@@ -1,0 +1,139 @@
+---
+import Layout from '../../layouts/Layout.astro'
+import { supabase } from '../../lib/supabase'
+import { fetchAllCasNumbers } from '../../lib/fetchSubstanceCasList'
+
+export async function getStaticPaths() {
+  const casList = await fetchAllCasNumbers()
+  return casList.map((cas) => ({
+    params: { cas },
+  }))
+}
+
+const { cas } = Astro.params
+if (!cas) {
+  return Astro.redirect('/pictograms/')
+}
+
+const { data: substance, error: subError } = await supabase
+  .from('substances')
+  .select(
+    'id, iupac_name, common_name, cas_number, ec_number, h_statement_codes, ghs_pictogram_codes, signal_word'
+  )
+  .eq('cas_number', cas)
+  .maybeSingle()
+
+if (subError || !substance) {
+  return Astro.redirect('/pictograms/')
+}
+
+const displayName = substance.common_name || substance.iupac_name
+const picCodes = substance.ghs_pictogram_codes ?? []
+const hCodes = substance.h_statement_codes ?? []
+
+const [{ data: pictogramRows }, { data: hRows }] = await Promise.all([
+  picCodes.length > 0
+    ? supabase
+        .from('pictograms_signals')
+        .select('code, name_en, svg_content')
+        .in('code', picCodes)
+    : Promise.resolve({ data: [] as { code: string; name_en: string; svg_content: string | null }[] }),
+  hCodes.length > 0
+    ? supabase.from('h_statements').select('code, text_en').in('code', hCodes)
+    : Promise.resolve({ data: [] as { code: string; text_en: string }[] }),
+])
+
+const pictograms = (pictogramRows ?? []).sort((a, b) => a.code.localeCompare(b.code))
+const hStatements = (hRows ?? []).sort((a, b) => a.code.localeCompare(b.code))
+
+const seoTitle = `${displayName} GHS Pictograms | Download SVG`
+const seoDescription = `GHS hazard pictograms (GHS01–GHS09) for ${displayName}. CAS ${cas}. Signal word and H-statements for labels and SDS reference.`
+---
+
+<Layout title={seoTitle} description={seoDescription} titleIsComplete={true} canonical={`https://ghspictograms.com/pictograms/${encodeURIComponent(cas)}/`}>
+  <article class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/pictograms/" class="text-[#062A78] hover:underline">Pictograms</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-700">{cas}</span>
+    </nav>
+
+    <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">
+      {displayName}
+    </h1>
+    <p class="mt-2 text-gray-600">
+      <span class="font-medium text-gray-800">CAS:</span> {substance.cas_number}
+      {substance.ec_number && (
+        <>
+          <span class="mx-2">·</span>
+          <span class="font-medium text-gray-800">EC:</span> {substance.ec_number}
+        </>
+      )}
+    </p>
+
+    {substance.signal_word && (
+      <div class="mt-8">
+        <h2 class="text-lg font-semibold text-gray-900 mb-2">Signal word</h2>
+        <span
+          class:list={[
+            'inline-block px-4 py-1.5 rounded-full text-sm font-bold',
+            substance.signal_word === 'Danger' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-900',
+          ]}
+        >
+          {substance.signal_word}
+        </span>
+      </div>
+    )}
+
+    <section class="mt-10">
+      <h2 class="text-xl font-semibold text-gray-900 mb-4">GHS pictograms</h2>
+      {pictograms.length === 0 ? (
+        <p class="text-gray-600">No pictogram codes linked for this substance in the database.</p>
+      ) : (
+        <ul class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+          {pictograms.map((p) => (
+            <li class="border border-gray-200 rounded-xl p-4 bg-white shadow-sm text-center">
+              <div
+                class="mx-auto w-28 h-28 flex items-center justify-center [&>svg]:max-w-full [&>svg]:max-h-full [&>svg]:w-auto [&>svg]:h-auto"
+                set:html={p.svg_content ?? ''}
+              />
+              <p class="mt-3 text-sm font-semibold text-gray-900">{p.code}</p>
+              <p class="text-xs text-gray-600 mt-1">{p.name_en}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+
+    <section class="mt-10">
+      <h2 class="text-xl font-semibold text-gray-900 mb-4">H-statements</h2>
+      {hStatements.length === 0 ? (
+        <p class="text-gray-600">No H-statements listed for this substance.</p>
+      ) : (
+        <ul class="space-y-3">
+          {hStatements.map((h) => (
+            <li class="border border-red-100 bg-red-50/80 rounded-lg px-4 py-3 text-sm text-red-900">
+              <span class="font-bold">{h.code}</span>
+              <span class="text-red-800"> — {h.text_en}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+
+    <div class="mt-12 p-6 rounded-xl bg-slate-50 border border-slate-200">
+      <a
+        href={`https://ghssymbols.com/hazards/${encodeURIComponent(cas)}/`}
+        class="inline-flex items-center gap-2 font-semibold text-[#062A78] hover:underline"
+      >
+        View full hazard data
+        <span aria-hidden="true">→</span>
+      </a>
+      <p class="mt-2 text-sm text-gray-600">H/P statements, ATE, SVHC and full CLP data on GHS Symbols.</p>
+    </div>
+
+    <p class="mt-10 text-sm text-gray-500">
+      Information is for reference only. Always verify against your official SDS and supplier classification.
+    </p>
+  </article>
+</Layout>

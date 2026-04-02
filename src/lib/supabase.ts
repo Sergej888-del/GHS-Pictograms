@@ -33,6 +33,11 @@ export interface Substance {
   svhc_status: boolean
   clp_harmonized: boolean
   data_level: number
+  /** Агрегированные коды CLP (миграция 001) */
+  h_statement_codes?: string[] | null
+  ghs_pictogram_codes?: string[] | null
+  signal_word?: string | null
+  p_statement_codes?: string[] | null
 }
 
 export interface HStatement {

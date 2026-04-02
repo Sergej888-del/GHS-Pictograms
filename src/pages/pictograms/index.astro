@@ -1,0 +1,18 @@
+---
+import Layout from '../../layouts/Layout.astro'
+import PictogramsBrowse from '../../components/PictogramsBrowse'
+---
+
+<Layout
+  title="Browse Pictograms"
+  description="Search harmonized substances and view GHS hazard pictograms (GHS01–GHS09), signal words and H-statements for each CAS."
+  canonical="https://ghspictograms.com/pictograms/"
+>
+  <section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-0">
+    <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">GHS pictograms by substance</h1>
+    <p class="mt-3 text-lg text-gray-600">
+      Browse the database: first 50 substances per page, or search by CAS or chemical name. Open a substance to see pictograms and H-statements.
+    </p>
+  </section>
+  <PictogramsBrowse client:load />
+</Layout>
