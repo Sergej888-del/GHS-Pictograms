@@ -387,4 +387,32 @@ const productJsonLd = JSON.stringify({
     </p>
   </article>
 
+  <script is:inline>
+    (function () {
+      document.querySelectorAll('.download-svg-btn').forEach(function (button) {
+        button.addEventListener('click', function () {
+          var li = button.closest('li')
+          if (!li) return
+          var el = li.querySelector('.svg-source')
+          if (!el) return
+          var svg = el.innerHTML.trim()
+          if (!svg) return
+          var code = button.getAttribute('data-download-code') || 'ghs-pictogram'
+          var xml =
+            '<?xml version="1.0" encoding="UTF-8"?>' +
+            (svg.indexOf('<svg') === 0 ? svg : '<svg xmlns="http://www.w3.org/2000/svg">' + svg + '</svg>')
+          try {
+            var blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })
+            var url = URL.createObjectURL(blob)
+            var a = document.createElement('a')
+            a.href = url
+            a.download = code + '.svg'
+            a.click()
+            URL.revokeObjectURL(url)
+          } catch (e) {}
+        })
+      })
+    })()
+  </script>
+
 </Layout>
