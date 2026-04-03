@@ -2,6 +2,7 @@
 import Layout from '../../layouts/Layout.astro'
 import { supabase } from '../../lib/supabase'
 import { fetchAllCasNumbers } from '../../lib/fetchSubstanceCasList'
+import GHSLabelConstructor from '../../components/GHSLabelConstructor'
 
 export async function getStaticPaths() {
   const casList = await fetchAllCasNumbers()
@@ -57,6 +58,19 @@ const [{ data: pictogramRows }, { data: hRows }, { data: pRows }] = await Promis
 ])
 
 const pictograms = (pictogramRows ?? []).sort((a, b) => a.code.localeCompare(b.code))
+const allPicCodes = picCodes
+const filteredPicCodes = (() => {
+  let codes = [...allPicCodes]
+  if (codes.includes('GHS06')) codes = codes.filter((c) => c !== 'GHS07')
+  if (codes.includes('GHS05')) codes = codes.filter((c) => c !== 'GHS07')
+  if (codes.includes('GHS08')) codes = codes.filter((c) => c !== 'GHS07')
+  if (codes.includes('GHS02') || codes.includes('GHS06'))
+    codes = codes.filter((c) => c !== 'GHS04' || codes.includes('GHS04'))
+  return codes
+})()
+const excludedPictograms = (pictogramRows ?? [])
+  .filter((p) => !filteredPicCodes.includes(p.code))
+  .sort((a, b) => a.code.localeCompare(b.code))
 const hStatements = (hRows ?? []).sort((a, b) => a.code.localeCompare(b.code))
 const pStatements = (pRows ?? []).sort((a, b) => a.code.localeCompare(b.code))
 
@@ -177,94 +191,43 @@ const productJsonLd = JSON.stringify({
     </section>
   </article>
 
-  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-4">
-    <h2 class="text-2xl font-bold text-gray-900 mb-4 no-print">Label Preview</h2>
-    <p class="text-gray-600 mb-6 no-print">
-      Printable CLP-style layout (red border per Annex I style). Use your browser’s print dialog to save as PDF.
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 no-print">
+    <h2 class="text-2xl font-bold text-gray-900 mb-2">GHS Label Constructor</h2>
+    <p class="text-gray-600 mb-6">
+      Build a CLP-compliant label for {displayName}. Add your supplier details, then download as PDF or order certified print-ready labels.
     </p>
+    <GHSLabelConstructor
+      client:load
+      displayName={displayName}
+      casNumber={substance.cas_number}
+      ecNumber={substance.ec_number}
+      signalWord={substance.signal_word}
+      pictograms={pictograms}
+      hStatements={hStatements}
+      pStatements={pStatements}
+    />
+  </div>
 
-    <div
-      id="label-preview-print"
-      class="bg-white border-[3px] border-red-600 p-6 sm:p-8 shadow-lg text-gray-900 max-w-2xl mx-auto"
-    >
-      <div class="border-b border-gray-200 pb-4 mb-4">
-        <p class="text-xs uppercase tracking-wide text-gray-500">Product identifier</p>
-        <p class="text-lg font-bold mt-1">{displayName}</p>
-        <p class="text-sm text-gray-700 mt-1">CAS: {substance.cas_number}</p>
-        {substance.ec_number && <p class="text-sm text-gray-700">EC: {substance.ec_number}</p>}
-      </div>
-
-      {pictograms.length > 0 && (
-        <div class="flex flex-wrap gap-4 justify-center my-6">
-          {pictograms.map((p) => (
-            <div
-              class="bg-red-600 p-1 inline-flex items-center justify-center shrink-0"
-              style="min-width: 108px; min-height: 108px;"
-            >
-              <div
-                class="bg-white w-full h-full min-w-[100px] min-h-[100px] flex items-center justify-center p-2 [&>svg]:max-w-[92px] [&>svg]:max-h-[92px] [&>svg]:w-auto [&>svg]:h-auto"
-                set:html={p.svg_content ?? ''}
-              />
-            </div>
+  {excludedPictograms.length > 0 && (
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 no-print">
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+        <p class="text-sm font-semibold text-gray-700 mb-2">
+          Pictograms not shown on label (CLP Article 26 precedence rules):
+        </p>
+        <ul class="space-y-1">
+          {excludedPictograms.map((p) => (
+            <li class="text-sm text-gray-600">
+              <span class="font-semibold text-gray-800">{p.code} — {p.name_en}:</span>
+              {' '}
+              {p.code === 'GHS07' && (allPicCodes.includes('GHS06') || allPicCodes.includes('GHS05'))
+                ? 'Suppressed — a more severe pictogram (GHS06 or GHS05) applies (CLP Art. 26)'
+                : 'Not required for this classification'}
+            </li>
           ))}
-        </div>
-      )}
-
-      {substance.signal_word && (
-        <div class="text-center my-6">
-          <p
-            class:list={[
-              'text-3xl sm:text-4xl font-black tracking-tight uppercase',
-              substance.signal_word === 'Danger' ? 'text-red-700' : 'text-amber-700',
-            ]}
-          >
-            {substance.signal_word}
-          </p>
-        </div>
-      )}
-
-      {hStatements.length > 0 && (
-        <div class="mb-5">
-          <p class="text-xs font-bold uppercase text-gray-600 mb-2">Hazard statements</p>
-          <ul class="text-sm space-y-1.5 leading-snug">
-            {hStatements.map((h) => (
-              <li>
-                <span class="font-bold">{h.code}:</span> {h.text_en}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {pStatements.length > 0 && (
-        <div class="mb-5">
-          <p class="text-xs font-bold uppercase text-gray-600 mb-2">Precautionary statements</p>
-          <ul class="text-sm space-y-1.5 leading-snug">
-            {pStatements.map((p) => (
-              <li>
-                <span class="font-bold">{p.code}:</span> {p.text_en}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div class="mt-6 pt-4 border-t border-dashed border-gray-300 text-sm text-gray-700">
-        <p class="font-semibold text-gray-900 mb-1">Supplier (placeholder)</p>
-        <p>[Company Name], [Address], [Phone]</p>
-      </div>
-
-      <div class="mt-6 no-print label-print-hide">
-        <button
-          type="button"
-          id="label-print-btn"
-          class="w-full sm:w-auto px-6 py-3 rounded-lg bg-[#062A78] text-white font-semibold hover:bg-[#051f5c] transition-colors"
-        >
-          Download as PDF
-        </button>
+        </ul>
       </div>
     </div>
-  </div>
+  )}
 
   <article class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 no-print">
     <section class="mb-16" aria-labelledby="pictograms-heading">
@@ -281,14 +244,9 @@ const productJsonLd = JSON.stringify({
             <li class="border border-gray-200 rounded-2xl p-6 bg-white shadow-sm">
               <div class="flex flex-col sm:flex-row gap-6 items-start">
                 <div
-                  class="bg-red-600 p-1 shrink-0 mx-auto sm:mx-0"
-                  style="width: 158px; height: 158px;"
-                >
-                  <div
-                    class="svg-source bg-white w-full h-full flex items-center justify-center p-2 [&>svg]:max-w-[140px] [&>svg]:max-h-[140px]"
-                    set:html={p.svg_content ?? ''}
-                  />
-                </div>
+                  class="svg-source shrink-0 mx-auto sm:mx-0 [&>svg]:w-[158px] [&>svg]:h-[158px]"
+                  set:html={p.svg_content ?? ''}
+                />
                 <div class="flex-1 min-w-0">
                   <p class="text-lg font-bold text-gray-900">{p.code}</p>
                   <p class="text-md font-semibold text-[#062A78] mt-1">{p.name_en}</p>
@@ -354,28 +312,47 @@ const productJsonLd = JSON.stringify({
         <div>
           <h3 class="text-lg font-bold text-gray-900">CLP Regulation (EC) No 1272/2008 (EU)</h3>
           <p class="mt-2 text-gray-700 leading-relaxed">
-            CLP requires suppliers to classify substances and mixtures, assign hazard classes, and communicate hazards on labels and safety data sheets in all EU Member States. Labels must show the correct GHS pictograms, signal word, hazard and precautionary statements, and product identifiers including where applicable the CAS/EC numbers.
+            {displayName} is subject to CLP labelling requirements. Suppliers must classify this substance,
+            assign the correct hazard classes, and communicate hazards on labels and safety data sheets
+            in all EU Member States. Labels must show the correct GHS pictograms, signal word,
+            hazard and precautionary statements, and product identifiers including CAS {substance.cas_number}
+            {substance.ec_number ? ` and EC ${substance.ec_number}` : ''}.
           </p>
-          <p class="mt-2 text-gray-700 leading-relaxed">
-            Annex I sets formatting rules (including minimum dimensions) and how elements are combined on the label. Downstream users must respect the classification provided and may need to re-label when repackaging or reformulating.
-          </p>
+          {hCodes.includes('H350') || hCodes.includes('H351') ? (
+            <p class="mt-2 text-amber-800 bg-amber-50 rounded-lg p-3 text-sm font-medium">
+              ⚠️ This substance has carcinogenicity classification — special workplace exposure limits and
+              mandatory risk assessment apply under REACH and national OEL regulations.
+            </p>
+          ) : null}
+          {hCodes.some((h) => h.startsWith('H4')) ? (
+            <p class="mt-2 text-blue-800 bg-blue-50 rounded-lg p-3 text-sm font-medium">
+              🌊 Aquatic hazard classification applies — prevent releases to drains, soil, and water.
+              Specific disposal P-statements are mandatory on the label.
+            </p>
+          ) : null}
+          {substance.signal_word === 'Danger' ? (
+            <p class="mt-2 text-red-800 bg-red-50 rounded-lg p-3 text-sm font-medium">
+              🔴 Signal word DANGER — indicates the most severe hazard category.
+              Enhanced workplace controls, PPE requirements, and emergency procedures apply.
+            </p>
+          ) : null}
         </div>
         <div>
           <h3 class="text-lg font-bold text-gray-900">OSHA Hazard Communication Standard (HCS 2012 / aligned updates)</h3>
           <p class="mt-2 text-gray-700 leading-relaxed">
-            In the United States, OSHA HCS requires chemical manufacturers and importers to evaluate hazards and provide labels and SDS aligned with GHS criteria. Workplace labels must be legible and prominently displayed; secondary containers often need the same core information when the original label is not transferred.
-          </p>
-          <p class="mt-2 text-gray-700 leading-relaxed">
-            Training, written programme, and SDS access are mandatory. Always verify the latest Federal Register alignment dates for any HCS revisions your state plan adopts.
+            In the United States, {displayName} (CAS {substance.cas_number}) requires a compliant GHS label
+            under OSHA HCS. Workplace labels must be legible and prominently displayed.
+            Secondary containers must carry the same core hazard information when the original label is not transferred.
+            Training, written programme, and SDS access are mandatory.
           </p>
         </div>
         <div>
-          <h3 class="text-lg font-bold text-gray-900">BS 5609 &amp; marine / IMDG context</h3>
+          <h3 class="text-lg font-bold text-gray-900">BS 5609 and marine / IMDG context</h3>
           <p class="mt-2 text-gray-700 leading-relaxed">
-            BS 5609 specifies durability of printed labels for goods shipped by sea: resistance to salt spray, UV, abrasion, and immersion where tested. It is widely used to qualify self-adhesive labels and ribbons for IMDG-compliant dangerous goods marking when permanence is required.
-          </p>
-          <p class="mt-2 text-gray-700 leading-relaxed">
-            Marine transport also relies on the IMDG Code for placards, marks, and documentation alongside GHS-style information on packages. For ocean freight, confirm with your carrier and certified label supplier that materials meet BS 5609 Section 2 or 3 as applicable.
+            For marine transport of {displayName}, labels must meet BS 5609 durability standards —
+            resistance to salt spray, UV, abrasion, and immersion. Standard office-printed labels
+            do not qualify. Confirm with your carrier and certified label supplier that materials
+            meet BS 5609 Section 2 or 3 as applicable for IMDG-compliant shipments.
           </p>
         </div>
       </div>
@@ -410,34 +387,4 @@ const productJsonLd = JSON.stringify({
     </p>
   </article>
 
-  <script is:inline>
-    (function () {
-      var btn = document.getElementById('label-print-btn')
-      if (btn) btn.addEventListener('click', function () { window.print() })
-
-      document.querySelectorAll('.download-svg-btn').forEach(function (button) {
-        button.addEventListener('click', function () {
-          var li = button.closest('li')
-          if (!li) return
-          var el = li.querySelector('.svg-source')
-          if (!el) return
-          var svg = el.innerHTML.trim()
-          if (!svg) return
-          var code = button.getAttribute('data-download-code') || 'ghs-pictogram'
-          var xml =
-            '<?xml version="1.0" encoding="UTF-8"?>' +
-            (svg.indexOf('<svg') === 0 ? svg : '<svg xmlns="http://www.w3.org/2000/svg">' + svg + '</svg>')
-          try {
-            var blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })
-            var url = URL.createObjectURL(blob)
-            var a = document.createElement('a')
-            a.href = url
-            a.download = code + '.svg'
-            a.click()
-            URL.revokeObjectURL(url)
-          } catch (e) {}
-        })
-      })
-    })()
-  </script>
 </Layout>
