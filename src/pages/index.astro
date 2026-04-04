@@ -1,38 +1,22 @@
 ---
-// ghspictograms/src/pages/index.astro
+// ghspictograms.com — главная (светлая тема, Space Grotesk + Inter)
 import { Fragment } from 'astro/jsx-runtime'
 import { supabase } from '../lib/supabase'
 
 const stats = [
-  { value: "4,178", label: "Substances" },
-  { value: "9", label: "GHS Pictograms" },
-  { value: "CLP/GHS", label: "EU Compliant" },
-  { value: "Free", label: "No Registration" },
+  { value: '4,178', label: 'Substances' },
+  { value: '9', label: 'GHS Pictograms' },
+  { value: 'CLP/GHS', label: 'EU Compliant' },
+  { value: 'Free · No Registration', label: '' },
 ]
 
 /**
- * Таблица public.pictograms_signals (схема supabase/schema.sql):
- * id, code, name_en, name_ru, svg_content, svg_url,
- * signal_word_en, signal_word_ru, hazard_class_en, hazard_class_ru,
- * adr_placard_code, dot_label_code, created_at
- * Код пиктограммы — поле `code` (GHS01…GHS09), не pictogram_code/ghs_code.
+ * pictograms_signals: id (= pictogram_id в смысле записи), code, name_en, svg_content, svg_url
+ * (полей pictogram_id / name в таблице нет — см. supabase/schema.sql)
  */
-/** Подписи карточек (fallback к code) */
-const PICTOGRAM_CARD_LABEL: Record<string, string> = {
-  GHS01: 'Explosive',
-  GHS02: 'Flammable',
-  GHS03: 'Oxidizing',
-  GHS04: 'Compressed Gas',
-  GHS05: 'Corrosive',
-  GHS06: 'Toxic',
-  GHS07: 'Harmful',
-  GHS08: 'Health Hazard',
-  GHS09: 'Environmental',
-}
-
-const { data: pictograms, error: pictogramsError } = await supabase
+const { data: pictogramsRaw, error: pictogramsError } = await supabase
   .from('pictograms_signals')
-  .select('code, name_en, svg_content')
+  .select('id, code, name_en, svg_url, svg_content')
   .order('code', { ascending: true })
   .limit(9)
 
@@ -40,717 +24,811 @@ if (pictogramsError) {
   console.error('[index] pictograms_signals:', pictogramsError.message)
 }
 
-const pictogramsRows = pictograms ?? []
-
-const withSvg = pictogramsRows.filter(
-  (r) => r.svg_content && String(r.svg_content).toLowerCase().includes('<svg')
-).length
-console.log('[index] pictograms_signals:', {
-  rowCount: pictogramsRows.length,
-  codes: pictogramsRows.map((r) => r.code),
-  rowsWithSvgMarkup: withSvg,
-  rowsMissingSvg: pictogramsRows.length - withSvg,
-})
+const pictogramsRows = pictogramsRaw ?? []
 
 const tools = [
   {
-    title: "GHS Label Constructor",
-    description: "Build compliant GHS labels in 5 steps. Add pictograms, H-statements, P-statements, supplier info. Export ready-to-print PDF.",
-    href: "/label-constructor/",
-    badge: "BETA",
-    cta: "Build Label →",
-    accent: "#e63946",
+    title: 'GHS Label Constructor',
+    description:
+      'Build compliant GHS labels in 5 steps. Add pictograms, H-statements, P-statements, supplier info. Export ready-to-print PDF.',
+    href: '/label-constructor/',
+    badge: 'BETA',
+    cta: 'Build Label →',
   },
   {
-    title: "Pictogram Library",
-    description: "Browse GHS01–GHS09 pictograms for 4,178 classified substances. Find the correct hazard symbols for any chemical by CAS number.",
-    href: "/pictograms/",
-    badge: "4,178 substances",
-    cta: "Browse Library →",
-    accent: "#f4a261",
+    title: 'Substance Database',
+    description:
+      'Browse GHS01–GHS09 pictograms for 4,178 classified substances. Find the correct hazard symbols for any chemical by CAS number.',
+    href: '/pictograms/',
+    badge: '4,178 SUBSTANCES',
+    cta: 'Browse Database →',
   },
   {
-    title: "GHS vs ADR/DOT Inspector",
-    description: "Compare workplace GHS labels vs transport placards side-by-side. Essential for logistics and distribution compliance.",
-    href: "/compare/",
-    badge: "Coming soon",
-    cta: "Preview →",
-    accent: "#457b9d",
+    title: 'GHS vs ADR/DOT Inspector',
+    description:
+      'Compare workplace GHS labels vs transport placards side-by-side. Essential for logistics and distribution compliance.',
+    href: '/compare/',
+    badge: 'COMING SOON',
+    cta: 'Preview →',
   },
 ]
 ---
 
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GHS Pictograms — Label Constructor & Hazard Symbol Library</title>
-  <meta name="description" content="Free GHS label constructor and pictogram library for 4,178 classified substances. Build CLP/GHS compliant labels, browse hazard symbols GHS01–GHS09." />
-  <link rel="canonical" href="https://ghspictograms.com/" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
-
-  <style>
-    :root {
-      --bg:       #0c0c0e;
-      --surface:  #141418;
-      --border:   #222228;
-      --red:      #e63946;
-      --orange:   #f4a261;
-      --teal:     #2a9d8f;
-      --text:     #e8e8e8;
-      --muted:    #666672;
-      --font-display: 'Bebas Neue', sans-serif;
-      --font-body:    'DM Sans', sans-serif;
-      --font-mono:    'DM Mono', monospace;
-    }
-
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font-body);
-      font-size: 16px;
-      line-height: 1.6;
-      overflow-x: hidden;
-    }
-
-    a { color: inherit; text-decoration: none; }
-
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image:
-        linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
-      background-size: 48px 48px;
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    nav {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: rgba(12,12,14,0.92);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
-      padding: 0 2rem;
-      height: 60px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .nav-logo {
-      font-family: var(--font-display);
-      font-size: 1.4rem;
-      letter-spacing: 0.05em;
-      color: var(--text);
-    }
-
-    .nav-logo span { color: var(--red); }
-
-    .nav-links {
-      display: flex;
-      gap: 2rem;
-      align-items: center;
-      list-style: none;
-    }
-
-    .nav-links a {
-      font-size: 0.875rem;
-      color: var(--muted);
-      font-weight: 500;
-      transition: color 0.2s;
-    }
-
-    .nav-links a:hover { color: var(--text); }
-
-    .nav-links .nav-cta {
-      background: var(--red);
-      color: white;
-      padding: 0.4rem 1rem;
-      border-radius: 4px;
-      font-weight: 600;
-      font-size: 0.8rem;
-      letter-spacing: 0.03em;
-      transition: opacity 0.2s;
-    }
-
-    .nav-links .nav-cta:hover { opacity: 0.85; color: white; }
-
-    .hero {
-      position: relative;
-      z-index: 1;
-      padding: 7rem 2rem 5rem;
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-
-    .hero-eyebrow {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--red);
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      margin-bottom: 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-
-    .hero-eyebrow::before {
-      content: '';
-      display: block;
-      width: 32px;
-      height: 1px;
-      background: var(--red);
-    }
-
-    .hero-title {
-      font-family: var(--font-display);
-      font-size: clamp(3.5rem, 9vw, 8rem);
-      line-height: 0.95;
-      letter-spacing: 0.02em;
-      margin-bottom: 2rem;
-    }
-
-    .hero-title .accent { color: var(--red); }
-
-    .hero-subtitle {
-      font-size: 1.125rem;
-      color: var(--muted);
-      max-width: 560px;
-      margin-bottom: 3rem;
-      line-height: 1.7;
-      font-weight: 300;
-    }
-
-    .hero-actions {
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-    }
-
-    .btn-primary {
-      background: var(--red);
-      color: white;
-      padding: 0.9rem 2rem;
-      border-radius: 4px;
-      font-weight: 600;
-      font-size: 0.95rem;
-      letter-spacing: 0.02em;
-      transition: transform 0.2s, box-shadow 0.2s;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(230,57,70,0.35);
-    }
-
-    .btn-secondary {
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 0.9rem 2rem;
-      border-radius: 4px;
-      font-weight: 500;
-      font-size: 0.95rem;
-      transition: border-color 0.2s, background 0.2s;
-    }
-
-    .btn-secondary:hover {
-      border-color: var(--muted);
-      background: rgba(255,255,255,0.03);
-    }
-
-    .stats-bar {
-      position: relative;
-      z-index: 1;
-      border-top: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
-      background: var(--surface);
-    }
-
-    .stats-inner {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 2rem;
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-    }
-
-    .stat-item {
-      padding: 2rem;
-      border-right: 1px solid var(--border);
-      text-align: center;
-    }
-
-    .stat-item:last-child { border-right: none; }
-
-    .stat-value {
-      font-family: var(--font-display);
-      font-size: 2.5rem;
-      color: var(--red);
-      display: block;
-      letter-spacing: 0.04em;
-    }
-
-    .stat-label {
-      font-size: 0.8rem;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      font-weight: 500;
-    }
-
-    .pictograms-section {
-      position: relative;
-      z-index: 1;
-      padding: 5rem 2rem;
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-
-    .section-label {
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
-      color: var(--muted);
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      margin-bottom: 2.5rem;
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-
-    .section-label::before {
-      content: '';
-      display: block;
-      width: 24px;
-      height: 1px;
-      background: var(--border);
-    }
-
-    .pictograms-grid {
-      display: grid;
-      grid-template-columns: repeat(9, minmax(0, 1fr));
-      gap: 0;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-
-    .pictogram-card {
-      min-width: 0;
-      aspect-ratio: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 0.75rem;
-      border-right: 1px solid var(--border);
-      padding: 1.75rem 0.5rem;
-      transition: background 0.2s;
-      cursor: pointer;
-      text-decoration: none;
-    }
-
-    .pictogram-card:last-child { border-right: none; }
-    .pictogram-card:hover { background: rgba(255,255,255,0.04); }
-
-    .pictogram-svg-wrap {
-      width: 100%;
-      max-width: 110px;
-      height: 110px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .pictogram-svg-wrap svg {
-      max-width: 100%;
-      max-height: 100%;
-      width: auto;
-      height: auto;
-      object-fit: contain;
-    }
-
-    .pictogram-code {
-      font-family: var(--font-mono);
-      font-size: 0.65rem;
-      color: var(--muted);
-      letter-spacing: 0.05em;
-    }
-
-    .pictogram-name {
-      font-size: 0.65rem;
-      color: var(--muted);
-      text-align: center;
-    }
-
-    .tools-section {
-      position: relative;
-      z-index: 1;
-      padding: 2rem 2rem 6rem;
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-
-    .tools-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1px;
-      background: var(--border);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-
-    .tool-card {
-      background: var(--surface);
-      padding: 2.5rem;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      transition: background 0.2s;
-    }
-
-    .tool-card:hover { background: #17171d; }
-
-    .tool-badge {
-      font-family: var(--font-mono);
-      font-size: 0.68rem;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      padding: 0.2rem 0.6rem;
-      border-radius: 3px;
-      border: 1px solid;
-      display: inline-block;
-      width: fit-content;
-    }
-
-    .tool-title {
-      font-family: var(--font-display);
-      font-size: 1.6rem;
-      letter-spacing: 0.03em;
-      line-height: 1.1;
-    }
-
-    .tool-description {
-      font-size: 0.875rem;
-      color: var(--muted);
-      line-height: 1.65;
-      flex: 1;
-    }
-
-    .tool-cta {
-      font-size: 0.875rem;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      transition: gap 0.2s;
-    }
-
-    .tool-card:hover .tool-cta { gap: 0.75rem; }
-
-    .crosslink {
-      position: relative;
-      z-index: 1;
-      max-width: 1200px;
-      margin: 0 auto 6rem;
-      padding: 0 2rem;
-    }
-
-    .crosslink-inner {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-left: 3px solid var(--teal);
-      border-radius: 8px;
-      padding: 2.5rem 3rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 2rem;
-    }
-
-    .crosslink-text h3 {
-      font-family: var(--font-display);
-      font-size: 1.5rem;
-      letter-spacing: 0.03em;
-      margin-bottom: 0.5rem;
-    }
-
-    .crosslink-text p {
-      font-size: 0.875rem;
-      color: var(--muted);
-    }
-
-    .crosslink-text p strong { color: var(--teal); }
-
-    .btn-teal {
-      background: var(--teal);
-      color: white;
-      padding: 0.8rem 1.75rem;
-      border-radius: 4px;
-      font-weight: 600;
-      font-size: 0.875rem;
-      white-space: nowrap;
-      flex-shrink: 0;
-      transition: opacity 0.2s;
-    }
-
-    .btn-teal:hover { opacity: 0.85; }
-
-    .search-section {
-      position: relative;
-      z-index: 1;
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 2rem 6rem;
-    }
-
-    .search-wrapper {
-      position: relative;
-      max-width: 640px;
-    }
-
-    .search-input {
-      width: 100%;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 1rem 1rem 1rem 3rem;
-      color: var(--text);
-      font-family: var(--font-body);
-      font-size: 1rem;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-
-    .search-input:focus { border-color: var(--red); }
-    .search-input::placeholder { color: var(--muted); }
-
-    .search-icon {
-      position: absolute;
-      left: 1rem;
-      top: 50%;
-      transform: translateY(-50%);
-      color: var(--muted);
-      font-size: 1rem;
-    }
-
-    .search-hint {
-      margin-top: 0.75rem;
-      font-size: 0.8rem;
-      color: var(--muted);
-      font-family: var(--font-mono);
-    }
-
-    .search-hint a { color: var(--red); }
-
-    footer {
-      position: relative;
-      z-index: 1;
-      border-top: 1px solid var(--border);
-      padding: 2.5rem 2rem;
-    }
-
-    .footer-inner {
-      max-width: 1200px;
-      margin: 0 auto;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 2rem;
-    }
-
-    .footer-logo {
-      font-family: var(--font-display);
-      font-size: 1rem;
-      letter-spacing: 0.05em;
-    }
-
-    .footer-logo span { color: var(--red); }
-
-    .footer-links {
-      display: flex;
-      gap: 1.5rem;
-      list-style: none;
-    }
-
-    .footer-links a {
-      font-size: 0.8rem;
-      color: var(--muted);
-      transition: color 0.2s;
-    }
-
-    .footer-links a:hover { color: var(--text); }
-
-    .footer-copy {
-      font-size: 0.75rem;
-      color: var(--muted);
-      font-family: var(--font-mono);
-    }
-
-    @media (max-width: 900px) {
-      .pictograms-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-      .tools-grid { grid-template-columns: 1fr; }
-      .stats-inner { grid-template-columns: repeat(2, 1fr); }
-      .crosslink-inner { flex-direction: column; align-items: flex-start; }
-      .footer-inner { flex-direction: column; align-items: flex-start; }
-    }
-
-    @media (max-width: 600px) {
-      .nav-links { display: none; }
-      .pictograms-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-      .stats-inner { grid-template-columns: repeat(2, 1fr); }
-      .hero-actions { flex-direction: column; }
-    }
-
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(20px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    .hero-eyebrow { animation: fadeUp 0.5s ease both; }
-    .hero-title   { animation: fadeUp 0.5s 0.1s ease both; }
-    .hero-subtitle{ animation: fadeUp 0.5s 0.2s ease both; }
-    .hero-actions { animation: fadeUp 0.5s 0.3s ease both; }
-  </style>
-</head>
-<body>
-
-  <nav>
-    <span class="nav-logo">GHS<span>Pictograms</span>.com</span>
-    <ul class="nav-links">
-      <li><a href="/label-constructor/">Label Constructor</a></li>
-      <li><a href="/pictograms/">Pictogram Library</a></li>
-      <li><a href="https://ghssymbols.com" target="_blank" rel="noopener">GHS Symbols ↗</a></li>
-      <li><a href="/label-constructor/" class="nav-cta">Build Label →</a></li>
-    </ul>
-  </nav>
-
-  <section class="hero">
-    <p class="hero-eyebrow">GHS / CLP Compliant Tools</p>
-    <h1 class="hero-title">
-      Build<br/>
-      GHS <span class="accent">Labels</span><br/>
-      That Comply.
-    </h1>
-    <p class="hero-subtitle">
-      Free label constructor and pictogram library for 4,178 classified substances.
-      CLP Annex VI data. Export print-ready PDF in minutes.
-    </p>
-    <div class="hero-actions">
-      <a href="/label-constructor/" class="btn-primary">⬡ Build a Label — Free</a>
-      <a href="/pictograms/" class="btn-secondary">Browse 4,178 Substances →</a>
-    </div>
-  </section>
-
-  <div class="stats-bar">
-    <div class="stats-inner">
-      {stats.map(s => (
-        <div class="stat-item">
-          <span class="stat-value">{s.value}</span>
-          <span class="stat-label">{s.label}</span>
-        </div>
-      ))}
-    </div>
-  </div>
-
-  <section class="pictograms-section">
-    <p class="section-label">GHS Hazard Pictograms — GHS01 to GHS09</p>
-    <div class="pictograms-grid">
-      {pictogramsRows.map((p) => (
-        <a href={`/pictograms/?symbol=${p.code.toLowerCase()}`} class="pictogram-card">
-          <div class="pictogram-svg-wrap" aria-hidden="true">
-            <Fragment set:html={p.svg_content ?? ''} />
-          </div>
-          <span class="pictogram-code">{p.code}</span>
-          <span class="pictogram-name">{PICTOGRAM_CARD_LABEL[p.code] ?? p.code}</span>
-        </a>
-      ))}
-    </div>
-  </section>
-
-  <section class="search-section">
-    <p class="section-label">Search the database</p>
-    <div class="search-wrapper">
-      <span class="search-icon">⌕</span>
-      <input
-        type="text"
-        class="search-input"
-        placeholder="Search by name or CAS number — e.g. acetone, 67-64-1"
-        id="searchInput"
-      />
-    </div>
-    <p class="search-hint">
-      Try: <a href="/pictograms/67-64-1/">acetone</a> ·
-      <a href="/pictograms/7664-93-9/">sulfuric acid</a> ·
-      <a href="/pictograms/75-09-2/">dichloromethane</a>
-    </p>
-  </section>
-
-  <section class="tools-section">
-    <p class="section-label">Tools</p>
-    <div class="tools-grid">
-      {tools.map(t => (
-        <div class="tool-card">
-          <span class="tool-badge" style={`color: ${t.accent}; border-color: ${t.accent}33;`}>
-            {t.badge}
-          </span>
-          <h2 class="tool-title">{t.title}</h2>
-          <p class="tool-description">{t.description}</p>
-          <a href={t.href} class="tool-cta" style={`color: ${t.accent};`}>{t.cta}</a>
-        </div>
-      ))}
-    </div>
-  </section>
-
-  <section class="crosslink">
-    <div class="crosslink-inner">
-      <div class="crosslink-text">
-        <h3>Need H-statements &amp; ATE calculations?</h3>
-        <p>Our sister site <strong>GHSSymbols.com</strong> covers hazard classification, mixture ATE calculator, and storage compatibility matrix.</p>
-      </div>
-      <a href="https://ghssymbols.com" target="_blank" rel="noopener" class="btn-teal">
-        Visit GHSSymbols.com →
-      </a>
-    </div>
-  </section>
-
-  <footer>
-    <div class="footer-inner">
-      <span class="footer-logo">GHS<span>Pictograms</span>.com</span>
-      <ul class="footer-links">
-        <li><a href="/label-constructor/">Label Constructor</a></li>
-        <li><a href="/pictograms/">Pictogram Library</a></li>
-        <li><a href="https://ghssymbols.com">GHSSymbols.com</a></li>
-      </ul>
-      <span class="footer-copy">Data source: ECHA CLP Annex VI · For reference only</span>
-    </div>
-  </footer>
-
-  <script>
-    const input = document.getElementById('searchInput')
-    input?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        const q = (e.target as HTMLInputElement).value.trim()
-        if (q) window.location.href = `/pictograms/?q=${encodeURIComponent(q)}`
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GHS Pictograms — Label Constructor & Hazard Symbol Library</title>
+    <meta
+      name="description"
+      content="Professional GHS pictogram library and label builder for 4,178 classified substances. CLP Annex VI data, CLP/GHS compliant tools."
+    />
+    <link rel="canonical" href="https://ghspictograms.com/" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <meta property="og:title" content="GHS Pictograms — Label Constructor & Library" />
+    <meta
+      property="og:description"
+      content="Pictogram library and label constructor for 4,178 substances. CLP Annex VI."
+    />
+    <meta property="og:url" content="https://ghspictograms.com/" />
+    <meta property="og:type" content="website" />
+
+    <style>
+      :root {
+        --nav: #062a78;
+        --nav-dark: #0a3a8c;
+        --accent: #0077b6;
+        --body: #ffffff;
+        --card: #f8fafc;
+        --card-border: #e2e8f0;
+        --text: #1e293b;
+        --muted: #64748b;
+        --font-heading: 'Space Grotesk', system-ui, sans-serif;
+        --font-body: 'Inter', system-ui, sans-serif;
       }
-    })
-  </script>
 
-</body>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        font-family: var(--font-body);
+        font-size: 16px;
+        line-height: 1.6;
+        color: var(--text);
+        background: var(--body);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .font-heading {
+        font-family: var(--font-heading);
+      }
+
+      /* ——— Nav ——— */
+      .site-nav {
+        background: var(--nav);
+        color: #fff;
+        padding: 0 1.5rem;
+        min-height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+
+      .nav-logo {
+        font-family: var(--font-heading);
+        font-size: 1.125rem;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+      }
+
+      .nav-logo .logo-ghs {
+        font-weight: 500;
+      }
+
+      .nav-logo .logo-pictograms {
+        font-weight: 700;
+      }
+
+      .nav-logo .logo-com {
+        font-weight: 400;
+        color: rgba(255, 255, 255, 0.65);
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        list-style: none;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .nav-links a {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.88);
+        transition: color 0.15s;
+      }
+
+      .nav-links a:hover {
+        color: #fff;
+      }
+
+      .nav-links a.nav-external {
+        color: rgba(255, 255, 255, 0.95);
+      }
+
+      .nav-cta {
+        background: var(--accent);
+        color: #fff !important;
+        padding: 0.45rem 1rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.8125rem;
+        white-space: nowrap;
+        transition: filter 0.15s;
+      }
+
+      .nav-cta:hover {
+        filter: brightness(1.08);
+        color: #fff !important;
+      }
+
+      /* ——— Hero ——— */
+      .hero {
+        background: linear-gradient(180deg, var(--nav) 0%, var(--nav-dark) 100%);
+        color: #fff;
+        padding: 3.5rem 1.5rem 4rem;
+      }
+
+      .hero-inner {
+        max-width: 1120px;
+        margin: 0 auto;
+      }
+
+      .hero-eyebrow {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.75);
+        margin-bottom: 1.25rem;
+      }
+
+      .hero-eyebrow::before {
+        content: '';
+        width: 32px;
+        height: 1px;
+        background: rgba(255, 255, 255, 0.45);
+      }
+
+      .hero h1 {
+        font-family: var(--font-heading);
+        font-size: clamp(2.25rem, 5vw, 3.25rem);
+        font-weight: 700;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        margin-bottom: 1rem;
+      }
+
+      .hero h1 .hero-accent {
+        color: var(--accent);
+      }
+
+      .hero-sub {
+        font-size: 1.125rem;
+        color: rgba(255, 255, 255, 0.85);
+        max-width: 36rem;
+        margin-bottom: 1.75rem;
+        line-height: 1.65;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-bottom: 2.5rem;
+      }
+
+      .btn-primary-hero {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 600;
+        font-size: 0.9375rem;
+        padding: 0.75rem 1.35rem;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        transition: filter 0.15s;
+      }
+
+      .btn-primary-hero:hover {
+        filter: brightness(1.06);
+      }
+
+      .btn-outline-hero {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-weight: 600;
+        font-size: 0.9375rem;
+        padding: 0.75rem 1.35rem;
+        border-radius: 8px;
+        border: 2px solid rgba(255, 255, 255, 0.85);
+        background: transparent;
+        transition:
+          background 0.15s,
+          border-color 0.15s;
+      }
+
+      .btn-outline-hero:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: #fff;
+      }
+
+      /* ——— Stats ——— */
+      .stats-bar {
+        background: #fff;
+        border-bottom: 1px solid var(--card-border);
+      }
+
+      .stats-inner {
+        max-width: 1120px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        padding: 0 1.5rem;
+      }
+
+      .stat-cell {
+        text-align: center;
+        padding: 1.75rem 1rem;
+        border-right: 1px solid var(--card-border);
+      }
+
+      .stat-cell:last-child {
+        border-right: none;
+      }
+
+      .stat-value {
+        font-family: var(--font-heading);
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--accent);
+        letter-spacing: 0.02em;
+      }
+
+      .stat-label {
+        font-size: 0.8125rem;
+        color: var(--muted);
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-top: 0.25rem;
+      }
+
+      /* ——— Sections ——— */
+      .section {
+        padding: 3.5rem 1.5rem;
+        max-width: 1120px;
+        margin: 0 auto;
+      }
+
+      .section-label {
+        font-size: 0.6875rem;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .section-label::before {
+        content: '';
+        width: 20px;
+        height: 1px;
+        background: var(--card-border);
+      }
+
+      .section-title {
+        font-family: var(--font-heading);
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--text);
+        margin-bottom: 1.75rem;
+        letter-spacing: -0.02em;
+      }
+
+      /* Pictogram grid */
+      .p-grid {
+        display: grid;
+        grid-template-columns: repeat(9, minmax(0, 1fr));
+        gap: 0.75rem;
+      }
+
+      .p-card {
+        display: block;
+        background: var(--card);
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        padding: 1rem 0.5rem;
+        text-align: center;
+        transition: border-color 0.2s;
+        min-width: 0;
+        cursor: pointer;
+      }
+
+      .p-card:hover {
+        border-color: #0077b6;
+      }
+
+      .p-card-svg {
+        width: 100%;
+        max-width: 72px;
+        height: 72px;
+        margin: 0 auto 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .p-card-svg :global(svg) {
+        max-width: 100%;
+        max-height: 100%;
+      }
+
+      .p-card-svg img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+      }
+
+      .p-code {
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: var(--muted);
+        font-family: ui-monospace, monospace;
+      }
+
+      .p-name {
+        display: block;
+        font-size: 0.6875rem;
+        color: var(--text);
+        margin-top: 0.2rem;
+        line-height: 1.3;
+      }
+
+      /* Search */
+      .search-wrap {
+        position: relative;
+        max-width: 640px;
+      }
+
+      .search-wrap .search-icon {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--muted);
+        font-size: 1rem;
+        pointer-events: none;
+      }
+
+      .search-form input[type='search'] {
+        width: 100%;
+        padding: 1rem 1rem 1rem 2.75rem;
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        font-family: var(--font-body);
+        font-size: 1rem;
+        color: var(--text);
+        background: #fff;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+
+      .search-form input[type='search']:focus {
+        border-color: var(--accent);
+      }
+
+      .search-form input[type='search']::placeholder {
+        color: #94a3b8;
+      }
+
+      .search-hint {
+        margin-top: 0.75rem;
+        font-size: 0.875rem;
+        color: var(--muted);
+      }
+
+      .search-hint a {
+        color: var(--accent);
+        font-weight: 500;
+      }
+
+      .search-hint a:hover {
+        text-decoration: underline;
+      }
+
+      /* Tools */
+      .tools-section {
+        background: var(--card);
+        padding: 3.5rem 1.5rem;
+      }
+
+      .tools-inner {
+        max-width: 1120px;
+        margin: 0 auto;
+      }
+
+      .tools-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.25rem;
+      }
+
+      .tool-card {
+        background: #fff;
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        height: 100%;
+      }
+
+      .tool-badge {
+        font-size: 0.625rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--accent);
+        border: 1px solid rgba(0, 119, 182, 0.35);
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        width: fit-content;
+      }
+
+      .tool-title {
+        font-family: var(--font-heading);
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      .tool-desc {
+        font-size: 0.875rem;
+        color: var(--muted);
+        line-height: 1.6;
+        flex: 1;
+      }
+
+      .tool-cta {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--accent);
+      }
+
+      .tool-cta:hover {
+        text-decoration: underline;
+      }
+
+      /* Sister */
+      .sister {
+        background: var(--nav);
+        color: #fff;
+        padding: 2.5rem 1.5rem;
+      }
+
+      .sister-inner {
+        max-width: 1120px;
+        margin: 0 auto;
+        border-left: 4px solid var(--accent);
+        padding-left: 1.5rem;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.5rem;
+      }
+
+      .sister h3 {
+        font-family: var(--font-heading);
+        font-size: 1.35rem;
+        font-weight: 700;
+        margin-bottom: 0.35rem;
+      }
+
+      .sister p {
+        font-size: 0.9375rem;
+        color: rgba(255, 255, 255, 0.85);
+        max-width: 36rem;
+        line-height: 1.6;
+      }
+
+      .btn-sister {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.65rem 1.25rem;
+        border: 2px solid #fff;
+        border-radius: 8px;
+        color: #fff;
+        font-weight: 600;
+        font-size: 0.875rem;
+        white-space: nowrap;
+        transition: background 0.15s;
+      }
+
+      .btn-sister:hover {
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      /* Footer */
+      .site-footer {
+        background: var(--nav);
+        color: rgba(255, 255, 255, 0.85);
+        padding: 2rem 1.5rem;
+      }
+
+      .footer-inner {
+        max-width: 1120px;
+        margin: 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+
+      .footer-logo {
+        font-family: var(--font-heading);
+        font-size: 0.9375rem;
+      }
+
+      .footer-logo .logo-ghs {
+        font-weight: 500;
+        color: #fff;
+      }
+
+      .footer-logo .logo-pictograms {
+        font-weight: 700;
+        color: #fff;
+      }
+
+      .footer-logo .logo-com {
+        font-weight: 400;
+        color: rgba(255, 255, 255, 0.6);
+      }
+
+      .footer-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.25rem;
+        list-style: none;
+      }
+
+      .footer-links a {
+        font-size: 0.8125rem;
+        color: rgba(255, 255, 255, 0.8);
+      }
+
+      .footer-links a:hover {
+        color: #fff;
+      }
+
+      .footer-copy {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.55);
+        width: 100%;
+        flex-basis: 100%;
+      }
+
+      @media (max-width: 1024px) {
+        .p-grid {
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 768px) {
+        .nav-links {
+          display: none;
+        }
+
+        .stats-inner {
+          grid-template-columns: repeat(2, 1fr);
+        }
+
+        .stat-cell:nth-child(2) {
+          border-right: none;
+        }
+
+        .stat-cell:nth-child(1),
+        .stat-cell:nth-child(2) {
+          border-bottom: 1px solid var(--card-border);
+        }
+
+        .p-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .tools-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .sister-inner {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Main">
+      <a href="/" class="nav-logo">
+        <span class="logo-ghs">GHS</span><span class="logo-pictograms">PICTOGRAMS</span><span class="logo-com">.COM</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="/label-constructor/">Label Constructor</a></li>
+        <li><a href="/pictograms/">Substance Database</a></li>
+        <li>
+          <a href="https://ghssymbols.com/" target="_blank" rel="noopener noreferrer" class="nav-external">GHS Symbols ↗</a>
+        </li>
+        <li><a href="/label-constructor/" class="nav-cta">Build Label →</a></li>
+      </ul>
+    </nav>
+
+    <section class="hero">
+      <div class="hero-inner">
+        <p class="hero-eyebrow">GHS / CLP Compliant Tools</p>
+        <h1 class="font-heading">
+          GHS Pictograms &amp;<br />
+          <span class="hero-accent">Label Constructor</span>
+        </h1>
+        <p class="hero-sub">
+          Professional pictogram library and label builder for 4,178 classified substances. CLP Annex VI data.
+        </p>
+        <div class="hero-actions">
+          <a href="/label-constructor/" class="btn-primary-hero">Build a Label — Free</a>
+          <a href="/pictograms/" class="btn-outline-hero">Browse Substance Database →</a>
+        </div>
+      </div>
+    </section>
+
+    <div class="stats-bar">
+      <div class="stats-inner">
+        {
+          stats.map((s) => (
+            <div class="stat-cell">
+              <div class="stat-value">{s.value}</div>
+              {s.label ? <div class="stat-label">{s.label}</div> : null}
+            </div>
+          ))
+        }
+      </div>
+    </div>
+
+    <section class="section">
+      <p class="section-label">Reference</p>
+      <h2 class="section-title">GHS Hazard Pictograms — GHS01 to GHS09</h2>
+      <div class="p-grid">
+        {
+          pictogramsRows.map((p) => (
+            <a href={`/pictograms/${p.code.toLowerCase()}/`} class="p-card">
+              <div class="p-card-svg">
+                {p.svg_content && String(p.svg_content).toLowerCase().includes('<svg') ? (
+                  <Fragment set:html={p.svg_content} />
+                ) : p.svg_url ? (
+                  <img src={p.svg_url} alt="" width="64" height="64" />
+                ) : (
+                  <span class="p-code">{p.code}</span>
+                )}
+              </div>
+              <span class="p-code">{p.code}</span>
+              <span class="p-name">{p.name_en}</span>
+            </a>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="section">
+      <p class="section-label">Database</p>
+      <h2 class="section-title">Search the Substance Database</h2>
+      <form class="search-form" method="get" action="/pictograms/">
+        <div class="search-wrap">
+          <span class="search-icon" aria-hidden="true">⌕</span>
+          <input
+            type="search"
+            name="search"
+            placeholder="Search by name or CAS number — e.g. acetone, 67-64-1"
+            autocomplete="off"
+          />
+        </div>
+      </form>
+      <p class="search-hint">
+        Try:
+        <a href="/pictograms/67-64-1/">acetone</a>
+        ·
+        <a href="/pictograms/7664-93-9/">sulfuric acid</a>
+        ·
+        <a href="/pictograms/75-09-2/">dichloromethane</a>
+      </p>
+    </section>
+
+    <div class="tools-section">
+      <div class="tools-inner">
+        <p class="section-label">Tools</p>
+        <div class="tools-grid" style="margin-top: 1.5rem;">
+          {
+            tools.map((t) => (
+              <div class="tool-card">
+                <span class="tool-badge">{t.badge}</span>
+                <h3 class="tool-title">{t.title}</h3>
+                <p class="tool-desc">{t.description}</p>
+                <a href={t.href} class="tool-cta">{t.cta}</a>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </div>
+
+    <section class="sister">
+      <div class="sister-inner">
+        <div>
+          <h3>Need H-Statements &amp; ATE Calculations?</h3>
+          <p>
+            Our sister site GHSSymbols.com covers hazard classification, mixture ATE calculator, and storage compatibility
+            matrix.
+          </p>
+        </div>
+        <a href="https://ghssymbols.com/" target="_blank" rel="noopener noreferrer" class="btn-sister">Visit GHSSymbols.com →</a>
+      </div>
+    </section>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <span class="footer-logo">
+          <span class="logo-ghs">GHS</span><span class="logo-pictograms">PICTOGRAMS</span><span class="logo-com">.COM</span>
+        </span>
+        <ul class="footer-links">
+          <li><a href="/label-constructor/">Label Constructor</a></li>
+          <li><a href="/pictograms/">Substance Database</a></li>
+          <li><a href="https://ghssymbols.com/">GHSSymbols.com</a></li>
+        </ul>
+        <span class="footer-copy">Data source: ECHA CLP Annex VI · For reference only</span>
+      </div>
+    </footer>
+  </body>
 </html>

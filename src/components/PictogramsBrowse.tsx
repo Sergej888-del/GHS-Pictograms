@@ -28,6 +28,12 @@ export default function PictogramsBrowse() {
     setPage(0)
   }, [debounced])
 
+  // GET /pictograms/?search=… (например с label-constructor)
+  useEffect(() => {
+    const s = new URLSearchParams(window.location.search).get('search')?.trim()
+    if (s) setQ(s)
+  }, [])
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)

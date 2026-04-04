@@ -10,7 +10,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "generate-types": "wrangler types"
+    "generate-types": "wrangler types",
+    "import-pubchem": "tsx scripts/import-pubchem.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^13.1.7",
@@ -28,5 +29,9 @@
   },
   "overrides": {
     "vite": "^7"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.7",
+    "tsx": "^4.19.3"
   }
 }
