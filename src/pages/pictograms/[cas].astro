@@ -1,15 +1,9 @@
 ---
+export const prerender = false
 import Layout from '../../layouts/Layout.astro'
 import { supabase } from '../../lib/supabase'
 import { fetchAllCasNumbers } from '../../lib/fetchSubstanceCasList'
 import GHSLabelConstructor from '../../components/GHSLabelConstructor'
-
-export async function getStaticPaths() {
-  const casList = await fetchAllCasNumbers()
-  return casList.map((cas) => ({
-    params: { cas },
-  }))
-}
 
 const { cas } = Astro.params
 if (!cas) {
