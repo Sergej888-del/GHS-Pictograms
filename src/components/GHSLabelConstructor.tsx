@@ -338,9 +338,22 @@ export default function GHSLabelConstructor({
               <input type="text" value={supplierPhone} onChange={e => setSupplierPhone(e.target.value)} placeholder="+44 800 000 0000" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#062A78]" />
             </div>
           </div>
+          {submitError && (
+            <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {submitError}
+            </p>
+          )}
           <div className="flex gap-3">
             <button type="button" onClick={() => setStep(1)} className="flex-1 py-3 rounded-lg border-2 border-gray-300 text-gray-700 font-semibold hover:border-gray-400 transition-colors">Back</button>
-            <button type="button" onClick={() => { saveToStorage(); setStep(3) }} className="flex-1 py-3 rounded-lg bg-[#062A78] text-white font-semibold hover:bg-[#051f5c] transition-colors">Next: Product info</button>
+            <button type="button" onClick={() => {
+              if (!supplierName.trim() || !supplierAddress.trim() || !supplierPhone.trim()) {
+                setSubmitError('Please fill in all supplier fields — required by CLP Article 17.')
+                return
+              }
+              setSubmitError('')
+              saveToStorage()
+              setStep(3)
+            }} className="flex-1 py-3 rounded-lg bg-[#062A78] text-white font-semibold hover:bg-[#051f5c] transition-colors">Next: Product info</button>
           </div>
         </div>
       )}
