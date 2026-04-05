@@ -744,7 +744,7 @@ const tools = [
       <div class="p-grid">
         {
           pictogramsRows.map((p) => (
-            <a href={`/pictograms/${p.code.toLowerCase()}/`} class="p-card">
+            <a href={`/ghs/${p.code.toLowerCase()}/`} class="p-card">
               <div class="p-card-svg">
                 {p.svg_content && String(p.svg_content).toLowerCase().includes('<svg') ? (
                   <Fragment set:html={p.svg_content} />
