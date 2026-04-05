@@ -1,0 +1,392 @@
+---
+import Layout from '../../layouts/Layout.astro'
+import { supabase } from '../../lib/supabase'
+
+export async function getStaticPaths() {
+  return [
+    'GHS01','GHS02','GHS03','GHS04','GHS05',
+    'GHS06','GHS07','GHS08','GHS09'
+  ].map(code => ({ params: { code: code.toLowerCase() } }))
+}
+
+const { code } = Astro.params
+const upperCode = (code ?? '').toUpperCase()
+
+const GHS_META: Record<string, {
+  name: string
+  hazardClass: string
+  color: string
+  bgLight: string
+  borderColor: string
+  textColor: string
+  hCodes: string[]
+  description: string
+  storageNote: string
+  regulatoryNote: string
+  adnNote: string
+}> = {
+  GHS01: {
+    name: 'Exploding Bomb',
+    hazardClass: 'Explosives',
+    color: '#7C3AED',
+    bgLight: '#F5F3FF',
+    borderColor: '#DDD6FE',
+    textColor: '#4C1D95',
+    hCodes: ['H200','H201','H202','H203','H204','H205','H240','H241','H242'],
+    description: 'The exploding bomb pictogram indicates explosive substances, mixtures, and articles, including self-reactive substances and organic peroxides. These materials release energy rapidly when subjected to shock, heat, or friction.',
+    storageNote: 'Store only in approved explosive magazines. Segregate from all ignition sources, heat, open flame, and friction. Access restricted to authorised personnel. Quantities must be minimised. Earthing and bonding required during transfer.',
+    regulatoryNote: 'Under CLP Regulation (EC) No 1272/2008, GHS01 applies to explosive substances in Division 1.1–1.6. EU Directive 2014/28/EU governs commercial explosives. OSHA 29 CFR 1910.109 covers storage and handling in the USA.',
+    adnNote: 'ADR/RID Class 1 — Explosive substances. UN placards use an orange rectangle with black flame/explosion symbol. Transport requires specialised vehicles and trained drivers under ADR regulations.',
+  },
+  GHS02: {
+    name: 'Flame',
+    hazardClass: 'Flammable substances',
+    color: '#DC2626',
+    bgLight: '#FFF7ED',
+    borderColor: '#FED7AA',
+    textColor: '#7C2D12',
+    hCodes: ['H220','H221','H222','H223','H224','H225','H226','H228','H229','H250','H251','H252','H260','H261'],
+    description: 'The flame pictogram indicates flammable gases, aerosols, liquids, and solids, as well as pyrophoric, self-heating, and water-reactive substances. Flash point below 60 °C for liquids is a key trigger.',
+    storageNote: 'Store in dedicated flammable storage cabinet away from oxidisers and ignition sources. Use explosion-proof electrical equipment. Ground and bond containers during transfer to prevent static discharge. Keep containers tightly closed.',
+    regulatoryNote: 'CLP categories: Flammable Liquids Cat. 1–3 (H224/H225/H226), Flammable Gases Cat. 1–2 (H220/H221). OSHA 29 CFR 1910.106 governs flammable liquid storage. NFPA 30 provides fire protection standards.',
+    adnNote: 'ADR Class 3 (flammable liquids) or Class 2.1 (flammable gases). Transport placards show red diamond with black flame. Flashpoint determines packing group: PG I (<23°C), PG II (23–60°C).',
+  },
+  GHS03: {
+    name: 'Flame Over Circle',
+    hazardClass: 'Oxidising substances',
+    color: '#D97706',
+    bgLight: '#FFFBEB',
+    borderColor: '#FDE68A',
+    textColor: '#78350F',
+    hCodes: ['H270','H271','H272'],
+    description: 'The flame over circle pictogram indicates oxidising gases, liquids, and solids. These substances can intensify fire or cause combustion in materials that normally would not burn, significantly increasing fire risk.',
+    storageNote: 'Store separately from all flammable, combustible, and organic materials. Keep cool and dry. Use dedicated non-combustible storage. Never store near reducing agents or acids. Ensure adequate ventilation.',
+    regulatoryNote: 'CLP categories: Oxidising Gases Cat. 1 (H270), Oxidising Liquids Cat. 1–3 (H271/H272), Oxidising Solids Cat. 1–3. OSHA 29 CFR 1910.104 covers oxygen storage. Special permits may apply for Category 1 oxidisers.',
+    adnNote: 'ADR Class 5.1 (oxidising substances) or Class 2.2 with oxidising sub-risk. Yellow diamond with black flame over circle. Must be segregated from Class 3 and Class 4 goods during transport.',
+  },
+  GHS04: {
+    name: 'Gas Cylinder',
+    hazardClass: 'Gases under pressure',
+    color: '#0284C7',
+    bgLight: '#F0F9FF',
+    borderColor: '#BAE6FD',
+    textColor: '#0C4A6E',
+    hCodes: ['H280','H281'],
+    description: 'The gas cylinder pictogram indicates compressed, liquefied, refrigerated liquefied, or dissolved gases stored under pressure. These present risks of explosion if heated and asphyxiation if released in confined spaces.',
+    storageNote: 'Secure cylinders upright with chains or straps at all times. Store away from heat sources, corrosives, and ignition sources. Use correct regulators and valves. Ensure adequate ventilation in storage and use areas. Cap cylinders when not in use.',
+    regulatoryNote: 'EU Pressure Equipment Directive (PED) 2014/68/EU applies to gas cylinders. EN ISO 11114-1 covers material compatibility. OSHA 29 CFR 1910.101 governs compressed gas handling in the USA. Regular inspection required.',
+    adnNote: 'ADR Class 2 — Gases. Placard colour depends on gas type: non-flammable/non-toxic (green), flammable (red), toxic (white). UN number identifies specific gas. Specialised transport vehicles may be required.',
+  },
+  GHS05: {
+    name: 'Corrosion',
+    hazardClass: 'Corrosive substances',
+    color: '#7C3AED',
+    bgLight: '#FAF5FF',
+    borderColor: '#E9D5FF',
+    textColor: '#4C1D95',
+    hCodes: ['H290','H314','H315','H318'],
+    description: 'The corrosion pictogram indicates substances that cause severe skin burns and eye damage (H314/H318) or are corrosive to metals (H290). Contact can cause permanent tissue destruction within minutes.',
+    storageNote: 'Store in acid-resistant or alkali-resistant cabinets as appropriate. Do not store in metal containers for corrosive-to-metals substances. Use secondary containment (drip trays). Segregate acids from bases. Ensure eyewash stations are accessible within 10 seconds.',
+    regulatoryNote: 'CLP Skin Corrosion Cat. 1A/1B/1C (H314) and Eye Damage Cat. 1 (H318). EU Directive 98/24/EC covers chemical agents at work. OSHA 29 CFR 1910.1000 sets PELs. Emergency eyewash required per ANSI Z358.1.',
+    adnNote: 'ADR Class 8 — Corrosive substances. Black and white diamond with test tubes showing corrosion. Packing groups I–III based on severity. Segregation from food, metals, and certain organic materials required.',
+  },
+  GHS06: {
+    name: 'Skull and Crossbones',
+    hazardClass: 'Acute toxicity (severe)',
+    color: '#1F2937',
+    bgLight: '#F9FAFB',
+    borderColor: '#D1D5DB',
+    textColor: '#111827',
+    hCodes: ['H300','H301','H310','H311','H330','H331'],
+    description: 'The skull and crossbones pictogram indicates severe acute toxicity via oral (H300/H301), dermal (H310/H311), or inhalation (H330/H331) routes. Categories 1–3 represent the highest acute toxicity levels under GHS/CLP.',
+    storageNote: 'Store in locked, well-ventilated area. Access restricted to trained and authorised personnel only. Secondary containment mandatory. Biological and air monitoring may be required. Emergency procedures and antidotes must be available and documented.',
+    regulatoryNote: 'CLP Acute Toxicity Cat. 1–3. Suppresses GHS07 on labels per CLP Article 26. OSHA 29 CFR 1910.1200 requires full hazcom programme. EU occupational exposure limits (OELs) under Directive 2017/164/EU may apply.',
+    adnNote: 'ADR Class 6.1 — Toxic substances. White diamond with skull and crossbones. Packing group I (very toxic), II (toxic), or III (harmful). Closed cargo transport vehicles required for PG I liquids.',
+  },
+  GHS07: {
+    name: 'Exclamation Mark',
+    hazardClass: 'Harmful substances',
+    color: '#D97706',
+    bgLight: '#FFFBEB',
+    borderColor: '#FDE68A',
+    textColor: '#78350F',
+    hCodes: ['H302','H312','H315','H317','H319','H332','H335','H336'],
+    description: 'The exclamation mark pictogram indicates acute toxicity of lower severity (H302/H312/H332), skin and eye irritation (H315/H319), skin sensitisation (H317), and respiratory/narcotic effects (H335/H336). Suppressed when GHS06, GHS05, or GHS08 applies.',
+    storageNote: 'Provide adequate ventilation in work areas. Wear appropriate PPE: gloves, eye protection, and respiratory protection if vapour concentrations may exceed OELs. Keep containers closed when not in use. Wash hands thoroughly after handling.',
+    regulatoryNote: 'CLP Acute Toxicity Cat. 4 and various irritation/sensitisation categories. Suppressed on label by GHS06 (acute tox. Cat. 1–3) and GHS05 per CLP Article 26. OSHA HCS 2012 aligns with these classifications.',
+    adnNote: 'Harmful substances (Class 6.1 PG III) may display GHS07 for transport. However, many GHS07-classified substances fall below ADR transport thresholds and do not require hazmat placards for road transport.',
+  },
+  GHS08: {
+    name: 'Health Hazard',
+    hazardClass: 'Serious long-term health hazards',
+    color: '#BE185D',
+    bgLight: '#FDF2F8',
+    borderColor: '#FBCFE8',
+    textColor: '#831843',
+    hCodes: ['H334','H340','H341','H350','H351','H360','H361','H362','H370','H371','H372','H373'],
+    description: 'The health hazard pictogram indicates serious chronic or irreversible health effects: carcinogenicity (H350/H351), mutagenicity (H340/H341), reproductive toxicity (H360/H361/H362), respiratory sensitisation (H334), and specific target organ toxicity (H370–H373).',
+    storageNote: 'Minimise exposure using engineering controls: local exhaust ventilation, closed systems, gloveboxes. Biological monitoring and medical surveillance may be legally required. Substitution should be considered for Cat. 1A/1B substances. Restrict access and maintain exposure records.',
+    regulatoryNote: 'CMR substances (Cat. 1A/1B) face restrictions under REACH Annex XVII and may be SVHC candidates. EU Directive 2004/37/EC covers carcinogens at work. OSHA 29 CFR 1910.1003–.1016 lists specific carcinogens with individual standards.',
+    adnNote: 'GHS08 substances transported as Class 6.1 or Class 9 depending on classification. Carcinogens and mutagens may be subject to IATA DGR and IMDG Code special provisions for transport documentation and packaging.',
+  },
+  GHS09: {
+    name: 'Environmental Hazard',
+    hazardClass: 'Aquatic environmental hazards',
+    color: '#0D9488',
+    bgLight: '#F0FDFA',
+    borderColor: '#99F6E4',
+    textColor: '#134E4A',
+    hCodes: ['H400','H401','H410','H411','H412','H413','H420'],
+    description: 'The environmental hazard pictogram indicates substances that are acutely or chronically toxic to aquatic life (H400–H413) or harm the ozone layer (H420). Even small releases can cause lasting ecological damage to water systems.',
+    storageNote: 'Do not allow entry to drains, waterways, or soil. Use bunded storage areas. Spill containment equipment must be available. Disposal must comply with local water authority regulations. Contact emergency services immediately for significant spills near water.',
+    regulatoryNote: 'CLP Aquatic Acute Cat. 1 (H400) and Chronic Cat. 1–4 (H410–H413). EU Water Framework Directive (2000/60/EC) sets environmental quality standards. Priority substances under Annex II may face market restrictions. REACH registration requires aquatic toxicity data.',
+    adnNote: 'Environmentally hazardous substances (aquatic) transported under ADR as Class 9 or with marine pollutant mark (MP). IMDG Code requires marine pollutant label for sea transport. PP1 packaging provision applies for small quantities.',
+  },
+}
+
+const meta = GHS_META[upperCode]
+if (!meta) return Astro.redirect('/pictograms/')
+
+// Загружаем SVG пиктограммы
+const { data: picData } = await supabase
+  .from('pictograms_signals')
+  .select('code, name_en, svg_content, signal_word_en')
+  .eq('code', upperCode)
+  .single()
+
+// Загружаем вещества с этой пиктограммой (первые 24)
+const { data: substancesRaw } = await supabase
+  .from('substances')
+  .select('cas_number, iupac_name, common_name, signal_word, ghs_pictogram_codes')
+  .contains('ghs_pictogram_codes', [upperCode])
+  .not('cas_number', 'is', null)
+  .limit(24)
+
+const substances = substancesRaw ?? []
+
+// Загружаем H-statements для этой пиктограммы
+const { data: hStatementsData } = await supabase
+  .from('h_statements')
+  .select('code, text_en')
+  .in('code', meta.hCodes)
+
+const hStatements = (hStatementsData ?? []).sort((a, b) => a.code.localeCompare(b.code))
+
+// Считаем сколько веществ с этой пиктограммой всего
+const { count: totalCount } = await supabase
+  .from('substances')
+  .select('cas_number', { count: 'exact', head: true })
+  .contains('ghs_pictogram_codes', [upperCode])
+  .not('cas_number', 'is', null)
+
+const seoTitle = `${upperCode} — ${meta.name} GHS Pictogram: Meaning, Download SVG & Substance List`
+const seoDesc = `${upperCode} (${meta.name}): ${meta.description.slice(0, 120)}… Download SVG, view ${totalCount ?? substances.length}+ substances.`
+---
+
+<Layout
+  title={seoTitle}
+  description={seoDesc}
+  titleIsComplete={true}
+  canonical={`https://ghspictograms.com/ghs/${code}/`}
+>
+
+  <!-- Hero section -->
+  <section class="bg-[#062A78] text-white py-16 px-4">
+    <div class="max-w-5xl mx-auto flex flex-col sm:flex-row items-center gap-10">
+
+      <!-- Большая пиктограмма -->
+      {picData?.svg_content ? (
+        <div
+          class="shrink-0 w-48 h-48 [&>svg]:w-full [&>svg]:h-full"
+          set:html={picData.svg_content}
+        />
+      ) : (
+        <div class="shrink-0 w-48 h-48 bg-white/10 rounded-2xl flex items-center justify-center">
+          <span class="text-white/60 text-sm font-mono">{upperCode}</span>
+        </div>
+      )}
+
+      <!-- Заголовок -->
+      <div>
+        <p class="text-blue-200 text-sm font-semibold uppercase tracking-widest mb-2">GHS Hazard Pictogram</p>
+        <h1 class="text-4xl sm:text-5xl font-bold leading-tight">{upperCode}</h1>
+        <p class="text-2xl font-semibold text-blue-100 mt-1">{meta.name}</p>
+        <p class="mt-3 text-blue-200 text-lg">{meta.hazardClass}</p>
+
+        <div class="mt-6 flex flex-wrap gap-3">
+          <a
+            href={`/label-constructor/?pictogram=${upperCode}`}
+            class="px-5 py-2.5 bg-white text-[#062A78] font-bold rounded-lg hover:bg-blue-50 transition-colors text-sm"
+          >
+            Use in Label Constructor →
+          </a>
+          <a
+            href="/pictograms/"
+            class="px-5 py-2.5 border border-white/40 text-white font-semibold rounded-lg hover:bg-white/10 transition-colors text-sm"
+          >
+            Browse all substances
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-8">
+
+    <!-- Что означает -->
+    <div class="rounded-2xl p-6 border-2" style={`background:${meta.bgLight};border-color:${meta.borderColor}`}>
+      <h2 class="text-xl font-bold mb-3" style={`color:${meta.textColor}`}>
+        What does {upperCode} mean?
+      </h2>
+      <p class="text-gray-700 leading-relaxed">{meta.description}</p>
+    </div>
+
+    <!-- H-statements карточки -->
+    {hStatements.length > 0 && (
+      <div>
+        <h2 class="text-xl font-bold text-gray-900 mb-4">
+          Associated H-statements ({hStatements.length})
+        </h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {hStatements.map(h => (
+            <div class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex gap-3 items-start">
+              <span class="font-mono font-bold text-red-700 shrink-0 text-sm mt-0.5">{h.code}</span>
+              <span class="text-red-900 text-sm leading-snug">{h.text_en}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    <!-- Storage note -->
+    <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-2xl p-6">
+      <h2 class="text-xl font-bold text-amber-900 mb-2">Storage & handling requirements</h2>
+      <p class="text-amber-800 leading-relaxed">{meta.storageNote}</p>
+    </div>
+
+    <!-- Regulatory note -->
+    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-2">Regulatory context (CLP / OSHA / REACH)</h2>
+      <p class="text-slate-700 leading-relaxed">{meta.regulatoryNote}</p>
+    </div>
+
+    <!-- ADR/DOT note -->
+    <div class="bg-blue-50 border border-blue-200 rounded-2xl p-6">
+      <h2 class="text-xl font-bold text-blue-900 mb-2">Transport marking: GHS vs ADR/DOT</h2>
+      <p class="text-blue-800 leading-relaxed">{meta.adnNote}</p>
+    </div>
+
+    <!-- Download SVG -->
+    {picData?.svg_content && (
+      <div class="border-2 border-dashed border-[#062A78]/30 rounded-2xl p-6 flex flex-col sm:flex-row items-center gap-6">
+        <div class="w-24 h-24 shrink-0 [&>svg]:w-full [&>svg]:h-full" set:html={picData.svg_content}/>
+        <div class="flex-1">
+          <p class="font-bold text-gray-900 text-lg">{upperCode} — {meta.name}</p>
+          <p class="text-gray-600 text-sm mt-1">High-resolution SVG vector file. Free for use in safety documents, SDS, and label design.</p>
+          <div id="download-svg-source" class="hidden" aria-hidden="true" set:html={picData.svg_content} />
+          <button
+            id="download-main-svg"
+            data-code={upperCode}
+            type="button"
+            class="mt-3 px-5 py-2 rounded-lg bg-[#062A78] text-white font-semibold text-sm hover:bg-[#051f5c] transition-colors"
+          >
+            Download {upperCode}.svg
+          </button>
+        </div>
+      </div>
+    )}
+
+    <!-- Substances list -->
+    <div>
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">
+        Substances classified with {upperCode}
+      </h2>
+      <p class="text-gray-500 text-sm mb-6">
+        Showing {substances.length} of {totalCount ?? substances.length} substances in our database with this pictogram.
+        <a href={`/pictograms/?pic=${upperCode}`} class="text-[#062A78] underline ml-1">View all →</a>
+      </p>
+
+      <ul class="divide-y divide-gray-200 border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm">
+        {substances.map(s => {
+          const name = s.common_name || s.iupac_name
+          const pics = s.ghs_pictogram_codes ?? []
+          return (
+            <li key={s.cas_number}>
+              <a
+                href={`/label-constructor/?cas=${encodeURIComponent(s.cas_number)}`}
+                class="flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors gap-4"
+              >
+                <div class="min-w-0">
+                  <span class="font-semibold text-[#062A78] block truncate">{name}</span>
+                  <span class="text-xs text-gray-500">CAS {s.cas_number}</span>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                  {s.signal_word && (
+                    <span class={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.signal_word === 'Danger' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {s.signal_word}
+                    </span>
+                  )}
+                  <span class="text-xs text-gray-400 hidden sm:block">{pics.slice(0,4).join(' ')}</span>
+                  <span class="text-[#062A78] text-xs font-medium">Label →</span>
+                </div>
+              </a>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+
+    <!-- Cross-link to ghssymbols -->
+    <div class="bg-gray-50 border border-gray-200 rounded-2xl p-5 flex items-start gap-4">
+      <div class="flex-1">
+        <p class="font-semibold text-gray-900">Need full toxicological data?</p>
+        <p class="text-gray-600 text-sm mt-1">GHS Symbols provides detailed hazard classification, H/P statements, ATE values and storage compatibility for all substances.</p>
+      </div>
+      <a
+        href={`https://ghssymbols.com/`}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="shrink-0 px-4 py-2 bg-[#062A78] text-white text-sm font-semibold rounded-lg hover:bg-[#051f5c] transition-colors"
+      >
+        GHS Symbols →
+      </a>
+    </div>
+
+  </div>
+
+  <!-- CTA -->
+  <section class="bg-[#062A78] text-white py-14 px-4 text-center">
+    <h2 class="text-2xl sm:text-3xl font-bold">Ready to build a GHS-compliant label?</h2>
+    <p class="mt-3 text-blue-100 text-lg">Auto-filled with {upperCode} — {meta.name} hazard data</p>
+    <a
+      href={`/label-constructor/?pictogram=${upperCode}`}
+      class="inline-block mt-8 px-8 py-3 rounded-lg bg-white text-[#062A78] font-bold hover:bg-blue-50 transition-colors"
+    >
+      Open Label Constructor →
+    </a>
+  </section>
+
+  <script is:inline>
+    (function () {
+      var btn = document.getElementById('download-main-svg')
+      var tpl = document.getElementById('download-svg-source')
+      if (!btn || !tpl) return
+      btn.addEventListener('click', function () {
+        var svg = tpl.innerHTML.trim()
+        var code = btn.getAttribute('data-code') || 'ghs'
+        if (!svg) return
+        var xml = '<?xml version="1.0" encoding="UTF-8"?>' + (svg.indexOf('<svg') === 0 ? svg : '<svg xmlns="http://www.w3.org/2000/svg">' + svg + '</svg>')
+        try {
+          var blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })
+          var url = URL.createObjectURL(blob)
+          var a = document.createElement('a')
+          a.href = url
+          a.download = code + '.svg'
+          a.click()
+          URL.revokeObjectURL(url)
+        } catch (e) {}
+      })
+    })()
+  </script>
+
+</Layout>
