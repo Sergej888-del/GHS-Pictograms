@@ -1,8 +1,8 @@
 import type { EventContext } from '@cloudflare/workers-types'
 
 interface Env {
-  SUPABASE_URL: string
-  SUPABASE_ANON_KEY: string
+  PUBLIC_SUPABASE_URL: string
+  PUBLIC_SUPABASE_ANON_KEY: string
   BREVO_API_KEY: string
 }
 
@@ -36,12 +36,12 @@ export async function onRequestPost(
     }
 
     // Сохраняем в Supabase
-    const supabaseRes = await fetch(`${env.SUPABASE_URL}/rest/v1/leads`, {
+    const supabaseRes = await fetch(`${env.PUBLIC_SUPABASE_URL}/rest/v1/leads`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': env.SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${env.SUPABASE_ANON_KEY}`,
+        'apikey': env.PUBLIC_SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${env.PUBLIC_SUPABASE_ANON_KEY}`,
         'Prefer': 'return=minimal',
       },
       body: JSON.stringify({
