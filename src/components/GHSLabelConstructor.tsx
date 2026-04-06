@@ -25,8 +25,6 @@ const VOLUME_OPTIONS: { key: VolumeKey; label: string; labelMm: string; picMm: s
   { key: 'gt500',    label: 'Over 500 L',   labelMm: '148 × 210 mm', picMm: '46 × 46 mm', template: 'C' },
 ]
 
-const PIC_SIZE: Record<VolumeKey, number> = { le3: 56, '3to50': 80, '50to500': 104, gt500: 128 }
-
 const TEMPLATE_LABELS: Record<Template, string> = {
   A: 'A — Compact vertical (small bottles)',
   B: 'B — Two-column (canisters, pails)',
@@ -44,6 +42,24 @@ function applyPrecedence(pictograms: Pictogram[]): Pictogram[] {
 function combinePStatements(pStatements: PStatement[]): string {
   return pStatements.map(p => p.text_en).join(' ')
 }
+
+type PictogramLayout = 'col' | 'row' | 'grid2'
+
+/** Умная раскладка пиктограмм по числу и шаблону этикетки */
+function getPictogramLayout(count: number, template: Template): PictogramLayout {
+  if (template === 'A') {
+    if (count <= 1) return 'col'
+    if (count === 2) return 'row'
+    return 'grid2'
+  }
+  if (template === 'B') {
+    if (count <= 2) return 'col'
+    return 'grid2'
+  }
+  return 'grid2'
+}
+
+const PIC_PX: Record<Template, number> = { A: 48, B: 56, C: 64 }
 
 const STORAGE_KEY = 'ghs_supplier_data'
 
@@ -70,7 +86,6 @@ export default function GHSLabelConstructor({
   const [agreed, setAgreed] = useState(false)
 
   const volInfo = VOLUME_OPTIONS.find(v => v.key === volume)!
-  const picSizePx = PIC_SIZE[volume]
   const filteredPics = applyPrecedence(pictograms)
   const MAX_P = 6
   const shownP = pStatements.slice(0, MAX_P)
@@ -130,16 +145,20 @@ export default function GHSLabelConstructor({
     }
   }
 
-  /** Пиктограммы строго колонкой (CLP); размер не ниже minSize px */
-  const PictogramsColumn = ({ minSize }: { minSize: number }) => {
-    const size = Math.max(picSizePx, minSize)
+  const PictogramsBlock = ({ layout, sizePx }: { layout: PictogramLayout; sizePx: number }) => {
     if (filteredPics.length === 0) return null
+    const layoutCls =
+      layout === 'col'
+        ? 'flex flex-col items-center gap-1'
+        : layout === 'row'
+          ? 'flex flex-row flex-wrap items-center justify-center gap-1'
+          : 'grid grid-cols-2 gap-1 justify-items-center'
     return (
-      <div className="flex flex-col items-center gap-1">
+      <div className={layoutCls}>
         {filteredPics.map(p => (
           <div
             key={p.code}
-            style={{ width: size, height: size }}
+            style={{ width: sizePx, height: sizePx }}
             className="flex shrink-0 items-center justify-center [&>svg]:max-h-full [&>svg]:max-w-full [&>svg]:h-full [&>svg]:w-full"
             dangerouslySetInnerHTML={{ __html: p.svg_content ?? '' }}
           />
@@ -257,32 +276,42 @@ export default function GHSLabelConstructor({
     </div>
   )
 
-  const LabelTemplateA = () => (
-    <div
-      className="bg-white border-[3px] border-red-600 p-2 mx-auto font-sans text-gray-900 antialiased"
-      style={{ maxWidth: 220 }}
-    >
-      <div className="flex flex-col gap-1">
-        <ProductLinesA />
-        {(filteredPics.length > 0 || signalWord) && (
-          <div className="flex flex-col items-center gap-1 my-0.5">
-            {filteredPics.length > 0 ? <PictogramsColumn minSize={52} /> : null}
-            {signalWord ? (
-              <p className={`text-center text-base font-black uppercase tracking-tight leading-none my-0.5 ${signalColor}`}>
-                {signalWord}
-              </p>
-            ) : null}
+  const LabelTemplateA = () => {
+    const n = filteredPics.length
+    const picLayout = getPictogramLayout(n, 'A')
+    const hasLeftCol = n > 0 || !!signalWord
+    const sizeA = PIC_PX.A
+    return (
+      <div
+        className="bg-white border-[3px] border-red-600 p-2 mx-auto font-sans text-gray-900 antialiased"
+        style={{ maxWidth: 260 }}
+      >
+        <div className={`flex gap-1 items-start ${!hasLeftCol ? 'flex-col' : ''}`}>
+          {hasLeftCol ? (
+            <div className="w-[40%] min-w-0 flex flex-col items-center gap-1">
+              {n > 0 ? <PictogramsBlock layout={picLayout} sizePx={sizeA} /> : null}
+              {signalWord ? (
+                <p className={`text-center text-xs font-black uppercase tracking-tight leading-tight ${signalColor}`}>
+                  {signalWord}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <div className={`min-w-0 flex flex-col gap-1 ${hasLeftCol ? 'w-[60%]' : 'w-full'}`}>
+            <ProductLinesA />
+            <HBlockLabel variant="A" />
+            <PBlockLabel variant="A" />
+            <SupplierBlockLabel variant="A" />
           </div>
-        )}
-        <HBlockLabel variant="A" />
-        <PBlockLabel variant="A" />
-        <SupplierBlockLabel variant="A" />
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   const LabelTemplateB = () => {
-    const hasLeftCol = filteredPics.length > 0 || !!signalWord
+    const n = filteredPics.length
+    const picLayout = getPictogramLayout(n, 'B')
+    const hasLeftCol = n > 0 || !!signalWord
     return (
       <div
         className="bg-white border-[3px] border-red-600 p-3 mx-auto font-sans text-gray-900 antialiased"
@@ -292,7 +321,7 @@ export default function GHSLabelConstructor({
           <div className={`flex gap-2 items-start ${!hasLeftCol ? 'flex-col' : ''}`}>
             {hasLeftCol ? (
               <div className="w-[40%] min-w-0 flex flex-col items-center gap-2">
-                {filteredPics.length > 0 ? <PictogramsColumn minSize={64} /> : null}
+                {n > 0 ? <PictogramsBlock layout={picLayout} sizePx={PIC_PX.B} /> : null}
                 {signalWord ? (
                   <p className={`text-center text-xl font-black uppercase tracking-tight leading-tight ${signalColor}`}>
                     {signalWord}
@@ -313,7 +342,9 @@ export default function GHSLabelConstructor({
   }
 
   const LabelTemplateC = () => {
-    const hasLeftCol = filteredPics.length > 0 || !!signalWord
+    const n = filteredPics.length
+    const picLayout = getPictogramLayout(n, 'C')
+    const hasLeftCol = n > 0 || !!signalWord
     return (
       <div
         className="bg-white border-[3px] border-red-600 p-4 mx-auto font-sans text-gray-900 antialiased"
@@ -321,8 +352,8 @@ export default function GHSLabelConstructor({
       >
         <div className={`flex gap-3 items-start ${!hasLeftCol ? 'flex-col' : ''}`}>
           {hasLeftCol ? (
-            <div className="shrink-0 flex flex-col items-center gap-2">
-              {filteredPics.length > 0 ? <PictogramsColumn minSize={80} /> : null}
+            <div className="shrink-0 flex flex-col items-center gap-2 max-w-[140px]">
+              {n > 0 ? <PictogramsBlock layout={picLayout} sizePx={PIC_PX.C} /> : null}
               {signalWord ? (
                 <p className={`text-center text-lg font-black uppercase tracking-tight leading-tight ${signalColor}`}>
                   {signalWord}
