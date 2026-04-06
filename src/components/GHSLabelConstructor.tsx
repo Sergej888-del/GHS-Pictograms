@@ -374,8 +374,12 @@ export default function GHSLabelConstructor({
           <p className="font-semibold text-[#062A78]">Step 1 — Select container volume</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {VOLUME_OPTIONS.map(v => (
-              <button key={v.key} type="button" onClick={() => handleVolumeChange(v.key)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${volume === v.key ? 'bg-[#062A78] text-white border-[#062A78]' : 'bg-white text-gray-700 border-gray-300 hover:border-[#062A78]'}`}>
+              <button
+                key={v.key}
+                type="button"
+                onClick={() => handleVolumeChange(v.key)}
+                className={`cursor-pointer px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${volume === v.key ? 'bg-[#062A78] text-white border-[#062A78]' : 'bg-white text-gray-700 border-gray-300 hover:border-[#062A78]'}`}
+              >
                 {v.label}
               </button>
             ))}
@@ -385,12 +389,28 @@ export default function GHSLabelConstructor({
           </p>
           <div className="space-y-2">
             <p className="text-sm font-medium text-gray-700">Label template (auto-selected, can change):</p>
-            <div className="flex flex-col gap-2">
-              {(['A','B','C'] as Template[]).map(t => (
-                <label key={t} className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${template === t ? 'border-[#062A78] bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                  <input type="radio" name="template" value={t} checked={template === t} onChange={() => setTemplate(t)} className="accent-[#062A78]" />
+            <div className="flex flex-col gap-2" role="radiogroup" aria-label="Label template">
+              {(['A', 'B', 'C'] as Template[]).map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  role="radio"
+                  aria-checked={template === t}
+                  onClick={() => setTemplate(t)}
+                  className={`flex w-full cursor-pointer items-center gap-3 rounded-lg border-2 p-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#062A78] focus-visible:ring-offset-2 ${
+                    template === t ? 'border-[#062A78] bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+                      template === t ? 'border-[#062A78] bg-[#062A78]' : 'border-gray-400 bg-white'
+                    }`}
+                    aria-hidden
+                  >
+                    {template === t ? <span className="h-1.5 w-1.5 rounded-full bg-white" /> : null}
+                  </span>
                   <span className="text-sm font-medium">{TEMPLATE_LABELS[t]}</span>
-                </label>
+                </button>
               ))}
             </div>
           </div>
