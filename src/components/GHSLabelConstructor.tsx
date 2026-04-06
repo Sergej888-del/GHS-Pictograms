@@ -130,136 +130,218 @@ export default function GHSLabelConstructor({
     }
   }
 
-  const PictogramsBlock = ({ size }: { size: number }) => (
-    <div className="flex flex-wrap gap-4 justify-center">
-      {filteredPics.map(p => (
-        <div
-          key={p.code}
-          style={{ width: size, height: size }}
-          className="flex items-center justify-center [&>svg]:w-full [&>svg]:h-full"
-          dangerouslySetInnerHTML={{ __html: p.svg_content ?? '' }}
-        />
-      ))}
-    </div>
-  )
+  /** Пиктограммы строго колонкой (CLP); размер не ниже minSize px */
+  const PictogramsColumn = ({ minSize }: { minSize: number }) => {
+    const size = Math.max(picSizePx, minSize)
+    if (filteredPics.length === 0) return null
+    return (
+      <div className="flex flex-col items-center gap-1">
+        {filteredPics.map(p => (
+          <div
+            key={p.code}
+            style={{ width: size, height: size }}
+            className="flex shrink-0 items-center justify-center [&>svg]:max-h-full [&>svg]:max-w-full [&>svg]:h-full [&>svg]:w-full"
+            dangerouslySetInnerHTML={{ __html: p.svg_content ?? '' }}
+          />
+        ))}
+      </div>
+    )
+  }
 
-  const SignalWordBlock = () => signalWord ? (
-    <p className={`text-center font-black tracking-tight uppercase text-3xl ${signalWord === 'Danger' ? 'text-red-700' : 'text-amber-700'}`}>
-      {signalWord}
-    </p>
-  ) : null
+  const signalColor = signalWord === 'Danger' ? 'text-red-700' : 'text-amber-700'
 
-  const HBlock = ({ small }: { small?: boolean }) => hStatements.length > 0 ? (
-    <div>
-      <p className="text-xs font-bold uppercase text-gray-500 mb-1 tracking-wide">Hazard statements</p>
-      <ul className={`${small ? 'text-xs' : 'text-sm'} space-y-1 leading-snug`}>
-        {hStatements.map(h => <li key={h.code}><span className="font-bold">{h.code}:</span> {h.text_en}</li>)}
-      </ul>
-    </div>
-  ) : null
-
-  const PBlock = ({ small }: { small?: boolean }) => shownP.length > 0 ? (
-    <div>
-      <p className="text-xs font-bold uppercase text-gray-500 mb-1 tracking-wide">Precautionary statements</p>
-      {pFormat === 'combined' ? (
-        <p className={`${small ? 'text-xs' : 'text-sm'} leading-relaxed text-gray-800`}>{combinePStatements(shownP)}</p>
-      ) : (
-        <ul className={`${small ? 'text-xs' : 'text-sm'} space-y-1 leading-snug`}>
-          {shownP.map(p => <li key={p.code}><span className="font-bold">{p.code}:</span> {p.text_en}</li>)}
+  const HBlockLabel = ({ variant }: { variant: 'A' | 'B' | 'C' }) => {
+    if (hStatements.length === 0) return null
+    const listCls =
+      variant === 'A'
+        ? 'text-[10px] leading-tight space-y-0.5'
+        : 'text-xs leading-snug space-y-0.5'
+    const titleCls = variant === 'A' ? 'text-[9px] font-bold uppercase text-gray-600 mb-0.5' : 'text-[10px] font-bold uppercase text-gray-600 mb-0.5'
+    return (
+      <div className="my-0.5 font-sans">
+        <p className={titleCls}>Hazard statements</p>
+        <ul className={listCls}>
+          {hStatements.map(h => (
+            <li key={h.code}>
+              <span className="font-bold">{h.code}:</span> {h.text_en}
+            </li>
+          ))}
         </ul>
-      )}
-      {hiddenPCount > 0 && (
-        <p className="mt-1 text-xs text-amber-700">+{hiddenPCount} more — see SDS (CLP max. 6 on label)</p>
-      )}
-    </div>
-  ) : null
+      </div>
+    )
+  }
 
-  const SupplierBlock = ({ small }: { small?: boolean }) => (
-    <div>
-      <p className="text-xs font-bold uppercase text-gray-500 mb-1 tracking-wide">Supplier</p>
-      {supplierName || supplierAddress || supplierPhone ? (
-        <div className={`${small ? 'text-xs' : 'text-sm'} text-gray-800`}>
+  const PBlockLabel = ({ variant }: { variant: 'A' | 'B' | 'C' }) => {
+    if (shownP.length === 0) return null
+    const bodyCls =
+      variant === 'A'
+        ? 'text-[10px] leading-tight text-gray-900'
+        : 'text-xs leading-snug text-gray-900'
+    const titleCls = variant === 'A' ? 'text-[9px] font-bold uppercase text-gray-600 mb-0.5' : 'text-[10px] font-bold uppercase text-gray-600 mb-0.5'
+    return (
+      <div className="my-0.5 font-sans">
+        <p className={titleCls}>Precautionary statements</p>
+        {pFormat === 'combined' ? (
+          <p className={bodyCls}>{combinePStatements(shownP)}</p>
+        ) : (
+          <ul className={`${bodyCls} space-y-0.5`}>
+            {shownP.map(p => (
+              <li key={p.code}>
+                <span className="font-bold">{p.code}:</span> {p.text_en}
+              </li>
+            ))}
+          </ul>
+        )}
+        {hiddenPCount > 0 && (
+          <p className="mt-0.5 text-[9px] text-amber-800 leading-tight">+{hiddenPCount} more — see SDS (CLP max. 6)</p>
+        )}
+      </div>
+    )
+  }
+
+  const SupplierBlockLabel = ({ variant }: { variant: 'A' | 'B' | 'C' }) => {
+    const hasData = !!(supplierName || supplierAddress || supplierPhone)
+    if (!hasData) return null
+    const textCls =
+      variant === 'A' ? 'text-[9px] leading-tight text-gray-900' : 'text-xs leading-snug text-gray-900'
+    const titleCls = variant === 'A' ? 'text-[9px] font-bold uppercase text-gray-600 mb-0.5' : 'text-[10px] font-bold uppercase text-gray-600 mb-0.5'
+    return (
+      <div className="my-0.5 font-sans">
+        <p className={titleCls}>Supplier</p>
+        <div className={textCls}>
           {supplierName && <p className="font-semibold">{supplierName}</p>}
           {supplierAddress && <p>{supplierAddress}</p>}
           {supplierPhone && <p>{supplierPhone}</p>}
         </div>
-      ) : (
-        <p className="text-xs text-gray-400 italic">[Add supplier in Step 2 — required by CLP Art. 17]</p>
-      )}
+      </div>
+    )
+  }
+
+  /** A: название → CAS/доп. поля, без лишних отступов */
+  const ProductLinesA = () => (
+    <div className="my-0.5 font-sans">
+      <p className="text-sm font-bold leading-tight text-gray-900">{displayName}</p>
+      <p className="text-xs text-gray-800 leading-tight">
+        CAS: {casNumber}
+        {ecNumber ? ` · EC: ${ecNumber}` : ''}
+      </p>
+      {nominalQty ? <p className="text-xs text-gray-800 leading-tight">Qty: {nominalQty}</p> : null}
+      {batchNumber ? <p className="text-xs text-gray-800 leading-tight">Batch: {batchNumber}</p> : null}
+      {ufiCode ? <p className="text-[10px] font-mono text-gray-800 leading-tight">{ufiCode}</p> : null}
     </div>
   )
 
-  const ProductBlock = ({ small }: { small?: boolean }) => (
-    <div>
-      <p className="text-xs uppercase tracking-wide text-gray-400 font-semibold">Product identifier</p>
-      <p className={`${small ? 'text-base' : 'text-lg'} font-bold mt-0.5`}>{displayName}</p>
-      <p className="text-xs text-gray-600">CAS: {casNumber}{ecNumber ? ` · EC: ${ecNumber}` : ''}</p>
-      {nominalQty && <p className="text-xs text-gray-600">Qty: {nominalQty}</p>}
-      {batchNumber && <p className="text-xs text-gray-600">Batch: {batchNumber}</p>}
-      {ufiCode && <p className="text-xs font-mono text-gray-700 mt-0.5">{ufiCode}</p>}
+  const ProductLinesB = () => (
+    <div className="font-sans">
+      <p className="text-sm font-bold leading-snug text-gray-900">{displayName}</p>
+      <p className="text-xs text-gray-800">
+        CAS: {casNumber}
+        {ecNumber ? ` · EC: ${ecNumber}` : ''}
+      </p>
+      {nominalQty ? <p className="text-xs text-gray-800">Qty: {nominalQty}</p> : null}
+      {batchNumber ? <p className="text-xs text-gray-800">Batch: {batchNumber}</p> : null}
+      {ufiCode ? <p className="text-xs font-mono text-gray-800">{ufiCode}</p> : null}
+    </div>
+  )
+
+  const ProductLinesC = () => (
+    <div className="font-sans">
+      <p className="text-base font-bold leading-snug text-gray-900">{displayName}</p>
+      <p className="text-xs text-gray-800">
+        CAS: {casNumber}
+        {ecNumber ? ` · EC: ${ecNumber}` : ''}
+      </p>
+      {nominalQty ? <p className="text-xs text-gray-800">Qty: {nominalQty}</p> : null}
+      {batchNumber ? <p className="text-xs text-gray-800">Batch: {batchNumber}</p> : null}
+      {ufiCode ? <p className="text-xs font-mono text-gray-800">{ufiCode}</p> : null}
     </div>
   )
 
   const LabelTemplateA = () => (
-    <div className="bg-white border-[3px] border-red-600 p-4 mx-auto" style={{ maxWidth: 320 }}>
-      <ProductBlock small />
-      <div className="border-t border-gray-200 my-3" />
-      <div className="flex justify-center my-3">
-        <PictogramsBlock size={picSizePx} />
+    <div
+      className="bg-white border-[3px] border-red-600 p-2 mx-auto font-sans text-gray-900 antialiased"
+      style={{ maxWidth: 220 }}
+    >
+      <div className="flex flex-col gap-1">
+        <ProductLinesA />
+        {(filteredPics.length > 0 || signalWord) && (
+          <div className="flex flex-col items-center gap-1 my-0.5">
+            {filteredPics.length > 0 ? <PictogramsColumn minSize={52} /> : null}
+            {signalWord ? (
+              <p className={`text-center text-base font-black uppercase tracking-tight leading-none my-0.5 ${signalColor}`}>
+                {signalWord}
+              </p>
+            ) : null}
+          </div>
+        )}
+        <HBlockLabel variant="A" />
+        <PBlockLabel variant="A" />
+        <SupplierBlockLabel variant="A" />
       </div>
-      <SignalWordBlock />
-      <div className="border-t border-gray-200 my-3 space-y-3">
-        <HBlock small />
-        <PBlock small />
-      </div>
-      <div className="border-t border-dashed border-gray-300 pt-2">
-        <SupplierBlock small />
-      </div>
-      <p className="text-center text-xs text-gray-300 mt-2">{volInfo.labelMm} · {volInfo.picMm} · CLP Annex I</p>
     </div>
   )
 
-  const LabelTemplateB = () => (
-    <div className="bg-white border-[3px] border-red-600 p-5 mx-auto" style={{ maxWidth: 560 }}>
-      <ProductBlock />
-      <div className="border-t border-gray-200 my-3" />
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col items-center justify-start gap-3">
-          <PictogramsBlock size={picSizePx} />
-          <SignalWordBlock />
-        </div>
-        <div className="space-y-3 text-sm">
-          <HBlock />
-          <PBlock />
+  const LabelTemplateB = () => {
+    const hasLeftCol = filteredPics.length > 0 || !!signalWord
+    return (
+      <div
+        className="bg-white border-[3px] border-red-600 p-3 mx-auto font-sans text-gray-900 antialiased"
+        style={{ maxWidth: 380 }}
+      >
+        <div className="flex flex-col gap-2">
+          <div className={`flex gap-2 items-start ${!hasLeftCol ? 'flex-col' : ''}`}>
+            {hasLeftCol ? (
+              <div className="w-[40%] min-w-0 flex flex-col items-center gap-2">
+                {filteredPics.length > 0 ? <PictogramsColumn minSize={64} /> : null}
+                {signalWord ? (
+                  <p className={`text-center text-xl font-black uppercase tracking-tight leading-tight ${signalColor}`}>
+                    {signalWord}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            <div className={`min-w-0 flex flex-col gap-2 ${hasLeftCol ? 'w-[60%]' : 'w-full'}`}>
+              <ProductLinesB />
+              <HBlockLabel variant="B" />
+              <PBlockLabel variant="B" />
+            </div>
+          </div>
+          <SupplierBlockLabel variant="B" />
         </div>
       </div>
-      <div className="border-t border-dashed border-gray-300 mt-4 pt-3">
-        <SupplierBlock />
-      </div>
-      <p className="text-center text-xs text-gray-300 mt-2">{volInfo.labelMm} · {volInfo.picMm} · CLP Annex I</p>
-    </div>
-  )
+    )
+  }
 
-  const LabelTemplateC = () => (
-    <div className="bg-white border-[3px] border-red-600 p-6 mx-auto" style={{ maxWidth: 720 }}>
-      <div className="flex gap-6">
-        <div className="flex flex-col items-center justify-center gap-3 shrink-0" style={{ minWidth: picSizePx * 2 + 16 }}>
-          <PictogramsBlock size={picSizePx} />
-          <SignalWordBlock />
-        </div>
-        <div className="flex-1 space-y-3">
-          <ProductBlock />
-          <div className="border-t border-gray-200" />
-          <HBlock />
-          <PBlock />
-          <div className="border-t border-dashed border-gray-300 pt-2">
-            <SupplierBlock />
+  const LabelTemplateC = () => {
+    const hasLeftCol = filteredPics.length > 0 || !!signalWord
+    return (
+      <div
+        className="bg-white border-[3px] border-red-600 p-4 mx-auto font-sans text-gray-900 antialiased"
+        style={{ maxWidth: 560 }}
+      >
+        <div className={`flex gap-3 items-start ${!hasLeftCol ? 'flex-col' : ''}`}>
+          {hasLeftCol ? (
+            <div className="shrink-0 flex flex-col items-center gap-2">
+              {filteredPics.length > 0 ? <PictogramsColumn minSize={80} /> : null}
+              {signalWord ? (
+                <p className={`text-center text-lg font-black uppercase tracking-tight leading-tight ${signalColor}`}>
+                  {signalWord}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="flex-1 min-w-0 flex flex-col gap-2">
+            <ProductLinesC />
+            <HBlockLabel variant="C" />
+          </div>
+          <div className="flex-1 min-w-0 flex flex-col gap-2">
+            <PBlockLabel variant="C" />
+            <SupplierBlockLabel variant="C" />
           </div>
         </div>
       </div>
-      <p className="text-center text-xs text-gray-300 mt-3">{volInfo.labelMm} · {volInfo.picMm} · CLP Annex I</p>
-    </div>
-  )
+    )
+  }
 
   const stepTitles = ['Container volume', 'Supplier details', 'Product info', 'P-statement format', 'Preview & Download']
 
