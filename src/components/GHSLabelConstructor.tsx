@@ -13,22 +13,116 @@ interface Props {
   pStatements: PStatement[]
 }
 
-type VolumeKey = 'le3' | '3to50' | '50to500' | 'gt500'
-type Template = 'A' | 'B' | 'C'
+type VolumeKey = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+type FontScale = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
 type PFormat = 'codes' | 'combined'
 type Step = 1 | 2 | 3 | 4 | 5
 
-const VOLUME_OPTIONS: { key: VolumeKey; label: string; labelMm: string; picMm: string; template: Template }[] = [
-  { key: 'le3',      label: 'Up to 3 L',    labelMm: '52 × 74 mm',   picMm: '16 × 16 mm', template: 'A' },
-  { key: '3to50',    label: '3 L – 50 L',   labelMm: '74 × 105 mm',  picMm: '23 × 23 mm', template: 'B' },
-  { key: '50to500',  label: '50 – 500 L',   labelMm: '105 × 148 mm', picMm: '32 × 32 mm', template: 'C' },
-  { key: 'gt500',    label: 'Over 500 L',   labelMm: '148 × 210 mm', picMm: '46 × 46 mm', template: 'C' },
+const VOLUME_TIERS = [
+  {
+    key: 'xs' as const,
+    label: '≤ 0.5 L',
+    sublabel: 'Vials, small bottles',
+    labelMm: '52 × 74 mm',
+    picMm: '10 × 10 mm',
+    picSizePx: 38,
+    maxWidthPx: 260,
+    fontScale: 'xs' as const,
+  },
+  {
+    key: 'sm' as const,
+    label: '0.5 – 3 L',
+    sublabel: 'Bottles, canisters',
+    labelMm: '52 × 74 mm',
+    picMm: '16 × 16 mm',
+    picSizePx: 52,
+    maxWidthPx: 280,
+    fontScale: 'sm' as const,
+  },
+  {
+    key: 'md' as const,
+    label: '3 – 50 L',
+    sublabel: 'Pails, canisters',
+    labelMm: '74 × 105 mm',
+    picMm: '23 × 23 mm',
+    picSizePx: 72,
+    maxWidthPx: 420,
+    fontScale: 'md' as const,
+  },
+  {
+    key: 'lg' as const,
+    label: '50 – 500 L',
+    sublabel: 'Drums, IBCs',
+    labelMm: '105 × 148 mm',
+    picMm: '32 × 32 mm',
+    picSizePx: 100,
+    maxWidthPx: 580,
+    fontScale: 'lg' as const,
+  },
+  {
+    key: 'xl' as const,
+    label: '> 500 L',
+    sublabel: 'Large IBCs, tanks',
+    labelMm: '148 × 210 mm',
+    picMm: '46 × 46 mm',
+    picSizePx: 140,
+    maxWidthPx: 720,
+    fontScale: 'xl' as const,
+  },
 ]
 
-const TEMPLATE_LABELS: Record<Template, string> = {
-  A: 'A — Compact vertical (small bottles)',
-  B: 'B — Two-column (canisters, pails)',
-  C: 'C — Horizontal (drums, IBC)',
+function getFontClasses(scale: FontScale) {
+  const map: Record<
+    FontScale,
+    { name: string; cas: string; label: string; h: string; p: string; signal: string; supplier: string }
+  > = {
+    xs: {
+      name: 'text-[10px]',
+      cas: 'text-[8px]',
+      label: 'text-[8px] uppercase',
+      h: 'text-[8px] leading-tight',
+      p: 'text-[8px] leading-tight',
+      signal: 'text-xs',
+      supplier: 'text-[7px]',
+    },
+    sm: {
+      name: 'text-xs',
+      cas: 'text-[9px]',
+      label: 'text-[9px] uppercase',
+      h: 'text-[9px] leading-snug',
+      p: 'text-[9px] leading-snug',
+      signal: 'text-sm',
+      supplier: 'text-[8px]',
+    },
+    md: {
+      name: 'text-sm',
+      cas: 'text-xs',
+      label: 'text-[10px] uppercase',
+      h: 'text-xs leading-snug',
+      p: 'text-xs leading-snug',
+      signal: 'text-base',
+      supplier: 'text-[9px]',
+    },
+    lg: {
+      name: 'text-base',
+      cas: 'text-xs',
+      label: 'text-xs uppercase',
+      h: 'text-xs leading-normal',
+      p: 'text-xs leading-normal',
+      signal: 'text-lg',
+      supplier: 'text-xs',
+    },
+    xl: {
+      name: 'text-lg',
+      cas: 'text-sm',
+      label: 'text-xs uppercase',
+      h: 'text-sm leading-normal',
+      p: 'text-sm leading-normal',
+      signal: 'text-xl',
+      supplier: 'text-sm',
+    },
+  }
+  return map[scale]
 }
 
 function applyPrecedence(pictograms: Pictogram[]): Pictogram[] {
@@ -43,23 +137,39 @@ function combinePStatements(pStatements: PStatement[]): string {
   return pStatements.map(p => p.text_en).join(' ')
 }
 
-type PictogramLayout = 'col' | 'row' | 'grid2'
+/** Раскладка пиктограмм в левой колонке по CLP/GHS */
+function PictogramsCluster({ pics, sizePx }: { pics: Pictogram[]; sizePx: number }) {
+  const n = pics.length
+  if (n === 0) return null
 
-/** Умная раскладка пиктограмм по числу и шаблону этикетки */
-function getPictogramLayout(count: number, template: Template): PictogramLayout {
-  if (template === 'A') {
-    if (count <= 1) return 'col'
-    if (count === 2) return 'row'
-    return 'grid2'
+  const cell = (p: Pictogram) => (
+    <div
+      key={p.code}
+      style={{ width: sizePx, height: sizePx }}
+      className="flex shrink-0 items-center justify-center [&>svg]:max-h-full [&>svg]:max-w-full [&>svg]:h-full [&>svg]:w-full"
+      dangerouslySetInnerHTML={{ __html: p.svg_content ?? '' }}
+    />
+  )
+
+  if (n === 1) {
+    return <div className="flex justify-center">{cell(pics[0])}</div>
   }
-  if (template === 'B') {
-    if (count <= 2) return 'col'
-    return 'grid2'
+  if (n === 2 || n === 3) {
+    return <div className="flex flex-col items-center gap-1">{pics.map(cell)}</div>
   }
-  return 'grid2'
+  if (n === 4) {
+    return <div className="grid grid-cols-2 gap-1 justify-items-center">{pics.map(cell)}</div>
+  }
+  if (n === 5) {
+    return (
+      <div className="flex flex-col items-center gap-1">
+        <div className="grid grid-cols-2 gap-1 justify-items-center">{pics.slice(0, 4).map(cell)}</div>
+        <div className="flex w-full justify-center">{cell(pics[4])}</div>
+      </div>
+    )
+  }
+  return <div className="grid grid-cols-2 gap-1 justify-items-center">{pics.map(cell)}</div>
 }
-
-const PIC_PX: Record<Template, number> = { A: 48, B: 56, C: 64 }
 
 const STORAGE_KEY = 'ghs_supplier_data'
 
@@ -68,8 +178,7 @@ export default function GHSLabelConstructor({
   pictograms, hStatements, pStatements,
 }: Props) {
   const [step, setStep] = useState<Step>(1)
-  const [volume, setVolume] = useState<VolumeKey>('3to50')
-  const [template, setTemplate] = useState<Template>('B')
+  const [volume, setVolume] = useState<VolumeKey>('sm')
   const [supplierName, setSupplierName] = useState('')
   const [supplierAddress, setSupplierAddress] = useState('')
   const [supplierPhone, setSupplierPhone] = useState('')
@@ -85,7 +194,7 @@ export default function GHSLabelConstructor({
   const [submitError, setSubmitError] = useState('')
   const [agreed, setAgreed] = useState(false)
 
-  const volInfo = VOLUME_OPTIONS.find(v => v.key === volume)!
+  const tier = VOLUME_TIERS.find(v => v.key === volume)!
   const filteredPics = applyPrecedence(pictograms)
   const MAX_P = 6
   const shownP = pStatements.slice(0, MAX_P)
@@ -116,7 +225,6 @@ export default function GHSLabelConstructor({
 
   const handleVolumeChange = (key: VolumeKey) => {
     setVolume(key)
-    setTemplate(VOLUME_OPTIONS.find(v => v.key === key)!.template)
   }
 
   const handleSubmitLead = async () => {
@@ -133,8 +241,8 @@ export default function GHSLabelConstructor({
           email, company, role,
           cas_number: casNumber,
           substance_name: displayName,
-          label_template: template,
-          volume_range: volInfo.label,
+          label_template: volume,
+          volume_range: tier.label,
         }),
       })
       setSubmitted(true)
@@ -145,231 +253,96 @@ export default function GHSLabelConstructor({
     }
   }
 
-  const PictogramsBlock = ({ layout, sizePx }: { layout: PictogramLayout; sizePx: number }) => {
-    if (filteredPics.length === 0) return null
-    const layoutCls =
-      layout === 'col'
-        ? 'flex flex-col items-center gap-1'
-        : layout === 'row'
-          ? 'flex flex-row flex-wrap items-center justify-center gap-1'
-          : 'grid grid-cols-2 gap-1 justify-items-center'
-    return (
-      <div className={layoutCls}>
-        {filteredPics.map(p => (
-          <div
-            key={p.code}
-            style={{ width: sizePx, height: sizePx }}
-            className="flex shrink-0 items-center justify-center [&>svg]:max-h-full [&>svg]:max-w-full [&>svg]:h-full [&>svg]:w-full"
-            dangerouslySetInnerHTML={{ __html: p.svg_content ?? '' }}
-          />
-        ))}
-      </div>
-    )
-  }
-
   const signalColor = signalWord === 'Danger' ? 'text-red-700' : 'text-amber-700'
 
-  const HBlockLabel = ({ variant }: { variant: 'A' | 'B' | 'C' }) => {
-    if (hStatements.length === 0) return null
-    const listCls =
-      variant === 'A'
-        ? 'text-[10px] leading-tight space-y-0.5'
-        : 'text-xs leading-snug space-y-0.5'
-    const titleCls = variant === 'A' ? 'text-[9px] font-bold uppercase text-gray-600 mb-0.5' : 'text-[10px] font-bold uppercase text-gray-600 mb-0.5'
-    return (
-      <div className="my-0.5 font-sans">
-        <p className={titleCls}>Hazard statements</p>
-        <ul className={listCls}>
-          {hStatements.map(h => (
-            <li key={h.code}>
-              <span className="font-bold">{h.code}:</span> {h.text_en}
-            </li>
-          ))}
-        </ul>
-      </div>
-    )
-  }
+  const UnifiedLabelPreview = () => {
+    const fc = getFontClasses(tier.fontScale)
+    const leftColW = tier.picSizePx + 24
+    const hasLeft = filteredPics.length > 0 || !!signalWord
 
-  const PBlockLabel = ({ variant }: { variant: 'A' | 'B' | 'C' }) => {
-    if (shownP.length === 0) return null
-    const bodyCls =
-      variant === 'A'
-        ? 'text-[10px] leading-tight text-gray-900'
-        : 'text-xs leading-snug text-gray-900'
-    const titleCls = variant === 'A' ? 'text-[9px] font-bold uppercase text-gray-600 mb-0.5' : 'text-[10px] font-bold uppercase text-gray-600 mb-0.5'
-    return (
-      <div className="my-0.5 font-sans">
-        <p className={titleCls}>Precautionary statements</p>
-        {pFormat === 'combined' ? (
-          <p className={bodyCls}>{combinePStatements(shownP)}</p>
-        ) : (
-          <ul className={`${bodyCls} space-y-0.5`}>
-            {shownP.map(p => (
-              <li key={p.code}>
-                <span className="font-bold">{p.code}:</span> {p.text_en}
-              </li>
-            ))}
-          </ul>
-        )}
-        {hiddenPCount > 0 && (
-          <p className="mt-0.5 text-[9px] text-amber-800 leading-tight">+{hiddenPCount} more — see SDS (CLP max. 6)</p>
-        )}
-      </div>
-    )
-  }
+    const supplierLine = [supplierName, supplierAddress, supplierPhone].filter(Boolean).join(' | ')
 
-  const SupplierBlockLabel = ({ variant }: { variant: 'A' | 'B' | 'C' }) => {
-    const hasData = !!(supplierName || supplierAddress || supplierPhone)
-    if (!hasData) return null
-    const textCls =
-      variant === 'A' ? 'text-[9px] leading-tight text-gray-900' : 'text-xs leading-snug text-gray-900'
-    const titleCls = variant === 'A' ? 'text-[9px] font-bold uppercase text-gray-600 mb-0.5' : 'text-[10px] font-bold uppercase text-gray-600 mb-0.5'
-    return (
-      <div className="my-0.5 font-sans">
-        <p className={titleCls}>Supplier</p>
-        <div className={textCls}>
-          {supplierName && <p className="font-semibold">{supplierName}</p>}
-          {supplierAddress && <p>{supplierAddress}</p>}
-          {supplierPhone && <p>{supplierPhone}</p>}
-        </div>
-      </div>
-    )
-  }
-
-  /** A: название → CAS/доп. поля, без лишних отступов */
-  const ProductLinesA = () => (
-    <div className="my-0.5 font-sans">
-      <p className="text-sm font-bold leading-tight text-gray-900">{displayName}</p>
-      <p className="text-xs text-gray-800 leading-tight">
-        CAS: {casNumber}
-        {ecNumber ? ` · EC: ${ecNumber}` : ''}
-      </p>
-      {nominalQty ? <p className="text-xs text-gray-800 leading-tight">Qty: {nominalQty}</p> : null}
-      {batchNumber ? <p className="text-xs text-gray-800 leading-tight">Batch: {batchNumber}</p> : null}
-      {ufiCode ? <p className="text-[10px] font-mono text-gray-800 leading-tight">{ufiCode}</p> : null}
-    </div>
-  )
-
-  const ProductLinesB = () => (
-    <div className="font-sans">
-      <p className="text-sm font-bold leading-snug text-gray-900">{displayName}</p>
-      <p className="text-xs text-gray-800">
-        CAS: {casNumber}
-        {ecNumber ? ` · EC: ${ecNumber}` : ''}
-      </p>
-      {nominalQty ? <p className="text-xs text-gray-800">Qty: {nominalQty}</p> : null}
-      {batchNumber ? <p className="text-xs text-gray-800">Batch: {batchNumber}</p> : null}
-      {ufiCode ? <p className="text-xs font-mono text-gray-800">{ufiCode}</p> : null}
-    </div>
-  )
-
-  const ProductLinesC = () => (
-    <div className="font-sans">
-      <p className="text-base font-bold leading-snug text-gray-900">{displayName}</p>
-      <p className="text-xs text-gray-800">
-        CAS: {casNumber}
-        {ecNumber ? ` · EC: ${ecNumber}` : ''}
-      </p>
-      {nominalQty ? <p className="text-xs text-gray-800">Qty: {nominalQty}</p> : null}
-      {batchNumber ? <p className="text-xs text-gray-800">Batch: {batchNumber}</p> : null}
-      {ufiCode ? <p className="text-xs font-mono text-gray-800">{ufiCode}</p> : null}
-    </div>
-  )
-
-  const LabelTemplateA = () => {
-    const n = filteredPics.length
-    const picLayout = getPictogramLayout(n, 'A')
-    const hasLeftCol = n > 0 || !!signalWord
-    const sizeA = PIC_PX.A
     return (
       <div
-        className="bg-white border-[3px] border-red-600 p-2 mx-auto font-sans text-gray-900 antialiased"
-        style={{ maxWidth: 260 }}
+        className="bg-white border-[3px] border-red-600 mx-auto font-sans text-gray-900 antialiased overflow-hidden"
+        style={{ maxWidth: tier.maxWidthPx }}
       >
-        <div className={`flex gap-1 items-start ${!hasLeftCol ? 'flex-col' : ''}`}>
-          {hasLeftCol ? (
-            <div className="w-[40%] min-w-0 flex flex-col items-center gap-1">
-              {n > 0 ? <PictogramsBlock layout={picLayout} sizePx={sizeA} /> : null}
+        <div className="flex flex-row gap-2 p-2 sm:p-3">
+          {hasLeft ? (
+            <div
+              className="shrink-0 flex flex-col items-center gap-1"
+              style={{ width: leftColW }}
+            >
+              {filteredPics.length > 0 ? (
+                <PictogramsCluster pics={filteredPics} sizePx={tier.picSizePx} />
+              ) : null}
               {signalWord ? (
-                <p className={`text-center text-xs font-black uppercase tracking-tight leading-tight ${signalColor}`}>
+                <p className={`text-center font-black uppercase tracking-tight leading-tight ${fc.signal} ${signalColor}`}>
                   {signalWord}
                 </p>
               ) : null}
             </div>
           ) : null}
-          <div className={`min-w-0 flex flex-col gap-1 ${hasLeftCol ? 'w-[60%]' : 'w-full'}`}>
-            <ProductLinesA />
-            <HBlockLabel variant="A" />
-            <PBlockLabel variant="A" />
-            <SupplierBlockLabel variant="A" />
-          </div>
-        </div>
-      </div>
-    )
-  }
 
-  const LabelTemplateB = () => {
-    const n = filteredPics.length
-    const picLayout = getPictogramLayout(n, 'B')
-    const hasLeftCol = n > 0 || !!signalWord
-    return (
-      <div
-        className="bg-white border-[3px] border-red-600 p-3 mx-auto font-sans text-gray-900 antialiased"
-        style={{ maxWidth: 380 }}
-      >
-        <div className="flex flex-col gap-2">
-          <div className={`flex gap-2 items-start ${!hasLeftCol ? 'flex-col' : ''}`}>
-            {hasLeftCol ? (
-              <div className="w-[40%] min-w-0 flex flex-col items-center gap-2">
-                {n > 0 ? <PictogramsBlock layout={picLayout} sizePx={PIC_PX.B} /> : null}
-                {signalWord ? (
-                  <p className={`text-center text-xl font-black uppercase tracking-tight leading-tight ${signalColor}`}>
-                    {signalWord}
-                  </p>
-                ) : null}
-              </div>
+          <div className={`min-w-0 flex flex-1 flex-col gap-1 ${!hasLeft ? 'w-full' : ''}`}>
+            <p className={`font-bold leading-tight ${fc.name}`}>{displayName}</p>
+            <p className={`text-gray-500 ${fc.cas}`}>
+              CAS: {casNumber}
+              {ecNumber ? ` · EC: ${ecNumber}` : ''}
+            </p>
+            {nominalQty ? <p className={`text-gray-600 ${fc.cas}`}>Qty: {nominalQty}</p> : null}
+            {batchNumber ? <p className={`text-gray-600 ${fc.cas}`}>Batch: {batchNumber}</p> : null}
+            {ufiCode ? <p className={`font-mono text-gray-700 ${fc.cas}`}>{ufiCode}</p> : null}
+
+            {(hStatements.length > 0 || shownP.length > 0) ? (
+              <div className="border-t border-gray-200 my-0.5" />
             ) : null}
-            <div className={`min-w-0 flex flex-col gap-2 ${hasLeftCol ? 'w-[60%]' : 'w-full'}`}>
-              <ProductLinesB />
-              <HBlockLabel variant="B" />
-              <PBlockLabel variant="B" />
-            </div>
-          </div>
-          <SupplierBlockLabel variant="B" />
-        </div>
-      </div>
-    )
-  }
 
-  const LabelTemplateC = () => {
-    const n = filteredPics.length
-    const picLayout = getPictogramLayout(n, 'C')
-    const hasLeftCol = n > 0 || !!signalWord
-    return (
-      <div
-        className="bg-white border-[3px] border-red-600 p-4 mx-auto font-sans text-gray-900 antialiased"
-        style={{ maxWidth: 560 }}
-      >
-        <div className={`flex gap-3 items-start ${!hasLeftCol ? 'flex-col' : ''}`}>
-          {hasLeftCol ? (
-            <div className="shrink-0 flex flex-col items-center gap-2 max-w-[140px]">
-              {n > 0 ? <PictogramsBlock layout={picLayout} sizePx={PIC_PX.C} /> : null}
-              {signalWord ? (
-                <p className={`text-center text-lg font-black uppercase tracking-tight leading-tight ${signalColor}`}>
-                  {signalWord}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-          <div className="flex-1 min-w-0 flex flex-col gap-2">
-            <ProductLinesC />
-            <HBlockLabel variant="C" />
-          </div>
-          <div className="flex-1 min-w-0 flex flex-col gap-2">
-            <PBlockLabel variant="C" />
-            <SupplierBlockLabel variant="C" />
+            {hStatements.length > 0 ? (
+              <>
+                <p className={`font-semibold text-gray-400 tracking-wider ${fc.label}`}>Hazard statements</p>
+                <ul className={`space-y-0.5 ${fc.h}`}>
+                  {hStatements.map(h => (
+                    <li key={h.code}>
+                      <span className="font-bold">{h.code}:</span> {h.text_en}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+
+            {hStatements.length > 0 && shownP.length > 0 ? (
+              <div className="border-t border-gray-200 my-0.5" />
+            ) : null}
+
+            {shownP.length > 0 ? (
+              <>
+                <p className={`font-semibold text-gray-400 tracking-wider ${fc.label}`}>Precautionary statements</p>
+                {pFormat === 'combined' ? (
+                  <p className={`${fc.p}`}>{combinePStatements(shownP)}</p>
+                ) : (
+                  <ul className={`space-y-0.5 ${fc.p}`}>
+                    {shownP.map(p => (
+                      <li key={p.code}>
+                        <span className="font-bold">{p.code}:</span> {p.text_en}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {hiddenPCount > 0 ? (
+                  <p className={`mt-0.5 text-amber-800 ${fc.cas}`}>+{hiddenPCount} more — see SDS</p>
+                ) : null}
+              </>
+            ) : null}
           </div>
         </div>
+
+        {supplierLine ? (
+          <div className={`border-t border-dashed border-gray-300 px-2 py-1.5 sm:px-3 leading-snug break-words ${fc.supplier}`}>
+            <span className="font-bold text-gray-600">SUPPLIER: </span>
+            <span className="text-gray-800">{supplierLine}</span>
+          </div>
+        ) : null}
       </div>
     )
   }
@@ -403,48 +376,28 @@ export default function GHSLabelConstructor({
       {step === 1 && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 space-y-4">
           <p className="font-semibold text-[#062A78]">Step 1 — Select container volume</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {VOLUME_OPTIONS.map(v => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {VOLUME_TIERS.map(v => (
               <button
                 key={v.key}
                 type="button"
                 onClick={() => handleVolumeChange(v.key)}
-                className={`cursor-pointer px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${volume === v.key ? 'bg-[#062A78] text-white border-[#062A78]' : 'bg-white text-gray-700 border-gray-300 hover:border-[#062A78]'}`}
+                className={`cursor-pointer flex flex-col items-start rounded-lg border-2 px-3 py-2.5 text-left transition-colors ${
+                  volume === v.key
+                    ? 'bg-[#062A78] text-white border-[#062A78]'
+                    : 'bg-white text-gray-900 border-gray-300 hover:border-[#062A78]'
+                }`}
               >
-                {v.label}
+                <span className="text-sm font-semibold">{v.label}</span>
+                <span className={`text-xs mt-0.5 ${volume === v.key ? 'text-blue-100' : 'text-gray-500'}`}>
+                  {v.sublabel}
+                </span>
               </button>
             ))}
           </div>
           <p className="text-xs text-gray-600">
-            Label size: <span className="font-semibold">{volInfo.labelMm}</span> · Pictogram: <span className="font-semibold">{volInfo.picMm}</span> · CLP Annex I
+            Label size: <span className="font-semibold">{tier.labelMm}</span> · Pictogram: <span className="font-semibold">{tier.picMm}</span> · CLP Annex I Table 1.3
           </p>
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-gray-700">Label template (auto-selected, can change):</p>
-            <div className="flex flex-col gap-2" role="radiogroup" aria-label="Label template">
-              {(['A', 'B', 'C'] as Template[]).map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  role="radio"
-                  aria-checked={template === t}
-                  onClick={() => setTemplate(t)}
-                  className={`flex w-full cursor-pointer items-center gap-3 rounded-lg border-2 p-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#062A78] focus-visible:ring-offset-2 ${
-                    template === t ? 'border-[#062A78] bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
-                  }`}
-                >
-                  <span
-                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
-                      template === t ? 'border-[#062A78] bg-[#062A78]' : 'border-gray-400 bg-white'
-                    }`}
-                    aria-hidden
-                  >
-                    {template === t ? <span className="h-1.5 w-1.5 rounded-full bg-white" /> : null}
-                  </span>
-                  <span className="text-sm font-medium">{TEMPLATE_LABELS[t]}</span>
-                </button>
-              ))}
-            </div>
-          </div>
           <button type="button" onClick={() => setStep(2)}
             className="w-full py-3 rounded-lg bg-[#062A78] text-white font-semibold hover:bg-[#051f5c] transition-colors">
             Next: Supplier details
@@ -558,9 +511,7 @@ export default function GHSLabelConstructor({
           </div>
 
           <div id="label-preview-print">
-            {template === 'A' && <LabelTemplateA />}
-            {template === 'B' && <LabelTemplateB />}
-            {template === 'C' && <LabelTemplateC />}
+            <UnifiedLabelPreview />
           </div>
 
           {!submitted ? (
@@ -612,7 +563,7 @@ export default function GHSLabelConstructor({
             <div className="max-w-2xl mx-auto space-y-3">
               <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-800">
                 <p className="font-semibold">Ready to download!</p>
-                <p>Print instructions: select "Actual size" in your print dialog. Label size: {volInfo.labelMm}.</p>
+                <p>Print instructions: select &quot;Actual size&quot; in your print dialog. Label size: {tier.labelMm}.</p>
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
                 <button type="button" onClick={() => window.print()}
