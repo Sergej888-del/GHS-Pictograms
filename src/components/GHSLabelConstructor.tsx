@@ -152,7 +152,7 @@ function PictogramsCluster({ pics, sizePx }: { pics: Pictogram[]; sizePx: number
   )
 
   if (n === 1) {
-    return <div className="flex justify-center">{cell(pics[0])}</div>
+    return <div className="flex w-full justify-start">{cell(pics[0])}</div>
   }
   if (n === 2 || n === 3) {
     return <div className="flex flex-col items-center gap-1">{pics.map(cell)}</div>
@@ -169,6 +169,13 @@ function PictogramsCluster({ pics, sizePx }: { pics: Pictogram[]; sizePx: number
     )
   }
   return <div className="grid grid-cols-2 gap-1 justify-items-center">{pics.map(cell)}</div>
+}
+
+/** Ширина левой колонки (пиктограммы + сигнальное слово) */
+function getLeftColumnWidth(picCount: number, picSizePx: number): number {
+  if (picCount <= 0) return picSizePx + 16
+  if (picCount <= 3) return picSizePx + 16
+  return picSizePx * 2 + 24
 }
 
 const STORAGE_KEY = 'ghs_supplier_data'
@@ -253,12 +260,22 @@ export default function GHSLabelConstructor({
     }
   }
 
-  const signalColor = signalWord === 'Danger' ? 'text-red-700' : 'text-amber-700'
+  const signalWordNorm = signalWord?.trim().toLowerCase() ?? ''
+  const signalColor =
+    signalWordNorm === 'danger' ? 'text-red-700' : 'text-amber-600'
 
   const UnifiedLabelPreview = () => {
     const fc = getFontClasses(tier.fontScale)
-    const leftColW = tier.picSizePx + 24
-    const hasLeft = filteredPics.length > 0 || !!signalWord
+    const nPics = filteredPics.length
+    const leftColW = getLeftColumnWidth(nPics, tier.picSizePx)
+    const hasLeft = nPics > 0 || !!signalWord
+
+    const labelInnerClass =
+      volume === 'xs' || volume === 'sm'
+        ? 'flex flex-row p-2 gap-2'
+        : volume === 'md'
+          ? 'flex flex-row p-3 gap-3'
+          : 'flex flex-row p-4 gap-4'
 
     const supplierLine = [supplierName, supplierAddress, supplierPhone].filter(Boolean).join(' | ')
 
@@ -267,10 +284,10 @@ export default function GHSLabelConstructor({
         className="bg-white border-[3px] border-red-600 mx-auto font-sans text-gray-900 antialiased overflow-hidden"
         style={{ maxWidth: tier.maxWidthPx }}
       >
-        <div className="flex flex-row gap-2 p-2 sm:p-3">
+        <div className={labelInnerClass}>
           {hasLeft ? (
             <div
-              className="shrink-0 flex flex-col items-center gap-1"
+              className="shrink-0 flex flex-col items-center gap-1 justify-start"
               style={{ width: leftColW }}
             >
               {filteredPics.length > 0 ? (
@@ -285,7 +302,7 @@ export default function GHSLabelConstructor({
           ) : null}
 
           <div className={`min-w-0 flex flex-1 flex-col gap-1 ${!hasLeft ? 'w-full' : ''}`}>
-            <p className={`font-bold leading-tight ${fc.name}`}>{displayName}</p>
+            <p className={`font-bold leading-tight break-words hyphens-auto ${fc.name}`}>{displayName}</p>
             <p className={`text-gray-500 ${fc.cas}`}>
               CAS: {casNumber}
               {ecNumber ? ` · EC: ${ecNumber}` : ''}
