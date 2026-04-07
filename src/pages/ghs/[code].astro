@@ -183,6 +183,108 @@ const { count: totalCount } = await supabase
 
 const seoTitle = `${upperCode} — ${meta.name} GHS Pictogram: Meaning, Download SVG & Substance List`
 const seoDesc = `${upperCode} (${meta.name}): ${meta.description.slice(0, 120)}… Download SVG, view ${totalCount ?? substances.length}+ substances.`
+
+const ghsJsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebPage',
+      '@id': `https://ghspictograms.com/ghs/${code}/`,
+      url: `https://ghspictograms.com/ghs/${code}/`,
+      name: seoTitle,
+      description: seoDesc,
+      inLanguage: 'en',
+      isPartOf: {
+        '@type': 'WebSite',
+        '@id': 'https://ghspictograms.com/',
+        name: 'GHS Pictograms',
+        url: 'https://ghspictograms.com/',
+      },
+      about: {
+        '@type': 'DefinedTerm',
+        name: `${upperCode} — ${meta.name}`,
+        description: meta.description,
+        inDefinedTermSet: {
+          '@type': 'DefinedTermSet',
+          name: 'GHS Hazard Pictograms',
+          url: 'https://ghspictograms.com/pictograms/',
+        },
+      },
+      breadcrumb: {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          {
+            '@type': 'ListItem',
+            position: 1,
+            name: 'Home',
+            item: 'https://ghspictograms.com/',
+          },
+          {
+            '@type': 'ListItem',
+            position: 2,
+            name: 'GHS Pictograms',
+            item: 'https://ghspictograms.com/pictograms/',
+          },
+          {
+            '@type': 'ListItem',
+            position: 3,
+            name: `${upperCode} — ${meta.name}`,
+            item: `https://ghspictograms.com/ghs/${code}/`,
+          },
+        ],
+      },
+    },
+    {
+      '@type': 'FAQPage',
+      mainEntity: [
+        {
+          '@type': 'Question',
+          name: `What does the ${upperCode} GHS pictogram mean?`,
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: meta.description,
+          },
+        },
+        {
+          '@type': 'Question',
+          name: `What hazard class does ${upperCode} represent?`,
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: `${upperCode} represents the hazard class: ${meta.hazardClass}. ${meta.regulatoryNote}`,
+          },
+        },
+        {
+          '@type': 'Question',
+          name: `What are the storage requirements for ${upperCode} substances?`,
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: meta.storageNote,
+          },
+        },
+        {
+          '@type': 'Question',
+          name: `How is ${upperCode} used in transport (ADR/DOT)?`,
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: meta.adnNote,
+          },
+        },
+        ...(hStatements.length > 0
+          ? [
+              {
+                '@type': 'Question',
+                name: `Which H-statements are associated with ${upperCode}?`,
+                acceptedAnswer: {
+                  '@type': 'Answer',
+                  text: `The following hazard statements are associated with ${upperCode} (${meta.name}): ${hStatements.map((h) => `${h.code}: ${h.text_en}`).join('; ')}.`,
+                },
+              },
+            ]
+          : []),
+      ],
+    },
+  ],
+}
 ---
 
 <Layout
@@ -373,5 +475,7 @@ const seoDesc = `${upperCode} (${meta.name}): ${meta.description.slice(0, 120)}�
       Open Label Constructor →
     </a>
   </section>
+
+  <script type="application/ld+json" set:html={JSON.stringify(ghsJsonLd)} />
 
 </Layout>
