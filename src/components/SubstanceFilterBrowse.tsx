@@ -211,18 +211,16 @@ export default function SubstanceFilterBrowse() {
             const name = r.common_name || r.iupac_name
             const href = `/label-constructor/?cas=${encodeURIComponent(r.cas_number)}`
             const pics = r.ghs_pictogram_codes ?? []
+            const casEcLine = `CAS ${r.cas_number}${r.ec_number ? ` · EC ${r.ec_number}` : ''}`
             return (
               <li key={r.cas_number}>
                 <a
                   href={href}
-                  className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors gap-4"
+                  className="flex items-start sm:items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors gap-4 min-w-0"
                 >
-                  <div className="min-w-0">
-                    <span className="font-semibold text-[#062A78] block truncate">{name}</span>
-                    <span className="text-sm text-gray-500">
-                      CAS {r.cas_number}
-                      {r.ec_number ? ` · EC ${r.ec_number}` : ''}
-                    </span>
+                  <div className="min-w-0 flex-1 overflow-hidden">
+                    <p className="font-semibold text-[#062A78] line-clamp-2 break-words">{name}</p>
+                    <p className="text-sm text-gray-500 truncate mt-0.5">{casEcLine}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {r.signal_word && (
