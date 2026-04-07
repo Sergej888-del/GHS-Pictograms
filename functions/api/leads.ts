@@ -18,22 +18,40 @@ export async function onRequestPost(
   }
 
   try {
-    const body = await request.json() as {
-      email: string
-      company: string
-      role: string
-      cas_number: string
-      substance_name: string
-      label_template: string
-      volume_range: string
-    }
+    const body = await request.json() as Record<string, unknown>
 
-    if (!body.email || !body.email.includes('@')) {
+    const email = typeof body.email === 'string' ? body.email : ''
+    if (!email || !email.includes('@')) {
       return new Response(JSON.stringify({ error: 'Valid email required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       })
     }
+
+    const source = typeof body.source === 'string' ? body.source : ''
+
+    // Старый формат (Label Constructor)
+    const company = typeof body.company === 'string' ? body.company : ''
+    const role = typeof body.role === 'string' ? body.role : ''
+    const cas_number = typeof body.cas_number === 'string' ? body.cas_number : ''
+    const substance_name = typeof body.substance_name === 'string' ? body.substance_name : ''
+    const label_template = typeof body.label_template === 'string' ? body.label_template : ''
+    const volume_range = typeof body.volume_range === 'string' ? body.volume_range : ''
+
+    // Новый формат (SVG download)
+    const ghsCode = typeof body.ghsCode === 'string' ? body.ghsCode : ''
+    const ghsName = typeof body.ghsName === 'string' ? body.ghsName : ''
+    const tool = typeof body.tool === 'string' ? body.tool : ''
+
+    const toolUsed =
+      source === 'svg-download'
+        ? (tool || 'svg-download')
+        : 'ghs-label-constructor'
+
+    const notes =
+      source === 'svg-download'
+        ? `Source: svg-download | GHS: ${ghsCode} (${ghsName}) | Tool: ${toolUsed}`
+        : `Role: ${role} | CAS: ${cas_number} | Substance: ${substance_name} | Template: ${label_template} | Volume: ${volume_range}`
 
     // Сохраняем в Supabase
     const supabaseRes = await fetch(`${env.PUBLIC_SUPABASE_URL}/rest/v1/leads`, {
@@ -45,13 +63,21 @@ export async function onRequestPost(
         'Prefer': 'return=minimal',
       },
       body: JSON.stringify({
-        email: body.email,
-        company: body.company,
-        tool_used: 'ghs-label-constructor',
-        notes: `Role: ${body.role} | CAS: ${body.cas_number} | Substance: ${body.substance_name} | Template: ${body.label_template} | Volume: ${body.volume_range}`,
+        email,
+        company,
+        tool_used: toolUsed,
+        notes,
         created_at: new Date().toISOString(),
       }),
     })
+
+    if (!supabaseRes.ok) {
+      const errText = await supabaseRes.text().catch(() => '')
+      return new Response(JSON.stringify({ error: 'Supabase insert failed', details: errText }), {
+        status: 502,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      })
+    }
 
     // Отправляем в Brevo
     await fetch('https://api.brevo.com/v3/contacts', {
@@ -61,13 +87,15 @@ export async function onRequestPost(
         'api-key': env.BREVO_API_KEY,
       },
       body: JSON.stringify({
-        email: body.email,
+        email,
         attributes: {
-          COMPANY: body.company,
-          ROLE: body.role,
-          TOOL: 'GHS Label Constructor',
-          CAS: body.cas_number,
-          SUBSTANCE: body.substance_name,
+          COMPANY: company,
+          ROLE: role,
+          TOOL: toolUsed,
+          CAS: cas_number,
+          SUBSTANCE: substance_name,
+          GHS_CODE: ghsCode,
+          GHS_NAME: ghsName,
         },
         listIds: [3],
         updateEnabled: true,

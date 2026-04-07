@@ -1,6 +1,7 @@
 ---
 export const prerender = true
 import Layout from '../../layouts/Layout.astro'
+import SvgDownloadButton from '../../components/SvgDownloadButton'
 import { supabase } from '../../lib/supabase'
 
 export async function getStaticPaths() {
@@ -151,7 +152,7 @@ if (!meta) return Astro.redirect('/pictograms/')
 // Загружаем SVG пиктограммы
 const { data: picData } = await supabase
   .from('pictograms_signals')
-  .select('code, name_en, svg_content, signal_word_en')
+  .select('code, name_en, svg_content, svg_url, signal_word_en')
   .eq('code', upperCode)
   .single()
 
@@ -284,15 +285,21 @@ const seoDesc = `${upperCode} (${meta.name}): ${meta.description.slice(0, 120)}�
         <div class="flex-1">
           <p class="font-bold text-gray-900 text-lg">{upperCode} — {meta.name}</p>
           <p class="text-gray-600 text-sm mt-1">High-resolution SVG vector file. Free for use in safety documents, SDS, and label design.</p>
-          <div id="download-svg-source" class="hidden" aria-hidden="true" set:html={picData.svg_content} />
-          <button
-            id="download-main-svg"
-            data-code={upperCode}
-            type="button"
-            class="mt-3 px-5 py-2 rounded-lg bg-[#062A78] text-white font-semibold text-sm hover:bg-[#051f5c] transition-colors"
-          >
-            Download {upperCode}.svg
-          </button>
+          {picData?.svg_url ? (
+            <div class="mt-3">
+              <SvgDownloadButton
+                client:load
+                svgUrl={picData.svg_url}
+                fileName={`${upperCode}.svg`}
+                ghsCode={upperCode}
+                ghsName={meta.name}
+              />
+            </div>
+          ) : (
+            <p class="mt-3 text-sm text-amber-700">
+              SVG download is temporarily unavailable for this pictogram.
+            </p>
+          )}
         </div>
       </div>
     )}
@@ -366,28 +373,5 @@ const seoDesc = `${upperCode} (${meta.name}): ${meta.description.slice(0, 120)}�
       Open Label Constructor →
     </a>
   </section>
-
-  <script is:inline>
-    (function () {
-      var btn = document.getElementById('download-main-svg')
-      var tpl = document.getElementById('download-svg-source')
-      if (!btn || !tpl) return
-      btn.addEventListener('click', function () {
-        var svg = tpl.innerHTML.trim()
-        var code = btn.getAttribute('data-code') || 'ghs'
-        if (!svg) return
-        var xml = '<?xml version="1.0" encoding="UTF-8"?>' + (svg.indexOf('<svg') === 0 ? svg : '<svg xmlns="http://www.w3.org/2000/svg">' + svg + '</svg>')
-        try {
-          var blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })
-          var url = URL.createObjectURL(blob)
-          var a = document.createElement('a')
-          a.href = url
-          a.download = code + '.svg'
-          a.click()
-          URL.revokeObjectURL(url)
-        } catch (e) {}
-      })
-    })()
-  </script>
 
 </Layout>
