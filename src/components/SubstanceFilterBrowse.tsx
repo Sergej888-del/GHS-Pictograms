@@ -1,3 +1,4 @@
+// v2 - mobile layout fix
 import { useEffect, useMemo, useState } from 'react'
 import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
