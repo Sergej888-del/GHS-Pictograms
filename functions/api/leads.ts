@@ -64,10 +64,12 @@ export async function onRequestPost(
       },
       body: JSON.stringify({
         email,
-        company,
-        tool_used: toolUsed,
-        notes,
-        created_at: new Date().toISOString(),
+        company_name: company || '',
+        source_tool: toolUsed,
+        source_domain: 'ghspictograms.com',
+        source_page: source === 'svg-download' ? `/ghs/${ghsCode.toLowerCase()}/` : '/label-constructor/',
+        substance_name: substance_name || ghsName || '',
+        qualification_notes: notes,
       }),
     })
 
