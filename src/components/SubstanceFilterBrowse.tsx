@@ -212,35 +212,48 @@ export default function SubstanceFilterBrowse() {
             const pics = r.ghs_pictogram_codes ?? []
             const casEcLine = `CAS ${r.cas_number}${r.ec_number ? ` · EC ${r.ec_number}` : ''}`
             return (
-              <li key={r.cas_number}>
+              <li key={r.cas_number} style={{ borderBottom: '1px solid #e2e8f0' }}>
                 <a
                   href={href}
-                  className="block px-4 py-3 hover:bg-slate-50 transition-colors"
+                  style={{ display: 'block', padding: '12px 16px', textDecoration: 'none' }}
                 >
-                  <div className="flex items-center justify-between gap-2 min-w-0">
-                    <p
-                      className="font-semibold text-[#062A78] text-sm min-w-0"
-                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                    >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                    <p style={{
+                      fontWeight: 600,
+                      color: '#062A78',
+                      fontSize: '0.875rem',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      minWidth: 0,
+                      flex: 1,
+                      margin: 0,
+                    }}>
                       {name}
                     </p>
-                    <span className="text-[#062A78] text-xs font-medium shrink-0">Open →</span>
+                    <span style={{ color: '#062A78', fontSize: '0.75rem', fontWeight: 500, flexShrink: 0 }}>
+                      Open →
+                    </span>
                   </div>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="text-xs text-gray-500" style={{ whiteSpace: 'nowrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.75rem', color: '#6b7280', whiteSpace: 'nowrap' }}>
                       {casEcLine}
                     </span>
                     {r.signal_word && (
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${
-                        r.signal_word === 'Danger'
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-amber-100 text-amber-700'
-                      }`}>
+                      <span style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        padding: '2px 8px',
+                        borderRadius: '9999px',
+                        backgroundColor: r.signal_word === 'Danger' ? '#fee2e2' : '#fef3c7',
+                        color: r.signal_word === 'Danger' ? '#b91c1c' : '#92400e',
+                        flexShrink: 0,
+                      }}>
                         {r.signal_word}
                       </span>
                     )}
                     {pics.length > 0 && (
-                      <span className="text-xs text-gray-400">
+                      <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
                         {pics.slice(0, 4).join(' ')}
                       </span>
                     )}
