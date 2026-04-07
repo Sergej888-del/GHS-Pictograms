@@ -215,23 +215,23 @@ export default function SubstanceFilterBrowse() {
               <li key={r.cas_number}>
                 <a
                   href={href}
-                  className="flex items-start sm:items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors gap-4 min-w-0"
-                  style={{ overflow: 'hidden' }}
+                  className="block px-4 py-3 hover:bg-slate-50 transition-colors"
                 >
-                  <div className="min-w-0 flex-1 overflow-hidden">
+                  <div className="flex items-center justify-between gap-2 min-w-0">
                     <p
-                      className="font-semibold text-[#062A78]"
+                      className="font-semibold text-[#062A78] text-sm min-w-0"
                       style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                     >
                       {name}
                     </p>
-                    <p className="text-sm text-gray-500 mt-0.5" style={{ whiteSpace: 'nowrap' }}>
-                      {casEcLine}
-                    </p>
+                    <span className="text-[#062A78] text-xs font-medium shrink-0">Open →</span>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span className="text-xs text-gray-500" style={{ whiteSpace: 'nowrap' }}>
+                      {casEcLine}
+                    </span>
                     {r.signal_word && (
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${
                         r.signal_word === 'Danger'
                           ? 'bg-red-100 text-red-700'
                           : 'bg-amber-100 text-amber-700'
@@ -239,12 +239,11 @@ export default function SubstanceFilterBrowse() {
                         {r.signal_word}
                       </span>
                     )}
-                    <span className="text-xs text-gray-400">
-                      {pics.length > 0 ? pics.join(' ') : '—'}
-                    </span>
-                    <span className="text-[#062A78] text-xs font-medium">
-                      Open in Label Builder →
-                    </span>
+                    {pics.length > 0 && (
+                      <span className="text-xs text-gray-400">
+                        {pics.slice(0, 4).join(' ')}
+                      </span>
+                    )}
                   </div>
                 </a>
               </li>
