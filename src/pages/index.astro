@@ -1,5 +1,6 @@
 ---
 // ghspictograms.com — главная (светлая тема, Space Grotesk + Inter)
+import '../styles/global.css'
 import { Fragment } from 'astro/jsx-runtime'
 import { supabase } from '../lib/supabase'
 
@@ -120,78 +121,6 @@ const tools = [
 
       .font-heading {
         font-family: var(--font-heading);
-      }
-
-      /* ——— Nav ——— */
-      .site-nav {
-        background: var(--nav);
-        color: #fff;
-        padding: 0 1.5rem;
-        min-height: 64px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-      }
-
-      .nav-logo {
-        font-family: var(--font-heading);
-        font-size: 1.125rem;
-        letter-spacing: 0.02em;
-        white-space: nowrap;
-      }
-
-      .nav-logo .logo-ghs {
-        font-weight: 500;
-      }
-
-      .nav-logo .logo-pictograms {
-        font-weight: 700;
-      }
-
-      .nav-logo .logo-com {
-        font-weight: 400;
-        color: rgba(255, 255, 255, 0.65);
-      }
-
-      .nav-links {
-        display: flex;
-        align-items: center;
-        gap: 1.5rem;
-        list-style: none;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-      }
-
-      .nav-links a {
-        font-size: 0.875rem;
-        font-weight: 500;
-        color: rgba(255, 255, 255, 0.88);
-        transition: color 0.15s;
-      }
-
-      .nav-links a:hover {
-        color: #fff;
-      }
-
-      .nav-links a.nav-external {
-        color: rgba(255, 255, 255, 0.95);
-      }
-
-      .nav-cta {
-        background: var(--accent);
-        color: #fff !important;
-        padding: 0.45rem 1rem;
-        border-radius: 6px;
-        font-weight: 600;
-        font-size: 0.8125rem;
-        white-space: nowrap;
-        transition: filter 0.15s;
-      }
-
-      .nav-cta:hover {
-        filter: brightness(1.08);
-        color: #fff !important;
       }
 
       /* ——— Hero ——— */
@@ -661,10 +590,6 @@ const tools = [
       }
 
       @media (max-width: 768px) {
-        .nav-links {
-          display: none;
-        }
-
         .stats-inner {
           grid-template-columns: repeat(2, 1fr);
         }
@@ -694,19 +619,45 @@ const tools = [
     </style>
   </head>
   <body>
-    <nav class="site-nav" aria-label="Main">
-      <a href="/" class="nav-logo">
-        <span class="logo-ghs">GHS</span><span class="logo-pictograms">PICTOGRAMS</span><span class="logo-com">.COM</span>
-      </a>
-      <ul class="nav-links">
-        <li><a href="/label-constructor/">Label Constructor</a></li>
-        <li><a href="/pictograms/">Substance Database</a></li>
-        <li>
-          <a href="https://ghssymbols.com/" target="_blank" rel="noopener noreferrer" class="nav-external">GHS Symbols ↗</a>
-        </li>
-        <li><a href="/label-constructor/" class="nav-cta">Build Label →</a></li>
-      </ul>
-    </nav>
+    <header class="sticky top-0 z-50 bg-[#062A78]" aria-label="Site header">
+      <nav class="flex items-center justify-between px-6 py-4 bg-[#062A78]" aria-label="Main">
+        <a href="/" class="text-white font-bold text-lg font-heading">GHS Pictograms</a>
+
+        <!-- Десктоп меню -->
+        <ul class="hidden md:flex items-center gap-6 text-sm font-medium">
+          <li><a href="/label-constructor/" class="text-white/80 hover:text-white transition-colors">Label Constructor</a></li>
+          <li><a href="/pictograms/" class="text-white/80 hover:text-white transition-colors">Substance Database</a></li>
+          <li><a href="/blog/" class="text-white/80 hover:text-white transition-colors">Blog</a></li>
+          <li><a href="/faq/" class="text-white/80 hover:text-white transition-colors">FAQ</a></li>
+          <li><a href="/label-constructor/" class="px-4 py-2 bg-white text-[#062A78] font-bold rounded-lg hover:bg-blue-50 transition-colors">Build Label →</a></li>
+        </ul>
+
+        <!-- Мобильный бургер -->
+        <button type="button" id="mobile-menu-btn" class="md:hidden text-white p-2" aria-label="Open menu">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </nav>
+
+      <!-- Мобильное выпадающее меню -->
+      <div id="mobile-menu" class="hidden md:hidden bg-[#062A78] border-t border-white/20 px-6 py-4">
+        <ul class="flex flex-col gap-4 text-sm font-medium">
+          <li><a href="/label-constructor/" class="text-white/80 hover:text-white transition-colors block py-1">Label Constructor</a></li>
+          <li><a href="/pictograms/" class="text-white/80 hover:text-white transition-colors block py-1">Substance Database</a></li>
+          <li><a href="/blog/" class="text-white/80 hover:text-white transition-colors block py-1">Blog</a></li>
+          <li><a href="/faq/" class="text-white/80 hover:text-white transition-colors block py-1">FAQ</a></li>
+          <li><a href="/label-constructor/" class="inline-block px-4 py-2 bg-white text-[#062A78] font-bold rounded-lg hover:bg-blue-50 transition-colors mt-2">Build Label →</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <script is:inline>
+      document.getElementById('mobile-menu-btn')?.addEventListener('click', function () {
+        const menu = document.getElementById('mobile-menu')
+        menu?.classList.toggle('hidden')
+      })
+    </script>
 
     <section class="hero">
       <div class="hero-inner">
