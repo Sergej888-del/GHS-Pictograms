@@ -217,10 +217,18 @@ export default function SubstanceFilterBrowse() {
                 <a
                   href={href}
                   className="flex items-start sm:items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors gap-4 min-w-0"
+                  style={{ overflow: 'hidden' }}
                 >
                   <div className="min-w-0 flex-1 overflow-hidden">
-                    <p className="font-semibold text-[#062A78] line-clamp-2 break-words">{name}</p>
-                    <p className="text-sm text-gray-500 truncate mt-0.5">{casEcLine}</p>
+                    <p
+                      className="font-semibold text-[#062A78]"
+                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    >
+                      {name}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-0.5" style={{ whiteSpace: 'nowrap' }}>
+                      {casEcLine}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {r.signal_word && (
