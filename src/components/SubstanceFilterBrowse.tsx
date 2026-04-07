@@ -30,6 +30,13 @@ export default function SubstanceFilterBrowse() {
   const [picFilters, setPicFilters] = useState<string[]>([])
   const [signalFilter, setSignalFilter] = useState<string>('')
 
+  // Подстановка запроса из URL: /pictograms/?search=… или ?q=… (GET с главной и прямые ссылки)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const s = params.get('search')?.trim() || params.get('q')?.trim()
+    if (s) setQuery(s)
+  }, [])
+
   // Загрузка всех веществ при монтировании
   useEffect(() => {
     async function loadAll() {
