@@ -619,44 +619,44 @@ const tools = [
     </style>
   </head>
   <body>
-    <header class="sticky top-0 z-50 bg-[#062A78]" aria-label="Site header">
-      <nav class="flex items-center justify-between px-6 py-4 bg-[#062A78]" aria-label="Main">
-        <a href="/" class="text-white font-bold text-lg font-heading">GHS Pictograms</a>
-
-        <!-- Десктоп меню -->
-        <ul class="hidden md:flex items-center gap-6 text-sm font-medium">
-          <li><a href="/label-constructor/" class="text-white/80 hover:text-white transition-colors">Label Constructor</a></li>
-          <li><a href="/pictograms/" class="text-white/80 hover:text-white transition-colors">Substance Database</a></li>
-          <li><a href="/blog/" class="text-white/80 hover:text-white transition-colors">Blog</a></li>
-          <li><a href="/faq/" class="text-white/80 hover:text-white transition-colors">FAQ</a></li>
-          <li><a href="/label-constructor/" class="px-4 py-2 bg-white text-[#062A78] font-bold rounded-lg hover:bg-blue-50 transition-colors">Build Label →</a></li>
+    <header class="bg-[#062A78] sticky top-0 z-50">
+      <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+        <a href="/" class="font-bold text-xl text-white shrink-0" style="font-family: var(--font-heading)">
+          GHSPICTOGRAMS.COM
+        </a>
+        <!-- Десктоп -->
+        <ul class="hidden md:flex items-center gap-1 text-sm font-medium">
+          <li><a href="/label-constructor/" class="inline-block rounded-md px-3 py-1.5 text-white hover:bg-white/10 transition-colors">Label Constructor</a></li>
+          <li><a href="/pictograms/" class="inline-block rounded-md px-3 py-1.5 text-white hover:bg-white/10 transition-colors">Substance Database</a></li>
+          <li class="mx-1 h-6 w-px bg-white/20" aria-hidden="true"></li>
+          <li><a href="/blog/" class="inline-block rounded-md px-3 py-1.5 text-white hover:bg-white/10 transition-colors">Blog</a></li>
+          <li><a href="/faq/" class="inline-block rounded-md px-3 py-1.5 text-white hover:bg-white/10 transition-colors">FAQ</a></li>
+          <li class="ml-2"><a href="/label-constructor/" class="inline-block px-4 py-2 bg-white text-[#062A78] font-bold rounded-lg hover:bg-blue-50 transition-colors">Build Label →</a></li>
         </ul>
-
-        <!-- Мобильный бургер -->
-        <button type="button" id="mobile-menu-btn" class="md:hidden text-white p-2" aria-label="Open menu">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+        <!-- Бургер -->
+        <button id="index-mobile-btn" class="md:hidden text-white p-2 hover:bg-white/10 rounded-lg transition-colors" aria-label="Open menu">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
           </svg>
         </button>
       </nav>
-
-      <!-- Мобильное выпадающее меню -->
-      <div id="mobile-menu" class="hidden md:hidden bg-[#062A78] border-t border-white/20 px-6 py-4">
-        <ul class="flex flex-col gap-4 text-sm font-medium">
-          <li><a href="/label-constructor/" class="text-white/80 hover:text-white transition-colors block py-1">Label Constructor</a></li>
-          <li><a href="/pictograms/" class="text-white/80 hover:text-white transition-colors block py-1">Substance Database</a></li>
-          <li><a href="/blog/" class="text-white/80 hover:text-white transition-colors block py-1">Blog</a></li>
-          <li><a href="/faq/" class="text-white/80 hover:text-white transition-colors block py-1">FAQ</a></li>
-          <li><a href="/label-constructor/" class="inline-block px-4 py-2 bg-white text-[#062A78] font-bold rounded-lg hover:bg-blue-50 transition-colors mt-2">Build Label →</a></li>
+      <!-- Мобильное меню -->
+      <div id="index-mobile-menu" class="hidden md:hidden border-t border-white/20 bg-[#062A78] px-4 py-4">
+        <ul class="flex flex-col gap-1 text-sm font-medium">
+          <li><a href="/label-constructor/" class="block py-3 px-2 text-white/80 hover:text-white rounded-md transition-colors">Label Constructor</a></li>
+          <li><a href="/pictograms/" class="block py-3 px-2 text-white/80 hover:text-white rounded-md transition-colors">Substance Database</a></li>
+          <li class="my-2 border-t border-white/20"></li>
+          <li><a href="/blog/" class="block py-3 px-2 text-white/80 hover:text-white rounded-md transition-colors">Blog</a></li>
+          <li><a href="/faq/" class="block py-3 px-2 text-white/80 hover:text-white rounded-md transition-colors">FAQ</a></li>
+          <li class="mt-2"><a href="/label-constructor/" class="inline-block px-4 py-2 bg-white text-[#062A78] font-bold rounded-lg">Build Label →</a></li>
         </ul>
       </div>
     </header>
 
     <script is:inline>
-      document.getElementById('mobile-menu-btn')?.addEventListener('click', function () {
-        const menu = document.getElementById('mobile-menu')
-        menu?.classList.toggle('hidden')
-      })
+      document.getElementById('index-mobile-btn')?.addEventListener('click', function() {
+        document.getElementById('index-mobile-menu')?.classList.toggle('hidden');
+      });
     </script>
 
     <section class="hero">
@@ -729,11 +729,11 @@ const tools = [
       </form>
       <p class="search-hint">
         Try:
-        <a href="/pictograms/?search=acetone">acetone</a>
+        <a href="/pictograms/?q=acetone">acetone</a>
         ·
-        <a href="/pictograms/?search=sulfuric+acid">sulfuric acid</a>
+        <a href="/pictograms/?q=sulfuric+acid">sulfuric acid</a>
         ·
-        <a href="/pictograms/?search=dichloromethane">dichloromethane</a>
+        <a href="/pictograms/?q=dichloromethane">dichloromethane</a>
       </p>
     </section>
 
