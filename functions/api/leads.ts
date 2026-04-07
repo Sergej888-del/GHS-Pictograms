@@ -73,6 +73,12 @@ export async function onRequestPost(
 
     if (!supabaseRes.ok) {
       const errText = await supabaseRes.text().catch(() => '')
+      console.error('Leads API error:', JSON.stringify({
+        step: 'supabase_insert',
+        status: supabaseRes.status,
+        statusText: supabaseRes.statusText,
+        body: errText,
+      }))
       return new Response(JSON.stringify({ error: 'Supabase insert failed', details: errText }), {
         status: 502,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -80,7 +86,7 @@ export async function onRequestPost(
     }
 
     // Отправляем в Brevo
-    await fetch('https://api.brevo.com/v3/contacts', {
+    const brevoRes = await fetch('https://api.brevo.com/v3/contacts', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -102,12 +108,28 @@ export async function onRequestPost(
       }),
     })
 
+    if (!brevoRes.ok) {
+      const brevoText = await brevoRes.text().catch(() => '')
+      console.error('Leads API error:', JSON.stringify({
+        step: 'brevo_contact_create',
+        status: brevoRes.status,
+        statusText: brevoRes.statusText,
+        body: brevoText,
+      }))
+      return new Response(JSON.stringify({ error: 'Brevo request failed', details: brevoText }), {
+        status: 502,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      })
+    }
+
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
     })
 
   } catch (err) {
+    // Требуется для Cloudflare Functions Logs
+    console.error('Leads API error:', JSON.stringify(err))
     return new Response(JSON.stringify({ error: 'Server error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },

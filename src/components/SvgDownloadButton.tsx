@@ -134,7 +134,7 @@ export default function SvgDownloadButton({ svgUrl, fileName, ghsCode, ghsName }
                 </div>
 
                 <p className="text-sm text-gray-600 mb-5">
-                  Enter your email to download <strong>{fileName}</strong>. We'll also send you occasional GHS compliance tips — unsubscribe anytime.
+                  Enter your work email to download <strong>{fileName}</strong>. Free for use in SDS documents, safety posters, and GHS label design.
                 </p>
 
                 <div className="space-y-3">
@@ -177,7 +177,7 @@ export default function SvgDownloadButton({ svgUrl, fileName, ghsCode, ghsName }
                 </div>
 
                 <p className="text-xs text-gray-400 mt-4 text-center">
-                  🔒 No spam. GHS compliance updates only. Unsubscribe anytime.
+                  🔒 Your email is used only to send the download link. No marketing emails.
                 </p>
               </>
             )}
