@@ -132,8 +132,7 @@ export async function onRequestPost(
   } catch (err) {
     // Требуется для Cloudflare Functions Logs
     console.error('Leads API error:', JSON.stringify(err))
-    const message = err instanceof Error ? err.message : String(err)
-    return new Response(JSON.stringify({ error: 'Server error', message }), {
+    return new Response(JSON.stringify({ error: 'Server error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
     })
