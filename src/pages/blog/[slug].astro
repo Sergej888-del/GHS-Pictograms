@@ -1,0 +1,47 @@
+export const prerender = true;
+
+---
+import Layout from '../../layouts/Layout.astro'
+import { getCollection, render } from 'astro:content'
+
+export async function getStaticPaths() {
+  const posts = await getCollection('blog')
+  return posts.map((post) => ({
+    params: { slug: post.id },
+    props: { post },
+  }))
+}
+
+const { post } = Astro.props as { post: Awaited<ReturnType<typeof getCollection>>[number] }
+const { Content } = await render(post)
+---
+
+<Layout
+  title={post.data.title}
+  description={post.data.description}
+  canonical={`https://ghspictograms.com/blog/${post.id}/`}
+>
+  <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <nav class="text-sm text-gray-500 mb-6" aria-label="Breadcrumb">
+      <a href="/" class="text-[#062A78] hover:underline">Home</a>
+      <span class="mx-2">→</span>
+      <a href="/blog/" class="text-[#062A78] hover:underline">Blog</a>
+      <span class="mx-2">→</span>
+      <span class="text-gray-700">{post.data.title}</span>
+    </nav>
+
+    <article class="max-w-none text-gray-900 leading-relaxed space-y-4 [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:tracking-tight [&_h1]:text-gray-900 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-gray-900 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-gray-900 [&_a]:text-[#062A78] [&_a]:font-semibold [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_table]:w-full [&_table]:text-sm [&_th]:border [&_th]:border-gray-200 [&_th]:bg-gray-50 [&_th]:px-3 [&_th]:py-2 [&_td]:border [&_td]:border-gray-200 [&_td]:px-3 [&_td]:py-2">
+      <p class="text-sm text-gray-500">
+        {post.data.pubDate.toISOString().slice(0, 10)}
+        {post.data.author ? <span class="mx-2 text-gray-300">•</span> : null}
+        {post.data.author ? <span>{post.data.author}</span> : null}
+      </p>
+      <Content />
+    </article>
+
+    <div class="mt-10 border-t border-gray-200 pt-6 text-sm text-gray-600">
+      <a href="/pictograms/" class="text-[#062A78] font-semibold hover:underline">Browse substances by pictogram →</a>
+    </div>
+  </div>
+</Layout>
+
