@@ -16,6 +16,9 @@ const STATIC_PAGES = [
   { url: '/inspector/', changefreq: 'monthly', priority: '0.8' },
   { url: '/faq/', changefreq: 'monthly', priority: '0.7' },
   { url: '/blog/', changefreq: 'weekly', priority: '0.8' },
+  { url: '/blog/ghs-vs-adr-key-differences/', changefreq: 'monthly', priority: '0.8' },
+  { url: '/blog/adr-hazard-classes-guide/', changefreq: 'monthly', priority: '0.8' },
+  { url: '/blog/how-to-read-ghs-label/', changefreq: 'monthly', priority: '0.8' },
 ];
 
 const GHS_PAGES = GHS_CODES.map(code => ({
