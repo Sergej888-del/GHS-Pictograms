@@ -1,77 +1,79 @@
-import type { APIRoute } from 'astro'
-import { createClient } from '@supabase/supabase-js'
-import { getCollection } from 'astro:content'
+import type { APIRoute } from 'astro';
+import { createClient } from '@supabase/supabase-js';
 
-export const prerender = false
+export const prerender = true;
+
+const SITE_URL = 'https://ghspictograms.com';
+
+const GHS_CODES = [
+  'GHS01','GHS02','GHS03','GHS04',
+  'GHS05','GHS06','GHS07','GHS08','GHS09'
+];
+
+const STATIC_PAGES = [
+  { url: '/', changefreq: 'weekly', priority: '1.0' },
+  { url: '/pictograms/', changefreq: 'weekly', priority: '0.9' },
+  { url: '/inspector/', changefreq: 'monthly', priority: '0.8' },
+  { url: '/faq/', changefreq: 'monthly', priority: '0.7' },
+  { url: '/blog/', changefreq: 'weekly', priority: '0.8' },
+];
+
+const GHS_PAGES = GHS_CODES.map(code => ({
+  url: `/ghs/${code.toLowerCase()}/`,
+  changefreq: 'monthly',
+  priority: '0.8',
+}));
 
 export const GET: APIRoute = async () => {
-  const supabase = createClient(
-    import.meta.env.PUBLIC_SUPABASE_URL!,
-    import.meta.env.PUBLIC_SUPABASE_ANON_KEY!
-  )
+  let substanceUrls: string[] = [];
 
-  // Статические страницы
-  const staticPages = [
-    'https://ghspictograms.com/',
-    'https://ghspictograms.com/pictograms/',
-    'https://ghspictograms.com/inspector/',
-    'https://ghspictograms.com/faq/',
-    'https://ghspictograms.com/label-constructor/',
-    'https://ghspictograms.com/blog/',
-    'https://ghspictograms.com/ghs/ghs01/',
-    'https://ghspictograms.com/ghs/ghs02/',
-    'https://ghspictograms.com/ghs/ghs03/',
-    'https://ghspictograms.com/ghs/ghs04/',
-    'https://ghspictograms.com/ghs/ghs05/',
-    'https://ghspictograms.com/ghs/ghs06/',
-    'https://ghspictograms.com/ghs/ghs07/',
-    'https://ghspictograms.com/ghs/ghs08/',
-    'https://ghspictograms.com/ghs/ghs09/',
-  ]
+  try {
+    const supabase = createClient(
+      import.meta.env.PUBLIC_SUPABASE_URL,
+      import.meta.env.PUBLIC_SUPABASE_ANON_KEY
+    );
 
-  // Загрузить CAS номера из Supabase для /pictograms/[cas]/ страниц
-  const casUrls: string[] = []
-  let from = 0
-  while (true) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('substances')
       .select('cas_number')
       .not('cas_number', 'is', null)
-      .range(from, from + 999)
-    if (!data?.length) break
-    data.forEach((r: { cas_number: string }) => {
-      casUrls.push(`https://ghspictograms.com/pictograms/${encodeURIComponent(r.cas_number)}/`)
-    })
-    if (data.length < 1000) break
-    from += 1000
+      .limit(5000);
+
+    if (!error && data) {
+      substanceUrls = data
+        .filter(s => s.cas_number)
+        .map(s => `/pictograms/${s.cas_number}/`);
+    }
+  } catch (e) {
+    console.error('Sitemap: Supabase error', e);
   }
 
-  // Посты блога из content collection (MDX), не из Supabase
-  const blogUrls: string[] = []
-  const posts = await getCollection('blog')
-  posts.forEach((p) => {
-    blogUrls.push(`https://ghspictograms.com/blog/${p.id}/`)
-  })
+  const allPages = [
+    ...STATIC_PAGES,
+    ...GHS_PAGES,
+    ...substanceUrls.map(url => ({
+      url,
+      changefreq: 'monthly',
+      priority: '0.6',
+    })),
+  ];
 
-  const allUrls = [...staticPages, ...casUrls, ...blogUrls]
+  const today = new Date().toISOString().split('T')[0];
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${allUrls
-  .map(
-    (url) => `  <url>
-    <loc>${url}</loc>
-    <changefreq>monthly</changefreq>
-    <priority>${url === 'https://ghspictograms.com/' ? '1.0' : '0.8'}</priority>
-  </url>`
-  )
-  .join('\n')}
-</urlset>`
+${allPages.map(page => `  <url>
+    <loc>${SITE_URL}${page.url}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>${page.changefreq}</changefreq>
+    <priority>${page.priority}</priority>
+  </url>`).join('\n')}
+</urlset>`;
 
   return new Response(xml, {
     headers: {
       'Content-Type': 'application/xml; charset=utf-8',
-      'Cache-Control': 'public, max-age=3600',
+      'Cache-Control': 'public, max-age=86400',
     },
-  })
-}
+  });
+};
