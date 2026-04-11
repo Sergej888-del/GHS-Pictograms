@@ -1,0 +1,24 @@
+---
+export const prerender = true
+import Layout from '../../layouts/Layout.astro'
+import GHSInspector from '../../components/GHSInspector'
+---
+
+<Layout
+  title="GHS vs ADR/DOT Inspector — Chemical Transport Classification"
+  description="Compare GHS workplace hazard classification with ADR/DOT transport requirements. Find ADR class, packing group and transport placards for any chemical substance."
+  canonical="https://ghspictograms.com/inspector/"
+>
+  <section style="max-width:900px; margin:0 auto; padding:40px 16px 0;">
+    <div style="margin-bottom:8px; font-size:0.8rem; color:#6b7280;">
+      <a href="/" style="color:#062A78;">GHS Pictograms</a> → Inspector
+    </div>
+    <h1 style="font-size:2rem; font-weight:800; color:#0f172a; margin-bottom:8px;">
+      GHS vs ADR/DOT Inspector
+    </h1>
+    <p style="color:#475569; margin-bottom:32px; font-size:1rem;">
+      Search any substance to compare workplace GHS classification with ADR/DOT transport requirements side by side.
+    </p>
+  </section>
+  <GHSInspector client:load />
+</Layout>

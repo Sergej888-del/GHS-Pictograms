@@ -213,31 +213,67 @@ export default function SubstanceFilterBrowse() {
             const pics = r.ghs_pictogram_codes ?? []
             const casEcLine = `CAS ${r.cas_number}${r.ec_number ? ` · EC ${r.ec_number}` : ''}`
             return (
-              <li key={r.cas_number} style={{ borderBottom: '1px solid #e2e8f0' }}>
+              <li key={r.cas_number} style={{ borderBottom: '1px solid #e2e8f0', minWidth: 0 }}>
                 <a
                   href={href}
-                  style={{ display: 'block', padding: '12px 16px', textDecoration: 'none' }}
+                  style={{ display: 'block', padding: '12px 16px', textDecoration: 'none', minWidth: 0 }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                    <p style={{
-                      fontWeight: 600,
-                      color: '#062A78',
-                      fontSize: '0.875rem',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '8px',
                       minWidth: 0,
-                      flex: 1,
-                      margin: 0,
-                    }}>
+                    }}
+                  >
+                    <p
+                      style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'block',
+                        width: '100%',
+                        wordBreak: 'normal',
+                        overflowWrap: 'normal',
+                        minWidth: 0,
+                        fontWeight: 600,
+                        color: '#062A78',
+                        fontSize: '0.875rem',
+                        margin: 0,
+                        flex: 1,
+                      }}
+                    >
                       {name}
                     </p>
                     <span style={{ color: '#062A78', fontSize: '0.75rem', fontWeight: 500, flexShrink: 0 }}>
                       Open →
                     </span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '0.75rem', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginTop: '4px',
+                      flexWrap: 'wrap',
+                      minWidth: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'block',
+                        width: '100%',
+                        wordBreak: 'normal',
+                        overflowWrap: 'normal',
+                        minWidth: 0,
+                        fontSize: '0.75rem',
+                        color: '#6b7280',
+                      }}
+                    >
                       {casEcLine}
                     </span>
                     {r.signal_word && (
