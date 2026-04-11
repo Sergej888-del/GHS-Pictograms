@@ -22,13 +22,6 @@ const pageTitle = titleIsComplete ? title : `${title} | GHS Pictograms`
 const siteUrl = 'https://ghspictograms.com'
 const canonicalUrl = canonical ?? `${siteUrl}${Astro.url.pathname}`
 
-/** Текущий сайт в экосистеме — всегда ghspictograms в этом layout */
-const ecosystem = [
-  { label: 'GHS Symbols', href: 'https://ghssymbols.com', id: 'symbols' as const },
-  { label: 'GHS Pictograms', href: 'https://ghspictograms.com', id: 'pictograms' as const },
-  { label: 'GHS Labels', href: 'https://ghslabels.com', id: 'labels' as const },
-]
-const activeId = 'pictograms'
 ---
 
 <!doctype html>
@@ -74,22 +67,16 @@ const activeId = 'pictograms'
         </a>
 
         <ul class="hidden md:flex items-center gap-1 lg:gap-2 text-sm font-medium">
-          {ecosystem.map(({ label, href, id }) => (
-            <li>
-              <a
-                href={href}
-                class:list={[
-                  'inline-block rounded-md px-3 py-1.5 transition-colors',
-                  id === activeId
-                    ? 'bg-white text-[#062A78] font-semibold shadow-sm'
-                    : 'text-white hover:bg-white/10',
-                ]}
-              >
-                {label}
-              </a>
-            </li>
-          ))}
-          <li class="mx-1 h-6 w-px bg-white/20" aria-hidden="true"></li>
+          <li>
+            <a href="/pictograms/" class="inline-block rounded-md px-3 py-1.5 transition-colors text-white hover:bg-white/10">
+              Substance Database
+            </a>
+          </li>
+          <li>
+            <a href="/inspector/" class="inline-block rounded-md px-3 py-1.5 transition-colors text-white hover:bg-white/10">
+              Inspector
+            </a>
+          </li>
           <li>
             <a href="/blog/" class="inline-block rounded-md px-3 py-1.5 transition-colors text-white hover:bg-white/10">
               Blog
@@ -101,8 +88,11 @@ const activeId = 'pictograms'
             </a>
           </li>
           <li>
-            <a href="/inspector/" class="inline-block rounded-md px-3 py-1.5 transition-colors text-white hover:bg-white/10">
-              Inspector
+            <a
+              href="/label-constructor/"
+              class="inline-block rounded-md px-3 py-1.5 bg-white text-[#062A78] font-semibold shadow-sm hover:brightness-105 transition-[filter]"
+            >
+              Build Label →
             </a>
           </li>
         </ul>
@@ -124,22 +114,16 @@ const activeId = 'pictograms'
       <!-- Мобильное меню: полная ширина под шапкой -->
       <div id="layout-mobile-menu" class="hidden md:hidden border-t border-white/20 bg-[#062A78] px-4 sm:px-6 lg:px-8 py-4">
         <ul class="flex flex-col gap-1 text-sm font-medium max-w-7xl mx-auto">
-          {ecosystem.map(({ label, href, id }) => (
-            <li>
-              <a
-                href={href}
-                class:list={[
-                  'block py-3 px-2 rounded-md transition-colors',
-                  id === activeId
-                    ? 'bg-white text-[#062A78] font-semibold'
-                    : 'text-white/80 hover:text-white',
-                ]}
-              >
-                {label}
-              </a>
-            </li>
-          ))}
-          <li class="my-2 border-t border-white/20" aria-hidden="true"></li>
+          <li>
+            <a href="/pictograms/" class="block py-3 px-2 text-white/80 hover:text-white transition-colors rounded-md">
+              Substance Database
+            </a>
+          </li>
+          <li>
+            <a href="/inspector/" class="block py-3 px-2 text-white/80 hover:text-white transition-colors rounded-md">
+              Inspector
+            </a>
+          </li>
           <li>
             <a href="/blog/" class="block py-3 px-2 text-white/80 hover:text-white transition-colors rounded-md">
               Blog
@@ -150,9 +134,12 @@ const activeId = 'pictograms'
               FAQ
             </a>
           </li>
-          <li>
-            <a href="/inspector/" class="block py-3 px-2 text-white/80 hover:text-white transition-colors rounded-md">
-              Inspector
+          <li class="mt-2">
+            <a
+              href="/label-constructor/"
+              class="inline-block py-3 px-4 rounded-md bg-white text-[#062A78] font-semibold shadow-sm"
+            >
+              Build Label →
             </a>
           </li>
         </ul>
