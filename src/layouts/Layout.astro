@@ -8,6 +8,8 @@ interface Props {
   canonical?: string
   /** Если true, в <title> используется только `title` без суффикса «| GHS Pictograms» */
   titleIsComplete?: boolean
+  /** Абсолютный URL превью для Open Graph / Twitter (по умолчанию og-default.png) */
+  image?: string
 }
 
 const {
@@ -15,9 +17,11 @@ const {
   description = 'GHS pictograms, label builder and visual chemical safety tools for design, logistics and compliance.',
   canonical,
   titleIsComplete = false,
+  image,
 } = Astro.props
 
 const pageTitle = titleIsComplete ? title : `${title} | GHS Pictograms`
+const ogImage = image ?? 'https://ghspictograms.com/og-default.png'
 
 const siteUrl = 'https://ghspictograms.com'
 const base = Astro.site ?? siteUrl
@@ -69,6 +73,12 @@ const canonicalURL = canonical
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalURL} />
     <meta property="og:type" content="website" />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:site_name" content="GHS Pictograms" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
     <slot name="head" />
   </head>
   <body class="bg-white text-gray-900 font-sans antialiased">

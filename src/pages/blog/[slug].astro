@@ -14,12 +14,21 @@ export async function getStaticPaths() {
 
 const { post } = Astro.props as { post: Awaited<ReturnType<typeof getCollection>>[number] }
 const { Content } = await render(post)
+
+const siteOrigin = 'https://ghspictograms.com'
+const ogImage =
+  post.data.image != null && post.data.image !== ''
+    ? post.data.image.startsWith('http')
+      ? post.data.image
+      : `${siteOrigin}${post.data.image.startsWith('/') ? post.data.image : `/${post.data.image}`}`
+    : undefined
 ---
 
 <Layout
   title={post.data.title}
   description={post.data.description}
   canonical={`https://ghspictograms.com/blog/${post.id}/`}
+  image={ogImage}
 >
   <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
     <nav class="text-sm text-gray-500 mb-6" aria-label="Breadcrumb">
@@ -29,6 +38,10 @@ const { Content } = await render(post)
       <span class="mx-2">→</span>
       <span class="text-gray-700">{post.data.title}</span>
     </nav>
+
+    <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 mb-6" style="font-family: 'Space Grotesk', system-ui, sans-serif">
+      {post.data.title}
+    </h1>
 
     <article class="max-w-none text-gray-900 leading-relaxed space-y-4 [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:tracking-tight [&_h1]:text-gray-900 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-gray-900 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-gray-900 [&_a]:text-[#062A78] [&_a]:font-semibold [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_table]:w-full [&_table]:text-sm [&_th]:border [&_th]:border-gray-200 [&_th]:bg-gray-50 [&_th]:px-3 [&_th]:py-2 [&_td]:border [&_td]:border-gray-200 [&_td]:px-3 [&_td]:py-2">
       <p class="text-sm text-gray-500">
