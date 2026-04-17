@@ -420,11 +420,12 @@ const ghsJsonLd = {
         {substances.map(s => {
           const name = s.common_name || s.iupac_name
           const pics = s.ghs_pictogram_codes ?? []
+          const casEnc = encodeURIComponent(s.cas_number)
           return (
-            <li key={s.cas_number}>
+            <li key={s.cas_number} class="flex items-stretch gap-0">
               <a
-                href={`/label-constructor/?cas=${encodeURIComponent(s.cas_number)}`}
-                class="flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors gap-4"
+                href={`/pictograms/${casEnc}/`}
+                class="flex flex-1 min-w-0 items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors gap-4"
               >
                 <div class="min-w-0">
                   <span class="font-semibold text-[#062A78] block truncate">{name}</span>
@@ -437,8 +438,14 @@ const ghsJsonLd = {
                     </span>
                   )}
                   <span class="text-xs text-gray-400 hidden sm:block">{pics.slice(0,4).join(' ')}</span>
-                  <span class="text-[#062A78] text-xs font-medium">Label →</span>
+                  <span class="text-[#062A78] text-xs font-medium">Details →</span>
                 </div>
+              </a>
+              <a
+                href={`/label-constructor/?cas=${casEnc}`}
+                class="shrink-0 px-4 py-3.5 border-l border-gray-200 text-xs font-semibold text-[#062A78] hover:bg-blue-50 transition-colors flex items-center"
+              >
+                Label
               </a>
             </li>
           )

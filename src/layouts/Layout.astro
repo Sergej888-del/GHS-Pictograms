@@ -20,7 +20,22 @@ const {
 const pageTitle = titleIsComplete ? title : `${title} | GHS Pictograms`
 
 const siteUrl = 'https://ghspictograms.com'
-const canonicalUrl = canonical ?? `${siteUrl}${Astro.url.pathname}`
+const base = Astro.site ?? siteUrl
+
+/** Совпадает с финальным URL Cloudflare (trailing slash) — иначе Ahrefs: «canonical → redirect». */
+function ensureTrailingSlashUrl(href: string): string {
+  const u = new URL(href)
+  if (u.pathname !== '/' && !u.pathname.endsWith('/')) {
+    u.pathname += '/'
+  }
+  return u.href
+}
+
+const rawPath = Astro.url.pathname
+const pathWithSlash = rawPath.endsWith('/') ? rawPath : rawPath + '/'
+const canonicalURL = canonical
+  ? ensureTrailingSlashUrl(canonical)
+  : new URL(pathWithSlash, base).href
 
 ---
 
@@ -38,7 +53,7 @@ const canonicalUrl = canonical ?? `${siteUrl}${Astro.url.pathname}`
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
-    <link rel="canonical" href={canonicalUrl} />
+    <link rel="canonical" href={canonicalURL} />
     <title>{pageTitle}</title>
 
     <!-- Google Fonts -->
@@ -52,7 +67,7 @@ const canonicalUrl = canonical ?? `${siteUrl}${Astro.url.pathname}`
     <!-- Open Graph -->
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
-    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:url" content={canonicalURL} />
     <meta property="og:type" content="website" />
     <slot name="head" />
   </head>

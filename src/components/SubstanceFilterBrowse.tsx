@@ -209,14 +209,16 @@ export default function SubstanceFilterBrowse() {
         <ul className="divide-y divide-gray-200 border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
           {results.map(r => {
             const name = r.common_name || r.iupac_name
-            const href = `/label-constructor/?cas=${encodeURIComponent(r.cas_number)}`
+            const casEnc = encodeURIComponent(r.cas_number)
+            const detailHref = `/pictograms/${casEnc}/`
+            const labelHref = `/label-constructor/?cas=${casEnc}`
             const pics = r.ghs_pictogram_codes ?? []
             const casEcLine = `CAS ${r.cas_number}${r.ec_number ? ` · EC ${r.ec_number}` : ''}`
             return (
-              <li key={r.cas_number} style={{ borderBottom: '1px solid #e2e8f0', minWidth: 0 }}>
+              <li key={r.cas_number} style={{ borderBottom: '1px solid #e2e8f0', minWidth: 0, display: 'flex', alignItems: 'stretch' }}>
                 <a
-                  href={href}
-                  style={{ display: 'block', padding: '12px 16px', textDecoration: 'none', minWidth: 0 }}
+                  href={detailHref}
+                  style={{ display: 'block', padding: '12px 16px', textDecoration: 'none', minWidth: 0, flex: 1 }}
                 >
                   <div
                     style={{
@@ -247,7 +249,7 @@ export default function SubstanceFilterBrowse() {
                       {name}
                     </p>
                     <span style={{ color: '#062A78', fontSize: '0.75rem', fontWeight: 500, flexShrink: 0 }}>
-                      Open →
+                      Details →
                     </span>
                   </div>
                   <div
@@ -295,6 +297,22 @@ export default function SubstanceFilterBrowse() {
                       </span>
                     )}
                   </div>
+                </a>
+                <a
+                  href={labelHref}
+                  style={{
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '12px 14px',
+                    borderLeft: '1px solid #e2e8f0',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    color: '#062A78',
+                    textDecoration: 'none',
+                  }}
+                >
+                  Label
                 </a>
               </li>
             )

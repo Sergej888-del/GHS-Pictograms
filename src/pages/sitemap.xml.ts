@@ -1,5 +1,4 @@
 import type { APIRoute } from 'astro';
-import { createClient } from '@supabase/supabase-js';
 
 export const prerender = true;
 
@@ -19,6 +18,7 @@ const STATIC_PAGES = [
   { url: '/blog/ghs-vs-adr-key-differences/', changefreq: 'monthly', priority: '0.8' },
   { url: '/blog/adr-hazard-classes-guide/', changefreq: 'monthly', priority: '0.8' },
   { url: '/blog/how-to-read-ghs-label/', changefreq: 'monthly', priority: '0.8' },
+  { url: '/label-constructor/', changefreq: 'weekly', priority: '0.85' },
 ];
 
 const GHS_PAGES = GHS_CODES.map(code => ({
@@ -28,37 +28,13 @@ const GHS_PAGES = GHS_CODES.map(code => ({
 }));
 
 export const GET: APIRoute = async () => {
-  let substanceUrls: string[] = [];
-
-  try {
-    const supabase = createClient(
-      import.meta.env.PUBLIC_SUPABASE_URL,
-      import.meta.env.PUBLIC_SUPABASE_ANON_KEY
-    );
-
-    const { data, error } = await supabase
-      .from('substances')
-      .select('cas_number')
-      .not('cas_number', 'is', null)
-      .limit(5000);
-
-    if (!error && data) {
-      substanceUrls = data
-        .filter(s => s.cas_number)
-        .map(s => `/pictograms/${s.cas_number}/`);
-    }
-  } catch (e) {
-    console.error('Sitemap: Supabase error', e);
-  }
+  // Не включаем /pictograms/[cas]/ — те же данные что на ghssymbols.com/hazards/[cas],
+  // тысячи URL без статических входящих ссылок → Ahrefs: duplicate + orphan + non-canonical в sitemap.
+  // Детальные страницы остаются в индексе через ссылки с /ghs/*, базы и конструктора.
 
   const allPages = [
     ...STATIC_PAGES,
     ...GHS_PAGES,
-    ...substanceUrls.map(url => ({
-      url,
-      changefreq: 'monthly',
-      priority: '0.6',
-    })),
   ];
 
   const today = new Date().toISOString().split('T')[0];
