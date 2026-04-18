@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import GHSLabelConstructor from './GHSLabelConstructor'
+import SubstanceFilterBrowse from './SubstanceFilterBrowse'
+
+const LABEL_BASE = '/label-constructor/'
+
+function setLabelConstructorUrl(cas: string | null) {
+  const url =
+    cas === null
+      ? LABEL_BASE
+      : `${LABEL_BASE}?cas=${encodeURIComponent(cas)}`
+  window.history.pushState({}, '', url)
+}
 
 interface Substance {
   id: string
@@ -32,13 +43,23 @@ export default function LabelConstructorLoader() {
   const [searchResults, setSearchResults] = useState<SearchRow[]>([])
   const [searching, setSearching] = useState(false)
 
-  // Читаем CAS из URL при загрузке
+  // Читаем CAS из URL при загрузке и при навигации назад/вперёд
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const casParam = params.get('cas')
-    if (casParam) {
+    const readCasFromUrl = () => {
+      const params = new URLSearchParams(window.location.search)
+      const casParam = params.get('cas')
       setCas(casParam)
+      if (!casParam) {
+        setSubstance(null)
+        setPictograms([])
+        setHStatements([])
+        setPStatements([])
+        setNotFound(false)
+      }
     }
+    readCasFromUrl()
+    window.addEventListener('popstate', readCasFromUrl)
+    return () => window.removeEventListener('popstate', readCasFromUrl)
   }, [])
 
   // Загружаем данные когда есть CAS
@@ -116,7 +137,12 @@ export default function LabelConstructorLoader() {
                 <li key={r.cas_number}>
                   <button
                     type="button"
-                    onClick={() => { setCas(r.cas_number); setSearchQ(''); setSearchResults([]) }}
+                    onClick={() => {
+                      setCas(r.cas_number)
+                      setSearchQ('')
+                      setSearchResults([])
+                      setLabelConstructorUrl(r.cas_number)
+                    }}
                     className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors"
                   >
                     <span className="font-semibold text-[#062A78]">{r.common_name || r.iupac_name}</span>
@@ -126,10 +152,21 @@ export default function LabelConstructorLoader() {
               ))}
             </ul>
           )}
+          <p className="mt-6 text-sm font-medium text-gray-700">
+            Or browse and select a substance from the full database
+          </p>
+          <div className="mt-3 -mx-2 sm:mx-0">
+            <SubstanceFilterBrowse
+              onSelectSubstance={c => {
+                setCas(c)
+                setLabelConstructorUrl(c)
+              }}
+            />
+          </div>
           <p className="mt-4 text-sm text-gray-500">
-            Or browse the full database:{' '}
+            Open the catalog in a separate page:{' '}
             <a href="/pictograms/" className="text-[#062A78] underline">
-              Select from substance list →
+              Pictograms database →
             </a>
           </p>
         </div>
@@ -147,7 +184,11 @@ export default function LabelConstructorLoader() {
         <p className="text-gray-600 mb-4">Substance not found for CAS: {cas}</p>
         <button
           type="button"
-          onClick={() => { setCas(null); setSubstance(null) }}
+          onClick={() => {
+            setCas(null)
+            setSubstance(null)
+            setLabelConstructorUrl(null)
+          }}
           className="text-[#062A78] underline text-sm"
         >
           ← Search again
@@ -171,7 +212,14 @@ export default function LabelConstructorLoader() {
         </div>
         <button
           type="button"
-          onClick={() => { setCas(null); setSubstance(null); setPictograms([]); setHStatements([]); setPStatements([]) }}
+          onClick={() => {
+            setCas(null)
+            setSubstance(null)
+            setPictograms([])
+            setHStatements([])
+            setPStatements([])
+            setLabelConstructorUrl(null)
+          }}
           className="text-sm text-gray-400 hover:text-gray-600 underline"
         >
           Change substance

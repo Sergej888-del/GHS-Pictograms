@@ -24,7 +24,12 @@ const PICTOGRAMS = [
   { code: 'GHS09', label: 'Environmental' },
 ]
 
-export default function SubstanceFilterBrowse() {
+interface Props {
+  /** Если задан — выбор вещества без перехода по ссылкам (например в Label Constructor) */
+  onSelectSubstance?: (cas: string) => void
+}
+
+export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {}) {
   const [all, setAll] = useState<Substance[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState(() => {
@@ -214,89 +219,140 @@ export default function SubstanceFilterBrowse() {
             const labelHref = `/label-constructor/?cas=${casEnc}`
             const pics = r.ghs_pictogram_codes ?? []
             const casEcLine = `CAS ${r.cas_number}${r.ec_number ? ` · EC ${r.ec_number}` : ''}`
+
+            const mainBlock = (
+              <>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '8px',
+                    minWidth: 0,
+                  }}
+                >
+                  <p
+                    style={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      display: 'block',
+                      width: '100%',
+                      wordBreak: 'normal',
+                      overflowWrap: 'normal',
+                      minWidth: 0,
+                      fontWeight: 600,
+                      color: '#062A78',
+                      fontSize: '0.875rem',
+                      margin: 0,
+                      flex: 1,
+                    }}
+                  >
+                    {name}
+                  </p>
+                  {!onSelectSubstance && (
+                    <span style={{ color: '#062A78', fontSize: '0.75rem', fontWeight: 500, flexShrink: 0 }}>
+                      Details →
+                    </span>
+                  )}
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginTop: '4px',
+                    flexWrap: 'wrap',
+                    minWidth: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      display: 'block',
+                      width: '100%',
+                      wordBreak: 'normal',
+                      overflowWrap: 'normal',
+                      minWidth: 0,
+                      fontSize: '0.75rem',
+                      color: '#6b7280',
+                    }}
+                  >
+                    {casEcLine}
+                  </span>
+                  {r.signal_word && (
+                    <span style={{
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      padding: '2px 8px',
+                      borderRadius: '9999px',
+                      backgroundColor: r.signal_word === 'Danger' ? '#fee2e2' : '#fef3c7',
+                      color: r.signal_word === 'Danger' ? '#b91c1c' : '#92400e',
+                      flexShrink: 0,
+                    }}>
+                      {r.signal_word}
+                    </span>
+                  )}
+                  {pics.length > 0 && (
+                    <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+                      {pics.slice(0, 4).join(' ')}
+                    </span>
+                  )}
+                </div>
+              </>
+            )
+
+            if (onSelectSubstance) {
+              return (
+                <li key={r.cas_number} style={{ borderBottom: '1px solid #e2e8f0', minWidth: 0, display: 'flex', alignItems: 'stretch' }}>
+                  <button
+                    type="button"
+                    onClick={() => onSelectSubstance(r.cas_number)}
+                    style={{
+                      display: 'block',
+                      padding: '12px 16px',
+                      textDecoration: 'none',
+                      minWidth: 0,
+                      flex: 1,
+                      textAlign: 'left',
+                      border: 'none',
+                      background: 'white',
+                      cursor: 'pointer',
+                      font: 'inherit',
+                    }}
+                  >
+                    {mainBlock}
+                  </button>
+                  <a
+                    href={detailHref}
+                    onClick={e => e.stopPropagation()}
+                    style={{
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '12px 14px',
+                      borderLeft: '1px solid #e2e8f0',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      color: '#062A78',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    Details
+                  </a>
+                </li>
+              )
+            }
+
             return (
               <li key={r.cas_number} style={{ borderBottom: '1px solid #e2e8f0', minWidth: 0, display: 'flex', alignItems: 'stretch' }}>
                 <a
                   href={detailHref}
                   style={{ display: 'block', padding: '12px 16px', textDecoration: 'none', minWidth: 0, flex: 1 }}
                 >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      gap: '8px',
-                      minWidth: 0,
-                    }}
-                  >
-                    <p
-                      style={{
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        display: 'block',
-                        width: '100%',
-                        wordBreak: 'normal',
-                        overflowWrap: 'normal',
-                        minWidth: 0,
-                        fontWeight: 600,
-                        color: '#062A78',
-                        fontSize: '0.875rem',
-                        margin: 0,
-                        flex: 1,
-                      }}
-                    >
-                      {name}
-                    </p>
-                    <span style={{ color: '#062A78', fontSize: '0.75rem', fontWeight: 500, flexShrink: 0 }}>
-                      Details →
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      marginTop: '4px',
-                      flexWrap: 'wrap',
-                      minWidth: 0,
-                    }}
-                  >
-                    <span
-                      style={{
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        display: 'block',
-                        width: '100%',
-                        wordBreak: 'normal',
-                        overflowWrap: 'normal',
-                        minWidth: 0,
-                        fontSize: '0.75rem',
-                        color: '#6b7280',
-                      }}
-                    >
-                      {casEcLine}
-                    </span>
-                    {r.signal_word && (
-                      <span style={{
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        padding: '2px 8px',
-                        borderRadius: '9999px',
-                        backgroundColor: r.signal_word === 'Danger' ? '#fee2e2' : '#fef3c7',
-                        color: r.signal_word === 'Danger' ? '#b91c1c' : '#92400e',
-                        flexShrink: 0,
-                      }}>
-                        {r.signal_word}
-                      </span>
-                    )}
-                    {pics.length > 0 && (
-                      <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
-                        {pics.slice(0, 4).join(' ')}
-                      </span>
-                    )}
-                  </div>
+                  {mainBlock}
                 </a>
                 <a
                   href={labelHref}
