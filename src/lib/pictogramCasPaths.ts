@@ -1,8 +1,7 @@
 /**
  * Общая логика страницы /pictograms/[cas]/ (без Supabase).
- * При `output: 'server'` Astro не поддерживает гибрид «частичный getStaticPaths + SSR на том же [cas].astro»
- * — вне списка getStaticPaths путь получает 404. Поэтому страница рендерится on‑demand;
- * TOP‑200 здесь можно взять для прогрева CDN или отдельного пайплайна.
+ * Статический билд: prerender только TOP‑N веществ (см. getStaticPaths в [cas].astro);
+ * остальные CAS — 301 через public/_redirects на ghssymbols.com.
  */
 
 /** Поля вещества, нужные странице /pictograms/[cas]/ и приоритету TOP‑N */
@@ -30,6 +29,39 @@ export type RelatedProp = {
   cas_number: string
   common_name: string | null
   iupac_name: string
+}
+
+/** Пересечение пиктограмм только среди переданного набора (TOP‑N prerender). */
+export function computeRelatedInTop200(
+  substance: SubstanceRow,
+  topPool: SubstanceRow[]
+): RelatedProp[] {
+  const picCodes = substance.ghs_pictogram_codes ?? []
+  if (picCodes.length === 0) return []
+  const picSet = new Set(picCodes)
+  return topPool
+    .filter((o) => o.cas_number !== substance.cas_number)
+    .map((o) => ({
+      o,
+      score: (o.ghs_pictogram_codes ?? []).reduce(
+        (n, c) => n + (picSet.has(c) ? 1 : 0),
+        0
+      ),
+    }))
+    .filter((x) => x.score > 0)
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        a.o.cas_number.localeCompare(b.o.cas_number, undefined, {
+          numeric: true,
+        })
+    )
+    .slice(0, 6)
+    .map(({ o }) => ({
+      cas_number: o.cas_number,
+      common_name: o.common_name,
+      iupac_name: o.iupac_name,
+    }))
 }
 
 /** Сортировка для «популярных» CAS (общее имя, короткое название). */

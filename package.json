@@ -8,13 +8,13 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "generate:redirects": "node scripts/generate-pictogram-redirects.mjs",
     "preview": "astro preview",
     "astro": "astro",
     "generate-types": "wrangler types",
     "import-pubchem": "tsx scripts/import-pubchem.ts"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "^13.1.7",
     "@astrojs/mdx": "^5.0.3",
     "@astrojs/react": "^5.0.2",
     "@astrojs/sitemap": "^3.7.2",

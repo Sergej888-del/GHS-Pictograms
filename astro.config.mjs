@@ -3,14 +3,14 @@ import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
 import mdx from '@astrojs/mdx';
 import tailwindcss from '@tailwindcss/vite';
-import cloudflare from '@astrojs/cloudflare';
 
-// Tailwind v4: плагин @tailwindcss/vite (в Astro 6 официальный @astrojs/tailwind пока без peer astro@6)
+// Чистый статический деплой на Cloudflare Pages (без SSR-воркера Astro).
+// Edge-функции в /functions (например api/leads) по-прежнему поддерживаются Pages отдельно.
+
 export default defineConfig({
   site: 'https://ghspictograms.com',
   trailingSlash: 'always',
-  output: 'server',
-  adapter: cloudflare(),
+  output: 'static',
 
   integrations: [react(), mdx()],
 
