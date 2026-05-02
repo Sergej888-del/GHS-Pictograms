@@ -1,9 +1,17 @@
 ---
-export const prerender = true
+/**
+ * On-demand SSR: нет getStaticPaths — не тратим 5‑минутный prerender Cloudflare на тысячи страниц.
+ * Кеш — на стороне Cloudflare (Cache Rules / fetch cache). Список TOP‑200 CAS для прогрева:
+ * `topCasNumbersForWarmup` в src/lib/pictogramCasPaths.ts (после однократной выборки веществ).
+ *
+ * Важно: при `prerender = true` и неполном getStaticPaths Astro не отдаёт остальные пути через SSR
+ * для того же файла — будет 404. Поэтому гибрид «200 static + остальные SSR» в одном [cas].astro невозможен.
+ */
+export const prerender = false
 
 import Layout from '../../layouts/Layout.astro'
+import { supabase } from '../../lib/supabase'
 import {
-  loadPictogramCasStaticPaths,
   filterLabelPictogramCodes,
   type HPRowLite,
   type PictogramRow,
@@ -11,8 +19,103 @@ import {
   type SubstanceRow,
 } from '../../lib/pictogramCasPaths'
 
-export async function getStaticPaths() {
-  return loadPictogramCasStaticPaths()
+const casParam = Astro.params.cas
+if (!casParam) {
+  return new Response(null, { status: 404 })
+}
+const casRaw = decodeURIComponent(casParam)
+
+const { data: subData } = await supabase
+  .from('substances')
+  .select(
+    'cas_number, common_name, iupac_name, ghs_pictogram_codes, h_statement_codes, p_statement_codes, signal_word, ec_number'
+  )
+  .eq('cas_number', casRaw)
+  .maybeSingle()
+
+if (!subData) {
+  return new Response(null, { status: 404 })
+}
+
+const substance = subData as SubstanceRow
+
+if (!(substance.ghs_pictogram_codes?.length ?? 0)) {
+  return new Response(null, { status: 404 })
+}
+
+const picCodes = substance.ghs_pictogram_codes ?? []
+const hCodes = substance.h_statement_codes ?? []
+const pCodes = substance.p_statement_codes ?? []
+
+const [picRes, hRes, pRes] = await Promise.all([
+  picCodes.length
+    ? supabase
+        .from('pictograms_signals')
+        .select('code, name_en, svg_content, hazard_class_en')
+        .in('code', picCodes)
+    : Promise.resolve({ data: null as PictogramRow[] | null }),
+  hCodes.length
+    ? supabase.from('h_statements').select('code, text_en').in('code', hCodes)
+    : Promise.resolve({ data: null as HPRowLite[] | null }),
+  pCodes.length
+    ? supabase.from('p_statements').select('code, text_en').in('code', pCodes)
+    : Promise.resolve({ data: null as HPRowLite[] | null }),
+])
+
+const picByCode = new Map(((picRes.data ?? []) as PictogramRow[]).map((p) => [p.code, p]))
+const pictograms = picCodes
+  .map((c) => picByCode.get(c))
+  .filter((p): p is PictogramRow => p != null)
+
+const hByCode = new Map(((hRes.data ?? []) as HPRowLite[]).map((h) => [h.code, h]))
+const hList = hCodes
+  .map((c) => hByCode.get(c))
+  .filter((h): h is HPRowLite => h != null)
+
+const pByCode = new Map(((pRes.data ?? []) as HPRowLite[]).map((p) => [p.code, p]))
+const pList = pCodes
+  .map((c) => pByCode.get(c))
+  .filter((p): p is HPRowLite => p != null)
+
+let related: RelatedProp[] = []
+
+if (picCodes.length > 0) {
+  const { data: overlapRows } = await supabase
+    .from('substances')
+    .select('cas_number, common_name, iupac_name, ghs_pictogram_codes')
+    .overlaps('ghs_pictogram_codes', picCodes)
+    .neq('cas_number', substance.cas_number)
+    .limit(100)
+
+  const picSet = new Set(picCodes)
+  type OverlapRow = {
+    cas_number: string
+    common_name: string | null
+    iupac_name: string
+    ghs_pictogram_codes: string[] | null
+  }
+  related = ((overlapRows ?? []) as OverlapRow[])
+    .map((o) => ({
+      o,
+      score: (o.ghs_pictogram_codes ?? []).reduce(
+        (n, c) => n + (picSet.has(c) ? 1 : 0),
+        0
+      ),
+    }))
+    .filter((x) => x.score > 0)
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        a.o.cas_number.localeCompare(b.o.cas_number, undefined, {
+          numeric: true,
+        })
+    )
+    .slice(0, 6)
+    .map(({ o }) => ({
+      cas_number: o.cas_number,
+      common_name: o.common_name,
+      iupac_name: o.iupac_name,
+    }))
 }
 
 const pictogramMeaningShort: Record<string, string> = {
@@ -64,14 +167,6 @@ function buildSeoDescription(displayName: string, casNum: string): string {
 function textSnippet(text: string, max = 130): string {
   const t = text.trim().replace(/\s+/g, ' ')
   return t.length <= max ? t : `${t.slice(0, max - 1)}…`
-}
-
-const { substance, pictograms, hList, pList, related } = Astro.props as {
-  substance: SubstanceRow
-  pictograms: PictogramRow[]
-  hList: HPRowLite[]
-  pList: HPRowLite[]
-  related: RelatedProp[]
 }
 
 const allPicCodes = substance.ghs_pictogram_codes ?? []

@@ -1,6 +1,11 @@
-import { supabase } from './supabase'
+/**
+ * Общая логика страницы /pictograms/[cas]/ (без Supabase).
+ * При `output: 'server'` Astro не поддерживает гибрид «частичный getStaticPaths + SSR на том же [cas].astro»
+ * — вне списка getStaticPaths путь получает 404. Поэтому страница рендерится on‑demand;
+ * TOP‑200 здесь можно взять для прогрева CDN или отдельного пайплайна.
+ */
 
-/** Минимальные поля вещества для страницы и related. */
+/** Поля вещества, нужные странице /pictograms/[cas]/ и приоритету TOP‑N */
 export type SubstanceRow = {
   cas_number: string
   common_name: string | null
@@ -27,7 +32,28 @@ export type RelatedProp = {
   iupac_name: string
 }
 
-/** CLP Art. 26 — какие пиктограммы показывать на этикетке (как в прежней логике). */
+/** Сортировка для «популярных» CAS (общее имя, короткое название). */
+export function prioritizePictogramSubstances(s: SubstanceRow[]): SubstanceRow[] {
+  return [...s].sort((a, b) => {
+    const aHasCommon = a.common_name ? 1 : 0
+    const bHasCommon = b.common_name ? 1 : 0
+    if (aHasCommon !== bHasCommon) return bHasCommon - aHasCommon
+
+    const aLen = (a.common_name || a.iupac_name).length
+    const bLen = (b.common_name || b.iupac_name).length
+    return aLen - bLen
+  })
+}
+
+/** Список CAS для прогрева кеша (например, первые TOP_N после prioritize). */
+export function topCasNumbersForWarmup(substances: SubstanceRow[], topN = 200): string[] {
+  const eligible = substances.filter((x) => (x.ghs_pictogram_codes?.length ?? 0) > 0)
+  return prioritizePictogramSubstances(eligible)
+    .slice(0, topN)
+    .map((x) => x.cas_number)
+}
+
+/** CLP Art. 26 — какие пиктограммы показывать на этикетке. */
 export function filterLabelPictogramCodes(allPicCodes: string[]): string[] {
   let codes = [...allPicCodes]
   if (codes.includes('GHS06')) codes = codes.filter((c) => c !== 'GHS07')
@@ -36,126 +62,4 @@ export function filterLabelPictogramCodes(allPicCodes: string[]): string[] {
   if (codes.includes('GHS02') || codes.includes('GHS06'))
     codes = codes.filter((c) => c !== 'GHS04' || codes.includes('GHS04'))
   return codes
-}
-
-async function fetchSubstancesBatched(): Promise<SubstanceRow[]> {
-  const out: SubstanceRow[] = []
-  let from = 0
-  const batch = 1000
-  while (true) {
-    const { data } = await supabase
-      .from('substances')
-      .select(
-        'cas_number, common_name, iupac_name, ghs_pictogram_codes, h_statement_codes, p_statement_codes, signal_word, ec_number'
-      )
-      .not('cas_number', 'is', null)
-      .not('ghs_pictogram_codes', 'is', null)
-      .range(from, from + batch - 1)
-
-    if (!data?.length) break
-    out.push(...(data as SubstanceRow[]))
-    if (data.length < batch) break
-    from += batch
-  }
-  return out.filter((s) => (s.ghs_pictogram_codes?.length ?? 0) > 0)
-}
-
-function buildRelatedMap(substances: SubstanceRow[]): Map<string, SubstanceRow[]> {
-  const byPic = new Map<string, SubstanceRow[]>()
-  for (const s of substances) {
-    for (const code of s.ghs_pictogram_codes ?? []) {
-      if (!byPic.has(code)) byPic.set(code, [])
-      byPic.get(code)!.push(s)
-    }
-  }
-
-  const relatedMap = new Map<string, SubstanceRow[]>()
-  for (const s of substances) {
-    const candidates = new Map<string, { sub: SubstanceRow; score: number }>()
-    for (const code of s.ghs_pictogram_codes ?? []) {
-      for (const other of byPic.get(code) ?? []) {
-        if (other.cas_number === s.cas_number) continue
-        const ex = candidates.get(other.cas_number)
-        if (ex) ex.score++
-        else candidates.set(other.cas_number, { sub: other, score: 1 })
-      }
-    }
-    const top6 = [...candidates.values()]
-      .sort(
-        (a, b) =>
-          b.score - a.score ||
-          a.sub.cas_number.localeCompare(b.sub.cas_number, undefined, {
-            numeric: true,
-          })
-      )
-      .slice(0, 6)
-      .map((c) => c.sub)
-    relatedMap.set(s.cas_number, top6)
-  }
-  return relatedMap
-}
-
-export async function loadPictogramCasStaticPaths(): Promise<
-  {
-    params: { cas: string }
-    props: {
-      substance: SubstanceRow
-      pictograms: PictogramRow[]
-      hList: HPRowLite[]
-      pList: HPRowLite[]
-      related: RelatedProp[]
-    }
-  }[]
-> {
-  const [substances, picRes, hRes, pRes] = await Promise.all([
-    fetchSubstancesBatched(),
-    supabase
-      .from('pictograms_signals')
-      .select('code, name_en, svg_content, hazard_class_en'),
-    supabase.from('h_statements').select('code, text_en'),
-    supabase.from('p_statements').select('code, text_en'),
-  ])
-
-  const picRows = (picRes.data ?? []) as PictogramRow[]
-  const hRows = (hRes.data ?? []) as HPRowLite[]
-  const pRows = (pRes.data ?? []) as HPRowLite[]
-
-  const picMap = new Map(picRows.map((p) => [p.code, p]))
-  const hMap = new Map(hRows.map((h) => [h.code, h]))
-  const pMap = new Map(pRows.map((p) => [p.code, p]))
-
-  const relatedMap = buildRelatedMap(substances)
-
-  return substances.map((substance) => {
-    const cas = substance.cas_number
-
-    const pictograms = (substance.ghs_pictogram_codes ?? [])
-      .map((c) => picMap.get(c))
-      .filter((p): p is PictogramRow => p != null)
-
-    const hList = (substance.h_statement_codes ?? [])
-      .map((c) => hMap.get(c))
-      .filter((row): row is HPRowLite => row != null)
-
-    const pList = (substance.p_statement_codes ?? [])
-      .map((c) => pMap.get(c))
-      .filter((row): row is HPRowLite => row != null)
-
-    const related: RelatedProp[] = (relatedMap.get(cas) ?? []).map((r) => ({
-      cas_number: r.cas_number,
-      common_name: r.common_name,
-      iupac_name: r.iupac_name,
-    }))
-
-    return {
-      params: { cas },
-      props: {
-        substance,
-        pictograms,
-        hList,
-        pList,
-        related,
-      },
-    }
-  })
 }
