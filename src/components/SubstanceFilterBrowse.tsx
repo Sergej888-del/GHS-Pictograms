@@ -30,6 +30,7 @@ interface Props {
 }
 
 export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {}) {
+  const selectMode = typeof onSelectSubstance === 'function'
   const [all, setAll] = useState<Substance[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState(() => {
@@ -250,7 +251,7 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
                   >
                     {name}
                   </p>
-                  {!onSelectSubstance && (
+                  {!selectMode && (
                     <span style={{ color: '#062A78', fontSize: '0.75rem', fontWeight: 500, flexShrink: 0 }}>
                       Details →
                     </span>
@@ -304,12 +305,12 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
               </>
             )
 
-            if (onSelectSubstance) {
+            if (selectMode) {
               return (
                 <li key={r.cas_number} style={{ borderBottom: '1px solid #e2e8f0', minWidth: 0, display: 'flex', alignItems: 'stretch' }}>
                   <button
                     type="button"
-                    onClick={() => onSelectSubstance(r.cas_number)}
+                    onClick={() => onSelectSubstance!(r.cas_number)}
                     style={{
                       display: 'block',
                       padding: '12px 16px',
@@ -351,6 +352,18 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
                 <a
                   href={detailHref}
                   style={{ display: 'block', padding: '12px 16px', textDecoration: 'none', minWidth: 0, flex: 1 }}
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)
+                      return
+                    e.preventDefault()
+                    window.location.assign(detailHref)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter' && e.key !== ' ') return
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+                    e.preventDefault()
+                    window.location.assign(detailHref)
+                  }}
                 >
                   {mainBlock}
                 </a>
