@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { supabase } from '../lib/supabase';
 
 export const prerender = true;
 
@@ -27,14 +28,42 @@ const GHS_PAGES = GHS_CODES.map(code => ({
   priority: '0.8',
 }));
 
+async function fetchPictogramsSubstanceUrls(): Promise<{ url: string; changefreq: string; priority: string }[]> {
+  const rows: { cas_number: string }[] = [];
+  let from = 0;
+  const batch = 1000;
+  while (true) {
+    const { data } = await supabase
+      .from('substances')
+      .select('cas_number, ghs_pictogram_codes')
+      .not('cas_number', 'is', null)
+      .not('ghs_pictogram_codes', 'is', null)
+      .range(from, from + batch - 1);
+
+    if (!data?.length) break;
+    for (const r of data as { cas_number: string; ghs_pictogram_codes: string[] | null }) {
+      if ((r.ghs_pictogram_codes?.length ?? 0) > 0 && r.cas_number?.trim()) {
+        rows.push({ cas_number: r.cas_number });
+      }
+    }
+    if (data.length < batch) break;
+    from += batch;
+  }
+
+  return rows.map((s) => ({
+    url: `/pictograms/${encodeURIComponent(s.cas_number)}/`,
+    changefreq: 'monthly',
+    priority: '0.72',
+  }));
+}
+
 export const GET: APIRoute = async () => {
-  // Не включаем /pictograms/[cas]/ — те же данные что на ghssymbols.com/hazards/[cas],
-  // тысячи URL без статических входящих ссылок → Ahrefs: duplicate + orphan + non-canonical в sitemap.
-  // Детальные страницы остаются в индексе через ссылки с /ghs/*, базы и конструктора.
+  const pictogramPages = await fetchPictogramsSubstanceUrls();
 
   const allPages = [
     ...STATIC_PAGES,
     ...GHS_PAGES,
+    ...pictogramPages,
   ];
 
   const today = new Date().toISOString().split('T')[0];

@@ -1,114 +1,99 @@
 ---
-export const prerender = false
+export const prerender = true
+
 import Layout from '../../layouts/Layout.astro'
-import { supabase } from '../../lib/supabase'
-import GHSLabelConstructor from '../../components/GHSLabelConstructor'
+import {
+  loadPictogramCasStaticPaths,
+  type HBrief,
+  type PictogramRow,
+  type RelatedProp,
+  type SubstanceRow,
+} from '../../lib/pictogramCasPaths'
 
-const { cas } = Astro.params
-if (!cas) {
-  return Astro.redirect('/pictograms/')
+export async function getStaticPaths() {
+  return loadPictogramCasStaticPaths()
 }
 
-const { data: substance, error: subError } = await supabase
-  .from('substances')
-  .select(
-    'id, iupac_name, common_name, cas_number, ec_number, h_statement_codes, ghs_pictogram_codes, signal_word, p_statement_codes'
-  )
-  .eq('cas_number', cas)
-  .maybeSingle()
-
-if (subError || !substance) {
-  return Astro.redirect('/pictograms/')
+const pictogramMeaningShort: Record<string, string> = {
+  GHS01: 'Explosive substances — avoid shock, heat, ignition.',
+  GHS02: 'Flammable — keep away from heat and ignition sources.',
+  GHS03: 'Oxidising — intensifies fire; segregate from flammables.',
+  GHS04: 'Gas under pressure — protect cylinders, avoid heat.',
+  GHS05: 'Corrosive — skin, eye, or metal damage; use PPE.',
+  GHS06: 'Acute toxicity — severe harm from short exposure.',
+  GHS07: 'Irritation or less severe acute toxicity — follow SDS.',
+  GHS08: 'Serious long-term health hazards (CMR, STOT, etc.).',
+  GHS09: 'Hazardous to the aquatic environment — prevent releases.',
 }
 
-const displayName = substance.common_name || substance.iupac_name
-const picCodes = substance.ghs_pictogram_codes ?? []
-const hCodes = substance.h_statement_codes ?? []
-const pCodes = substance.p_statement_codes ?? []
-
-const pictogramPromise =
-  picCodes.length > 0
-    ? supabase
-        .from('pictograms_signals')
-        .select('code, name_en, svg_content, hazard_class_en')
-        .in('code', picCodes)
-    : Promise.resolve({ data: [] as { code: string; name_en: string; svg_content: string | null; hazard_class_en: string | null }[] })
-
-const hPromise =
-  hCodes.length > 0
-    ? supabase.from('h_statements').select('code, text_en').in('code', hCodes)
-    : Promise.resolve({ data: [] as { code: string; text_en: string }[] })
-
-const pPromise =
-  pCodes.length > 0
-    ? supabase.from('p_statements').select('code, text_en').in('code', pCodes)
-    : Promise.resolve({ data: [] as { code: string; text_en: string }[] })
-
-const [{ data: pictogramRows }, { data: hRows }, { data: pRows }] = await Promise.all([
-  pictogramPromise,
-  hPromise,
-  pPromise,
-])
-
-const pictograms = (pictogramRows ?? []).sort((a, b) => a.code.localeCompare(b.code))
-const allPicCodes = picCodes
-const filteredPicCodes = (() => {
-  let codes = [...allPicCodes]
-  if (codes.includes('GHS06')) codes = codes.filter((c) => c !== 'GHS07')
-  if (codes.includes('GHS05')) codes = codes.filter((c) => c !== 'GHS07')
-  if (codes.includes('GHS08')) codes = codes.filter((c) => c !== 'GHS07')
-  if (codes.includes('GHS02') || codes.includes('GHS06'))
-    codes = codes.filter((c) => c !== 'GHS04' || codes.includes('GHS04'))
-  return codes
-})()
-const excludedPictograms = (pictogramRows ?? [])
-  .filter((p) => !filteredPicCodes.includes(p.code))
-  .sort((a, b) => a.code.localeCompare(b.code))
-const hStatements = (hRows ?? []).sort((a, b) => a.code.localeCompare(b.code))
-const pStatements = (pRows ?? []).sort((a, b) => a.code.localeCompare(b.code))
-
-const pictogramMeaning: Record<string, string> = {
-  GHS01:
-    'Indicates explosive materials or self-reactive substances and mixtures. Workers must avoid shock, friction, heat, and ignition sources. Often paired with storage and handling restrictions under transport and workplace rules.',
-  GHS02:
-    'Indicates flammable gases, liquids, vapours, aerosols, or solids. Keep away from heat, sparks, and open flame; use grounding and ventilation as required by your SDS and local rules.',
-  GHS03:
-    'Indicates oxidising substances that can intensify fire or cause other materials to burn. Store separately from flammables and combustibles; follow incompatible substance rules.',
-  GHS04:
-    'Indicates gases under pressure (compressed, liquefied, or dissolved). Protect cylinders from physical damage and excessive temperature; follow valve and regulator safety practices.',
-  GHS05:
-    'Indicates corrosive effects on skin, eyes, or metal. Use appropriate PPE and eyewash provision; prevent contact with incompatible materials.',
-  GHS06:
-    'Indicates acute toxicity (severe). Exposure can cause serious harm or death from a single or short exposure; strict PPE, containment, and emergency procedures apply.',
-  GHS07:
-    'Indicates less severe health effects such as skin or eye irritation, or acute toxicity of lower severity. Still requires precautions per classification and SDS.',
-  GHS08:
-    'Indicates serious long-term health effects such as carcinogenicity, mutagenicity, reproductive toxicity, or respiratory sensitisation. Exposure must be controlled according to regulatory limits.',
-  GHS09:
-    'Indicates hazards to the aquatic environment. Prevent releases to drains and soil; follow disposal and spill rules for environmental protection.',
-}
-
-function meaningForPictogram(code: string, hazardClassEn: string | null): string {
-  if (hazardClassEn && hazardClassEn.trim().length > 20) {
+function captionForPictogram(code: string, hazardClassEn: string | null): string {
+  if (hazardClassEn && hazardClassEn.trim().length > 24) {
     const s = hazardClassEn.trim()
-    return s.length <= 420 ? s : `${s.slice(0, 400).trim()}…`
+    return s.length <= 220 ? s : `${s.slice(0, 200).trim()}…`
   }
-  return pictogramMeaning[code] ?? `${code} marks a hazard class under the GHS. Always read the full SDS and implement the supplier’s recommended controls and emergency measures.`
+  return (
+    pictogramMeaningShort[code] ??
+    'GHS hazard pictogram — use official classification and SDS for labelling.'
+  )
 }
 
-const seoTitle = `${displayName} GHS Label — Pictograms, H-statements & Print Template`
-const rawDesc = `GHS label preview for ${displayName}: CLP pictograms, H/P statements, signal word. CAS ${cas}. Print or download PDF template.`
-const seoDescription = rawDesc.length > 155 ? `${rawDesc.slice(0, 152)}…` : rawDesc
+function buildSeoTitle(displayName: string): string {
+  const suffix = ' GHS Pictograms — Download SVG | GHSPictograms'
+  const max = 60
+  let full = `${displayName}${suffix}`
+  if (full.length <= max) return full
+  const maxName = Math.max(8, max - suffix.length - 3)
+  const namePart =
+    displayName.length > maxName
+      ? `${displayName.slice(0, maxName - 3)}...`
+      : displayName
+  full = `${namePart}${suffix}`
+  return full.length > max ? full.slice(0, max) : full
+}
+
+function buildSeoDescription(displayName: string, casNum: string): string {
+  const raw = `Free SVG downloads of GHS hazard pictograms for ${displayName} (CAS ${casNum}). Label size specifications and CLP-compliant label builder.`
+  const max = 155
+  if (raw.length <= max) return raw
+  const trimmed = `${displayName} (CAS ${casNum}). Label size specs & CLP label builder — free SVG GHS pictograms.`
+  if (trimmed.length <= max) return trimmed
+  return `${trimmed.slice(0, max - 1)}…`
+}
+
+const {
+  substance,
+  labelPictograms,
+  excludedPictograms,
+  hBrief,
+  relatedSubstances,
+} = Astro.props as {
+  substance: SubstanceRow
+  labelPictograms: PictogramRow[]
+  excludedPictograms: PictogramRow[]
+  hBrief: HBrief[]
+  relatedSubstances: RelatedProp[]
+}
+
+const cas = substance.cas_number
+const displayName = substance.common_name || substance.iupac_name
+const casEnc = encodeURIComponent(cas)
+
+const seoTitle = buildSeoTitle(displayName)
+const seoDescription = buildSeoDescription(displayName, cas)
+const canonical = `https://ghspictograms.com/pictograms/${casEnc}/`
+const ogImage = 'https://ghspictograms.com/og-default.png'
 
 const productJsonLd = JSON.stringify({
   '@context': 'https://schema.org',
   '@type': 'Product',
-  name: `${displayName} — GHS workplace label reference`,
+  name: `${displayName} — GHS pictogram SVG pack & label specs`,
   description: seoDescription,
+  image: ogImage,
   sku: cas,
   brand: { '@type': 'Brand', name: 'GHS Pictograms' },
+  category: 'GHSLabelDesignResource',
   additionalProperty: [
-    { '@type': 'PropertyValue', name: 'CAS', value: substance.cas_number ?? cas },
+    { '@type': 'PropertyValue', name: 'CAS', value: cas },
     ...(substance.ec_number
       ? [{ '@type': 'PropertyValue', name: 'EC', value: substance.ec_number }]
       : []),
@@ -120,138 +105,71 @@ const productJsonLd = JSON.stringify({
   title={seoTitle}
   description={seoDescription}
   titleIsComplete={true}
-  canonical={`https://ghspictograms.com/pictograms/${encodeURIComponent(cas)}/`}
+  canonical={canonical}
+  image={ogImage}
 >
   <script type="application/ld+json" slot="head" set:html={productJsonLd} />
-  <style is:global slot="head">
-    @media print {
-      header,
-      footer,
-      .no-print {
-        display: none !important;
-      }
-      main {
-        padding: 0 !important;
-        margin: 0 !important;
-        max-width: none !important;
-      }
-      #label-preview-print {
-        box-shadow: none !important;
-        margin: 0 auto !important;
-        max-width: 100% !important;
-        padding: 10mm !important;
-        border-width: 2pt !important;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-      #label-preview-print .label-print-hide {
-        display: none !important;
-      }
-    }
-  </style>
 
-  <article class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 no-print">
-    <nav class="text-sm text-gray-500 mb-8">
+  <article class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+    <nav class="text-sm text-gray-500 mb-8" aria-label="Breadcrumb">
       <a href="/pictograms/" class="text-[#062A78] hover:underline">Pictograms</a>
       <span class="mx-2">/</span>
-      <span class="text-gray-700">{cas}</span>
+      <span class="text-gray-700 font-mono">{cas}</span>
     </nav>
 
-    <section class="mb-14" aria-labelledby="hero-heading">
-      <h1 id="hero-heading" class="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">
-        {displayName}
-      </h1>
-      <p class="mt-3 text-lg text-gray-600">
-        <span class="font-medium text-gray-800">CAS</span> {substance.cas_number}
-        {substance.ec_number && (
-          <>
-            <span class="mx-2">·</span>
-            <span class="font-medium text-gray-800">EC</span> {substance.ec_number}
-          </>
-        )}
-      </p>
-      <p class="mt-4 text-xl text-[#062A78] font-medium leading-snug">
-        CLP/GHS compliant label elements for {displayName}
-      </p>
-      <p class="mt-4">
-        <a
-          href={`https://ghssymbols.com/hazards/${encodeURIComponent(cas)}/`}
-          class="text-sm font-semibold text-[#062A78] hover:underline"
-        >
-          View full hazard data on GHS Symbols →
-        </a>
-      </p>
-    </section>
-  </article>
-
-  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 no-print">
-    <h2 class="text-2xl font-bold text-gray-900 mb-2">GHS Label Constructor</h2>
-    <p class="text-gray-600 mb-6">
-      Build a CLP-compliant label for {displayName}. Add your supplier details, then download as PDF or order certified print-ready labels.
+    <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight leading-tight">
+      {displayName} — GHS Pictograms &amp; Label Specifications
+    </h1>
+    <p class="mt-3 text-sm text-gray-600">
+      <span class="font-medium text-gray-800">CAS</span> {cas}
+      {substance.ec_number && (
+        <>
+          <span class="mx-2">·</span>
+          <span class="font-medium text-gray-800">EC</span> {substance.ec_number}
+        </>
+      )}
+      {substance.signal_word && (
+        <>
+          <span class="mx-2">·</span>
+          <span class="font-medium text-amber-800">Signal word</span>{' '}
+          {substance.signal_word}
+        </>
+      )}
     </p>
-    <GHSLabelConstructor
-      client:load
-      displayName={displayName}
-      casNumber={substance.cas_number}
-      ecNumber={substance.ec_number}
-      signalWord={substance.signal_word}
-      pictograms={pictograms}
-      hStatements={hStatements}
-      pStatements={pStatements}
-    />
-  </div>
 
-  {excludedPictograms.length > 0 && (
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 no-print">
-      <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
-        <p class="text-sm font-semibold text-gray-700 mb-2">
-          Pictograms not shown on label (CLP Article 26 precedence rules):
-        </p>
-        <ul class="space-y-1">
-          {excludedPictograms.map((p) => (
-            <li class="text-sm text-gray-600">
-              <span class="font-semibold text-gray-800">{p.code} — {p.name_en}:</span>
-              {' '}
-              {p.code === 'GHS07' && (allPicCodes.includes('GHS06') || allPicCodes.includes('GHS05'))
-                ? 'Suppressed — a more severe pictogram (GHS06 or GHS05) applies (CLP Art. 26)'
-                : 'Not required for this classification'}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  )}
-
-  <article class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 no-print">
-    <section class="mb-16" aria-labelledby="pictograms-heading">
+    <section class="mt-12" aria-labelledby="pictograms-heading">
       <h2 id="pictograms-heading" class="text-2xl font-bold text-gray-900 mb-2">
-        GHS Pictograms
+        Hazard Pictograms for {displayName}
       </h2>
-      <p class="text-gray-600 mb-8">Official hazard symbols for this classification. Download individual SVG files for design tools.</p>
+      <p class="text-gray-600 mb-8 max-w-3xl">
+        Use these pictograms when labeling containers of {displayName}. Download vector SVGs for Adobe Illustrator, packaging
+        design, and print workflows.
+      </p>
 
-      {pictograms.length === 0 ? (
-        <p class="text-gray-600">No pictogram codes are linked for this substance in the database.</p>
+      {labelPictograms.length === 0 ? (
+        <p class="text-gray-600">No pictogram graphics are available for this entry.</p>
       ) : (
-        <ul class="space-y-10">
-          {pictograms.map((p) => (
-            <li class="border border-gray-200 rounded-2xl p-6 bg-white shadow-sm">
-              <div class="flex flex-col sm:flex-row gap-6 items-start">
-                <div
-                  class="svg-source shrink-0 mx-auto sm:mx-0 [&>svg]:w-[158px] [&>svg]:h-[158px]"
-                  set:html={p.svg_content ?? ''}
-                />
-                <div class="flex-1 min-w-0">
-                  <p class="text-lg font-bold text-gray-900">{p.code}</p>
-                  <p class="text-md font-semibold text-[#062A78] mt-1">{p.name_en}</p>
-                  <p class="mt-3 text-gray-700 text-sm leading-relaxed">{meaningForPictogram(p.code, p.hazard_class_en)}</p>
-                  <button
-                    type="button"
-                    class="download-svg-btn mt-4 px-4 py-2 rounded-lg border-2 border-[#062A78] text-[#062A78] font-semibold text-sm hover:bg-[#062A78] hover:text-white transition-colors"
-                    data-download-code={p.code}
-                  >
-                    Download SVG
-                  </button>
-                </div>
+        <ul class="grid sm:grid-cols-2 gap-8 list-none p-0">
+          {labelPictograms.map((p) => (
+            <li class="pictogram-svg-card border border-gray-200 rounded-2xl p-6 bg-white shadow-sm">
+              <div
+                class="svg-source mx-auto flex items-center justify-center [&>svg]:max-w-[200px] [&>svg]:max-h-[200px] [&>svg]:w-full [&>svg]:h-auto"
+                style="width:200px;height:200px;"
+                set:html={p.svg_content ?? ''}
+              />
+              <p class="text-center font-mono font-bold text-gray-900 mt-4">{p.code}</p>
+              <p class="text-center text-lg font-semibold text-[#062A78] mt-1">{p.name_en}</p>
+              <p class="text-sm text-gray-600 mt-3 text-center leading-relaxed px-2">
+                {captionForPictogram(p.code, p.hazard_class_en)}
+              </p>
+              <div class="mt-5 flex justify-center">
+                <button
+                  type="button"
+                  class="download-svg-btn px-4 py-2 rounded-lg border-2 border-[#062A78] text-[#062A78] font-semibold text-sm hover:bg-[#062A78] hover:text-white transition-colors"
+                  data-download-code={p.code}
+                >
+                  Download SVG
+                </button>
               </div>
             </li>
           ))}
@@ -259,124 +177,145 @@ const productJsonLd = JSON.stringify({
       )}
     </section>
 
-    <section class="mb-16" aria-labelledby="requirements-heading">
-      <h2 id="requirements-heading" class="text-2xl font-bold text-gray-900 mb-4">
-        Label Requirements
-      </h2>
-      <p class="text-gray-600 mb-6">
-        Minimum label dimensions under CLP Annex I depend on package capacity. Pictograms must meet minimum size on the label (typically at least 1/15 of label height, not less than 10×10 mm for small packages).
-      </p>
+    {excludedPictograms.length > 0 && (
+      <div class="mt-10 bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm">
+        <p class="font-semibold text-gray-800 mb-2">CLP precedence (label display)</p>
+        <p class="text-gray-600 mb-2">
+          Some assigned codes are omitted on the harmonised label when a more severe pictogram applies (e.g. GHS07 vs GHS06).
+        </p>
+        <ul class="space-y-1 text-gray-600">
+          {excludedPictograms.map((p) => (
+            <li>
+              <span class="font-mono font-semibold text-gray-800">{p.code}</span> — {p.name_en}
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
 
+    <section class="mt-16" aria-labelledby="label-size-heading">
+      <h2 id="label-size-heading" class="text-2xl font-bold text-gray-900 mb-2">
+        Label Size Requirements (CLP Annex I, Table 1.3)
+      </h2>
+      <p class="text-gray-600 mb-6 text-sm">
+        Indicative minimum dimensions for the label and GHS pictogram on the package (verify against the current CLP text and
+        your package shape).
+      </p>
       <div class="overflow-x-auto rounded-xl border border-gray-200">
         <table class="w-full text-sm text-left">
           <thead class="bg-slate-100 text-gray-900 font-semibold">
             <tr>
               <th class="px-4 py-3">Package capacity</th>
               <th class="px-4 py-3">Minimum label size (not folded)</th>
-              <th class="px-4 py-3">Pictogram (indicative minimum)</th>
+              <th class="px-4 py-3">Minimum pictogram size</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200">
             <tr>
-              <td class="px-4 py-3">≤ 3 L</td>
-              <td class="px-4 py-3">52 × 74 mm (A8)</td>
-              <td class="px-4 py-3">≥ 10 × 10 mm</td>
+              <td class="px-4 py-3">≤ 0.5 L</td>
+              <td class="px-4 py-3">52 × 74 mm</td>
+              <td class="px-4 py-3">16 × 16 mm</td>
             </tr>
-            <tr class="bg-slate-50/50">
-              <td class="px-4 py-3">3 L – 50 L</td>
-              <td class="px-4 py-3">74 × 105 mm (A7)</td>
-              <td class="px-4 py-3">Scale with label per Annex I</td>
+            <tr class="bg-slate-50/60">
+              <td class="px-4 py-3">0.5–3 L</td>
+              <td class="px-4 py-3">74 × 105 mm</td>
+              <td class="px-4 py-3">23 × 23 mm</td>
             </tr>
             <tr>
-              <td class="px-4 py-3">50 L – 500 L</td>
-              <td class="px-4 py-3">105 × 148 mm (A6)</td>
-              <td class="px-4 py-3">Scale with label per Annex I</td>
+              <td class="px-4 py-3">3–50 L</td>
+              <td class="px-4 py-3">105 × 148 mm</td>
+              <td class="px-4 py-3">32 × 32 mm</td>
             </tr>
-            <tr class="bg-slate-50/50">
+            <tr class="bg-slate-50/60">
+              <td class="px-4 py-3">50–500 L</td>
+              <td class="px-4 py-3">148 × 210 mm</td>
+              <td class="px-4 py-3">46 × 46 mm</td>
+            </tr>
+            <tr>
               <td class="px-4 py-3">&gt; 500 L</td>
-              <td class="px-4 py-3">148 × 210 mm (A5)</td>
-              <td class="px-4 py-3">Scale with label per Annex I</td>
+              <td class="px-4 py-3">210 × 297 mm</td>
+              <td class="px-4 py-3">64 × 64 mm</td>
             </tr>
           </tbody>
         </table>
       </div>
-
-      <div class="mt-10 space-y-8">
-        <div>
-          <h3 class="text-lg font-bold text-gray-900">CLP Regulation (EC) No 1272/2008 (EU)</h3>
-          <p class="mt-2 text-gray-700 leading-relaxed">
-            {displayName} is subject to CLP labelling requirements. Suppliers must classify this substance,
-            assign the correct hazard classes, and communicate hazards on labels and safety data sheets
-            in all EU Member States. Labels must show the correct GHS pictograms, signal word,
-            hazard and precautionary statements, and product identifiers including CAS {substance.cas_number}
-            {substance.ec_number ? ` and EC ${substance.ec_number}` : ''}.
-          </p>
-          {hCodes.includes('H350') || hCodes.includes('H351') ? (
-            <p class="mt-2 text-amber-800 bg-amber-50 rounded-lg p-3 text-sm font-medium">
-              ⚠️ This substance has carcinogenicity classification — special workplace exposure limits and
-              mandatory risk assessment apply under REACH and national OEL regulations.
-            </p>
-          ) : null}
-          {hCodes.some((h) => h.startsWith('H4')) ? (
-            <p class="mt-2 text-blue-800 bg-blue-50 rounded-lg p-3 text-sm font-medium">
-              🌊 Aquatic hazard classification applies — prevent releases to drains, soil, and water.
-              Specific disposal P-statements are mandatory on the label.
-            </p>
-          ) : null}
-          {substance.signal_word === 'Danger' ? (
-            <p class="mt-2 text-red-800 bg-red-50 rounded-lg p-3 text-sm font-medium">
-              🔴 Signal word DANGER — indicates the most severe hazard category.
-              Enhanced workplace controls, PPE requirements, and emergency procedures apply.
-            </p>
-          ) : null}
-        </div>
-        <div>
-          <h3 class="text-lg font-bold text-gray-900">OSHA Hazard Communication Standard (HCS 2012 / aligned updates)</h3>
-          <p class="mt-2 text-gray-700 leading-relaxed">
-            In the United States, {displayName} (CAS {substance.cas_number}) requires a compliant GHS label
-            under OSHA HCS. Workplace labels must be legible and prominently displayed.
-            Secondary containers must carry the same core hazard information when the original label is not transferred.
-            Training, written programme, and SDS access are mandatory.
-          </p>
-        </div>
-        <div>
-          <h3 class="text-lg font-bold text-gray-900">BS 5609 and marine / IMDG context</h3>
-          <p class="mt-2 text-gray-700 leading-relaxed">
-            For marine transport of {displayName}, labels must meet BS 5609 durability standards —
-            resistance to salt spray, UV, abrasion, and immersion. Standard office-printed labels
-            do not qualify. Confirm with your carrier and certified label supplier that materials
-            meet BS 5609 Section 2 or 3 as applicable for IMDG-compliant shipments.
-          </p>
-        </div>
-      </div>
     </section>
-  </article>
 
-  <section
-    class="no-print bg-[#062A78] text-white py-14 px-4 sm:px-6"
-    aria-labelledby="cta-heading"
-  >
-    <div class="max-w-3xl mx-auto text-center">
-      <h2 id="cta-heading" class="text-2xl sm:text-3xl font-bold">
-        Need print-ready {displayName} labels?
-      </h2>
-      <p class="mt-4 text-lg text-blue-100">
-        Order BS5609 certified labels — delivered in 3–5 days
-      </p>
+    <section class="mt-14 rounded-2xl bg-amber-50 border border-amber-200 p-8 text-center" aria-label="Label builder call to action">
       <a
-        href="https://ghslabels.com"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="inline-block mt-8 px-8 py-3 rounded-lg bg-white text-[#062A78] font-bold hover:bg-blue-50 transition-colors"
+        href={`/label-constructor/?cas=${casEnc}`}
+        class="inline-block px-8 py-4 rounded-xl bg-[#062A78] text-white font-bold text-lg hover:bg-blue-900 transition-colors shadow-md"
       >
-        Visit GHS Labels
+        Build a CLP-Compliant Label for {displayName} →
       </a>
-    </div>
-  </section>
+      <p class="mt-5">
+        <a
+          href={`https://ghssymbols.com/hazards/${casEnc}/`}
+          class="text-sm font-semibold text-[#062A78] hover:underline"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          View hazard classification on GHSSymbols.com →
+        </a>
+      </p>
+    </section>
 
-  <article class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 no-print">
-    <p class="text-sm text-gray-500">
-      Information is for reference only. Always verify classification and label content against your official SDS, supplier data, and applicable law.
+    {hBrief.length > 0 && (
+      <section class="mt-16" aria-labelledby="hazard-statements-heading">
+        <h2 id="hazard-statements-heading" class="text-2xl font-bold text-gray-900 mb-4">
+          Hazard Statements
+        </h2>
+        <p class="text-gray-600 text-sm mb-4">
+          Harmonised hazard statements associated with this entry (short preview for label context; always confirm on the SDS).
+        </p>
+        <ul class="space-y-3 list-none p-0">
+          {hBrief.map((h) => (
+            <li class="border border-gray-100 rounded-lg p-4 bg-gray-50/80">
+              <span class="font-mono font-bold text-[#062A78]">{h.code}</span>
+              {h.snippet ? (
+                <span class="text-gray-700 text-sm ml-2">{h.snippet}</span>
+              ) : (
+                <span class="text-gray-500 text-sm ml-2">(wording in safety data sheet)</span>
+              )}
+            </li>
+          ))}
+        </ul>
+        {(substance.h_statement_codes?.length ?? 0) > 12 && (
+          <p class="mt-3 text-sm text-gray-500">
+            Showing 12 of {substance.h_statement_codes!.length} hazard statements — see full classification on the SDS or GHS
+            Symbols.
+          </p>
+        )}
+      </section>
+    )}
+
+    {relatedSubstances.length > 0 && (
+      <section class="mt-16 border-t border-gray-200 pt-10" aria-labelledby="related-heading">
+        <h2 id="related-heading" class="text-2xl font-bold text-gray-900 mb-4">
+          Related Substances with Same Pictograms
+        </h2>
+        <p class="text-gray-600 text-sm mb-6">
+          Other harmonised entries sharing GHS pictogram codes with {displayName} (by overlap count).
+        </p>
+        <div class="grid sm:grid-cols-2 gap-4">
+          {relatedSubstances.map((r) => (
+            <a
+              href={`/pictograms/${encodeURIComponent(r.cas_number)}/`}
+              class="block border border-gray-200 rounded-xl p-4 hover:bg-amber-50/50 hover:border-amber-200 transition-colors"
+            >
+              <div class="font-semibold text-gray-900 text-sm line-clamp-2">
+                {r.common_name || r.iupac_name}
+              </div>
+              <div class="text-xs text-gray-500 mt-1 font-mono">CAS {r.cas_number}</div>
+            </a>
+          ))}
+        </div>
+      </section>
+    )}
+
+    <p class="mt-14 text-xs text-gray-500">
+      Information is for design and training reference only. Verify dimensions, classification, and label content against the
+      official CLP text, your SDS, and national law.
     </p>
   </article>
 
@@ -384,9 +323,9 @@ const productJsonLd = JSON.stringify({
     (function () {
       document.querySelectorAll('.download-svg-btn').forEach(function (button) {
         button.addEventListener('click', function () {
-          var li = button.closest('li')
-          if (!li) return
-          var el = li.querySelector('.svg-source')
+          var card = button.closest('.pictogram-svg-card')
+          if (!card) return
+          var el = card.querySelector('.svg-source')
           if (!el) return
           var svg = el.innerHTML.trim()
           if (!svg) return
@@ -407,5 +346,4 @@ const productJsonLd = JSON.stringify({
       })
     })()
   </script>
-
 </Layout>
