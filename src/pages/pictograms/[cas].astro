@@ -171,7 +171,6 @@ function textSnippet(text: string, max = 130): string {
 
 const allPicCodes = substance.ghs_pictogram_codes ?? []
 const filteredCodes = filterLabelPictogramCodes(allPicCodes)
-const picByCode = new Map(pictograms.map((p) => [p.code, p]))
 const labelPictograms = filteredCodes
   .map((c) => picByCode.get(c))
   .filter((p): p is PictogramRow => p != null)
