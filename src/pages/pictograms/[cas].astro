@@ -19,103 +19,38 @@ import {
   type SubstanceRow,
 } from '../../lib/pictogramCasPaths'
 
+type PageMode = 'missing_param' | 'substance_not_found' | 'no_pictograms' | 'ok'
+
 const casParam = Astro.params.cas
+const casRaw = casParam ? decodeURIComponent(casParam) : ''
+
+let substance: SubstanceRow | null = null
+let pageMode: PageMode
+
 if (!casParam) {
-  return new Response(null, { status: 404 })
-}
-const casRaw = decodeURIComponent(casParam)
-
-const { data: subData } = await supabase
-  .from('substances')
-  .select(
-    'cas_number, common_name, iupac_name, ghs_pictogram_codes, h_statement_codes, p_statement_codes, signal_word, ec_number'
-  )
-  .eq('cas_number', casRaw)
-  .maybeSingle()
-
-if (!subData) {
-  return new Response(null, { status: 404 })
-}
-
-const substance = subData as SubstanceRow
-
-if (!(substance.ghs_pictogram_codes?.length ?? 0)) {
-  return new Response(null, { status: 404 })
-}
-
-const picCodes = substance.ghs_pictogram_codes ?? []
-const hCodes = substance.h_statement_codes ?? []
-const pCodes = substance.p_statement_codes ?? []
-
-const [picRes, hRes, pRes] = await Promise.all([
-  picCodes.length
-    ? supabase
-        .from('pictograms_signals')
-        .select('code, name_en, svg_content, hazard_class_en')
-        .in('code', picCodes)
-    : Promise.resolve({ data: null as PictogramRow[] | null }),
-  hCodes.length
-    ? supabase.from('h_statements').select('code, text_en').in('code', hCodes)
-    : Promise.resolve({ data: null as HPRowLite[] | null }),
-  pCodes.length
-    ? supabase.from('p_statements').select('code, text_en').in('code', pCodes)
-    : Promise.resolve({ data: null as HPRowLite[] | null }),
-])
-
-const picByCode = new Map(((picRes.data ?? []) as PictogramRow[]).map((p) => [p.code, p]))
-const pictograms = picCodes
-  .map((c) => picByCode.get(c))
-  .filter((p): p is PictogramRow => p != null)
-
-const hByCode = new Map(((hRes.data ?? []) as HPRowLite[]).map((h) => [h.code, h]))
-const hList = hCodes
-  .map((c) => hByCode.get(c))
-  .filter((h): h is HPRowLite => h != null)
-
-const pByCode = new Map(((pRes.data ?? []) as HPRowLite[]).map((p) => [p.code, p]))
-const pList = pCodes
-  .map((c) => pByCode.get(c))
-  .filter((p): p is HPRowLite => p != null)
-
-let related: RelatedProp[] = []
-
-if (picCodes.length > 0) {
-  const { data: overlapRows } = await supabase
+  pageMode = 'missing_param'
+} else {
+  const { data: subData } = await supabase
     .from('substances')
-    .select('cas_number, common_name, iupac_name, ghs_pictogram_codes')
-    .overlaps('ghs_pictogram_codes', picCodes)
-    .neq('cas_number', substance.cas_number)
-    .limit(100)
-
-  const picSet = new Set(picCodes)
-  type OverlapRow = {
-    cas_number: string
-    common_name: string | null
-    iupac_name: string
-    ghs_pictogram_codes: string[] | null
-  }
-  related = ((overlapRows ?? []) as OverlapRow[])
-    .map((o) => ({
-      o,
-      score: (o.ghs_pictogram_codes ?? []).reduce(
-        (n, c) => n + (picSet.has(c) ? 1 : 0),
-        0
-      ),
-    }))
-    .filter((x) => x.score > 0)
-    .sort(
-      (a, b) =>
-        b.score - a.score ||
-        a.o.cas_number.localeCompare(b.o.cas_number, undefined, {
-          numeric: true,
-        })
+    .select(
+      'cas_number, common_name, iupac_name, ghs_pictogram_codes, h_statement_codes, p_statement_codes, signal_word, ec_number'
     )
-    .slice(0, 6)
-    .map(({ o }) => ({
-      cas_number: o.cas_number,
-      common_name: o.common_name,
-      iupac_name: o.iupac_name,
-    }))
+    .eq('cas_number', casRaw)
+    .maybeSingle()
+
+  substance = (subData as SubstanceRow | null) ?? null
+
+  if (!substance) {
+    pageMode = 'substance_not_found'
+  } else if (!(substance.ghs_pictogram_codes?.length ?? 0)) {
+    pageMode = 'no_pictograms'
+  } else {
+    pageMode = 'ok'
+  }
+}
+
+if (pageMode === 'missing_param' || pageMode === 'substance_not_found') {
+  Astro.response.status = 404
 }
 
 const pictogramMeaningShort: Record<string, string> = {
@@ -169,46 +104,169 @@ function textSnippet(text: string, max = 130): string {
   return t.length <= max ? t : `${t.slice(0, max - 1)}…`
 }
 
-const allPicCodes = substance.ghs_pictogram_codes ?? []
-const filteredCodes = filterLabelPictogramCodes(allPicCodes)
-const labelPictograms = filteredCodes
-  .map((c) => picByCode.get(c))
-  .filter((p): p is PictogramRow => p != null)
-const excludedPictograms = allPicCodes
-  .filter((c) => !filteredCodes.includes(c))
-  .map((c) => picByCode.get(c))
-  .filter((p): p is PictogramRow => p != null)
-  .sort((a, b) => a.code.localeCompare(b.code))
-
-const cas = substance.cas_number
-const displayName = substance.common_name || substance.iupac_name
-const casEnc = encodeURIComponent(cas)
-
-const seoTitle = buildSeoTitle(displayName)
-const seoDescription = buildSeoDescription(displayName, cas)
-const canonical = `https://ghspictograms.com/pictograms/${casEnc}/`
 const ogImage = 'https://ghspictograms.com/og-default.png'
 
-const productJsonLd = JSON.stringify({
-  '@context': 'https://schema.org',
-  '@type': 'Product',
-  name: `${displayName} — GHS pictogram SVG pack & label specs`,
-  description: seoDescription,
-  image: ogImage,
-  sku: cas,
-  brand: { '@type': 'Brand', name: 'GHS Pictograms' },
-  category: 'GHSLabelDesignResource',
-  additionalProperty: [
-    { '@type': 'PropertyValue', name: 'CAS', value: cas },
-    ...(substance.ec_number
-      ? [{ '@type': 'PropertyValue', name: 'EC', value: substance.ec_number }]
-      : []),
-  ],
-})
+let seoTitle = 'Substance not found | GHSPictograms'
+let seoDescription =
+  'That CAS is not present in our harmonised CLP database on GHSPictograms.'
+let canonical = 'https://ghspictograms.com/pictograms/'
+let productJsonLd = ''
 
-const hPreview = hList.slice(0, 12)
-const pPreview = pList.slice(0, 12)
+let cas = ''
+let displayName = ''
+let casEnc = ''
+let labelPictograms: PictogramRow[] = []
+let excludedPictograms: PictogramRow[] = []
+let related: RelatedProp[] = []
+let hPreview: HPRowLite[] = []
+let pPreview: HPRowLite[] = []
+let substanceEc: string | null = null
+let substanceSignalWord: string | null = null
+let hStatementsTotal = 0
+let pStatementsTotal = 0
+
+if (pageMode === 'missing_param') {
+  seoTitle = 'Substance not found | GHSPictograms'
+  seoDescription = 'Missing CAS in the URL. Browse substances from the pictograms directory.'
+}
+
+if (pageMode === 'substance_not_found' && casRaw) {
+  const casSlugEnc = encodeURIComponent(casRaw)
+  canonical = `https://ghspictograms.com/pictograms/${casSlugEnc}/`
+  seoTitle = `Substance not found (CAS ${casRaw}) | GHSPictograms`
+  seoDescription = `CAS ${casRaw} was not found in our harmonised database. Try GHSSymbols for broader hazard data or another CAS spelling.`
+}
+
+if (pageMode === 'no_pictograms' && substance) {
+  cas = substance.cas_number
+  displayName = substance.common_name || substance.iupac_name
+  casEnc = encodeURIComponent(cas)
+  canonical = `https://ghspictograms.com/pictograms/${casEnc}/`
+  seoTitle = `${displayName} — no pictogram data yet | GHSPictograms`
+  if (seoTitle.length > 62) seoTitle = `CAS ${cas} — no pictograms | GHSPictograms`
+  seoDescription = `Harmonised entry for CAS ${cas} has no GHS pictogram codes in our dataset yet. View hazard statements on GHSSymbols.`
+  substanceEc = substance.ec_number
+  substanceSignalWord = substance.signal_word
+}
+
+if (pageMode === 'ok' && substance) {
+  const picCodes = substance.ghs_pictogram_codes ?? []
+  const hCodes = substance.h_statement_codes ?? []
+  const pCodes = substance.p_statement_codes ?? []
+
+  const [picRes, hRes, pRes] = await Promise.all([
+    picCodes.length
+      ? supabase
+          .from('pictograms_signals')
+          .select('code, name_en, svg_content, hazard_class_en')
+          .in('code', picCodes)
+      : Promise.resolve({ data: null as PictogramRow[] | null }),
+    hCodes.length
+      ? supabase.from('h_statements').select('code, text_en').in('code', hCodes)
+      : Promise.resolve({ data: null as HPRowLite[] | null }),
+    pCodes.length
+      ? supabase.from('p_statements').select('code, text_en').in('code', pCodes)
+      : Promise.resolve({ data: null as HPRowLite[] | null }),
+  ])
+
+  const picByCode = new Map(((picRes.data ?? []) as PictogramRow[]).map((p) => [p.code, p]))
+
+  const hByCode = new Map(((hRes.data ?? []) as HPRowLite[]).map((h) => [h.code, h]))
+  const hList = hCodes
+    .map((c) => hByCode.get(c))
+    .filter((h): h is HPRowLite => h != null)
+
+  const pByCode = new Map(((pRes.data ?? []) as HPRowLite[]).map((p) => [p.code, p]))
+  const pList = pCodes
+    .map((c) => pByCode.get(c))
+    .filter((p): p is HPRowLite => p != null)
+
+  if (picCodes.length > 0) {
+    const { data: overlapRows } = await supabase
+      .from('substances')
+      .select('cas_number, common_name, iupac_name, ghs_pictogram_codes')
+      .overlaps('ghs_pictogram_codes', picCodes)
+      .neq('cas_number', substance.cas_number)
+      .limit(100)
+
+    const picSet = new Set(picCodes)
+    type OverlapRow = {
+      cas_number: string
+      common_name: string | null
+      iupac_name: string
+      ghs_pictogram_codes: string[] | null
+    }
+    related = ((overlapRows ?? []) as OverlapRow[])
+      .map((o) => ({
+        o,
+        score: (o.ghs_pictogram_codes ?? []).reduce(
+          (n, c) => n + (picSet.has(c) ? 1 : 0),
+          0
+        ),
+      }))
+      .filter((x) => x.score > 0)
+      .sort(
+        (a, b) =>
+          b.score - a.score ||
+          a.o.cas_number.localeCompare(b.o.cas_number, undefined, {
+            numeric: true,
+          })
+      )
+      .slice(0, 6)
+      .map(({ o }) => ({
+        cas_number: o.cas_number,
+        common_name: o.common_name,
+        iupac_name: o.iupac_name,
+      }))
+  }
+
+  const allPicCodes = substance.ghs_pictogram_codes ?? []
+  const filteredCodes = filterLabelPictogramCodes(allPicCodes)
+  labelPictograms = filteredCodes
+    .map((c) => picByCode.get(c))
+    .filter((p): p is PictogramRow => p != null)
+  excludedPictograms = allPicCodes
+    .filter((c) => !filteredCodes.includes(c))
+    .map((c) => picByCode.get(c))
+    .filter((p): p is PictogramRow => p != null)
+    .sort((a, b) => a.code.localeCompare(b.code))
+
+  cas = substance.cas_number
+  displayName = substance.common_name || substance.iupac_name
+  casEnc = encodeURIComponent(cas)
+
+  seoTitle = buildSeoTitle(displayName)
+  seoDescription = buildSeoDescription(displayName, cas)
+  canonical = `https://ghspictograms.com/pictograms/${casEnc}/`
+
+  productJsonLd = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: `${displayName} — GHS pictogram SVG pack & label specs`,
+    description: seoDescription,
+    image: ogImage,
+    sku: cas,
+    brand: { '@type': 'Brand', name: 'GHS Pictograms' },
+    category: 'GHSLabelDesignResource',
+    additionalProperty: [
+      { '@type': 'PropertyValue', name: 'CAS', value: cas },
+      ...(substance.ec_number
+        ? [{ '@type': 'PropertyValue', name: 'EC', value: substance.ec_number }]
+        : []),
+    ],
+  })
+
+  hPreview = hList.slice(0, 12)
+  pPreview = pList.slice(0, 12)
+  substanceEc = substance.ec_number
+  substanceSignalWord = substance.signal_word
+  hStatementsTotal = substance.h_statement_codes?.length ?? 0
+  pStatementsTotal = substance.p_statement_codes?.length ?? 0
+}
+
+const showNotFoundUi = pageMode === 'missing_param' || pageMode === 'substance_not_found'
 ---
+
 
 <Layout
   title={seoTitle}
@@ -217,9 +275,100 @@ const pPreview = pList.slice(0, 12)
   canonical={canonical}
   image={ogImage}
 >
-  <script type="application/ld+json" slot="head" set:html={productJsonLd} />
+  {pageMode === 'ok' && productJsonLd ? (
+    <script type="application/ld+json" slot="head" set:html={productJsonLd} />
+  ) : null}
 
-  <article class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+  {showNotFoundUi ? (
+    <article class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+      <nav class="text-sm text-gray-500 mb-8" aria-label="Breadcrumb">
+        <a href="/pictograms/" class="text-[#062A78] hover:underline">Pictograms</a>
+        <span class="mx-2">/</span>
+        <span class="text-gray-700 font-mono">
+          {pageMode === 'substance_not_found' ? casRaw : '—'}
+        </span>
+      </nav>
+
+      <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">Substance not found</h1>
+      <p class="mt-4 text-gray-600 max-w-2xl">
+        {pageMode === 'missing_param'
+          ? 'This URL does not include a valid CAS identifier. Go back to the pictograms browser and choose a substance.'
+          : `We do not have a harmonised substance row for CAS ${casRaw} in GHSPictograms yet. Check the CAS format or try GHSSymbols for hazard pages.`}
+      </p>
+      <div class="mt-8 flex flex-wrap gap-4">
+        <a
+          href="/pictograms/"
+          class="inline-flex items-center px-5 py-2.5 rounded-lg bg-[#062A78] text-white font-semibold text-sm hover:bg-blue-900"
+        >
+          Browse pictograms directory
+        </a>
+        {pageMode === 'substance_not_found' && casRaw ? (
+          <a
+            href={`https://ghssymbols.com/hazards/${encodeURIComponent(casRaw)}/`}
+            class="inline-flex items-center px-5 py-2.5 rounded-lg border-2 border-[#062A78] text-[#062A78] font-semibold text-sm hover:bg-[#062A78]/5"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Try GHSSymbols hazard page for CAS {casRaw}
+          </a>
+        ) : null}
+      </div>
+      <p class="mt-10 text-xs text-gray-500">HTTP 404 — page not found in this database snapshot.</p>
+    </article>
+  ) : null}
+
+  {pageMode === 'no_pictograms' ? (
+    <article class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+      <nav class="text-sm text-gray-500 mb-8" aria-label="Breadcrumb">
+        <a href="/pictograms/" class="text-[#062A78] hover:underline">Pictograms</a>
+        <span class="mx-2">/</span>
+        <span class="text-gray-700 font-mono">{cas}</span>
+      </nav>
+
+      <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight leading-tight">
+        {displayName}
+      </h1>
+      <p class="mt-3 text-sm text-gray-600">
+        <span class="font-medium text-gray-800">CAS</span> {cas}
+        {substanceEc ? (
+          <>
+            <span class="mx-2">·</span>
+            <span class="font-medium text-gray-800">EC</span> {substanceEc}
+          </>
+        ) : null}
+        {substanceSignalWord ? (
+          <>
+            <span class="mx-2">·</span>
+            <span class="font-medium text-amber-800">Signal word</span> {substanceSignalWord}
+          </>
+        ) : null}
+      </p>
+
+      <div class="mt-10 rounded-2xl border border-amber-200 bg-amber-50 p-6 sm:p-8">
+        <h2 class="text-xl font-bold text-gray-900">No pictograms data available</h2>
+        <p class="mt-3 text-gray-700 max-w-2xl">
+          This harmonised entry has no GHS pictogram codes in our dataset. You can still open the full hazard page on GHSSymbols
+          (H and P phrases, signal word, and more).
+        </p>
+        <a
+          href={`https://ghssymbols.com/hazards/${casEnc}/`}
+          class="mt-6 inline-flex items-center px-6 py-3 rounded-xl bg-[#062A78] text-white font-bold text-base hover:bg-blue-900"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Open hazard classification on GHSSymbols.com →
+        </a>
+      </div>
+
+      <p class="mt-12 text-xs text-gray-500">
+        Information is for reference only — confirm classification on your SDS and the official CLP text.
+      </p>
+    </article>
+  ) : null}
+
+  {pageMode === 'ok' ? (
+    <>
+      <article class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
     <nav class="text-sm text-gray-500 mb-8" aria-label="Breadcrumb">
       <a href="/pictograms/" class="text-[#062A78] hover:underline">Pictograms</a>
       <span class="mx-2">/</span>
@@ -231,17 +380,17 @@ const pPreview = pList.slice(0, 12)
     </h1>
     <p class="mt-3 text-sm text-gray-600">
       <span class="font-medium text-gray-800">CAS</span> {cas}
-      {substance.ec_number && (
+      {substanceEc && (
         <>
           <span class="mx-2">·</span>
-          <span class="font-medium text-gray-800">EC</span> {substance.ec_number}
+          <span class="font-medium text-gray-800">EC</span> {substanceEc}
         </>
       )}
-      {substance.signal_word && (
+      {substanceSignalWord && (
         <>
           <span class="mx-2">·</span>
           <span class="font-medium text-amber-800">Signal word</span>{' '}
-          {substance.signal_word}
+          {substanceSignalWord}
         </>
       )}
     </p>
@@ -389,10 +538,9 @@ const pPreview = pList.slice(0, 12)
             </li>
           ))}
         </ul>
-        {(substance.h_statement_codes?.length ?? 0) > 12 && (
+        {hStatementsTotal > 12 && (
           <p class="mt-3 text-sm text-gray-500">
-            Showing 12 of {substance.h_statement_codes!.length} hazard statements — see full classification on the SDS or GHS
-            Symbols.
+            Showing 12 of {hStatementsTotal} hazard statements — see full classification on the SDS or GHS Symbols.
           </p>
         )}
       </section>
@@ -416,8 +564,8 @@ const pPreview = pList.slice(0, 12)
             </li>
           ))}
         </ul>
-        {(substance.p_statement_codes?.length ?? 0) > 12 && (
-          <p class="mt-3 text-sm text-gray-500">Showing 12 of {substance.p_statement_codes!.length} precautionary statements.</p>
+        {pStatementsTotal > 12 && (
+          <p class="mt-3 text-sm text-gray-500">Showing 12 of {pStatementsTotal} precautionary statements.</p>
         )}
       </section>
     )}
@@ -450,33 +598,35 @@ const pPreview = pList.slice(0, 12)
       Information is for design and training reference only. Verify dimensions, classification, and label content against the
       official CLP text, your SDS, and national law.
     </p>
-  </article>
+      </article>
 
-  <script is:inline>
-    (function () {
-      document.querySelectorAll('.download-svg-btn').forEach(function (button) {
-        button.addEventListener('click', function () {
-          var card = button.closest('.pictogram-svg-card')
-          if (!card) return
-          var el = card.querySelector('.svg-source')
-          if (!el) return
-          var svg = el.innerHTML.trim()
-          if (!svg) return
-          var code = button.getAttribute('data-download-code') || 'ghs-pictogram'
-          var xml =
-            '<?xml version="1.0" encoding="UTF-8"?>' +
-            (svg.indexOf('<svg') === 0 ? svg : '<svg xmlns="http://www.w3.org/2000/svg">' + svg + '</svg>')
-          try {
-            var blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })
-            var url = URL.createObjectURL(blob)
-            var a = document.createElement('a')
-            a.href = url
-            a.download = code + '.svg'
-            a.click()
-            URL.revokeObjectURL(url)
-          } catch (e) {}
-        })
-      })
-    })()
-  </script>
+      <script is:inline>
+        (function () {
+          document.querySelectorAll('.download-svg-btn').forEach(function (button) {
+            button.addEventListener('click', function () {
+              var card = button.closest('.pictogram-svg-card')
+              if (!card) return
+              var el = card.querySelector('.svg-source')
+              if (!el) return
+              var svg = el.innerHTML.trim()
+              if (!svg) return
+              var code = button.getAttribute('data-download-code') || 'ghs-pictogram'
+              var xml =
+                '<?xml version="1.0" encoding="UTF-8"?>' +
+                (svg.indexOf('<svg') === 0 ? svg : '<svg xmlns="http://www.w3.org/2000/svg">' + svg + '</svg>')
+              try {
+                var blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })
+                var url = URL.createObjectURL(blob)
+                var a = document.createElement('a')
+                a.href = url
+                a.download = code + '.svg'
+                a.click()
+                URL.revokeObjectURL(url)
+              } catch (e) {}
+            })
+          })
+        })()
+      </script>
+    </>
+  ) : null}
 </Layout>
