@@ -9,7 +9,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Отсутствуют PUBLIC_SUPABASE_URL или PUBLIC_SUPABASE_ANON_KEY в .env.local')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+/** Длиннее дефолтного undici/HTML timeout — prerender тысяч страниц без обрыва. */
+const customFetch: typeof fetch = (input, init) =>
+  fetch(input, {
+    ...init,
+    signal: AbortSignal.timeout(120_000),
+  })
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  global: { fetch: customFetch },
+})
 
 // Типы для основных таблиц
 export interface Substance {

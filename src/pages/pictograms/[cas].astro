@@ -4,7 +4,8 @@ export const prerender = true
 import Layout from '../../layouts/Layout.astro'
 import {
   loadPictogramCasStaticPaths,
-  type HBrief,
+  filterLabelPictogramCodes,
+  type HPRowLite,
   type PictogramRow,
   type RelatedProp,
   type SubstanceRow,
@@ -60,19 +61,30 @@ function buildSeoDescription(displayName: string, casNum: string): string {
   return `${trimmed.slice(0, max - 1)}…`
 }
 
-const {
-  substance,
-  labelPictograms,
-  excludedPictograms,
-  hBrief,
-  relatedSubstances,
-} = Astro.props as {
-  substance: SubstanceRow
-  labelPictograms: PictogramRow[]
-  excludedPictograms: PictogramRow[]
-  hBrief: HBrief[]
-  relatedSubstances: RelatedProp[]
+function textSnippet(text: string, max = 130): string {
+  const t = text.trim().replace(/\s+/g, ' ')
+  return t.length <= max ? t : `${t.slice(0, max - 1)}…`
 }
+
+const { substance, pictograms, hList, pList, related } = Astro.props as {
+  substance: SubstanceRow
+  pictograms: PictogramRow[]
+  hList: HPRowLite[]
+  pList: HPRowLite[]
+  related: RelatedProp[]
+}
+
+const allPicCodes = substance.ghs_pictogram_codes ?? []
+const filteredCodes = filterLabelPictogramCodes(allPicCodes)
+const picByCode = new Map(pictograms.map((p) => [p.code, p]))
+const labelPictograms = filteredCodes
+  .map((c) => picByCode.get(c))
+  .filter((p): p is PictogramRow => p != null)
+const excludedPictograms = allPicCodes
+  .filter((c) => !filteredCodes.includes(c))
+  .map((c) => picByCode.get(c))
+  .filter((p): p is PictogramRow => p != null)
+  .sort((a, b) => a.code.localeCompare(b.code))
 
 const cas = substance.cas_number
 const displayName = substance.common_name || substance.iupac_name
@@ -99,6 +111,9 @@ const productJsonLd = JSON.stringify({
       : []),
   ],
 })
+
+const hPreview = hList.slice(0, 12)
+const pPreview = pList.slice(0, 12)
 ---
 
 <Layout
@@ -260,7 +275,7 @@ const productJsonLd = JSON.stringify({
       </p>
     </section>
 
-    {hBrief.length > 0 && (
+    {hPreview.length > 0 && (
       <section class="mt-16" aria-labelledby="hazard-statements-heading">
         <h2 id="hazard-statements-heading" class="text-2xl font-bold text-gray-900 mb-4">
           Hazard Statements
@@ -269,11 +284,11 @@ const productJsonLd = JSON.stringify({
           Harmonised hazard statements associated with this entry (short preview for label context; always confirm on the SDS).
         </p>
         <ul class="space-y-3 list-none p-0">
-          {hBrief.map((h) => (
+          {hPreview.map((h) => (
             <li class="border border-gray-100 rounded-lg p-4 bg-gray-50/80">
               <span class="font-mono font-bold text-[#062A78]">{h.code}</span>
-              {h.snippet ? (
-                <span class="text-gray-700 text-sm ml-2">{h.snippet}</span>
+              {h.text_en ? (
+                <span class="text-gray-700 text-sm ml-2">{textSnippet(h.text_en)}</span>
               ) : (
                 <span class="text-gray-500 text-sm ml-2">(wording in safety data sheet)</span>
               )}
@@ -289,16 +304,40 @@ const productJsonLd = JSON.stringify({
       </section>
     )}
 
-    {relatedSubstances.length > 0 && (
+    {pPreview.length > 0 && (
+      <section class="mt-16" aria-labelledby="p-statements-heading">
+        <h2 id="p-statements-heading" class="text-2xl font-bold text-gray-900 mb-4">
+          Precautionary Statements (preview)
+        </h2>
+        <p class="text-gray-600 text-sm mb-4">Label-oriented P-phrases — confirm full wording on the SDS.</p>
+        <ul class="space-y-3 list-none p-0">
+          {pPreview.map((pRow) => (
+            <li class="border border-gray-100 rounded-lg p-4 bg-teal-50/40">
+              <span class="font-mono font-bold text-teal-900">{pRow.code}</span>
+              {pRow.text_en ? (
+                <span class="text-gray-700 text-sm ml-2">{textSnippet(pRow.text_en)}</span>
+              ) : (
+                <span class="text-gray-500 text-sm ml-2">(wording in safety data sheet)</span>
+              )}
+            </li>
+          ))}
+        </ul>
+        {(substance.p_statement_codes?.length ?? 0) > 12 && (
+          <p class="mt-3 text-sm text-gray-500">Showing 12 of {substance.p_statement_codes!.length} precautionary statements.</p>
+        )}
+      </section>
+    )}
+
+    {related.length > 0 && (
       <section class="mt-16 border-t border-gray-200 pt-10" aria-labelledby="related-heading">
         <h2 id="related-heading" class="text-2xl font-bold text-gray-900 mb-4">
           Related Substances with Same Pictograms
         </h2>
         <p class="text-gray-600 text-sm mb-6">
-          Other harmonised entries sharing GHS pictogram codes with {displayName} (by overlap count).
+          Other harmonised entries sharing GHS pictogram codes with {displayName} (by overlap score).
         </p>
         <div class="grid sm:grid-cols-2 gap-4">
-          {relatedSubstances.map((r) => (
+          {related.map((r) => (
             <a
               href={`/pictograms/${encodeURIComponent(r.cas_number)}/`}
               class="block border border-gray-200 rounded-xl p-4 hover:bg-amber-50/50 hover:border-amber-200 transition-colors"
