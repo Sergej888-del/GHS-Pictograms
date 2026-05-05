@@ -1,0 +1,271 @@
+---
+// GHSRevisionsTimeline.astro
+// Horizontal timeline of UN GHS revisions 2003-2025
+// No external dependencies. Pure Astro + scoped CSS + inline SVG positioning.
+// Conservative Navy palette matching ghspictograms.com (#0077B6 primary)
+
+interface Revision {
+  number: number;
+  year: number;
+  date: string;
+  headline: string;
+  detail: string;
+}
+
+const revisions: Revision[] = [
+  {
+    number: 1,
+    year: 2003,
+    date: "Jul 2003",
+    headline: "First edition",
+    detail: "Foundational hazard classes published. Basis for early national adoptions.",
+  },
+  {
+    number: 2,
+    year: 2007,
+    date: "Jul 2007",
+    headline: "Editorial corrections",
+    detail: "Minor refinements. No major class changes.",
+  },
+  {
+    number: 3,
+    year: 2009,
+    date: "Jul 2009",
+    headline: "EU CLP baseline",
+    detail: "Edition that EU CLP Regulation 1272/2008 was built on.",
+  },
+  {
+    number: 4,
+    year: 2011,
+    date: "Jul 2011",
+    headline: "Aquatic chronic toxicity",
+    detail: "Long-term aquatic categories added. Triggered EU ATP updates.",
+  },
+  {
+    number: 5,
+    year: 2013,
+    date: "Jul 2013",
+    headline: "Desensitized explosives",
+    detail: "New class for stabilized explosive substances.",
+  },
+  {
+    number: 6,
+    year: 2015,
+    date: "Jul 2015",
+    headline: "Consolidation",
+    detail: "Largely editorial. Few new requirements.",
+  },
+  {
+    number: 7,
+    year: 2017,
+    date: "Jul 2017",
+    headline: "Most widely implemented",
+    detail: "Used as baseline by OSHA HCS 2024 and many global markets in 2026.",
+  },
+  {
+    number: 8,
+    year: 2019,
+    date: "Jul 2019",
+    headline: "Skin sensitization clarifications",
+    detail: "Refined criteria for sensitizer subcategories.",
+  },
+  {
+    number: 9,
+    year: 2021,
+    date: "Jul 2021",
+    headline: "Non-animal test data",
+    detail: "Guidance on accepting in vitro data for skin and eye irritation.",
+  },
+  {
+    number: 10,
+    year: 2023,
+    date: "Jul 2023",
+    headline: "Aerosols and chemicals under pressure",
+    detail: "Refined classification logic for pressurized formulations.",
+  },
+  {
+    number: 11,
+    year: 2025,
+    date: "Sep 2025",
+    headline: "Atmospheric system class",
+    detail: "Adds global warming potential as a hazard. Non-animal sensitization methods formalized.",
+  },
+];
+
+const startYear = 2003;
+const endYear = 2025;
+const yearSpan = endYear - startYear;
+---
+
+<div class="ghs-timeline-wrapper">
+  <div class="ghs-timeline-scroll">
+    <div class="ghs-timeline">
+      <div class="ghs-timeline-axis"></div>
+
+      {revisions.map((rev) => {
+        const ratio = (rev.year - startYear) / yearSpan;
+        const isOdd = rev.number % 2 === 1;
+        return (
+          <div
+            class={`ghs-timeline-point ${isOdd ? 'is-above' : 'is-below'}`}
+            style={`left: calc(120px + ${ratio} * (100% - 240px));`}
+            data-rev={rev.number}
+          >
+            <div class="ghs-timeline-dot"></div>
+            <div class="ghs-timeline-label">
+              <div class="ghs-timeline-rev">Rev {rev.number}</div>
+              <div class="ghs-timeline-year">{rev.year}</div>
+              <div class="ghs-timeline-headline">{rev.headline}</div>
+              <div class="ghs-timeline-detail">{rev.detail}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  </div>
+
+  <p class="ghs-timeline-caption">
+    UN GHS revisions, 2003 to 2025. Each revision is published every two years by UNSCEGHS in Geneva.
+    Revisions 7 and 8 are the most widely implemented baselines as of 2026.
+  </p>
+</div>
+
+<style>
+  .ghs-timeline-wrapper {
+    margin: 2rem 0;
+    padding: 1.5rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+  }
+
+  .ghs-timeline-scroll {
+    overflow-x: auto;
+    overflow-y: visible;
+    padding: 1rem 1.5rem;
+    -webkit-overflow-scrolling: touch;
+    scroll-padding-left: 1.5rem;
+    scroll-padding-right: 1.5rem;
+  }
+
+  .ghs-timeline {
+    position: relative;
+    min-width: 920px;
+    height: 360px;
+    padding: 80px 120px 80px 120px;
+  }
+
+  .ghs-timeline-axis {
+    position: absolute;
+    top: 50%;
+    left: 120px;
+    right: 120px;
+    height: 3px;
+    background: linear-gradient(to right, #cbd5e1 0%, #0077B6 50%, #0077B6 100%);
+    border-radius: 1.5px;
+  }
+
+  .ghs-timeline-point {
+    position: absolute;
+    top: 50%;
+    width: 200px;
+    transform: translate(-50%, -50%);
+  }
+
+  .ghs-timeline-dot {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 14px;
+    height: 14px;
+    background: #ffffff;
+    border: 3px solid #0077B6;
+    border-radius: 50%;
+    z-index: 2;
+    transition: all 0.2s ease;
+  }
+
+  .ghs-timeline-point:hover .ghs-timeline-dot {
+    background: #0077B6;
+    transform: translate(-50%, -50%) scale(1.3);
+  }
+
+  .ghs-timeline-label {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 180px;
+    padding: 0.5rem 0.625rem;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-left: 3px solid #0077B6;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: #334155;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    transition: all 0.2s ease;
+  }
+
+  .ghs-timeline-point.is-above .ghs-timeline-label {
+    bottom: 18px;
+  }
+
+  .ghs-timeline-point.is-below .ghs-timeline-label {
+    top: 18px;
+  }
+
+  .ghs-timeline-point:hover .ghs-timeline-label {
+    box-shadow: 0 4px 12px rgba(0, 119, 182, 0.18);
+    border-color: #0077B6;
+    z-index: 10;
+  }
+
+  .ghs-timeline-rev {
+    font-weight: 700;
+    color: #0077B6;
+    font-size: 0.7rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .ghs-timeline-year {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 0.95rem;
+    margin: 0.125rem 0;
+  }
+
+  .ghs-timeline-headline {
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.25rem;
+  }
+
+  .ghs-timeline-detail {
+    color: #64748b;
+    font-size: 0.7rem;
+    line-height: 1.4;
+  }
+
+  .ghs-timeline-caption {
+    margin: 0.5rem 0 0 0;
+    font-size: 0.8125rem;
+    color: #64748b;
+    font-style: italic;
+    line-height: 1.5;
+  }
+
+  @media (max-width: 920px) {
+    .ghs-timeline-wrapper::before {
+      content: "← scroll horizontally to view all revisions →";
+      display: block;
+      text-align: center;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-bottom: 0.5rem;
+      font-style: italic;
+    }
+  }
+</style>

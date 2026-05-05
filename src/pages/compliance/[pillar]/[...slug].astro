@@ -1,0 +1,183 @@
+---
+import { getCollection, render } from 'astro:content';
+import Layout from '../../../layouts/Layout.astro';
+
+export const prerender = true;
+
+export async function getStaticPaths() {
+  const articles = await getCollection('compliance', ({ data }) => !data.draft);
+  return articles.map((article) => {
+    return {
+      params: { 
+        pillar: article.data.pillar, 
+        slug: article.id 
+      },
+      props: { article },
+    };
+  });
+}
+
+const { article } = Astro.props;
+const { Content } = await render(article);
+---
+
+<Layout title={article.data.title} description={article.data.description}>
+  <article class="max-w-4xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
+    <header class="mb-10 pb-8 border-b border-slate-200">
+      <p class="text-sm font-semibold uppercase tracking-wider text-blue-600 mb-3">Compliance Hub · UN GHS</p>
+      <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 leading-tight tracking-tight mb-4">{article.data.title}</h1>
+      <p class="text-lg text-slate-600 leading-relaxed">{article.data.description}</p>
+      <div class="flex items-center gap-3 mt-6 text-sm text-slate-500">
+        <time datetime={article.data.pubDate.toISOString()}>{article.data.pubDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</time>
+        {article.data.author && <><span>·</span><span>{article.data.author}</span></>}
+      </div>
+    </header>
+
+    <div class="article-content">
+      <Content />
+    </div>
+  </article>
+</Layout>
+
+<style is:global>
+  /* Anchor scroll offset — country names land below the page top, not hidden under it */
+  .article-content :is(h1, h2, h3, h4, h5, h6) {
+    scroll-margin-top: 5rem;
+  }
+
+  /* H2 — major sections, e.g. "Deep Profiles", "Medium Profiles" */
+  .article-content h2 {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin-top: 3.5rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e2e8f0;
+    letter-spacing: -0.01em;
+  }
+
+  /* H3 — country names like "Australia and New Zealand", "Philippines" */
+  .article-content h3 {
+    font-size: 1.5rem;
+    line-height: 2rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-top: 2.5rem;
+    margin-bottom: 1rem;
+    padding-left: 0.875rem;
+    border-left: 4px solid #2563eb;
+  }
+
+  /* H4 — subheadings inside country profiles */
+  .article-content h4 {
+    font-size: 1.125rem;
+    line-height: 1.75rem;
+    font-weight: 600;
+    color: #334155;
+    margin-top: 1.75rem;
+    margin-bottom: 0.625rem;
+  }
+
+  /* Body text — readable line-height and good color contrast */
+  .article-content p {
+    color: #334155;
+    line-height: 1.75;
+    margin-bottom: 1.125rem;
+    font-size: 1.0625rem;
+  }
+
+  /* "Regulation:", "Authority:", "Scope:" etc — strong labels */
+  .article-content p strong,
+  .article-content li strong {
+    color: #0f172a;
+    font-weight: 600;
+  }
+
+  /* Lists */
+  .article-content ul, .article-content ol {
+    margin: 1rem 0 1.5rem 0;
+    padding-left: 1.5rem;
+    color: #334155;
+  }
+  .article-content li {
+    margin-bottom: 0.5rem;
+    line-height: 1.7;
+  }
+
+  /* Links */
+  .article-content a {
+    color: #2563eb;
+    text-decoration: underline;
+    text-decoration-color: #93c5fd;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+    transition: color 0.15s, text-decoration-color 0.15s;
+  }
+  .article-content a:hover {
+    color: #1d4ed8;
+    text-decoration-color: #2563eb;
+  }
+
+  /* Tables */
+  .article-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2rem 0;
+    font-size: 0.9375rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    overflow: hidden;
+  }
+  .article-content thead {
+    background: #f1f5f9;
+  }
+  .article-content th {
+    text-align: left;
+    padding: 0.875rem 1rem;
+    font-weight: 600;
+    color: #0f172a;
+    border-bottom: 2px solid #cbd5e1;
+  }
+  .article-content td {
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid #e2e8f0;
+    color: #334155;
+    vertical-align: top;
+  }
+  .article-content tbody tr:hover {
+    background: #f8fafc;
+  }
+  .article-content tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* Blockquotes */
+  .article-content blockquote {
+    border-left: 4px solid #2563eb;
+    background: #f8fafc;
+    padding: 1rem 1.25rem;
+    margin: 1.5rem 0;
+    font-style: italic;
+    color: #475569;
+    border-radius: 0 0.375rem 0.375rem 0;
+  }
+
+  /* Code */
+  .article-content code {
+    background: #f1f5f9;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-size: 0.875em;
+    color: #0f172a;
+  }
+
+  /* Mobile adjustments */
+  @media (max-width: 640px) {
+    .article-content h2 { font-size: 1.5rem; line-height: 2rem; }
+    .article-content h3 { font-size: 1.25rem; line-height: 1.75rem; }
+    .article-content p { font-size: 1rem; }
+  }
+</style>
+
