@@ -19,12 +19,24 @@ export async function getStaticPaths() {
 
 const { article } = Astro.props;
 const { Content } = await render(article);
+
+const pillarLabels: Record<string, string> = {
+  'un-ghs': 'UN GHS',
+  'clp': 'CLP',
+  'osha-hcs': 'OSHA HCS',
+  'global-ghs': 'Global GHS',
+  'sds': 'SDS',
+  'mixture-classification': 'Mixture Classification',
+  'transport': 'Transport',
+  'svhc': 'SVHC',
+};
+const pillarLabel = pillarLabels[article.data.pillar] ?? article.data.pillar.toUpperCase();
 ---
 
 <Layout title={article.data.title} description={article.data.description}>
   <article class="max-w-4xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
     <header class="mb-10 pb-8 border-b border-slate-200">
-      <p class="text-sm font-semibold uppercase tracking-wider text-blue-600 mb-3">Compliance Hub · UN GHS</p>
+      <p class="text-sm font-semibold uppercase tracking-wider text-blue-600 mb-3">Compliance Hub · {pillarLabel}</p>
       <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 leading-tight tracking-tight mb-4">{article.data.title}</h1>
       <p class="text-lg text-slate-600 leading-relaxed">{article.data.description}</p>
       <div class="flex items-center gap-3 mt-6 text-sm text-slate-500">
