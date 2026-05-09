@@ -89,13 +89,18 @@ const pillarMeta = {
 
 type PillarSlug = keyof typeof pillarMeta;
 
-const pillarOrder: readonly PillarSlug[] = ['un-ghs', 'osha-hcs', 'clp', 'sds'];
-
 export async function getStaticPaths() {
-  return pillarOrder.map((slug) => ({
-    params: { pillar: slug },
-  }));
+  // ⚠️ getStaticPaths runs in isolated scope — нельзя ссылаться на pillarOrder снаружи.
+  // Список дублирован с outer pillarOrder ниже (template scope).
+  return [
+    { params: { pillar: 'un-ghs' } },
+    { params: { pillar: 'osha-hcs' } },
+    { params: { pillar: 'clp' } },
+    { params: { pillar: 'sds' } },
+  ];
 }
+
+const pillarOrder: readonly PillarSlug[] = ['un-ghs', 'osha-hcs', 'clp', 'sds'];
 
 const { pillar } = Astro.params;
 const pillarSlug = pillar as PillarSlug;
