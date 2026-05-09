@@ -53,6 +53,14 @@ const tools = [
     badge: 'NEW',
     cta: 'Try Inspector →',
   },
+  {
+    title: 'Compliance Hub',
+    description:
+      'Deep-dive guides on UN GHS, OSHA HCS, EU CLP, and SDS authoring. Country-by-country regulatory reference and standards explainers.',
+    href: '/compliance/',
+    badge: 'EDITORIAL',
+    cta: 'Browse Hub →',
+  },
 ]
 ---
 
@@ -230,6 +238,34 @@ const tools = [
       .btn-outline-hero:hover {
         background: rgba(255, 255, 255, 0.1);
         border-color: #fff;
+      }
+
+      /* Compliance Hub button — отдельный стиль с emerald accent чтобы выделить новый раздел */
+      .btn-compliance-hero {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-weight: 600;
+        font-size: 0.9375rem;
+        padding: 0.75rem 1.35rem;
+        border-radius: 8px;
+        border: 2px solid rgba(16, 185, 129, 0.7);
+        background: rgba(16, 185, 129, 0.15);
+        transition:
+          background 0.15s,
+          border-color 0.15s;
+      }
+
+      .btn-compliance-hero:hover {
+        background: rgba(16, 185, 129, 0.28);
+        border-color: rgba(16, 185, 129, 1);
+      }
+
+      .btn-compliance-hero .btn-icon {
+        margin-right: 0.45rem;
+        font-size: 1rem;
+        line-height: 1;
       }
 
       /* ——— Stats ——— */
@@ -430,9 +466,10 @@ const tools = [
         margin: 0 auto;
       }
 
+      /* 4-column grid на больших экранах для размещения 4 карточек */
       .tools-grid {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, 1fr);
         gap: 1.25rem;
       }
 
@@ -445,6 +482,16 @@ const tools = [
         flex-direction: column;
         gap: 0.75rem;
         height: 100%;
+        transition:
+          transform 0.15s,
+          border-color 0.15s,
+          box-shadow 0.15s;
+      }
+
+      .tool-card:hover {
+        border-color: var(--accent);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
       }
 
       .tool-badge {
@@ -463,6 +510,13 @@ const tools = [
         color: #15803d;
         border-color: rgba(22, 163, 74, 0.45);
         background: rgba(22, 163, 74, 0.1);
+      }
+
+      /* EDITORIAL badge — фиолетовый акцент для нового compliance hub */
+      .tool-badge--editorial {
+        color: #6d28d9;
+        border-color: rgba(124, 58, 237, 0.4);
+        background: rgba(124, 58, 237, 0.1);
       }
 
       .tool-title {
@@ -603,6 +657,11 @@ const tools = [
         .p-grid {
           grid-template-columns: repeat(5, minmax(0, 1fr));
         }
+
+        /* На планшетах tools идут 2 в ряд */
+        .tools-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
       }
 
       @media (max-width: 768px) {
@@ -641,6 +700,7 @@ const tools = [
         <ul id="desktop-nav" style="display:flex;align-items:center;gap:1rem;list-style:none;margin:0;padding:0;">
           <li><a href="/pictograms/" style="color:rgba(255,255,255,0.8);font-size:0.875rem;font-weight:500;">Substance Database</a></li>
           <li><a href="/inspector/" style="color:rgba(255,255,255,0.8);font-size:0.875rem;font-weight:500;">Inspector</a></li>
+          <li><a href="/compliance/" style="color:rgba(255,255,255,0.8);font-size:0.875rem;font-weight:500;">Compliance</a></li>
           <li><a href="/blog/" style="color:rgba(255,255,255,0.8);font-size:0.875rem;font-weight:500;">Blog</a></li>
           <li><a href="/faq/" style="color:rgba(255,255,255,0.8);font-size:0.875rem;font-weight:500;">FAQ</a></li>
           <li><a href="/label-constructor/" style="background:white;color:#062A78;font-weight:700;padding:0.5rem 1rem;border-radius:0.5rem;font-size:0.875rem;">Build Label →</a></li>
@@ -655,6 +715,7 @@ const tools = [
         <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0.5rem;">
           <li><a href="/pictograms/" style="color:rgba(255,255,255,0.8);display:block;padding:0.75rem 0.5rem;font-size:0.875rem;">Substance Database</a></li>
           <li><a href="/inspector/" style="color:rgba(255,255,255,0.8);display:block;padding:0.75rem 0.5rem;font-size:0.875rem;">Inspector</a></li>
+          <li><a href="/compliance/" style="color:rgba(255,255,255,0.8);display:block;padding:0.75rem 0.5rem;font-size:0.875rem;">Compliance</a></li>
           <li><a href="/blog/" style="color:rgba(255,255,255,0.8);display:block;padding:0.75rem 0.5rem;font-size:0.875rem;">Blog</a></li>
           <li><a href="/faq/" style="color:rgba(255,255,255,0.8);display:block;padding:0.75rem 0.5rem;font-size:0.875rem;">FAQ</a></li>
           <li style="margin-top:0.5rem;"><a href="/label-constructor/" style="background:white;color:#062A78;font-weight:700;padding:0.5rem 1rem;border-radius:0.5rem;font-size:0.875rem;display:inline-block;">Build Label →</a></li>
@@ -696,6 +757,10 @@ const tools = [
           <a href="/label-constructor/" class="btn-primary-hero">Build a Label — Free</a>
           <a href="/pictograms/" class="btn-outline-hero">Browse Substances →</a>
           <a href="/inspector/" class="btn-outline-hero">ADR Inspector →</a>
+          <a href="/compliance/" class="btn-compliance-hero">
+            <span class="btn-icon" aria-hidden="true">📚</span>
+            Compliance Hub →
+          </a>
         </div>
       </div>
     </section>
@@ -760,7 +825,15 @@ const tools = [
           {
             tools.map((t) => (
               <div class="tool-card">
-                <span class:list={['tool-badge', t.badge === 'NEW' && 'tool-badge--new']}>{t.badge}</span>
+                <span
+                  class:list={[
+                    'tool-badge',
+                    t.badge === 'NEW' && 'tool-badge--new',
+                    t.badge === 'EDITORIAL' && 'tool-badge--editorial',
+                  ]}
+                >
+                  {t.badge}
+                </span>
                 <h3 class="tool-title">{t.title}</h3>
                 <p class="tool-desc">{t.description}</p>
                 <a href={t.href} class="tool-cta">{t.cta}</a>
@@ -792,6 +865,7 @@ const tools = [
         <ul class="footer-links">
           <li><a href="/label-constructor/">Label Constructor</a></li>
           <li><a href="/pictograms/">Substance Database</a></li>
+          <li><a href="/compliance/">Compliance Hub</a></li>
           <li><a href="https://ghssymbols.com/">GHSSymbols.com</a></li>
         </ul>
         <span class="footer-copy">Data source: ECHA CLP Annex VI · For reference only</span>
