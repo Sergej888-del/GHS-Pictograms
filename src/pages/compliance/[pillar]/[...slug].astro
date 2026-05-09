@@ -31,12 +31,65 @@ const pillarLabels: Record<string, string> = {
   'svhc': 'SVHC',
 };
 const pillarLabel = pillarLabels[article.data.pillar] ?? article.data.pillar.toUpperCase();
+
+// BreadcrumbList JSON-LD schema для Google rich results
+const SITE = 'https://ghspictograms.com';
+const breadcrumbJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    {
+      '@type': 'ListItem',
+      position: 1,
+      name: 'Compliance Hub',
+      item: `${SITE}/compliance/`,
+    },
+    {
+      '@type': 'ListItem',
+      position: 2,
+      name: pillarLabel,
+      item: `${SITE}/compliance/${article.data.pillar}/`,
+    },
+    {
+      '@type': 'ListItem',
+      position: 3,
+      name: article.data.title,
+      item: `${SITE}/compliance/${article.data.pillar}/${article.data.slug}/`,
+    },
+  ],
+};
 ---
 
 <Layout title={article.data.title} description={article.data.description}>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify(breadcrumbJsonLd)} />
+  </Fragment>
+
+  <!-- Breadcrumb bar — единый стиль с pillar landing pages -->
+  <nav class="bg-slate-50 border-b border-slate-200" aria-label="Breadcrumb">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3">
+      <ol class="flex items-center gap-2 text-sm text-slate-600 flex-wrap">
+        <li>
+          <a href="/compliance/" class="hover:text-blue-700 transition-colors font-medium">
+            Compliance Hub
+          </a>
+        </li>
+        <li class="text-slate-400" aria-hidden="true">›</li>
+        <li>
+          <a href={`/compliance/${article.data.pillar}/`} class="hover:text-blue-700 transition-colors font-medium">
+            {pillarLabel}
+          </a>
+        </li>
+        <li class="text-slate-400" aria-hidden="true">›</li>
+        <li class="font-semibold text-slate-900 truncate" aria-current="page">
+          {article.data.title}
+        </li>
+      </ol>
+    </div>
+  </nav>
+
   <article class="max-w-4xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
     <header class="mb-10 pb-8 border-b border-slate-200">
-      <p class="text-sm font-semibold uppercase tracking-wider text-blue-600 mb-3">Compliance Hub · {pillarLabel}</p>
       <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 leading-tight tracking-tight mb-4">{article.data.title}</h1>
       <p class="text-lg text-slate-600 leading-relaxed">{article.data.description}</p>
       <div class="flex items-center gap-3 mt-6 text-sm text-slate-500">
@@ -192,4 +245,3 @@ const pillarLabel = pillarLabels[article.data.pillar] ?? article.data.pillar.toU
     .article-content p { font-size: 1rem; }
   }
 </style>
-

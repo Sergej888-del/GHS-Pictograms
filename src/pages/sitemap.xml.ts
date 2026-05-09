@@ -6,7 +6,6 @@ import { prioritizePictogramSubstances, type SubstanceRow } from '../lib/pictogr
 export const prerender = true;
 
 const SITE_URL = 'https://ghspictograms.com';
-
 const GHS_CODES = [
   'GHS01','GHS02','GHS03','GHS04',
   'GHS05','GHS06','GHS07','GHS08','GHS09'
@@ -20,6 +19,7 @@ const STATIC_PAGES = [
   { url: '/faq/', changefreq: 'monthly', priority: '0.7' },
   { url: '/blog/', changefreq: 'weekly', priority: '0.8' },
   { url: '/label-constructor/', changefreq: 'weekly', priority: '0.85' },
+  { url: '/compliance/', changefreq: 'weekly', priority: '0.9' },
 ];
 
 const GHS_PAGES = GHS_CODES.map(code => ({
@@ -28,13 +28,20 @@ const GHS_PAGES = GHS_CODES.map(code => ({
   priority: '0.8',
 }));
 
+/** Pillar landing pages для Compliance Hub — 4 штуки */
+const COMPLIANCE_PILLAR_PAGES = [
+  { url: '/compliance/un-ghs/', changefreq: 'weekly', priority: '0.85' },
+  { url: '/compliance/osha-hcs/', changefreq: 'weekly', priority: '0.85' },
+  { url: '/compliance/clp/', changefreq: 'weekly', priority: '0.85' },
+  { url: '/compliance/sds/', changefreq: 'weekly', priority: '0.85' },
+];
+
 async function fetchTop200PictogramUrls(): Promise<
   { url: string; changefreq: string; priority: string }[]
 > {
   const rows: SubstanceRow[] = [];
   let from = 0;
   const batch = 1000;
-
   while (true) {
     const { data, error } = await supabase
       .from('substances')
@@ -43,10 +50,8 @@ async function fetchTop200PictogramUrls(): Promise<
       )
       .not('ghs_pictogram_codes', 'is', null)
       .range(from, from + batch - 1);
-
     if (error) throw error;
     if (!data?.length) break;
-
     for (const row of data as SubstanceRow[]) {
       if ((row.ghs_pictogram_codes?.length ?? 0) > 0 && row.cas_number?.trim()) {
         rows.push(row);
@@ -55,9 +60,7 @@ async function fetchTop200PictogramUrls(): Promise<
     if (data.length < batch) break;
     from += batch;
   }
-
   const top200 = prioritizePictogramSubstances(rows).slice(0, 200);
-
   return top200.map((s) => ({
     url: `/pictograms/${encodeURIComponent(s.cas_number)}/`,
     changefreq: 'monthly',
@@ -76,15 +79,29 @@ async function fetchBlogSitemapEntries(): Promise<
   }))
 }
 
+async function fetchComplianceSitemapEntries(): Promise<
+  { url: string; changefreq: string; priority: string }[]
+> {
+  const articles = await getCollection('compliance', ({ data }) => !data.draft);
+  return articles.map((article) => ({
+    url: `/compliance/${article.data.pillar}/${article.data.slug}/`,
+    changefreq: 'monthly',
+    priority: '0.85',
+  }));
+}
+
 export const GET: APIRoute = async () => {
-  const [pictogramPages, blogPages] = await Promise.all([
+  const [pictogramPages, blogPages, compliancePages] = await Promise.all([
     fetchTop200PictogramUrls(),
     fetchBlogSitemapEntries(),
+    fetchComplianceSitemapEntries(),
   ]);
 
   const allPages = [
     ...STATIC_PAGES,
     ...GHS_PAGES,
+    ...COMPLIANCE_PILLAR_PAGES,
+    ...compliancePages,
     ...blogPages,
     ...pictogramPages,
   ];
