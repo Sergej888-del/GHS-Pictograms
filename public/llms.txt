@@ -1,0 +1,44 @@
+# GHS Pictograms
+
+> GHS pictogram library, label builder, ADR/DOT inspector and compliance hub for chemical safety professionals serving GHS, CLP, OSHA HCS 2024 and SDS workflows.
+
+## Tools
+
+- [GHS Label Constructor](https://ghspictograms.com/label-constructor/): Build CLP-compliant chemical labels with pictograms, signal words, H/P-statements across 5 volume tiers
+- [Substance Database](https://ghspictograms.com/pictograms/): Search 4,178 CLP Annex VI substances with full GHS classification, pictograms and signal words
+- [GHS vs ADR/DOT Inspector](https://ghspictograms.com/inspector/): Compare GHS hazard classification with transport (ADR/DOT) classification side by side
+
+## Compliance Hub
+
+- [UN GHS](https://ghspictograms.com/compliance/un-ghs/): The global standard for chemical hazard communication
+- [OSHA HCS](https://ghspictograms.com/compliance/osha-hcs/): US Hazard Communication Standard, including the 2024 update
+- [CLP (EU)](https://ghspictograms.com/compliance/clp/): EU Regulation EC 1272/2008 on classification, labelling and packaging
+- [SDS Format](https://ghspictograms.com/compliance/sds/): Safety Data Sheet 16-section format requirements
+
+## GHS Pictograms Reference
+
+- [GHS01 Explosive](https://ghspictograms.com/ghs/ghs01/)
+- [GHS02 Flammable](https://ghspictograms.com/ghs/ghs02/)
+- [GHS03 Oxidising](https://ghspictograms.com/ghs/ghs03/)
+- [GHS04 Gas Cylinder](https://ghspictograms.com/ghs/ghs04/)
+- [GHS05 Corrosive](https://ghspictograms.com/ghs/ghs05/)
+- [GHS06 Toxic](https://ghspictograms.com/ghs/ghs06/)
+- [GHS07 Harmful](https://ghspictograms.com/ghs/ghs07/)
+- [GHS08 Health Hazard](https://ghspictograms.com/ghs/ghs08/)
+- [GHS09 Environmental](https://ghspictograms.com/ghs/ghs09/)
+
+## Blog & FAQ
+
+- [Blog](https://ghspictograms.com/blog/): Articles on chemical safety, labelling, and regulatory compliance
+- [FAQ](https://ghspictograms.com/faq/): Common questions about GHS pictograms and labels
+
+## Sister sites
+
+- [ghssymbols.com](https://ghssymbols.com): Per-substance hazard pages, ATE Calculator, H/P-statement reference
+- [ghslabels.com](https://ghslabels.com): Certified GHS label ordering (BS5609 marine grade)
+
+## Data
+
+- 4,178 substances from EU CLP Annex VI (harmonised classification list)
+- Free SVG downloads for all 9 GHS pictograms
+- CLP/GHS compliant label builder with adaptive layout for 5 volume tiers
