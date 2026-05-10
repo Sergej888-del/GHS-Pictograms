@@ -1,0 +1,56 @@
+# robots.txt for ghspictograms.com
+# Last updated: 2026-05-10
+# Strategy: open access for AI crawlers (search + training)
+# Rationale: B2B compliance content benefits from AI citation visibility
+# in ChatGPT, Claude, Perplexity, and Google AI Overviews.
+
+# ─── Default ─────────────────────────────────────────────
+User-agent: *
+Allow: /
+
+# ─── AI Search / Retrieval crawlers ──────────────────────
+# These bots fetch pages in real time when a user asks an AI assistant.
+# Allowing them is what gets you cited in ChatGPT/Claude/Perplexity answers.
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+# ─── AI Training crawlers ────────────────────────────────
+# These bots collect content for model training.
+# Allowing them is fine here: content is public CLP Annex VI reference data.
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+# ─── Sitemap ─────────────────────────────────────────────
+Sitemap: https://ghspictograms.com/sitemap.xml
