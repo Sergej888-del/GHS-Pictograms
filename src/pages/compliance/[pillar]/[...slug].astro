@@ -58,11 +58,42 @@ const breadcrumbJsonLd = {
     },
   ],
 };
+const articlePageId = `${SITE}/compliance/${article.data.pillar}/${article.data.slug}/`;
+
+const articleSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: article.data.title,
+  description: article.data.description,
+  datePublished: article.data.pubDate.toISOString(),
+  dateModified: (article.data.updatedDate ?? article.data.pubDate).toISOString(),
+  author: {
+    '@type': 'Organization',
+    name: 'GHS Pictograms',
+    url: 'https://ghspictograms.com',
+  },
+  publisher: {
+    '@type': 'Organization',
+    name: 'GHS Pictograms',
+    url: 'https://ghspictograms.com',
+    logo: {
+      '@type': 'ImageObject',
+      url: 'https://ghspictograms.com/favicon.svg',
+    },
+  },
+  mainEntityOfPage: {
+    '@type': 'WebPage',
+    '@id': articlePageId,
+  },
+};
+
+const articleSchemaJson = JSON.stringify(articleSchema);
 ---
 
 <Layout title={article.data.title} description={article.data.description}>
   <Fragment slot="head">
     <script type="application/ld+json" set:html={JSON.stringify(breadcrumbJsonLd)} />
+    <script type="application/ld+json" set:html={articleSchemaJson} />
   </Fragment>
 
   <!-- Breadcrumb bar — единый стиль с pillar landing pages -->
