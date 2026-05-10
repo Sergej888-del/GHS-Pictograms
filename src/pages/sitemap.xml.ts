@@ -1,7 +1,5 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
-import { supabase } from '../lib/supabase';
-import { prioritizePictogramSubstances, type SubstanceRow } from '../lib/pictogramCasPaths';
 
 export const prerender = true;
 
@@ -36,38 +34,6 @@ const COMPLIANCE_PILLAR_PAGES = [
   { url: '/compliance/sds/', changefreq: 'weekly', priority: '0.85' },
 ];
 
-async function fetchTop200PictogramUrls(): Promise<
-  { url: string; changefreq: string; priority: string }[]
-> {
-  const rows: SubstanceRow[] = [];
-  let from = 0;
-  const batch = 1000;
-  while (true) {
-    const { data, error } = await supabase
-      .from('substances')
-      .select(
-        'cas_number, common_name, iupac_name, ghs_pictogram_codes, h_statement_codes, p_statement_codes, signal_word, ec_number'
-      )
-      .not('ghs_pictogram_codes', 'is', null)
-      .range(from, from + batch - 1);
-    if (error) throw error;
-    if (!data?.length) break;
-    for (const row of data as SubstanceRow[]) {
-      if ((row.ghs_pictogram_codes?.length ?? 0) > 0 && row.cas_number?.trim()) {
-        rows.push(row);
-      }
-    }
-    if (data.length < batch) break;
-    from += batch;
-  }
-  const top200 = prioritizePictogramSubstances(rows).slice(0, 200);
-  return top200.map((s) => ({
-    url: `/pictograms/${encodeURIComponent(s.cas_number)}/`,
-    changefreq: 'monthly',
-    priority: '0.72',
-  }));
-}
-
 async function fetchBlogSitemapEntries(): Promise<
   { url: string; changefreq: string; priority: string }[]
 > {
@@ -91,8 +57,7 @@ async function fetchComplianceSitemapEntries(): Promise<
 }
 
 export const GET: APIRoute = async () => {
-  const [pictogramPages, blogPages, compliancePages] = await Promise.all([
-    fetchTop200PictogramUrls(),
+  const [blogPages, compliancePages] = await Promise.all([
     fetchBlogSitemapEntries(),
     fetchComplianceSitemapEntries(),
   ]);
@@ -103,7 +68,6 @@ export const GET: APIRoute = async () => {
     ...COMPLIANCE_PILLAR_PAGES,
     ...compliancePages,
     ...blogPages,
-    ...pictogramPages,
   ];
 
   const today = new Date().toISOString().split('T')[0];
