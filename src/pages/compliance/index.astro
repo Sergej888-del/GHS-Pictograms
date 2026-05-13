@@ -5,7 +5,7 @@ import { getCollection } from 'astro:content';
 export const prerender = true;
 
 // Все опубликованные статьи compliance hub
-const allArticles = await getCollection('compliance', ({ data }) => !data.draft);
+const allArticles = await getCollection('compliance', ({ data }) => !data.draft && data.type !== 'pillar');
 
 // Сортировка: новые → старые
 const sortedArticles = allArticles.sort(
