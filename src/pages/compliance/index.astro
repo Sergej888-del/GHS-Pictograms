@@ -110,9 +110,10 @@ const pillarMeta: Record<
 // Порядок отображения пилларов
 const pillarOrder = ['un-ghs', 'osha-hcs', 'clp', 'sds'] as const;
 
-// Подсчёт статей в каждом пилларе
+// Pillar counts include pillar overviews (each pillar contributes 1 + its cluster count)
+const allContent = await getCollection('compliance', ({ data }) => !data.draft);
 const pillarCounts: Record<string, number> = {};
-for (const article of allArticles) {
+for (const article of allContent) {
   pillarCounts[article.data.pillar] = (pillarCounts[article.data.pillar] ?? 0) + 1;
 }
 
