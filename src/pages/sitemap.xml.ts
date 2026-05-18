@@ -32,6 +32,8 @@ const COMPLIANCE_PILLAR_PAGES = [
   { url: '/compliance/osha-hcs/', changefreq: 'weekly', priority: '0.85' },
   { url: '/compliance/clp/', changefreq: 'weekly', priority: '0.85' },
   { url: '/compliance/sds/', changefreq: 'weekly', priority: '0.85' },
+  { url: '/compliance/reach/', changefreq: 'weekly', priority: '0.85' },
+  { url: '/compliance/svhc/', changefreq: 'weekly', priority: '0.85' },
 ];
 
 async function fetchBlogSitemapEntries(): Promise<
@@ -48,7 +50,7 @@ async function fetchBlogSitemapEntries(): Promise<
 async function fetchComplianceSitemapEntries(): Promise<
   { url: string; changefreq: string; priority: string }[]
 > {
-  const articles = await getCollection('compliance', ({ data }) => !data.draft);
+  const articles = await getCollection('compliance', ({ data }) => !data.draft && data.type !== 'pillar');
   return articles.map((article) => ({
     url: `/compliance/${article.data.pillar}/${article.data.slug}/`,
     changefreq: 'monthly',
