@@ -1,0 +1,216 @@
+---
+title: "SCIP Database Notification Guide: Requirements & Process"
+description: "Complete SCIP database guide for EU suppliers: who must notify, IUCLID submission process, 0.1% threshold, penalties, and the 2025 repeal proposal."
+slug: "scip-database-notification-guide"
+pubDate: 2026-05-21
+category: "compliance"
+pillar: "svhc"
+type: "deep-dive"
+draft: false
+language: "en-US"
+author: "GHS Pictograms Editorial"
+schemaType: "Article"
+keywords:
+  - "scip database"
+  - "echa scip database"
+  - "scip notification"
+  - "scip svhc"
+  - "scip database requirements"
+  - "scip iuclid"
+  - "simplified scip notification"
+  - "scip database abolition"
+relatedPages:
+  - "/compliance/svhc/"
+  - "/compliance/reach/"
+  - "/compliance/reach/reach-registration-step-by-step/"
+  - "/compliance/sds/sds-format-16-sections-explained/"
+crossDomainLinks:
+  - "https://ghssymbols.com/hazards/110-54-3/"
+  - "https://ghssymbols.com/"
+---
+
+By 30 April 2026, the European Chemicals Agency (ECHA) had received over **17.5 million SCIP database notifications** from EU suppliers — yet the European Commission has formally proposed scrapping the entire scheme. For compliance officers, this creates a paradox: SCIP obligations remain fully enforceable, while the legal basis for them may disappear within two years. This guide explains the current SCIP database requirements, the IUCLID-based submission process, national enforcement variations, and what the December 2025 repeal proposal means for ongoing notifications.
+
+## At a glance
+
+- **Legal basis:** Article 9(1)(i) of the Waste Framework Directive 2008/98/EC, in force since 5 January 2021
+- **Who must notify:** EU producers, importers, assemblers, and distributors placing articles on the EU market with SVHCs above 0.1% w/w
+- **Threshold:** 0.1% weight by weight at the article level (each component of a complex object counts separately)
+- **Reference list:** The REACH Candidate List, currently 253 substances after the 4 February 2026 update
+- **Penalties:** Vary by Member State — Germany permits fines up to €1 million plus imprisonment of up to five years
+- **Future:** Commission proposal COM(2025) 986 of 10 December 2025 would repeal SCIP; not yet adopted, obligations remain in force
+
+## What is the SCIP database?
+
+The SCIP database — Substances of Concern In articles as such or in complex objects (Products) — is the EU public registry of articles placed on the market that contain substances of very high concern. Established by ECHA under the revised Waste Framework Directive in 2018 and operational since 5 January 2021, the **ECHA SCIP database** captures information that flows through to waste operators, recyclers, and consumers across the lifecycle of an article.
+
+The legal trigger sits in Article 9(1)(i) of Directive 2008/98/EC, added by Directive (EU) 2018/851. This provision requires Member States to ensure that any supplier of an article — as defined in REACH Article 3(33) — submits to ECHA the same information that REACH Article 33(1) already requires them to pass downstream when the article contains a Candidate List substance above 0.1% w/w. The Commission deliberately reused the REACH information duty as the foundation, then added structured data fields aimed at waste managers.
+
+Two parallel goals drive the scheme. The first is **substitution pressure** — making the use of SVHCs visible in finished goods, the Commission hoped to push manufacturers toward safer alternatives. The second is **waste stream traceability** — recyclers receiving end-of-life products can query the SCIP database to identify hazardous content before processing. Whether either goal has materialized in practice is contested, and that debate has now shaped the [repeal proposal](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:52025PC0986) examined later in this guide.
+
+For the broader regulatory context — what makes a substance an SVHC, how the Candidate List is built, and how this connects to Authorisation under Annex XIV — see the parent [REACH SVHC pillar guide](/compliance/svhc/).
+
+## Who must submit a SCIP notification?
+
+The SCIP notification obligation falls on any actor placing an article on the EU market. ECHA identifies four duty-holder categories:
+
+- **EU producers and assemblers** of articles, including manufacturers of components and complex objects
+- **EU importers** bringing finished articles from non-EU countries into the EU market
+- **EU distributors** repackaging, rebranding, or otherwise placing articles on the market under their own name
+- **Other EU actors** in the supply chain who place articles on the market
+
+One critical exemption: **retailers and other actors supplying articles directly and exclusively to consumers** are not required to submit SCIP notifications. They sit at the end of the supply chain, so the upstream actors carry the obligation. Member States may add limited national exemptions tied to defence matters.
+
+Non-EU companies have no direct legal obligation to ECHA, but they are routinely required to provide the underlying data to their EU customers under contract — so the practical effect of SCIP reaches well beyond the bloc. The same applies to a significant share of the 17.5 million current notifications: many were filed by EU importers acting on data prepared by suppliers in China, the United States, Japan, and elsewhere.
+
+### Practical example: n-hexane in cleaning products
+
+Take **n-hexane** (CAS [110-54-3](https://ghssymbols.com/hazards/110-54-3/)), added to the Candidate List on 4 February 2026 due to specific target organ toxicity after repeated exposure. The substance is widely used as a solvent in adhesives, coatings, and degreasing formulations. As of 4 August 2026 — six months after Candidate List inclusion — any EU manufacturer of an article containing n-hexane above 0.1% w/w must have submitted a SCIP notification covering that article. An importer bringing a cleaning kit from outside the EU faces the same deadline. A retailer selling the finished kit to a consumer does not — but their wholesaler does.
+
+This six-month grace window after each Candidate List update is consistent across all SVHC additions and is the most common compliance trigger for new SCIP submissions.
+
+## SCIP information requirements
+
+Each SCIP notification must contain a structured dataset built around three blocks:
+
+1. **Article identification** — name, primary identifier (such as a European Article Number or Catalogue Number), article category from a defined picklist (TARIC-derived), production country, and a textual description of the article
+2. **SVHC content** — the Candidate List substance name, EC and CAS numbers, concentration range (in defined bands such as 0.1–0.5%, 0.5–1%, 1–10%, >10%), and the location of the substance within the article
+3. **Safe-use information** — instructions sufficient to allow safe handling of the article during use and at the end-of-life stage
+
+The **0.1% threshold** is the most-misunderstood part of the **scip database requirements**. The Court of Justice of the European Union ruled in Case C-106/14 (the "Once an Article Always an Article" judgment, 2015) that the threshold applies at the level of each individual article in a complex object — not at the level of the finished assembled product. A laptop is not a single article for SCIP purposes; each component that meets the REACH definition of an article (a screen, a battery housing, a connector) is assessed independently. Manufacturers of complex goods often discover that what they thought was a clean product contains a reportable SVHC in a single moulded connector or solder joint.
+
+Concentration is measured by weight, dry basis. ECHA provides extensive guidance on how to apply this at the component level, particularly for electronics, automotive parts, and textiles where bills of materials run to thousands of components.
+
+## How to submit a SCIP notification
+
+The submission workflow is built on IUCLID — the harmonised chemicals data tool that ECHA uses across REACH, CLP, BPR, and Drinking Water Directive applications. The current version, **IUCLID 6 v10**, was released on 27 April 2026 and is mandatory for new submissions.
+
+The complete **scip notification** process runs through six steps:
+
+1. **Create an ECHA account** at ECHA Cloud Services. This account also grants access to REACH-IT, R4BP, and other ECHA submission portals. Account creation is free
+2. **Prepare the IUCLID dossier** — either in the cloud-hosted IUCLID instance or in a locally installed IUCLID 6 v10 application. The SCIP format is part of IUCLID since October 2019 and follows a defined data model
+3. **Populate the SCIP-specific dataset** with article identification, SVHC content, concentration ranges, and safe-use information. Picklists are mandatory for many fields to enforce data consistency
+4. **Validate the dossier** using the IUCLID Validation Assistant before export. Validation flags missing mandatory fields and inconsistent data
+5. **Export the dossier** as an `.i6z` compressed file containing all referenced datasets
+6. **Submit through the ECHA Submission Portal**, which assigns a unique SCIP Reference Number on successful processing. This reference number is shared with downstream customers to support their own notifications
+
+Since late 2019, ECHA has offered the **Simplified SCIP Notification (SSN)** as an alternative for distributors and assemblers. Instead of preparing a full dossier, an SSN allows a duty-holder to reference an existing SCIP notification submitted upstream — only fields specific to the new actor's placing on the market need to be added. This dramatically reduces the burden for actors who repackage or redistribute articles already covered by a supplier's notification.
+
+A separate referencing mechanism allows assemblers of complex objects to link to existing notifications for incorporated components, avoiding duplicate data entry across the supply chain. For a battery pack containing a notified cell, the pack manufacturer references the cell notification rather than re-entering the cell data.
+
+A practical note from current SCIP operations: since the start of 2026, ECHA has acknowledged ongoing technical delays in the SCIP Dissemination process. Successful submissions are accepted as normal, but the public publication of new notifications is running behind. Duty-holders do not need to resubmit — the back-end issue is on ECHA's side and is being actively addressed.
+
+## Penalties and enforcement
+
+ECHA administers the SCIP database but has no enforcement powers. Sanctions for **scip reporting** failures are set by national law in each Member State, transposing the Waste Framework Directive. This produces wide variation in both monetary scale and procedural approach.
+
+| Member State | Maximum fine | Criminal liability | Enforcing authority |
+|---|---|---|---|
+| Germany | Up to €1,000,000 | Up to 5 years imprisonment | Federal states (Länder) under ChemG §16f |
+| France | Administrative penalties under Code de l'environnement | Possible for serious cases | DGCCRF, DGPR |
+| Sweden | Penalty fees under Environmental Code | Possible for severe negligence | Swedish Chemicals Agency (KemI) |
+| Italy | €5,000–€30,000 typical range | Reserved for repeated/serious violations | Regional environmental authorities |
+| Netherlands | Administrative fines | Limited criminal exposure | Human Environment and Transport Inspectorate (ILT) |
+
+Germany operates the most aggressive regime. Section 16f of the Chemikaliengesetz (ChemG), in force since 16 November 2023, specifies that intentional or negligent failure to submit a SCIP notification — or submitting incomplete or false data — can be prosecuted as either an administrative offence or, in serious cases, a criminal offence carrying both fines and imprisonment. The €1 million cap is the upper limit of the administrative scale; criminal proceedings can pursue separate financial and custodial penalties.
+
+In practice, enforcement focuses on companies flagged through Member State market surveillance, customs inspections, or supply chain investigations. ECHA's public SCIP database is itself used by national authorities as a starting point — an article visibly placed on the EU market with no matching notification is a strong audit signal.
+
+## SCIP vs REACH Article 33
+
+The **scip svhc** obligation overlaps with REACH Article 33 but is not identical. Both are triggered by the same Candidate List threshold of 0.1% w/w, both flow from ECHA, and both serve transparency goals — but their content and audience differ.
+
+REACH Article 33(1) requires suppliers to provide downstream customers (and, on request, consumers within 45 days) with information sufficient for safe use of the article. It is a **communication obligation** along the supply chain. There is no central registry — the information passes from supplier to customer in whatever format works between them.
+
+SCIP, in contrast, is a **central database notification**. The same trigger applies, but the destination is ECHA's public database, the format is structured IUCLID data, and the intended audience is waste operators and recyclers at end-of-life. Fulfilling a SCIP notification does not discharge the REACH Article 33 duty, and vice versa. Many companies process both obligations through the same internal data workflow, but the legal duties are distinct and must be tracked separately.
+
+For the underlying REACH framework that ties these obligations together, see the [REACH compliance pillar](/compliance/reach/) and the [REACH registration cluster](/compliance/reach/reach-registration-step-by-step/) which covers the parent registration scheme.
+
+## The future of SCIP — the December 2025 repeal proposal
+
+On 10 December 2025, the European Commission presented the Environmental Omnibus package, a set of six legislative proposals aimed at simplifying EU environmental law. One of those proposals — Commission document **COM(2025) 986 final** — proposes amending the Waste Framework Directive to **repeal the SCIP database** entirely.
+
+The Commission's rationale, presented to the Council's Antici Group on 19 January 2026 (Council document WK 889/2026 INIT), is twofold:
+
+- The SCIP database has not produced the expected uptake among recyclers and waste operators — query volumes are low and the data is judged too complex for end-users
+- The compliance burden falls disproportionately on small and medium-sized enterprises, with significant duplication of effort with the REACH Article 33 supply chain communication
+
+The Commission estimates **annual savings of €225 million** for businesses if SCIP is repealed. The data collected so far would be retained by ECHA but no new notifications would be accepted once the amending directive enters into force. The Commission has signalled that future functionality will be delivered through the **Digital Product Passport** under the Ecodesign for Sustainable Products Regulation, expected to be operational in stages from 2027.
+
+**The critical point for current compliance: the proposal is not yet adopted.** As of May 2026, COM(2025) 986 is in the ordinary legislative procedure, with the European Parliament's ENVI committee holding its first extraordinary exchange of views on 19 January 2026 and the Council working through the Antici Group. Under typical timelines, adoption would take 12–24 months from proposal date, and the directive would then require national transposition. Until publication in the Official Journal and entry into force, the existing SCIP obligation applies in full.
+
+Companies should treat **scip database abolition** as a planning input, not a compliance defence. Notifications skipped on the assumption that "SCIP is being scrapped anyway" remain enforceable under current law, and Member States such as Germany continue active enforcement. The realistic horizon for the obligation to end is 2027 at the earliest, and likely later if the proposal is amended in Parliament or Council.
+
+## How GHS Pictograms tools help
+
+If you are working through SVHC identification, classification, or label requirements connected to SCIP notifications, two tools on this site can speed up the process:
+
+**[GHS Label Constructor](/label-constructor/)** — generates CLP-compliant labels with the correct pictograms, signal word, and hazard statements for products containing SVHCs and other classified substances. Useful when an article also requires a supply label under CLP.
+
+**[GHSSymbols.com hazards database](https://ghssymbols.com/)** — provides the full hazard profile for individual SVHCs, including the GHS pictograms, H- and P-statements, signal word, and storage class. For an example see the n-hexane page at [ghssymbols.com/hazards/110-54-3/](https://ghssymbols.com/hazards/110-54-3/).
+
+For the broader CLP-aligned hazard label image set, see the [GHS07 health hazard pictogram page](/ghs/ghs07/).
+
+## Key takeaways
+
+- **SCIP obligations remain fully enforceable.** The 10 December 2025 repeal proposal is not yet law, and Member States continue active enforcement under existing rules
+- **The trigger is consistent with REACH Article 33** — Candidate List substance above 0.1% w/w at the article (or component) level — but the obligation is separate and discharged through IUCLID submission to ECHA
+- **Each Candidate List update creates new SCIP work.** Six months after a substance is added, all articles containing that substance above 0.1% must be covered by a notification. The 4 February 2026 additions trigger an action deadline of 4 August 2026
+- **Penalties vary widely between Member States**, but Germany's regime of up to €1 million and five years imprisonment sets the upper risk profile and is actively enforced
+- **The Simplified SCIP Notification (SSN) and reference mechanism** materially reduce the burden for distributors, assemblers, and complex-object manufacturers — and should be the default workflow where applicable
+
+## Frequently asked questions
+
+### What is SCIP in REACH?
+
+SCIP is not part of REACH itself — it is established under the Waste Framework Directive (Article 9(1)(i) of Directive 2008/98/EC). However, it uses the REACH Candidate List of SVHCs as its scope trigger and reuses the REACH Article 33 information set. ECHA administers both regulations, which is why the two are often discussed together.
+
+### Who needs to submit SCIP notifications?
+
+Any EU producer, importer, assembler, or distributor placing an article on the EU market with a Candidate List substance above 0.1% w/w must submit. Retailers and other actors supplying articles directly and exclusively to consumers are exempt. Non-EU companies have no direct duty to ECHA but are typically required by contract to provide the data to their EU customers.
+
+### What is the 0.1% threshold for SCIP?
+
+The 0.1% weight-by-weight threshold is measured at the level of each article in a complex object, not at the level of the finished product. This was clarified by the Court of Justice in Case C-106/14. Manufacturers of complex goods must assess every component that meets the REACH definition of an article independently.
+
+### Is SCIP the same as REACH Article 33?
+
+No. Both are triggered by the same SVHC threshold, but REACH Article 33 is a supply-chain communication obligation (passing safe-use information to customers), while SCIP is a central database notification to ECHA aimed at waste operators. Fulfilling one does not discharge the other — both duties apply in parallel.
+
+### What happens if I don't submit a SCIP notification?
+
+Enforcement is national. In Germany, intentional or negligent failure can result in administrative fines up to €1 million plus criminal liability with up to five years imprisonment under ChemG §16f. Other Member States operate lower fine ceilings but most permit criminal liability for serious or repeated violations. National authorities use the public SCIP database itself as an audit tool.
+
+### Will the SCIP database be abolished?
+
+The European Commission proposed repeal on 10 December 2025 (COM(2025) 986). The proposal is in the ordinary legislative procedure and has not been adopted. Under typical EU timelines, adoption and entry into force would take at least 12–24 months from the proposal date. Until that happens, SCIP obligations remain fully in force.
+
+### Can non-EU companies submit SCIP notifications?
+
+Non-EU companies cannot directly submit SCIP notifications, as the obligation rests on the EU entity placing the article on the market. Non-EU producers typically support their EU customers by providing the underlying article and SVHC data needed to prepare the notification. Some non-EU companies engage Only Representatives (OR) under REACH to handle related obligations, though OR status does not extend to SCIP notification.
+
+## Related articles
+
+- [REACH SVHC: Substances of Very High Concern Guide](/compliance/svhc/) — parent pillar covering Candidate List, Annex XIV, and Authorisation
+- [REACH Registration Step-by-Step](/compliance/reach/reach-registration-step-by-step/) — the parent registration scheme that anchors REACH compliance
+- [REACH Pillar](/compliance/reach/) — full overview of the REACH regulation
+- [SDS Format: 16 Sections Explained](/compliance/sds/sds-format-16-sections-explained/) — how SVHC information appears in Safety Data Sheets
+
+## Sources
+
+1. **Directive 2008/98/EC** of the European Parliament and of the Council of 19 November 2008 on waste, as amended by Directive (EU) 2018/851 — Article 9(1)(i). Available at: [eur-lex.europa.eu](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02008L0098-20240218)
+2. **Regulation (EC) No 1907/2006** (REACH) — Article 3(33) definition of "article", Article 33(1) communication duty, Article 7(2) notification duty. Available at: [eur-lex.europa.eu](https://eur-lex.europa.eu/eli/reg/2006/1907/oj)
+3. **COM(2025) 986 final** — Proposal for a Directive amending Directive 2008/98/EC and others, Brussels 10.12.2025. Available at: [eur-lex.europa.eu](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:52025PC0986)
+4. **ECHA — SCIP Database** main page (current submission count and Dissemination status). Available at: [echa.europa.eu/scip](https://echa.europa.eu/scip)
+5. **ECHA — Suppliers of articles guidance for SCIP notifications**. Available at: [echa.europa.eu/scip-suppliers-of-articles](https://echa.europa.eu/scip-suppliers-of-articles)
+6. **ECHA — SCIP Format** specification and IUCLID picklist. Available at: [echa.europa.eu/scip-format](https://echa.europa.eu/scip-format)
+7. **ECHA — Candidate List of substances of very high concern for Authorisation** (253 entries, 4 February 2026 update). Available at: [echa.europa.eu/candidate-list-table](https://echa.europa.eu/candidate-list-table)
+8. **ECHA Press Release ECHA/NR/26/06** — ECHA adds two hazardous chemicals to the Candidate List, 4 February 2026
+9. **Court of Justice of the European Union, Case C-106/14** — Fédération des entreprises du commerce et de la distribution v. Premier ministre and Ministre de l'écologie, du développement durable et de l'énergie, 10 September 2015
+10. **Council of the European Union, Document WK 889/2026 INIT** — Environment Omnibus Package, presentation to the Antici Group on Simplification, 19 January 2026
+11. **German Chemikaliengesetz (ChemG) §16f** — Information obligations of suppliers under the Waste Framework Directive, in force from 16 November 2023
+12. **IUCLID 6 v10** release notes (27 April 2026). Available at: [iuclid6.echa.europa.eu](https://iuclid6.echa.europa.eu/)
+
+---
+
+*Substance classification data referenced via the [GHSSymbols.com hazards database](https://ghssymbols.com/), derived from ECHA CLP Annex VI list of harmonised classifications.*
