@@ -2,6 +2,7 @@
 export const prerender = true
 // ghspictograms.com — главная (светлая тема, Space Grotesk + Inter)
 import '../styles/global.css'
+import GoogleAnalytics from '../components/GoogleAnalytics.astro'
 import { Fragment } from 'astro/jsx-runtime'
 import { supabase } from '../lib/supabase'
 
@@ -67,6 +68,7 @@ const tools = [
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <GoogleAnalytics />
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GHS Pictograms — Label Constructor & Hazard Symbol Library</title>
