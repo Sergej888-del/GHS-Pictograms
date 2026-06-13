@@ -1,0 +1,184 @@
+---
+import Layout from '../layouts/Layout.astro'
+
+const title = 'Privacy Policy'
+const description =
+  'What data GHS Pictograms collects, why, who we share it with, and how to exercise your rights under GDPR, CCPA, and Latvian data protection law.'
+const canonical = 'https://ghspictograms.com/privacy/'
+
+export const prerender = true
+---
+
+<Layout title={title} description={description} canonical={canonical}>
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <nav class="text-sm text-gray-500 mb-6" aria-label="Breadcrumb">
+      <a href="/" class="text-[#062A78] hover:underline">Home</a>
+      <span class="mx-2">→</span>
+      <span class="text-gray-700">Privacy Policy</span>
+    </nav>
+
+    <h1
+      class="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight"
+      style="font-family: 'Space Grotesk', system-ui, sans-serif"
+    >
+      Privacy Policy
+    </h1>
+    <p class="mt-4 text-gray-700 leading-relaxed text-lg">
+      What data we collect, why we collect it, who we share it with, and how to exercise your
+      rights under GDPR, CCPA, and Latvian data protection law.
+    </p>
+    <p class="mt-2 text-sm text-gray-500">Last updated: 13 June 2026</p>
+
+    <div class="mt-10 space-y-8 text-gray-700 leading-relaxed">
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">1. Who we are</h2>
+        <p>
+          GHS Pictograms (ghspictograms.com) is an independent reference for GHS hazard
+          classification and chemical safety compliance, operated from Riga, Latvia. For data
+          protection purposes, GHS Pictograms is the data controller responsible for processing
+          personal data collected through this site.
+        </p>
+        <p class="mt-3">
+          Contact for data protection matters:
+          <a href="mailto:sergejssevcenko@ghslabels.com" class="text-[#062A78] font-semibold hover:underline">sergejssevcenko@ghslabels.com</a>.
+        </p>
+        <div class="mt-4 flex flex-wrap gap-2 text-xs">
+          <span class="rounded-full bg-blue-100 text-blue-800 px-3 py-1 font-medium">GDPR compliant</span>
+          <span class="rounded-full bg-blue-100 text-blue-800 px-3 py-1 font-medium">CCPA aware</span>
+          <span class="rounded-full bg-blue-100 text-blue-800 px-3 py-1 font-medium">Latvia-based controller</span>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">2. What data we collect</h2>
+        <p>We collect the following categories of personal data:</p>
+        <ul class="mt-3 list-disc pl-5 space-y-2">
+          <li><span class="font-semibold">Contact data:</span> when you reach out by email, we collect your name, email address, company (if provided), and the contents of your message.</li>
+          <li><span class="font-semibold">Email subscription data:</span> if you sign up for updates or download a free resource, we collect your email address and (optionally) name. This is processed via Brevo.</li>
+          <li><span class="font-semibold">Analytics data:</span> we use Google Analytics 4 to understand aggregate site usage. This includes anonymised IP addresses, browser type, device type, pages visited, and referral source.</li>
+          <li><span class="font-semibold">Cookie data:</span> see Section 6 below.</li>
+          <li><span class="font-semibold">Server log data:</span> our hosting provider (Cloudflare) records standard server logs including IP address, request time, and user agent for security and performance purposes.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">3. Why we process this data (lawful basis under GDPR)</h2>
+        <ul class="list-disc pl-5 space-y-2">
+          <li><span class="font-semibold">Consent (Art. 6(1)(a)):</span> sending update or marketing emails after you opt in. You can withdraw consent at any time via the unsubscribe link in every email.</li>
+          <li><span class="font-semibold">Legitimate interest (Art. 6(1)(f)):</span> aggregate analytics, security logging, and improvement of our content. We have assessed that this does not override your rights and freedoms.</li>
+          <li><span class="font-semibold">Legal obligation (Art. 6(1)(c)):</span> retaining business records as required by Latvian law.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">4. Third parties and sub-processors</h2>
+        <p>We use the following service providers to process personal data on our behalf. Each operates under appropriate data protection terms.</p>
+        <div class="mt-4 overflow-x-auto">
+          <table class="w-full text-sm border-collapse">
+            <thead>
+              <tr class="border-b border-gray-300 text-left">
+                <th class="py-2 pr-4 font-semibold text-gray-900">Provider</th>
+                <th class="py-2 pr-4 font-semibold text-gray-900">Purpose</th>
+                <th class="py-2 font-semibold text-gray-900">Region</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-gray-100"><td class="py-2 pr-4">Cloudflare</td><td class="py-2 pr-4">Hosting, CDN, security</td><td class="py-2">Global (US-headquartered)</td></tr>
+              <tr class="border-b border-gray-100"><td class="py-2 pr-4">Brevo (formerly Sendinblue)</td><td class="py-2 pr-4">Email subscriptions, marketing automation</td><td class="py-2">European Union (France)</td></tr>
+              <tr class="border-b border-gray-100"><td class="py-2 pr-4">Google Analytics 4</td><td class="py-2 pr-4">Aggregate site analytics</td><td class="py-2">Global (US-headquartered)</td></tr>
+              <tr class="border-b border-gray-100"><td class="py-2 pr-4">Supabase</td><td class="py-2 pr-4">Substance database, lead storage</td><td class="py-2">European Union</td></tr>
+              <tr class="border-b border-gray-100"><td class="py-2 pr-4">Affiliate networks (when active)</td><td class="py-2 pr-4">Tracking referral commissions</td><td class="py-2">Varies by partner</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-4 font-semibold text-gray-900">Cross-border data transfers</p>
+        <p class="mt-1">
+          Transfers of personal data outside the European Economic Area are protected by Standard
+          Contractual Clauses (SCCs) approved by the European Commission, or by adequacy decisions
+          where applicable.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">5. How long we keep your data</h2>
+        <ul class="list-disc pl-5 space-y-2">
+          <li><span class="font-semibold">Contact data:</span> up to 24 months from your last contact, then deleted or anonymised.</li>
+          <li><span class="font-semibold">Email subscription data:</span> until you unsubscribe, after which we retain only a suppression record (your email hash) to ensure we do not contact you again.</li>
+          <li><span class="font-semibold">Analytics data:</span> 14 months in Google Analytics 4, then automatically deleted.</li>
+          <li><span class="font-semibold">Server logs:</span> up to 30 days, then automatically rotated.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">6. Cookies</h2>
+        <p>We use a small number of cookies and similar technologies:</p>
+        <ul class="mt-3 list-disc pl-5 space-y-2">
+          <li><span class="font-semibold">Strictly necessary cookies:</span> set by Cloudflare for security and load balancing. These cannot be disabled.</li>
+          <li><span class="font-semibold">Analytics cookies:</span> set by Google Analytics 4 (<code class="text-sm bg-gray-100 px-1 py-0.5 rounded">_ga</code>, <code class="text-sm bg-gray-100 px-1 py-0.5 rounded">_ga_*</code>) with IP anonymisation enabled.</li>
+          <li><span class="font-semibold">Affiliate cookies:</span> when you click an affiliate link, our affiliate partners may set cookies on their domain to track referrals. These are governed by the partner's privacy policy, not ours.</li>
+        </ul>
+        <p class="mt-3">
+          You can clear cookies via your browser settings at any time. Disabling analytics cookies
+          will not affect site functionality.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">7. Your rights</h2>
+        <p>
+          Under the EU General Data Protection Regulation (GDPR), the UK Data Protection Act 2018,
+          and similar laws, you have the following rights regarding your personal data:
+        </p>
+        <ul class="mt-3 list-disc pl-5 space-y-2">
+          <li><span class="font-semibold">Access</span> a copy of the data we hold about you.</li>
+          <li><span class="font-semibold">Rectification</span> of inaccurate or incomplete data.</li>
+          <li><span class="font-semibold">Erasure</span> (the "right to be forgotten") when processing is no longer necessary.</li>
+          <li><span class="font-semibold">Restriction</span> of processing in certain circumstances.</li>
+          <li><span class="font-semibold">Data portability</span> — receive your data in a structured, machine-readable format.</li>
+          <li><span class="font-semibold">Objection</span> to processing based on legitimate interest, including direct marketing.</li>
+          <li><span class="font-semibold">Withdrawal of consent</span> at any time, without affecting the lawfulness of prior processing.</li>
+        </ul>
+        <p class="mt-3">
+          If you are a California resident, the California Consumer Privacy Act (CCPA) grants you
+          analogous rights to know, delete, and opt out of the sale of personal information. We do
+          not sell personal information.
+        </p>
+        <p class="mt-3">
+          To exercise any of these rights, email
+          <a href="mailto:sergejssevcenko@ghslabels.com" class="text-[#062A78] font-semibold hover:underline">sergejssevcenko@ghslabels.com</a>.
+          We will respond within 30 days.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">8. Right to lodge a complaint</h2>
+        <p>
+          If you believe we have not handled your personal data lawfully, you have the right to
+          lodge a complaint with the Latvian Data State Inspectorate (Datu valsts inspekcija),
+          reachable at <a href="https://www.dvi.gov.lv" rel="noopener" target="_blank" class="text-[#062A78] font-semibold hover:underline">dvi.gov.lv</a>,
+          or with the supervisory authority of your country of residence.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">9. Children</h2>
+        <p>
+          This site is intended for business and professional users. We do not knowingly collect
+          personal data from anyone under the age of 16. If you believe we have collected such
+          data, please contact us and we will delete it.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">10. Updates to this policy</h2>
+        <p>
+          We may update this policy when our services, sub-processors, or applicable laws change.
+          The "Last updated" date at the top of this page reflects the most recent revision.
+          Material changes will be highlighted via a notice on the site.
+        </p>
+      </section>
+
+      <p class="text-sm text-gray-500">This privacy policy was last updated on 13 June 2026.</p>
+    </div>
+  </div>
+</Layout>

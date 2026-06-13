@@ -1,0 +1,143 @@
+---
+import Layout from '../layouts/Layout.astro'
+
+const title = 'Affiliate Disclosure'
+const description =
+  'How GHS Pictograms participates in affiliate programs, how affiliate links are marked, and why our editorial content stays independent of commission.'
+const canonical = 'https://ghspictograms.com/affiliate-disclosure/'
+
+export const prerender = true
+---
+
+<Layout title={title} description={description} canonical={canonical}>
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <nav class="text-sm text-gray-500 mb-6" aria-label="Breadcrumb">
+      <a href="/" class="text-[#062A78] hover:underline">Home</a>
+      <span class="mx-2">→</span>
+      <span class="text-gray-700">Affiliate Disclosure</span>
+    </nav>
+
+    <h1
+      class="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight"
+      style="font-family: 'Space Grotesk', system-ui, sans-serif"
+    >
+      Affiliate Disclosure
+    </h1>
+    <p class="mt-4 text-gray-700 leading-relaxed text-lg">
+      How we participate in affiliate programs, how we mark affiliate links, and why our
+      editorial content remains independent of commission.
+    </p>
+    <p class="mt-2 text-sm text-gray-500">Last updated: 13 June 2026</p>
+
+    <div class="mt-10 space-y-8 text-gray-700 leading-relaxed">
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">
+          How affiliate relationships work
+        </h2>
+        <p>
+          GHS Pictograms (ghspictograms.com) is an independent reference for GHS hazard
+          classification and chemical safety compliance, operated from Riga, Latvia. We
+          participate in affiliate programs with selected providers of SDS authoring and
+          management software and adjacent chemical-compliance services. When a reader clicks
+          an affiliate link from our pages and subsequently makes a purchase or subscribes, we
+          may earn a commission at no additional cost to the reader.
+        </p>
+        <p class="mt-3">
+          Affiliate commissions help fund our independent content. They do not determine which
+          tools or services we cover, how we describe them, or what we recommend.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">
+          How affiliate links are marked
+        </h2>
+        <p>Every outbound affiliate link on this site carries two visible signals plus two technical signals:</p>
+        <ul class="mt-3 list-disc pl-5 space-y-2">
+          <li>A dagger symbol (&dagger;) appears immediately next to the link text.</li>
+          <li>Pages containing affiliate links display an affiliate disclosure note.</li>
+          <li>The HTML attribute <code class="text-sm bg-gray-100 px-1 py-0.5 rounded">rel="sponsored nofollow noopener"</code> is applied to every affiliate link, in line with Google's webmaster guidelines.</li>
+          <li>Affiliate links open in a new tab via <code class="text-sm bg-gray-100 px-1 py-0.5 rounded">target="_blank"</code>.</li>
+        </ul>
+        <p class="mt-3">
+          If a link does not show a dagger and is not on a page with an affiliate disclosure, it
+          is not an affiliate link.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">
+          Active affiliate programs
+        </h2>
+        <p>
+          This section lists every active partnership as it goes live, along with the date the
+          partnership began.
+        </p>
+        <p class="mt-3 font-semibold text-gray-900">Currently active</p>
+        <p class="mt-1">
+          No active affiliate programs at this time. This list will be updated when our first
+          partnership goes live.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">
+          Editorial independence
+        </h2>
+        <p>
+          Our compliance content, comparisons, and tool descriptions are written before any
+          affiliate decision is made. We frequently describe and recommend tools and services
+          for which we receive no commission, when they are the right fit for the reader.
+        </p>
+        <p class="mt-3">
+          We do not write articles or descriptions in exchange for commission, payment, or
+          product. Where a provider has paid for a featured or sponsored placement, that
+          placement is clearly labelled <span class="font-semibold">Sponsored</span> and kept
+          separate from editorial content. There is no sponsored content on this site at present.
+        </p>
+        <p class="mt-3">
+          We may decline to recommend an affiliate partner if our editorial evaluation finds the
+          product unsuitable for our readers, regardless of commission terms.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">
+          Editor's commitment
+        </h2>
+        <p>
+          If an affiliate partner's product no longer meets our editorial standard, we remove the
+          affiliate placement before we change what we say about it. Commission never overrides
+          accuracy.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">
+          Compliance with disclosure laws
+        </h2>
+        <p>This disclosure is intended to satisfy material-connection requirements under:</p>
+        <ul class="mt-3 list-disc pl-5 space-y-2">
+          <li><span class="font-semibold">United States:</span> FTC 16 CFR Part 255 — Guides Concerning the Use of Endorsements and Testimonials in Advertising.</li>
+          <li><span class="font-semibold">United Kingdom:</span> CAP Code Rule 2.4 — commercial intent must be obvious.</li>
+          <li><span class="font-semibold">European Union:</span> Unfair Commercial Practices Directive 2005/29/EC, Article 7(2) — hidden commercial intent is a misleading practice.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">
+          Questions
+        </h2>
+        <p>
+          If you have questions about our affiliate relationships or editorial process, contact us
+          at <a href="mailto:sergejssevcenko@ghslabels.com" class="text-[#062A78] font-semibold hover:underline">sergejssevcenko@ghslabels.com</a>.
+        </p>
+      </section>
+
+      <p class="text-sm text-gray-500">
+        This disclosure was last updated on 13 June 2026 and may be revised as our affiliate
+        programs change.
+      </p>
+    </div>
+  </div>
+</Layout>
