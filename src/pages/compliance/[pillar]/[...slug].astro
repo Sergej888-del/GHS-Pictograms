@@ -89,12 +89,27 @@ const articleSchema = {
 };
 
 const articleSchemaJson = JSON.stringify(articleSchema);
+
+// FAQ — single source: frontmatter `faq` feeds both the visible block and FAQPage JSON-LD
+const faqItems = article.data.faq ?? [];
+const mdLinkToText = (s: string) => s.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+const mdLinkToHtml = (s: string) => s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+const faqJsonLd = faqItems.length > 0 ? {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqItems.map((item) => ({
+    '@type': 'Question',
+    name: item.q,
+    acceptedAnswer: { '@type': 'Answer', text: mdLinkToText(item.a) },
+  })),
+} : null;
 ---
 
 <Layout title={article.data.title} description={article.data.description}>
   <Fragment slot="head">
     <script type="application/ld+json" set:html={JSON.stringify(breadcrumbJsonLd)} />
     <script type="application/ld+json" set:html={articleSchemaJson} />
+    {faqJsonLd && <script type="application/ld+json" set:html={JSON.stringify(faqJsonLd)} />}
   </Fragment>
 
   <!-- Breadcrumb bar — единый стиль с pillar landing pages -->
@@ -133,6 +148,18 @@ const articleSchemaJson = JSON.stringify(articleSchema);
     <div class="article-content">
       <Content />
     </div>
+
+    {faqItems.length > 0 && (
+      <section class="article-content" aria-labelledby="faq-heading">
+        <h2 id="faq-heading">Frequently asked questions</h2>
+        {faqItems.map((item) => (
+          <Fragment>
+            <h3>{item.q}</h3>
+            <p set:html={mdLinkToHtml(item.a)} />
+          </Fragment>
+        ))}
+      </section>
+    )}
   </article>
 </Layout>
 

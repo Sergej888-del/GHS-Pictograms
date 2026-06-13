@@ -32,6 +32,7 @@ const compliance = defineCollection({
     keywords: z.array(z.string()).optional(),
     relatedPages: z.array(z.string()).optional(),
     crossDomainLinks: z.array(z.string()).optional(),
+    faq: z.array(z.object({ q: z.string(), a: z.string() })).optional(),
   }),
 })
 
