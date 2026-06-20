@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { loadSelectorData, type LoadedData } from '../lib/selectorData';
 import { resolveSelection, type Selection } from '../lib/pictogramSelector';
+import { buildLabelElementsSvg, downloadSvg, downloadPdf } from '../lib/labelArtifact';
 
 const SG = "'Space Grotesk', system-ui, sans-serif";
 
@@ -70,6 +71,7 @@ export default function PictogramSelector() {
 
   const [email, setEmail] = useState('');
   const [leadState, setLeadState] = useState<LeadState>('idle');
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -136,6 +138,39 @@ export default function PictogramSelector() {
       });
       setLeadState(r.ok ? 'done' : 'error');
     } catch { setLeadState('error'); }
+  }
+
+  function buildArtifact() {
+    if (!result) return null;
+    return buildLabelElementsSvg({
+      jurisdictionTag: JTAG[jurisdiction] ?? jurisdiction,
+      pictograms: result.pictograms.map((p) => ({
+        code: p.code,
+        name: PICTO_NAME[p.code] ?? '',
+        svg: data?.svgByCode[p.code] ?? '',
+        optional: p.optional,
+      })),
+      signalWord: result.signal_word,
+      hStatements: result.h_codes.map((h) => ({ code: h, text: data?.hText[h] ?? '' })),
+    });
+  }
+
+  function handleDownloadSvg() {
+    const art = buildArtifact();
+    if (art) downloadSvg(art.svg, 'ghs-label-elements.svg');
+  }
+
+  async function handleDownloadPdf() {
+    const art = buildArtifact();
+    if (!art) return;
+    setPdfBusy(true);
+    try {
+      await downloadPdf(art, 'ghs-label-elements.pdf');
+    } catch {
+      /* swallow — user can retry */
+    } finally {
+      setPdfBusy(false);
+    }
   }
 
   if (loading) return <div style={{ ...card, padding: '24px', fontSize: 14, color: '#6b7488' }}>Loading hazard reference data…</div>;
@@ -312,10 +347,29 @@ export default function PictogramSelector() {
 
           {/* email */}
           <div style={{ ...card, boxShadow: '0 1px 2px rgba(16,32,64,.04)', padding: '20px 22px' }}>
-            <h4 style={{ fontFamily: SG, fontWeight: 600, fontSize: 15, margin: '0 0 4px', color: '#16224a' }}>Email me this result</h4>
-            <p style={{ fontSize: 13, color: '#6b7488', margin: '0 0 14px', lineHeight: 1.5 }}>Get a copy of these label elements for your records.</p>
+            <h4 style={{ fontFamily: SG, fontWeight: 600, fontSize: 15, margin: '0 0 4px', color: '#16224a' }}>Download this result</h4>
+            <p style={{ fontSize: 13, color: '#6b7488', margin: '0 0 14px', lineHeight: 1.5 }}>Enter your email to download these label elements.</p>
             {leadState === 'done' ? (
-              <p style={{ fontSize: 13.5, fontWeight: 600, color: '#1f8a4c', margin: 0 }}>Sent — check your inbox.</p>
+              <div>
+                <p style={{ fontSize: 13.5, fontWeight: 600, color: '#1f8a4c', margin: '0 0 10px' }}>Ready — download your copy:</p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={handleDownloadPdf}
+                    disabled={pdfBusy}
+                    style={{ flex: 1, background: '#ef915d', border: 'none', color: '#fff', fontFamily: "'Inter',system-ui,sans-serif", fontWeight: 700, fontSize: 13.5, padding: '10px 14px', borderRadius: 8, cursor: 'pointer', opacity: pdfBusy ? 0.6 : 1 }}
+                  >
+                    {pdfBusy ? 'Preparing…' : 'Download PDF'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadSvg}
+                    style={{ flex: 1, background: '#fff', border: '1px solid #d8deea', color: '#16224a', fontFamily: "'Inter',system-ui,sans-serif", fontWeight: 700, fontSize: 13.5, padding: '10px 14px', borderRadius: 8, cursor: 'pointer' }}
+                  >
+                    Download SVG
+                  </button>
+                </div>
+              </div>
             ) : (
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
@@ -333,7 +387,7 @@ export default function PictogramSelector() {
                   disabled={leadState === 'sending' || !email.includes('@')}
                   style={{ background: '#ef915d', border: 'none', color: '#fff', fontFamily: "'Inter',system-ui,sans-serif", fontWeight: 700, fontSize: 13.5, padding: '10px 18px', borderRadius: 8, cursor: 'pointer', whiteSpace: 'nowrap', opacity: leadState === 'sending' || !email.includes('@') ? 0.55 : 1 }}
                 >
-                  {leadState === 'sending' ? 'Sending…' : 'Send'}
+                  {leadState === 'sending' ? 'Sending…' : 'Get it'}
                 </button>
               </div>
             )}
