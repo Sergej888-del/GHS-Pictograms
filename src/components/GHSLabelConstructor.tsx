@@ -245,11 +245,17 @@ export default function GHSLabelConstructor({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email, company, role,
+          email,
+          source: 'label-constructor',
+          tool: 'label-constructor',
+          source_domain: 'ghspictograms.com',
+          email_consent: false,
+          company, role,
           cas_number: casNumber,
           substance_name: displayName,
           label_template: volume,
           volume_range: tier.label,
+          notes: `Source: label-constructor | CAS: ${casNumber} | Substance: ${displayName} | Volume: ${tier.label} (${volume}) | Company: ${company || '—'} | Role: ${role || '—'}`,
         }),
       })
       setSubmitted(true)
