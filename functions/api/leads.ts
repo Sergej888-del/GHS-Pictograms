@@ -97,43 +97,44 @@ export async function onRequestPost(
       })
     }
 
-    // Отправляем в Brevo
-    const brevoRes = await fetch('https://api.brevo.com/v3/contacts', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'api-key': env.BREVO_API_KEY,
-      },
-      body: JSON.stringify({
-        email,
-        attributes: {
-          COMPANY: company,
-          ROLE: role,
-          TOOL: toolUsed,
-          CAS: cas_number,
-          SUBSTANCE: substance_name,
-          GHS_CODE: ghsCode,
-          GHS_NAME: ghsName,
+    // Brevo — best-effort: не роняем ответ, если лид уже сохранён в Supabase
+    try {
+      const brevoRes = await fetch('https://api.brevo.com/v3/contacts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': env.BREVO_API_KEY,
         },
-        listIds: [3],
-        updateEnabled: true,
-      }),
-    })
-
-    if (!brevoRes.ok) {
-      const brevoText = await brevoRes.text().catch(() => '')
-      console.error('Leads API error:', JSON.stringify({
-        step: 'brevo_contact_create',
-        status: brevoRes.status,
-        statusText: brevoRes.statusText,
-        body: brevoText,
-      }))
-      return new Response(JSON.stringify({ error: 'Brevo request failed', details: brevoText }), {
-        status: 502,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        body: JSON.stringify({
+          email,
+          attributes: {
+            COMPANY: company,
+            ROLE: role,
+            TOOL: toolUsed,
+            CAS: cas_number,
+            SUBSTANCE: substance_name,
+            GHS_CODE: ghsCode,
+            GHS_NAME: ghsName,
+          },
+          listIds: [3],
+          updateEnabled: true,
+        }),
       })
+
+      if (!brevoRes.ok) {
+        const brevoText = await brevoRes.text().catch(() => '')
+        console.error('Leads API warning (non-fatal):', JSON.stringify({
+          step: 'brevo_contact_create',
+          status: brevoRes.status,
+          statusText: brevoRes.statusText,
+          body: brevoText,
+        }))
+      }
+    } catch (brevoErr) {
+      console.error('Leads API warning (non-fatal): brevo threw', JSON.stringify(brevoErr))
     }
 
+    // Лид уже в Supabase — возвращаем success независимо от исхода Brevo
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
