@@ -1,0 +1,29 @@
+---
+export const prerender = true
+import Layout from '../../layouts/Layout.astro'
+import PictogramSelector from '../../components/PictogramSelector'
+---
+<Layout
+  title="GHS Pictogram Selector — label pictograms by jurisdiction | GHS Pictograms"
+  description="Select hazard classes and categories to get the correct GHS label pictograms, signal word, and hazard statements for UN GHS, EU CLP, GB CLP, and OSHA HazCom — with CLP Article 26 precedence applied and explained."
+  canonical="https://ghspictograms.com/pictogram-selector/"
+>
+  <main class="px-4 py-8 sm:py-10">
+    <div class="mx-auto max-w-6xl">
+      <nav class="mb-4 text-xs text-slate-500">
+        <a href="/" class="hover:underline">Home</a>
+        <span class="mx-1">/</span>
+        <span class="text-slate-700">Pictogram Selector</span>
+      </nav>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">GHS Pictogram Selector</h1>
+      <p class="mt-2 max-w-2xl text-sm text-slate-600">
+        Choose the hazard classes and categories that apply to your substance or mixture, pick a jurisdiction, and get the
+        correct label pictograms, signal word, and hazard statements — with the precedence rules (CLP Article&nbsp;26) applied
+        and explained.
+      </p>
+    </div>
+    <div class="mt-8">
+      <PictogramSelector client:load />
+    </div>
+  </main>
+</Layout>

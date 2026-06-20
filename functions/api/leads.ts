@@ -46,12 +46,17 @@ export async function onRequestPost(
     const toolUsed =
       source === 'svg-download'
         ? (tool || 'svg-download')
-        : 'ghs-label-constructor'
+        : source === 'pictogram-selector'
+          ? 'pictogram-selector'
+          : 'ghs-label-constructor'
 
+    const incomingNotes = typeof body.notes === 'string' ? body.notes : ''
     const notes =
       source === 'svg-download'
         ? `Source: svg-download | GHS: ${ghsCode} (${ghsName}) | Tool: ${toolUsed}`
-        : `Role: ${role} | CAS: ${cas_number} | Substance: ${substance_name} | Template: ${label_template} | Volume: ${volume_range}`
+        : source === 'pictogram-selector'
+          ? `Source: pictogram-selector | ${incomingNotes}`
+          : `Role: ${role} | CAS: ${cas_number} | Substance: ${substance_name} | Template: ${label_template} | Volume: ${volume_range}`
 
     // Сохраняем в Supabase
     const supabaseRes = await fetch(`${env.PUBLIC_SUPABASE_URL}/rest/v1/leads`, {
@@ -67,7 +72,12 @@ export async function onRequestPost(
         company_name: company || '',
         source_tool: toolUsed,
         source_domain: 'ghspictograms.com',
-        source_page: source === 'svg-download' ? `/ghs/${ghsCode.toLowerCase()}/` : '/label-constructor/',
+        source_page:
+          source === 'svg-download'
+            ? `/ghs/${ghsCode.toLowerCase()}/`
+            : source === 'pictogram-selector'
+              ? '/pictogram-selector/'
+              : '/label-constructor/',
         substance_name: substance_name || ghsName || '',
         qualification_notes: notes,
       }),
