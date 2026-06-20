@@ -28,6 +28,7 @@ if (pictogramsError) {
 }
 
 const pictogramsRows = pictogramsRaw ?? []
+const featuredPictos = pictogramsRows.filter((p) => ['GHS02', 'GHS05', 'GHS06', 'GHS09'].includes(p.code))
 
 const tools = [
   {
@@ -53,14 +54,6 @@ const tools = [
     href: '/inspector/',
     badge: 'NEW',
     cta: 'Try Inspector →',
-  },
-  {
-    title: 'Pictogram Selector',
-    description:
-      'Pick hazard classes and categories for your jurisdiction and get the correct GHS pictograms, signal word, and H-statements.',
-    href: '/pictogram-selector/',
-    badge: 'NEW',
-    cta: 'Select Pictograms →',
   },
   {
     title: 'Compliance Hub',
@@ -153,12 +146,28 @@ const tools = [
 
       /* ——— Hero ——— */
       .hero {
-        background: linear-gradient(180deg, var(--nav) 0%, var(--nav-dark) 100%);
+        position: relative;
+        overflow: hidden;
+        background:
+          radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1.4px) 0 0 / 22px 22px,
+          linear-gradient(135deg, #123a8f 0%, #0d2c72 55%, #0a2360 100%);
         color: #fff;
         padding: 3.5rem 1.5rem 4rem;
       }
-
+      .hero::after {
+        content: '';
+        position: absolute;
+        top: -120px;
+        right: -80px;
+        width: 420px;
+        height: 420px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(86, 179, 255, 0.2), transparent 65%);
+        pointer-events: none;
+      }
       .hero-inner {
+        position: relative;
+        z-index: 1;
         max-width: 1120px;
         margin: 0 auto;
       }
@@ -368,13 +377,19 @@ const tools = [
         border-radius: 8px;
         padding: 1rem 0.5rem;
         text-align: center;
-        transition: border-color 0.2s;
+        box-shadow: 0 1px 2px rgba(16, 32, 64, 0.03);
+        transition:
+          border-color 0.2s,
+          transform 0.2s,
+          box-shadow 0.2s;
         min-width: 0;
         cursor: pointer;
       }
 
       .p-card:hover {
         border-color: #0077b6;
+        transform: translateY(-3px);
+        box-shadow: 0 12px 26px -16px rgba(16, 32, 64, 0.35);
       }
 
       .p-card-svg {
@@ -413,56 +428,115 @@ const tools = [
         line-height: 1.3;
       }
 
-      /* Search */
-      .search-wrap {
+      /* Featured tool card (replaces the old substance search) */
+      .featured-tool {
         position: relative;
-        max-width: 640px;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 2rem;
+        align-items: center;
+        background:
+          radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1.4px) 0 0 / 20px 20px,
+          linear-gradient(135deg, #123a8f 0%, #0d2c72 60%, #0a2360 100%);
+        border: 1px solid rgba(86, 179, 255, 0.25);
+        border-radius: 16px;
+        padding: 2.25rem;
+        box-shadow:
+          0 1px 2px rgba(16, 32, 64, 0.04),
+          0 24px 50px -28px rgba(10, 35, 96, 0.55);
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
       }
-
-      .search-wrap .search-icon {
+      .featured-tool:hover {
+        transform: translateY(-3px);
+        box-shadow:
+          0 1px 2px rgba(16, 32, 64, 0.04),
+          0 30px 60px -26px rgba(10, 35, 96, 0.6);
+      }
+      .featured-glow {
         position: absolute;
-        left: 1rem;
-        top: 50%;
-        transform: translateY(-50%);
-        color: var(--muted);
-        font-size: 1rem;
+        top: -100px;
+        right: -60px;
+        width: 360px;
+        height: 360px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(86, 179, 255, 0.22), transparent 65%);
         pointer-events: none;
       }
-
-      .search-form input[type='search'] {
-        width: 100%;
-        padding: 1rem 1rem 1rem 2.75rem;
-        border: 1px solid var(--card-border);
+      .featured-content {
+        position: relative;
+        z-index: 1;
+        max-width: 40rem;
+      }
+      .featured-badge {
+        display: inline-block;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #bfe0ff;
+        border: 1px solid rgba(111, 180, 255, 0.4);
+        background: rgba(86, 179, 255, 0.12);
+        padding: 0.25rem 0.6rem;
+        border-radius: 5px;
+        margin-bottom: 0.9rem;
+      }
+      .featured-title {
+        font-family: var(--font-heading);
+        font-size: clamp(1.6rem, 3.5vw, 2.1rem);
+        font-weight: 700;
+        color: #fff;
+        letter-spacing: -0.02em;
+        margin-bottom: 0.6rem;
+      }
+      .featured-desc {
+        font-size: 0.95rem;
+        line-height: 1.65;
+        color: rgba(255, 255, 255, 0.82);
+        margin-bottom: 1.25rem;
+      }
+      .featured-cta {
+        display: inline-flex;
+        align-items: center;
+        background: #ef915d;
+        color: #fff;
+        font-weight: 700;
+        font-size: 0.9rem;
+        padding: 0.7rem 1.3rem;
         border-radius: 8px;
-        font-family: var(--font-body);
-        font-size: 1rem;
-        color: var(--text);
+        transition: background 0.15s;
+      }
+      .featured-tool:hover .featured-cta {
+        background: #e87f45;
+      }
+      .featured-pictos {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        gap: 0.75rem;
+      }
+      .featured-pictos .fp {
+        width: 76px;
+        height: 76px;
         background: #fff;
-        outline: none;
-        transition: border-color 0.15s;
+        border-radius: 12px;
+        padding: 10px;
+        box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
-
-      .search-form input[type='search']:focus {
-        border-color: var(--accent);
+      .featured-pictos .fp :global(svg) {
+        width: 100%;
+        height: 100%;
+        display: block;
       }
-
-      .search-form input[type='search']::placeholder {
-        color: #94a3b8;
-      }
-
-      .search-hint {
-        margin-top: 0.75rem;
-        font-size: 0.875rem;
-        color: var(--muted);
-      }
-
-      .search-hint a {
-        color: var(--accent);
-        font-weight: 500;
-      }
-
-      .search-hint a:hover {
-        text-decoration: underline;
+      .featured-pictos .fp img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
       }
 
       /* Tools */
@@ -492,6 +566,9 @@ const tools = [
         flex-direction: column;
         gap: 0.75rem;
         height: 100%;
+        box-shadow:
+          0 1px 2px rgba(16, 32, 64, 0.04),
+          0 14px 32px -24px rgba(16, 32, 64, 0.5);
         transition:
           transform 0.15s,
           border-color 0.15s,
@@ -672,6 +749,14 @@ const tools = [
         .tools-grid {
           grid-template-columns: repeat(2, 1fr);
         }
+
+        .featured-tool {
+          grid-template-columns: 1fr;
+        }
+
+        .featured-pictos {
+          display: none;
+        }
       }
 
       @media (max-width: 768px) {
@@ -815,19 +900,34 @@ const tools = [
     </section>
 
     <section class="section">
-      <p class="section-label">Database</p>
-      <h2 class="section-title">Search the Substance Database</h2>
-      <form class="search-form" method="get" action="/pictograms/">
-        <div class="search-wrap">
-          <span class="search-icon" aria-hidden="true">⌕</span>
-          <input
-            type="search"
-            name="search"
-            placeholder="Search by name or CAS number — e.g. acetone, 67-64-1"
-            autocomplete="off"
-          />
+      <a href="/pictogram-selector/" class="featured-tool">
+        <span class="featured-glow" aria-hidden="true"></span>
+        <div class="featured-content">
+          <span class="featured-badge">New · Interactive tool</span>
+          <h2 class="featured-title">GHS Pictogram Selector</h2>
+          <p class="featured-desc">
+            Pick the hazard classes and categories that apply to your substance or mixture, choose a jurisdiction
+            (UN GHS · EU CLP · GB CLP · OSHA HazCom), and get the correct label pictograms, signal word and
+            H-statements — with the CLP Article&nbsp;26 precedence rules applied and explained.
+          </p>
+          <span class="featured-cta">Open the Selector →</span>
         </div>
-      </form>
+        <div class="featured-pictos" aria-hidden="true">
+          {
+            featuredPictos.map((p) => (
+              <span class="fp">
+                {p.svg_content && String(p.svg_content).toLowerCase().includes('<svg') ? (
+                  <Fragment set:html={p.svg_content} />
+                ) : p.svg_url ? (
+                  <img src={p.svg_url} alt="" width="56" height="56" />
+                ) : (
+                  <span class="p-code">{p.code}</span>
+                )}
+              </span>
+            ))
+          }
+        </div>
+      </a>
     </section>
 
     <div class="tools-section">
