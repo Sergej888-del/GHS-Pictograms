@@ -1,47 +1,64 @@
 // =====================================================================
-// GHS Pictogram Selector — React island
+// GHS Pictogram Selector — React island (redesigned)
 // Place at: src/components/PictogramSelector.tsx
-// Mount with <PictogramSelector client:load /> from the .astro page.
+// Mount with <PictogramSelector client:load /> inside the #f6f8fc MAIN section.
+// Pictogram SVGs are read from Supabase (pictograms_signals.svg_content) via
+// the loader's svgByCode map — no local asset files.
 // =====================================================================
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { loadSelectorData, type LoadedData } from '../lib/selectorData';
 import { resolveSelection, type Selection } from '../lib/pictogramSelector';
 
-// Standard GHS pictogram names (stable — no need to fetch).
-const PICTOGRAM_NAMES: Record<string, string> = {
+const SG = "'Space Grotesk', system-ui, sans-serif";
+
+// Short display names for the result tiles (stable GHS standard — no need to fetch).
+const PICTO_NAME: Record<string, string> = {
   GHS01: 'Explosive',
   GHS02: 'Flammable',
-  GHS03: 'Oxidizing',
-  GHS04: 'Gas under pressure',
+  GHS03: 'Oxidising',
+  GHS04: 'Gas',
   GHS05: 'Corrosive',
-  GHS06: 'Acute toxicity',
-  GHS07: 'Harmful / irritant',
+  GHS06: 'Toxic',
+  GHS07: 'Irritant',
   GHS08: 'Health hazard',
-  GHS09: 'Hazardous to the environment',
+  GHS09: 'Environmental',
 };
 
-const GROUP_LABELS: Record<string, string> = {
-  PHYSICAL: 'Physical hazards',
-  HEALTH: 'Health hazards',
-  ENVIRONMENTAL: 'Environmental hazards',
-};
+const JTAG: Record<string, string> = { UN_GHS: 'UN GHS', EU_CLP: 'EU CLP', GB_CLP: 'GB CLP', OSHA_HCS: 'OSHA HCS' };
+const JUR_ORDER: Record<string, number> = { UN_GHS: 0, EU_CLP: 1, GB_CLP: 2, OSHA_HCS: 3 };
+const GROUP_LABELS: Record<string, string> = { PHYSICAL: 'Physical hazards', HEALTH: 'Health hazards', ENVIRONMENTAL: 'Environmental hazards' };
 const GROUP_ORDER = ['PHYSICAL', 'HEALTH', 'ENVIRONMENTAL'];
 
 // ---- SDS Manager affiliate slot ---------------------------------------
 // DISABLED. Turn on ONLY when BOTH ship in the SAME deploy:
-//   1) the tracking URL is in hand (paste into `href`),
-//   2) SDS Manager is listed on /affiliate-disclosure/.
-// Marking is mandatory and already wired below: dagger (†),
-// rel="sponsored nofollow noopener", target="_blank".
-const SDS_MANAGER = {
-  enabled: false,
-  href: '', // e.g. 'https://sdsmanager.com/?ref=...'  (check for a sub-id / campaign param for attribution)
+//   1) tracking URL in hand (paste into `href`),
+//   2) SDS Manager listed on /affiliate-disclosure/.
+// Marking is mandatory and already wired: † + rel="sponsored nofollow noopener" + target="_blank".
+const SDS_MANAGER = { enabled: false, href: '' };
+
+const card: CSSProperties = {
+  background: '#ffffff',
+  border: '1px solid #e4e9f2',
+  borderRadius: 14,
+  boxShadow: '0 1px 2px rgba(16,32,64,.04),0 18px 40px -28px rgba(16,32,64,.28)',
 };
+const micro: CSSProperties = { fontSize: 10.5, fontWeight: 700, letterSpacing: '.12em', color: '#9aa3b5', textTransform: 'uppercase' };
+const cardH: CSSProperties = { fontFamily: SG, fontWeight: 600, fontSize: 17, letterSpacing: '-.01em', margin: 0, color: '#16224a' };
+
+const SCOPED_CSS = `
+.gs-wrap select.gs-select{appearance:none;-webkit-appearance:none;-moz-appearance:none;width:190px;padding:9px 30px 9px 12px;border:1px solid #d8deea;border-radius:8px;font-family:'Inter',system-ui,sans-serif;font-size:13.5px;color:#33415f;background:#fff;cursor:pointer;}
+.gs-wrap select.gs-select.chosen{border-color:#1f5fd0;background:#f3f7fe;color:#16224a;font-weight:600;}
+.gs-wrap .gs-row:hover{background:#f8fafe;}
+.gs-wrap .gs-jur:hover{border-color:#1f5fd0 !important;}
+.gs-wrap .gs-send:hover{background:#e87f45 !important;}
+.gs-wrap .gs-browse:hover{border-color:#cfdcf6 !important;}
+.gs-wrap .gs-email:focus{border-color:#1f5fd0;outline:none;}
+.gs-wrap .gs-picto svg{width:100%;height:100%;display:block;}
+@media (max-width:900px){.gs-wrap .gs-grid{grid-template-columns:1fr !important;}.gs-wrap .gs-aside{position:static !important;}}
+`;
 
 type CategoryOption = { code: string; hint: string | null };
 type LeadState = 'idle' | 'sending' | 'done' | 'error';
-
-const JUR_ORDER: Record<string, number> = { UN_GHS: 0, EU_CLP: 1, GB_CLP: 2, OSHA_HCS: 3 };
 
 export default function PictogramSelector() {
   const [data, setData] = useState<LoadedData | null>(null);
@@ -49,7 +66,7 @@ export default function PictogramSelector() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [jurisdiction, setJurisdiction] = useState('EU_CLP');
-  const [picked, setPicked] = useState<Record<string, string>>({}); // class_code -> category_code
+  const [picked, setPicked] = useState<Record<string, string>>({});
 
   const [email, setEmail] = useState('');
   const [leadState, setLeadState] = useState<LeadState>('idle');
@@ -62,7 +79,6 @@ export default function PictogramSelector() {
     return () => { alive = false; };
   }, []);
 
-  // class_code -> category options (derived from the base mapping)
   const categoriesByClass = useMemo(() => {
     const out: Record<string, CategoryOption[]> = {};
     if (!data) return out;
@@ -76,17 +92,13 @@ export default function PictogramSelector() {
       if (m.h_statement_code) acc[cc].get(m.category_code)!.add(m.h_statement_code);
     }
     for (const [cc, catMap] of Object.entries(acc)) {
-      const opts: CategoryOption[] = [...catMap.entries()].map(([code, hSet]) => ({
-        code,
-        hint: hSet.size === 1 ? [...hSet][0] : null,
-      }));
+      const opts: CategoryOption[] = [...catMap.entries()].map(([code, hSet]) => ({ code, hint: hSet.size === 1 ? [...hSet][0] : null }));
       opts.sort((a, b) => naturalCat(a.code) - naturalCat(b.code) || a.code.localeCompare(b.code));
       out[cc] = opts;
     }
     return out;
   }, [data]);
 
-  // group_type -> classes (display-ordered)
   const grouped = useMemo(() => {
     const out: Record<string, LoadedData['catalog']> = {};
     if (!data) return out;
@@ -101,10 +113,7 @@ export default function PictogramSelector() {
     [picked]
   );
 
-  const result = useMemo(
-    () => (data ? resolveSelection(data, jurisdiction, selection) : null),
-    [data, jurisdiction, selection]
-  );
+  const result = useMemo(() => (data ? resolveSelection(data, jurisdiction, selection) : null), [data, jurisdiction, selection]);
 
   function setClassCategory(classCode: string, cat: string) {
     setPicked((p) => ({ ...p, [classCode]: cat }));
@@ -123,283 +132,246 @@ export default function PictogramSelector() {
       const r = await fetch('/api/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          source: 'pictogram-selector',
-          tool: 'pictogram-selector',
-          notes: `Selection: ${sel} || ${res}`,
-        }),
+        body: JSON.stringify({ email, source: 'pictogram-selector', tool: 'pictogram-selector', notes: `Selection: ${sel} || ${res}` }),
       });
       setLeadState(r.ok ? 'done' : 'error');
-    } catch {
-      setLeadState('error');
-    }
+    } catch { setLeadState('error'); }
   }
 
-  if (loading) {
-    return <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading hazard reference data…</div>;
-  }
-  if (loadError) {
-    return <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">Could not load reference data: {loadError}</div>;
-  }
+  if (loading) return <div style={{ ...card, padding: '24px', fontSize: 14, color: '#6b7488' }}>Loading hazard reference data…</div>;
+  if (loadError) return <div style={{ ...card, border: '1px solid #f0d6d7', padding: '24px', fontSize: 14, color: '#b23b3b' }}>Could not load reference data: {loadError}</div>;
   if (!data) return null;
 
   const selectedCount = selection.length;
-  const jurName = data.jurisdictions.find((j) => j.code === jurisdiction)?.name_en ?? jurisdiction;
+  const signalColor = result?.signal_word === 'Danger' ? '#d62828' : result?.signal_word === 'Warning' ? '#d4860f' : '#8a94a6';
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <div className="grid gap-6 lg:grid-cols-[1fr_390px]">
-        {/* ---------------- INPUTS ---------------- */}
-        <section className="space-y-6">
+    <div className="gs-wrap">
+      <style>{SCOPED_CSS}</style>
+      <div className="gs-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 380px', gap: 28, alignItems: 'start' }}>
+        {/* ---------------- LEFT ---------------- */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           {/* Jurisdiction */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
-            <span className="mb-2 block text-sm font-semibold text-slate-700">Jurisdiction</span>
-            <div className="flex flex-wrap gap-2">
-              {[...data.jurisdictions]
-                .sort((a, b) => (JUR_ORDER[a.code] ?? 9) - (JUR_ORDER[b.code] ?? 9))
-                .map((j) => (
+          <div style={{ ...card, padding: '22px 24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#1f5fd0', display: 'inline-block' }} />
+              <h2 style={cardH}>Jurisdiction</h2>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              {[...data.jurisdictions].sort((a, b) => (JUR_ORDER[a.code] ?? 9) - (JUR_ORDER[b.code] ?? 9)).map((j) => {
+                const active = jurisdiction === j.code;
+                return (
                   <button
                     key={j.code}
                     type="button"
+                    className="gs-jur"
                     onClick={() => setJurisdiction(j.code)}
-                    className={
-                      'rounded-lg border px-3 py-2 text-sm font-medium transition ' +
-                      (jurisdiction === j.code
-                        ? 'border-blue-800 bg-blue-800 text-white'
-                        : 'border-slate-300 bg-white text-slate-700 hover:border-blue-400')
-                    }
+                    style={{
+                      fontFamily: "'Inter',system-ui,sans-serif", fontSize: 13.5, fontWeight: 600, padding: '9px 15px', borderRadius: 9, cursor: 'pointer',
+                      border: active ? '1px solid #1f5fd0' : '1px solid #d6deeb',
+                      background: active ? '#1f5fd0' : '#fff',
+                      color: active ? '#fff' : '#33415f',
+                    }}
                   >
                     {j.name_en}
                   </button>
-                ))}
+                );
+              })}
             </div>
-            <p className="mt-2 text-xs text-slate-500">
+            <p style={{ fontSize: 13, lineHeight: 1.6, color: '#6b7488', margin: '14px 0 0' }}>
               The base building blocks are UN GHS; EU/GB CLP and OSHA HazCom differences are applied automatically.
             </p>
           </div>
 
-          {/* Hazard classes */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-slate-800">Select your hazard classification</h2>
+          {/* Hazard classification */}
+          <div style={{ ...card, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '22px 24px', borderBottom: '1px solid #eef1f6' }}>
+              <h2 style={cardH}>Select your hazard classification</h2>
               {selectedCount > 0 && (
-                <button type="button" onClick={reset} className="text-xs font-medium text-slate-500 underline hover:text-slate-800">
+                <button type="button" onClick={reset} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'Inter',system-ui,sans-serif", fontSize: 13, fontWeight: 600, color: '#1f5fd0', textDecoration: 'underline', textUnderlineOffset: 3, padding: 0 }}>
                   Reset ({selectedCount})
                 </button>
               )}
             </div>
 
-            <div className="space-y-5">
-              {GROUP_ORDER.filter((g) => grouped[g]?.length).map((group) => (
-                <div key={group}>
-                  <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">{GROUP_LABELS[group] ?? group}</h3>
-                  <div className="divide-y divide-slate-100 rounded-lg border border-slate-100">
-                    {grouped[group].map((cls) => {
-                      const opts = categoriesByClass[cls.class_code] ?? [];
-                      const value = picked[cls.class_code] ?? '';
-                      return (
-                        <div key={cls.class_code} className="flex items-center gap-3 px-3 py-2">
-                          <span className={'flex-1 text-sm ' + (value ? 'font-medium text-slate-900' : 'text-slate-600')}>
-                            {cls.name_en}
-                          </span>
-                          <select
-                            value={value}
-                            onChange={(e) => setClassCategory(cls.class_code, e.target.value)}
-                            className={
-                              'w-44 shrink-0 rounded-md border px-2 py-1.5 text-sm ' +
-                              (value ? 'border-blue-500 bg-blue-50 text-blue-900' : 'border-slate-300 bg-white text-slate-600')
-                            }
-                          >
-                            <option value="">— not selected —</option>
-                            {opts.map((o) => (
-                              <option key={o.code} value={o.code}>
-                                {catLabel(o)}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      );
-                    })}
-                  </div>
+            {GROUP_ORDER.filter((g) => grouped[g]?.length).map((group) => (
+              <div key={group}>
+                <div style={{ padding: '18px 24px 8px', fontSize: 11, fontWeight: 700, letterSpacing: '.12em', color: '#9aa3b5', textTransform: 'uppercase' }}>
+                  {GROUP_LABELS[group] ?? group}
                 </div>
-              ))}
-            </div>
+                {grouped[group].map((cls) => {
+                  const opts = categoriesByClass[cls.class_code] ?? [];
+                  const value = picked[cls.class_code] ?? '';
+                  return (
+                    <label key={cls.class_code} className="gs-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '13px 24px', borderTop: '1px solid #f1f3f8', cursor: 'pointer' }}>
+                      <span style={{ fontSize: 14.5, color: '#33415f', fontWeight: 500 }}>{cls.name_en}</span>
+                      <span style={{ position: 'relative', flex: 'none' }}>
+                        <select
+                          className={'gs-select' + (value ? ' chosen' : '')}
+                          value={value}
+                          onChange={(e) => setClassCategory(cls.class_code, e.target.value)}
+                        >
+                          <option value="">— not selected —</option>
+                          {opts.map((o) => (
+                            <option key={o.code} value={o.code}>{catLabel(o)}</option>
+                          ))}
+                        </select>
+                        <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#8a94a6', fontSize: 11 }}>▼</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            ))}
+            <div style={{ height: 8 }} />
           </div>
-        </section>
+        </div>
 
-        {/* ---------------- RESULT ---------------- */}
-        <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="text-base font-semibold text-slate-800">
-              Label elements
-              <span className="ml-2 text-xs font-normal text-slate-400">{jurName}</span>
-            </h2>
+        {/* ---------------- RIGHT (sticky) ---------------- */}
+        <div className="gs-aside" style={{ position: 'sticky', top: 20, display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Label elements */}
+          <div style={{ ...card, padding: '22px 22px 24px' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 18 }}>
+              <h3 style={{ ...cardH, fontSize: 17 }}>Label elements</h3>
+              <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.04em', color: '#1f5fd0', background: '#eaf1fd', border: '1px solid #d4e3fb', borderRadius: 5, padding: '3px 8px' }}>
+                {JTAG[jurisdiction] ?? jurisdiction}
+              </span>
+            </div>
 
+            {/* pictograms */}
+            <div style={{ ...micro, marginBottom: 10 }}>Pictograms</div>
             {selectedCount === 0 ? (
-              <p className="mt-4 text-sm text-slate-500">
-                Select one or more hazard classes on the left to see the required pictograms, signal word, and hazard statements.
-              </p>
+              <div style={{ border: '1px dashed #d8deea', borderRadius: 10, padding: 18, textAlign: 'center', fontSize: 13, color: '#8a94a6', marginBottom: 20 }}>
+                Select one or more hazard classes to generate the label elements.
+              </div>
+            ) : result && result.pictograms.length > 0 ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
+                {result.pictograms.map((p) => {
+                  const svg = data.svgByCode[p.code];
+                  return (
+                    <div key={p.code} style={{ position: 'relative', width: 96, border: '1px solid #f0d6d7', background: '#fff', borderRadius: 10, padding: '10px 6px 8px', textAlign: 'center', boxShadow: '0 1px 2px rgba(16,32,64,.05)' }}>
+                      {svg ? (
+                        <div className="gs-picto" style={{ width: 52, height: 52, margin: '0 auto 6px' }} dangerouslySetInnerHTML={{ __html: svg }} />
+                      ) : null}
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#16224a' }}>{p.code}</div>
+                      <div style={{ fontSize: 10.5, color: '#7a8398', marginTop: 1 }}>{PICTO_NAME[p.code] ?? ''}</div>
+                      {p.optional && (
+                        <span style={{ position: 'absolute', top: -8, right: -8, background: '#f6c453', color: '#5b4708', fontSize: 9, fontWeight: 700, borderRadius: 999, padding: '2px 6px' }}>optional</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
-              <div className="mt-4 space-y-5">
-                {/* pictograms */}
-                <div>
-                  <div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Pictograms</div>
-                  {result && result.pictograms.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {result.pictograms.map((p) => (
-                        <div key={p.code} className="relative w-24 rounded-md border-2 border-red-600 bg-white p-2 text-center">
-                          <div className="text-sm font-bold text-slate-900">{p.code}</div>
-                          <div className="mt-0.5 text-[11px] leading-tight text-slate-600">{PICTOGRAM_NAMES[p.code] ?? ''}</div>
-                          {p.optional && (
-                            <span className="absolute -right-2 -top-2 rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold text-amber-950">
-                              optional
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-500">No pictogram required for this classification.</p>
-                  )}
-                </div>
+              <div style={{ fontSize: 13, color: '#8a94a6', marginBottom: 20 }}>No pictogram required for the selected classification.</div>
+            )}
 
-                {/* signal word */}
-                <div>
-                  <div className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">Signal word</div>
-                  {result?.signal_word ? (
-                    <div className={'text-lg font-extrabold ' + (result.signal_word === 'Danger' ? 'text-red-600' : 'text-amber-500')}>
-                      {result.signal_word}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-slate-500">None</div>
-                  )}
-                </div>
+            {/* signal word */}
+            <div style={{ ...micro, marginBottom: 6 }}>Signal word</div>
+            <div style={{ fontFamily: SG, fontWeight: 700, fontSize: 24, letterSpacing: '-.01em', marginBottom: 20, color: signalColor }}>
+              {result?.signal_word ?? '—'}
+            </div>
 
-                {/* hazard statements */}
-                <div>
-                  <div className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">Hazard statements</div>
-                  {result && result.h_codes.length > 0 ? (
-                    <ul className="space-y-1">
-                      {result.h_codes.map((h) => (
-                        <li key={h} className="text-sm text-slate-700">
-                          <span className="font-semibold text-slate-900">{h}</span>
-                          {data.hText[h] ? <span className="text-slate-600"> — {data.hText[h]}</span> : null}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-slate-500">None</p>
-                  )}
-                </div>
-
-                {/* why (precedence trace) */}
-                {result && result.applied_rules.length > 0 && (
-                  <details className="rounded-lg bg-slate-50 p-3">
-                    <summary className="cursor-pointer text-sm font-semibold text-slate-700">
-                      Why these pictograms? ({result.applied_rules.length} rule{result.applied_rules.length > 1 ? 's' : ''} applied)
-                    </summary>
-                    <ul className="mt-2 space-y-2">
-                      {result.applied_rules.map((r) => (
-                        <li key={r.rule_code} className="text-xs text-slate-600">
-                          <span className="text-slate-800">{r.explanation}</span>{' '}
-                          <span className="text-slate-400">({r.legal_reference})</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
-
-                {/* not applicable in jurisdiction */}
-                {result && result.notes.length > 0 && (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                    <div className="text-xs font-bold uppercase tracking-wide text-amber-700">Not applicable in {jurName}</div>
-                    <ul className="mt-1 space-y-1">
-                      {result.notes.map((n, i) => (
-                        <li key={i} className="text-xs text-amber-800">{n}</li>
-                      ))}
-                    </ul>
+            {/* hazard statements */}
+            <div style={{ ...micro, marginBottom: 10 }}>Hazard statements</div>
+            {result && result.h_codes.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                {result.h_codes.map((h) => (
+                  <div key={h} style={{ fontSize: 14, lineHeight: 1.5, color: '#2a3656' }}>
+                    <span style={{ fontWeight: 700, color: '#16224a' }}>{h}</span>
+                    {data.hText[h] ? <><span style={{ color: '#9aa3b5' }}> — </span>{data.hText[h]}</> : null}
                   </div>
-                )}
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: '#8a94a6' }}>—</div>
+            )}
+
+            {/* precedence applied (blue) */}
+            {result && result.applied_rules.length > 0 && (
+              <div style={{ marginTop: 18, border: '1px solid #d6e2f4', background: '#eef4fc', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.10em', color: '#3a6abf', textTransform: 'uppercase', marginBottom: 7 }}>Precedence applied — Art. 26</div>
+                {result.applied_rules.map((r) => (
+                  <div key={r.rule_code} style={{ fontSize: 12.5, lineHeight: 1.55, color: '#3c4d6e', marginTop: 4 }}>
+                    {r.explanation} <span style={{ color: '#8aa0c6' }}>({r.legal_reference})</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* not applicable in jurisdiction */}
+            {result && result.notes.length > 0 && (
+              <div style={{ marginTop: 12, border: '1px solid #ecdcc0', background: '#fbf5ea', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.10em', color: '#9a6b1e', textTransform: 'uppercase', marginBottom: 7 }}>Not applicable in {JTAG[jurisdiction] ?? jurisdiction}</div>
+                {result.notes.map((n, i) => (
+                  <div key={i} style={{ fontSize: 12.5, lineHeight: 1.55, color: '#7c5a1f', marginTop: 4 }}>{n}</div>
+                ))}
               </div>
             )}
           </div>
 
-          {/* lead capture (primary) */}
-          {selectedCount > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-5">
-              <div className="text-sm font-semibold text-slate-800">Email me this result</div>
-              <p className="mt-1 text-xs text-slate-500">Get a copy of these label elements for your records.</p>
-              {leadState === 'done' ? (
-                <p className="mt-3 text-sm font-medium text-green-700">Sent — check your inbox.</p>
-              ) : (
-                <div className="mt-3 flex gap-2">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@company.com"
-                    className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={submitLead}
-                    disabled={leadState === 'sending' || !email.includes('@')}
-                    className="shrink-0 rounded-md bg-orange-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:opacity-50"
-                  >
-                    {leadState === 'sending' ? 'Sending…' : 'Send'}
-                  </button>
-                </div>
-              )}
-              {leadState === 'error' && <p className="mt-2 text-xs text-red-600">Something went wrong. Please try again.</p>}
-            </div>
-          )}
+          {/* email */}
+          <div style={{ ...card, boxShadow: '0 1px 2px rgba(16,32,64,.04)', padding: '20px 22px' }}>
+            <h4 style={{ fontFamily: SG, fontWeight: 600, fontSize: 15, margin: '0 0 4px', color: '#16224a' }}>Email me this result</h4>
+            <p style={{ fontSize: 13, color: '#6b7488', margin: '0 0 14px', lineHeight: 1.5 }}>Get a copy of these label elements for your records.</p>
+            {leadState === 'done' ? (
+              <p style={{ fontSize: 13.5, fontWeight: 600, color: '#1f8a4c', margin: 0 }}>Sent — check your inbox.</p>
+            ) : (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  className="gs-email"
+                  type="email"
+                  placeholder="you@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  style={{ flex: 1, minWidth: 0, padding: '10px 12px', border: '1px solid #d8deea', borderRadius: 8, fontFamily: "'Inter',system-ui,sans-serif", fontSize: 13.5, color: '#16224a', background: '#fff' }}
+                />
+                <button
+                  type="button"
+                  className="gs-send"
+                  onClick={submitLead}
+                  disabled={leadState === 'sending' || !email.includes('@')}
+                  style={{ background: '#ef915d', border: 'none', color: '#fff', fontFamily: "'Inter',system-ui,sans-serif", fontWeight: 700, fontSize: 13.5, padding: '10px 18px', borderRadius: 8, cursor: 'pointer', whiteSpace: 'nowrap', opacity: leadState === 'sending' || !email.includes('@') ? 0.55 : 1 }}
+                >
+                  {leadState === 'sending' ? 'Sending…' : 'Send'}
+                </button>
+              </div>
+            )}
+            {leadState === 'error' && <p style={{ fontSize: 12, color: '#b23b3b', margin: '8px 0 0' }}>Something went wrong. Please try again.</p>}
+          </div>
 
           {/* SDS Manager — next step (DISABLED until tracking URL + disclosure) */}
           {SDS_MANAGER.enabled && SDS_MANAGER.href && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-              <div className="text-sm font-semibold text-slate-800">Next step: the full Safety Data Sheet</div>
-              <p className="mt-1 text-xs text-slate-600">
-                These are your label pictograms. For the complete 16-section SDS, SDS Manager handles authoring and management.
-              </p>
-              <a
-                href={SDS_MANAGER.href}
-                target="_blank"
-                rel="sponsored nofollow noopener"
-                className="mt-3 inline-block rounded-md border border-blue-800 px-3 py-2 text-sm font-semibold text-blue-800 transition hover:bg-blue-50"
-              >
+            <div style={{ ...card, boxShadow: '0 1px 2px rgba(16,32,64,.04)', padding: '18px 22px' }}>
+              <h4 style={{ fontFamily: SG, fontWeight: 600, fontSize: 15, margin: '0 0 4px', color: '#16224a' }}>Next step: the full Safety Data Sheet</h4>
+              <p style={{ fontSize: 13, color: '#6b7488', margin: '0 0 12px', lineHeight: 1.5 }}>These are your label pictograms. For the complete 16-section SDS, SDS Manager handles authoring and management.</p>
+              <a href={SDS_MANAGER.href} target="_blank" rel="sponsored nofollow noopener" style={{ display: 'inline-block', border: '1.5px solid #1f5fd0', color: '#1f5fd0', fontWeight: 700, fontSize: 13.5, textDecoration: 'none', padding: '9px 16px', borderRadius: 8 }}>
                 Explore SDS Manager †
               </a>
-              <p className="mt-2 text-[11px] text-slate-400">
-                † Affiliate link. See our <a href="/affiliate-disclosure/" className="underline">affiliate disclosure</a>.
-              </p>
+              <p style={{ fontSize: 11, color: '#9aa3b5', margin: '10px 0 0' }}>† Affiliate link. See our <a href="/affiliate-disclosure/" style={{ color: '#1f5fd0' }}>affiliate disclosure</a>.</p>
             </div>
           )}
 
-          {/* cross-link to substance browser */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <a href="/pictograms/" className="text-sm font-medium text-blue-800 hover:underline">
-              Looking for a specific substance? Browse harmonized substances →
-            </a>
-          </div>
+          {/* browse cross-link */}
+          <a href="/pictograms/" className="gs-browse" style={{ ...card, boxShadow: '0 1px 2px rgba(16,32,64,.04)', display: 'block', padding: '18px 22px', textDecoration: 'none' }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#1f5fd0', lineHeight: 1.5 }}>Looking for a specific substance? Browse harmonized substances →</span>
+          </a>
 
           {/* disclaimer */}
-          <p className="px-1 text-[11px] leading-relaxed text-slate-400">
-            Reference tool implementing the UN GHS building blocks and CLP Article 26 precedence rules. Always verify against the
-            current legal text for your jurisdiction. This is not legal advice.
+          <p style={{ fontSize: 11.5, lineHeight: 1.6, color: '#9aa3b5', margin: 0, padding: '0 4px' }}>
+            Reference tool implementing the UN GHS building blocks and CLP Article 26 precedence rules. Always verify against the current legal text for your jurisdiction. This is not legal advice.
           </p>
-        </aside>
+        </div>
       </div>
     </div>
   );
 }
 
-// "Cat 2", "Cat 1A", but leave non-numeric codes (e.g. "Type B") as-is; append the H-code hint when unambiguous.
+// "Cat 2", "Cat 1A"; leave non-numeric codes (e.g. "Type B") as-is; append H-code hint when unambiguous.
 function catLabel(o: CategoryOption): string {
   const base = /^\d/.test(o.code) ? `Cat ${o.code}` : o.code;
   return o.hint ? `${base} · ${o.hint}` : base;
 }
-
 function naturalCat(code: string): number {
   const m = code.match(/^(\d+)/);
   return m ? parseInt(m[1], 10) : 999;

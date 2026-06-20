@@ -2,28 +2,101 @@
 export const prerender = true
 import Layout from '../../layouts/Layout.astro'
 import PictogramSelector from '../../components/PictogramSelector'
+import { supabase } from '../../lib/supabase'
+
+// Reference grid pictograms come from the shared pictograms_signals table
+// (single source of truth across the ecosystem). Fetched at build time.
+const { data: pictoRows } = await supabase
+  .from('pictograms_signals')
+  .select('code, name_en, svg_content')
+  .order('code')
+const PICTOS = (pictoRows ?? []).filter((p) => /^GHS0[1-9]$/.test(p.code))
+
+const STATS = [
+  { n: '4,178', l: 'Substances' },
+  { n: '9', l: 'GHS Pictograms' },
+  { n: 'CLP · GHS', l: 'EU compliant' },
+  { n: 'Free', l: 'No registration' },
+];
 ---
 <Layout
   title="GHS Pictogram Selector — label pictograms by jurisdiction | GHS Pictograms"
   description="Select hazard classes and categories to get the correct GHS label pictograms, signal word, and hazard statements for UN GHS, EU CLP, GB CLP, and OSHA HazCom — with CLP Article 26 precedence applied and explained."
   canonical="https://ghspictograms.com/pictogram-selector/"
 >
-  <main class="px-4 py-8 sm:py-10">
-    <div class="mx-auto max-w-6xl">
-      <nav class="mb-4 text-xs text-slate-500">
-        <a href="/" class="hover:underline">Home</a>
-        <span class="mx-1">/</span>
-        <span class="text-slate-700">Pictogram Selector</span>
-      </nav>
-      <h1 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">GHS Pictogram Selector</h1>
-      <p class="mt-2 max-w-2xl text-sm text-slate-600">
-        Choose the hazard classes and categories that apply to your substance or mixture, pick a jurisdiction, and get the
-        correct label pictograms, signal word, and hazard statements — with the precedence rules (CLP Article&nbsp;26) applied
-        and explained.
-      </p>
+  <style is:inline>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+    .ps-refcard{transition:transform .3s ease, box-shadow .3s ease;}
+    .ps-refcard:hover{transform:translateY(-4px);box-shadow:0 14px 30px -16px rgba(16,32,64,.35);}
+    .ps-refsvg svg{width:100%;height:100%;display:block;}
+  </style>
+
+  <div style="font-family:'Inter',system-ui,sans-serif;color:#16224a;">
+
+    <!-- HERO (navy + dot grid) -->
+    <section style="position:relative;overflow:hidden;background:radial-gradient(rgba(255,255,255,.10) 1px, transparent 1.4px) 0 0/22px 22px, linear-gradient(135deg,#123a8f 0%,#0d2c72 55%,#0a2360 100%);">
+      <div style="position:absolute;top:-120px;right:-80px;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(86,179,255,.20),transparent 65%);pointer-events:none;"></div>
+      <div style="max-width:1240px;margin:0 auto;padding:34px 28px 44px;position:relative;">
+        <div style="font-size:12.5px;color:#9fb6e6;margin-bottom:18px;">
+          <a href="/" style="color:#9fb6e6;text-decoration:none;">Home</a>
+          <span style="color:#5f78b3;margin:0 8px;">/</span>
+          <span style="color:#cdd9f3;">Pictogram Selector</span>
+        </div>
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.18em;color:#6fb4ff;text-transform:uppercase;margin-bottom:14px;">— Pictogram Selector</div>
+        <h1 style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:46px;line-height:1.05;letter-spacing:-.02em;color:#ffffff;margin:0 0 16px;max-width:780px;">GHS Pictogram Selector</h1>
+        <p style="font-size:16.5px;line-height:1.65;color:#c2cfeb;margin:0;max-width:680px;">Choose the hazard classes and categories that apply to your substance or mixture, pick a jurisdiction, and get the correct label pictograms, signal word and hazard statements — with the precedence rules of <span style="color:#9fc4ff;">CLP Article 26</span> applied and explained.</p>
+      </div>
+    </section>
+
+    <!-- STAT STRIP -->
+    <div style="background:#ffffff;border-bottom:1px solid #e9edf4;">
+      <div style="max-width:1240px;margin:0 auto;padding:0 28px;display:grid;grid-template-columns:repeat(4,1fr);">
+        {STATS.map((s) => (
+          <div style="padding:26px 8px;text-align:center;border-left:1px solid #eef1f6;">
+            <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:30px;color:#1f5fd0;letter-spacing:-.01em;line-height:1.1;">{s.n}</div>
+            <div style="font-size:11px;font-weight:600;letter-spacing:.10em;color:#8b94a6;text-transform:uppercase;margin-top:6px;">{s.l}</div>
+          </div>
+        ))}
+      </div>
     </div>
-    <div class="mt-8">
-      <PictogramSelector client:load />
-    </div>
-  </main>
+
+    <!-- MAIN -->
+    <section style="background:#f6f8fc;padding:44px 0 56px;">
+      <div style="max-width:1240px;margin:0 auto;padding:0 28px;">
+        <PictogramSelector client:load />
+      </div>
+    </section>
+
+    <!-- REFERENCE GRID -->
+    <section style="background:#ffffff;padding:56px 0;border-top:1px solid #eef1f6;">
+      <div style="max-width:1240px;margin:0 auto;padding:0 28px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+          <span style="width:24px;height:1.5px;background:#9aa3b5;display:inline-block;"></span>
+          <span style="font-size:11px;font-weight:700;letter-spacing:.14em;color:#9aa3b5;text-transform:uppercase;">Reference</span>
+        </div>
+        <h2 style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:30px;letter-spacing:-.02em;margin:0 0 28px;color:#16224a;">GHS Hazard Pictograms — GHS01 to GHS09</h2>
+        <div style="display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:14px;">
+          {PICTOS.map((p) => (
+            <div class="ps-refcard" style="border:1px solid #e7ebf3;border-radius:12px;background:#fbfcfe;padding:16px 8px 14px;text-align:center;">
+              {p.svg_content && <div class="ps-refsvg" style="width:58px;height:58px;margin:0 auto 12px;" set:html={p.svg_content} />}
+              <div style="font-size:12px;font-weight:700;color:#1f5fd0;letter-spacing:.02em;">{p.code}</div>
+              <div style="font-size:11.5px;color:#6b7488;margin-top:3px;line-height:1.35;">{p.name_en}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- SISTER CTA -->
+    <section style="background:#0a2670;">
+      <div style="max-width:1240px;margin:0 auto;padding:34px 28px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:20px;">
+        <div style="max-width:640px;border-left:3px solid #56b3ff;padding-left:18px;">
+          <h3 style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:21px;color:#fff;margin:0 0 6px;">Need H-statements &amp; ATE calculations?</h3>
+          <p style="font-size:14px;line-height:1.6;color:#bccae6;margin:0;">Our sister site GHSSymbols.com covers hazard classification, the mixture ATE calculator and the storage compatibility matrix.</p>
+        </div>
+        <a href="https://ghssymbols.com/" style="background:transparent;border:1.5px solid rgba(255,255,255,.55);color:#fff;font-weight:700;font-size:14px;text-decoration:none;padding:12px 22px;border-radius:9px;white-space:nowrap;">Visit GHSSymbols.com →</a>
+      </div>
+    </section>
+
+  </div>
 </Layout>

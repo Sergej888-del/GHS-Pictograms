@@ -14,7 +14,8 @@ export type LoadedData = RefData & {
   // richer display fields carried on the same arrays (harmless for the engine)
   jurisdictions: { id: string; code: string; name_en: string }[];
   catalog: { id: string; class_code: string; group_type: string; name_en: string; display_order: number }[];
-  hText: Record<string, string>; // H-code -> English statement text (display only)
+  hText: Record<string, string>;     // H-code -> English statement text (display only)
+  svgByCode: Record<string, string>; // GHS code -> inline SVG markup (display only)
 };
 
 export async function loadSelectorData(): Promise<LoadedData> {
@@ -59,6 +60,18 @@ export async function loadSelectorData(): Promise<LoadedData> {
     /* ignore — fall back to showing H-codes without text */
   }
 
+  // Pictogram SVGs come from the shared pictograms_signals table (single source
+  // of truth across the ecosystem). Display-only — never let it break the tool.
+  const svgByCode: Record<string, string> = {};
+  try {
+    const { data } = await supabase.from('pictograms_signals').select('code, svg_content');
+    for (const row of (data ?? []) as { code: string; svg_content: string | null }[]) {
+      if (row.svg_content) svgByCode[row.code] = row.svg_content;
+    }
+  } catch {
+    /* ignore — fall back to showing the GHS code without the pictogram image */
+  }
+
   return {
     jurisdictions: (jur.data ?? []) as LoadedData['jurisdictions'],
     catalog: (cat.data ?? []) as LoadedData['catalog'],
@@ -67,5 +80,6 @@ export async function loadSelectorData(): Promise<LoadedData> {
     precedence: (prec.data ?? []) as RefData['precedence'],
     hPrecedence: (hprec.data ?? []) as RefData['hPrecedence'],
     hText,
+    svgByCode,
   };
 }
