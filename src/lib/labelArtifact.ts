@@ -42,13 +42,18 @@ function wrapText(text: string, maxChars: number): string[] {
 }
 
 // Nest a pictogram's inline SVG at (x,y) sized box×box.
-// DB pictogram SVGs are clean <svg viewBox="..."> with no width/height, so we inject those.
+// Pictogram SVGs may already carry width/height/x/y/preserveAspectRatio on the root <svg>
+// (e.g. GHS01 has width/height in pt), so strip those from the opening tag first, then
+// inject our own — otherwise duplicate attributes make the composed SVG invalid.
 function placePictogram(svgContent: string, x: number, y: number, box: number): string {
-  const trimmed = String(svgContent).trim();
-  return trimmed.replace(
-    /^<svg\b/i,
-    `<svg x="${x}" y="${y}" width="${box}" height="${box}" preserveAspectRatio="xMidYMid meet"`
-  );
+  const s = String(svgContent).trim();
+  const m = s.match(/^<svg\b[^>]*>/i);
+  if (!m) return s;
+  const openTag = m[0]
+    .replace(/\s(?:width|height|x|y|preserveAspectRatio)\s*=\s*"[^"]*"/gi, '')
+    .replace(/\s(?:width|height|x|y|preserveAspectRatio)\s*=\s*'[^']*'/gi, '')
+    .replace(/^<svg\b/i, `<svg x="${x}" y="${y}" width="${box}" height="${box}" preserveAspectRatio="xMidYMid meet"`);
+  return openTag + s.slice(m[0].length);
 }
 
 export function buildLabelElementsSvg(input: LabelArtifactInput): LabelArtifact {
