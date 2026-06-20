@@ -289,6 +289,8 @@ const articleSchema = pillarArticle
   <!-- HERO -->
   <!-- ============================================================ -->
   <section class={`relative overflow-hidden bg-gradient-to-br ${meta.heroGradient} text-white`}>
+    <!-- Dot-grid overlay -->
+    <div class="absolute inset-0 pointer-events-none" style="background-image:radial-gradient(rgba(255,255,255,0.10) 1px, transparent 1.4px);background-size:22px 22px;" aria-hidden="true"></div>
     <!-- Decorative blur pattern -->
     <div class="absolute inset-0 opacity-10">
       <div class={`absolute top-0 left-0 w-96 h-96 ${meta.heroBgAccentA} rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2`}></div>
@@ -344,7 +346,8 @@ const articleSchema = pillarArticle
   <!-- ============================================================ -->
   <!-- ARTICLES LIST -->
   <!-- ============================================================ -->
-  <section class="max-w-6xl mx-auto px-4 sm:px-6 py-14">
+  <section class="bg-gradient-to-b from-slate-100 to-white">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-14">
     {articles.length > 0 ? (
       <>
         <div class="mb-10">
@@ -436,6 +439,7 @@ const articleSchema = pillarArticle
         </a>
       </div>
     )}
+    </div>
   </section>
 
   <!-- ============================================================ -->

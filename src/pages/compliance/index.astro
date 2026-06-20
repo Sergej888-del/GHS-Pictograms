@@ -168,6 +168,8 @@ const pageDescription =
   <!-- HERO -->
   <!-- ============================================================ -->
   <section class="relative overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 text-white">
+    <!-- Dot-grid overlay -->
+    <div class="absolute inset-0 pointer-events-none" style="background-image:radial-gradient(rgba(255,255,255,0.10) 1px, transparent 1.4px);background-size:22px 22px;" aria-hidden="true"></div>
     <!-- Декоративный pattern на фоне -->
     <div class="absolute inset-0 opacity-10">
       <div class="absolute top-0 left-0 w-96 h-96 bg-blue-400 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2"></div>
@@ -204,7 +206,8 @@ const pageDescription =
   <!-- ============================================================ -->
   <!-- PILLAR GRID -->
   <!-- ============================================================ -->
-  <section class="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+  <section class="bg-gradient-to-b from-slate-100 to-white">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-16">
     <div class="mb-10">
       <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight mb-2">
         Regulatory Pillars
@@ -249,6 +252,7 @@ const pageDescription =
           </a>
         );
       })}
+    </div>
     </div>
   </section>
 
