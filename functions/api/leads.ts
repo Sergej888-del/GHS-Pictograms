@@ -83,7 +83,8 @@ export async function onRequestPost(
       }),
     })
 
-    if (!supabaseRes.ok) {
+    // 409 = duplicate (email, source_tool): лид уже захвачен — это не ошибка, пропускаем дальше
+    if (!supabaseRes.ok && supabaseRes.status !== 409) {
       const errText = await supabaseRes.text().catch(() => '')
       console.error('Leads API error:', JSON.stringify({
         step: 'supabase_insert',
