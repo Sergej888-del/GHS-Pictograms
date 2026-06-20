@@ -17,6 +17,7 @@ const STATIC_PAGES = [
   { url: '/faq/', changefreq: 'monthly', priority: '0.7' },
   { url: '/blog/', changefreq: 'weekly', priority: '0.8' },
   { url: '/label-constructor/', changefreq: 'weekly', priority: '0.85' },
+  { url: '/pictogram-selector/', changefreq: 'weekly', priority: '0.85' },
   { url: '/compliance/', changefreq: 'weekly', priority: '0.9' },
 ];
 
