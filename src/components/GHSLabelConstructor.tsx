@@ -172,14 +172,23 @@ export default function GHSLabelConstructor({
   const toUnit = (mm: number) => (sizeUnit === 'in' ? Math.round((mm / 25.4) * 100) / 100 : Math.round(mm))
   const fromUnit = (v: number) => (sizeUnit === 'in' ? v * 25.4 : v)
   const fmtDim = (mm: number) => (sizeUnit === 'in' ? (mm / 25.4).toFixed(2) : String(Math.round(mm)))
-  const sizeOptions: { w: number; h: number; note: string }[] = [{ w: clpTier.labelMinW, h: clpTier.labelMinH, note: 'CLP minimum' }]
+  const ISO_A: { name: string; w: number; h: number }[] = [
+    { name: 'A8', w: 52, h: 74 }, { name: 'A7', w: 74, h: 105 }, { name: 'A6', w: 105, h: 148 }, { name: 'A5', w: 148, h: 210 }, { name: 'A4', w: 210, h: 297 },
+  ]
+  const isoFormat = (w: number, h: number): string | null => {
+    const hit = ISO_A.find((a) => Math.abs(a.w - w) <= 1 && Math.abs(a.h - h) <= 1)
+    return hit ? hit.name : null
+  }
+  const clpMinFmt = isoFormat(clpTier.labelMinW, clpTier.labelMinH)
+  const sizeOptions: { w: number; h: number; note: string }[] = [{ w: clpTier.labelMinW, h: clpTier.labelMinH, note: `${clpMinFmt ? clpMinFmt + ' · ' : ''}CLP minimum` }]
   for (const st of LABEL_STOCK) {
     if (st.widthMm >= clpTier.labelMinW && st.heightMm >= clpTier.labelMinH && !(st.widthMm === clpTier.labelMinW && st.heightMm === clpTier.labelMinH)) {
-      sizeOptions.push({ w: st.widthMm, h: st.heightMm, note: `${st.name} stock` })
+      sizeOptions.push({ w: st.widthMm, h: st.heightMm, note: st.name })
     }
   }
   const outWmm = previewArtifact.width / PX_PER_MM
   const outHmm = previewArtifact.height / PX_PER_MM
+  const outFmt = fit.fits ? isoFormat(outWmm, outHmm) : null
   const supplierIncomplete = !supplierName.trim() || !supplierAddress.trim() || !supplierPhone.trim()
   return (
     <>
@@ -188,7 +197,7 @@ export default function GHSLabelConstructor({
       <div className="mt-3 space-y-3 text-sm text-gray-700">
         <ol className="list-decimal list-inside space-y-1">
           <li><span className="font-medium">Container capacity</span> — pick your container; this sets the CLP Annex I Table 1.3 minimum label and pictogram size.</li>
-          <li><span className="font-medium">Label size</span> — keep the CLP minimum, choose a stock size, or enter a custom size (toggle mm / in).</li>
+          <li><span className="font-medium">Label size</span> — keep the CLP minimum, choose a stock size, or enter a custom size (toggle mm / in). Sizes follow ISO paper formats: A8 = 52 × 74 mm, A7 = 74 × 105 mm, A6 = 105 × 148 mm, A5 = 148 × 210 mm.</li>
           <li><span className="font-medium">Product &amp; supplier details</span> — fill in quantity, batch, UFI and the CLP Article 17 supplier block.</li>
           <li><span className="font-medium">Precautionary format</span> — codes with text, or a combined space-saving line.</li>
           <li><span className="font-medium">Download</span> — PDF for printing, or SVG for label software.</li>
@@ -442,7 +451,7 @@ export default function GHSLabelConstructor({
           </div>
           <div className="mt-2 text-center">
             <p className="text-xs font-medium text-gray-700">
-              Output: {fmtDim(outWmm)} × {fmtDim(outHmm)} {sizeUnit}{!fit.fits ? ' · fold-out / tie-on tag' : ''}
+              Output: {outFmt ? outFmt + ' · ' : ''}{fmtDim(outWmm)} × {fmtDim(outHmm)} {sizeUnit}{!fit.fits ? ' · fold-out / tie-on tag' : ''}
             </p>
             <p className="text-[11px] text-gray-400">Preview is scaled to fit your screen — the size above is the real print size.</p>
           </div>
