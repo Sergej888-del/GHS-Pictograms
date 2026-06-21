@@ -699,15 +699,19 @@ export function buildSizedLabel(
         x += picBox + picGap;
         rowBottom = Math.max(rowBottom, rowY + picBox);
       }
+      // Signal word on its own line below the pictogram row (prevents overlap when
+      // pictograms span the full width of the row).
+      let blockTop = rowBottom;
       if (input.signalWord) {
+        const sfs = Math.max(16, Math.round(picBox * 0.42));
+        blockTop += g(2) + sfs;
         body.push(
-          `<text x="${W - pad}" y="${top + Math.round(picBox * 0.62)}" text-anchor="end" font-family="${FONT}" font-size="${Math.max(
-            13,
-            Math.round(picBox * 0.3)
-          )}" font-weight="800" fill="${signalColor}">${escapeXml(input.signalWord.toUpperCase())}</text>`
+          `<text x="${pad}" y="${blockTop}" font-family="${FONT}" font-size="${sfs}" font-weight="800" fill="${signalColor}">${escapeXml(
+            input.signalWord.toUpperCase()
+          )}</text>`
         );
       }
-      const tb = textBlock(pad, W - 2 * pad, rowBottom + g(2));
+      const tb = textBlock(pad, W - 2 * pad, blockTop + g(2));
       body = body.concat(tb.parts);
       contentBottom = tb.bottom;
     }
