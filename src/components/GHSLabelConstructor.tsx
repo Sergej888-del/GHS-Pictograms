@@ -157,7 +157,7 @@ export default function GHSLabelConstructor({
   const supplierIncomplete = !supplierName.trim() || !supplierAddress.trim() || !supplierPhone.trim()
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-start">
-      {/* CONTROLS */}
+      {/* CONTROLS + GATE (left on desktop; below preview on mobile) */}
       <div className="order-2 lg:order-1 space-y-5">
         {/* Container size */}
         <section className="bg-blue-50 border border-blue-200 rounded-xl p-4 sm:p-5 space-y-3">
@@ -249,18 +249,7 @@ export default function GHSLabelConstructor({
             </label>
           </div>
         </section>
-      </div>
-      {/* PREVIEW + GATE */}
-      <div className="order-1 lg:order-2 lg:sticky lg:top-4 space-y-4">
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-          <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-2">Live preview</p>
-          <div className="bg-white rounded-lg p-3 flex justify-center">
-            <div
-              className="w-full max-w-[460px] [&>svg]:w-full [&>svg]:h-auto"
-              dangerouslySetInnerHTML={{ __html: previewSvg }}
-            />
-          </div>
-        </div>
+        {/* Download gate — placed after the controls so on mobile it follows them */}
         {!submitted ? (
           <div className="bg-blue-50 border-2 border-[#062A78] rounded-xl p-4 sm:p-5 space-y-4">
             <p className="font-bold text-[#062A78]">Download your label</p>
@@ -346,6 +335,18 @@ export default function GHSLabelConstructor({
             </div>
           </div>
         )}
+      </div>
+      {/* PREVIEW (right on desktop, sticky; top on mobile) */}
+      <div className="order-1 lg:order-2 lg:sticky lg:top-4">
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-2">Live preview</p>
+          <div className="bg-white rounded-lg p-3 flex justify-center">
+            <div
+              className="w-full max-w-[460px] [&>svg]:w-full [&>svg]:h-auto"
+              dangerouslySetInnerHTML={{ __html: previewSvg }}
+            />
+          </div>
+        </div>
       </div>
     </div>
   )
