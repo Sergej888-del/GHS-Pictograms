@@ -516,24 +516,32 @@ export const LABEL_STOCK: StockSize[] = [
 // further, so 4 px/mm gives ~200 dpi after the 2x canvas pass.
 export const PX_PER_MM = 4;
 
+// Fill behaviour: when content is shorter than the label, type is scaled up to
+// fill ~FILL_TARGET of the height (bounded by MAX_FILL_SCALE), then the block is
+// vertically centred so any residual whitespace is balanced top/bottom.
+const FILL_TARGET = 0.95;
+const MAX_FILL_SCALE = 4;
+
 export type SizedLabelArtifact = LabelArtifact & {
   layout: 'two-col' | 'stacked';
   fit: {
-    fits: boolean; // does all content fit within the chosen height at a legible minimum font?
-    neededHeightMm: number; // minimum height (at the chosen width) that fits everything
-    pictogramMm: number; // pictogram side actually rendered (CLP target for the tier)
+    fits: boolean; // does all content fit within the chosen height at the legible minimum font?
+    neededHeightMm: number; // minimum height (at the chosen width, min font) that fits everything
+    pictogramMm: number; // pictogram side actually rendered (mm)
     belowClpMin: boolean; // chosen size is below the CLP minimum for the tier
     clpMinLabel: string; // e.g. "52 x 74 mm"
   };
 };
 
-// Build the full CLP label at a chosen physical size. The artifact NEVER clips:
-// it grows in height until all elements fit at the legible minimum font, and the
-// returned `fit` reports whether that exceeded the requested height (=> the caller
-// should warn that a larger label or a fold-out/tie-on tag is needed per Art. 29).
-// Layout is responsive: a left pictogram rail + text column when the label is wide
-// enough, otherwise a stacked layout (pictogram row on top, full-width text below)
-// so narrow labels use their full width instead of a cramped column.
+// Build the full CLP label at a chosen physical size.
+// - Pictograms scale with the label width (bigger label => bigger pictogram),
+//   floored at the CLP-tier minimum and capped to 40% of the label width.
+// - Fonts use the legible minimum when content is tight (so the most fits), and
+//   scale UP to fill the label when there is spare height; the content block is
+//   then vertically centred. When even the minimum font overflows, the label
+//   grows downward and fit.fits is false (caller warns: larger label / fold-out).
+// - Layout is responsive: pictogram rail + text column when wide enough, else a
+//   stacked layout (pictogram row on top, full-width text below).
 export function buildSizedLabel(
   input: FullLabelInput,
   opt: { tierKey: ClpTierKey; widthMm: number; heightMm: number }
@@ -543,205 +551,228 @@ export function buildSizedLabel(
   const pad = Math.round(3 * PX_PER_MM);
   const border = 3;
   const colGap = Math.round(3 * PX_PER_MM);
-  const picGap = Math.round(2 * PX_PER_MM);
-  const picBox = Math.round(tier.pictogramMm * PX_PER_MM);
+  const cw = (fs: number) => fs * 0.56;
+
+  // Pictogram size: proportional to how much wider the label is than the tier
+  // minimum, floored at the CLP minimum, capped at 40% of the label width.
+  const picScale = opt.widthMm / tier.labelMinW;
+  const picMm = Math.min(Math.max(tier.pictogramMm * picScale, tier.pictogramMm), opt.widthMm * 0.4);
+  const picBox = Math.round(picMm * PX_PER_MM);
   const railW = picBox;
 
-  // Legible font floors (px). x-height ~= 0.52*size; 13 px ~= 1.7 mm, 11 px ~= 1.43 mm
-  // (meets the 1.4 mm x-height mandatory from 2027). We never shrink below these.
-  const FS_NAME = Math.max(13, Math.round(3.2 * PX_PER_MM));
-  const LH_NAME = Math.round(FS_NAME * 1.3);
-  const FS_META = Math.max(11, Math.round(2.6 * PX_PER_MM));
-  const LH_META = Math.round(FS_META * 1.35);
-  const FS_SEC = Math.max(9, Math.round(2.2 * PX_PER_MM));
-  const FS_STMT = Math.max(11, Math.round(2.6 * PX_PER_MM));
-  const LH_STMT = Math.round(FS_STMT * 1.35);
-  const cw = (fs: number) => fs * 0.56; // approx char width for Arial
-
-  const txt = (
-    x: number,
-    y: number,
-    s: string,
-    o: { size: number; weight?: number; fill: string; anchor?: string; mono?: boolean }
-  ) =>
-    `<text x="${x}" y="${y}" font-family="${o.mono ? "'Courier New', monospace" : FONT}" font-size="${o.size}"${
-      o.weight ? ` font-weight="${o.weight}"` : ''
-    }${o.anchor ? ` text-anchor="${o.anchor}"` : ''} fill="${o.fill}">${escapeXml(s)}</text>`;
-
-  const pics = input.pictograms.filter((p) => p.svg && p.svg.trim());
-
-  // Shared text block (product identifier + meta + H + P). Returns parts + bottom y.
-  const textBlock = (x: number, width: number, startY: number): { parts: string[]; bottom: number } => {
-    const parts: string[] = [];
-    let ry = startY;
-    const codeColW = Math.round(FS_STMT * 4.5);
-    const stmtTextX = x + codeColW;
-    const stmtMax = Math.max(10, Math.floor((width - codeColW) / cw(FS_STMT)));
-    const nameMax = Math.max(8, Math.floor(width / cw(FS_NAME)));
-
-    const nameLines = hardWrapText(input.productName || '', nameMax);
-    ry += FS_NAME;
-    nameLines.forEach((ln, i) => parts.push(txt(x, ry + i * LH_NAME, ln, { size: FS_NAME, weight: 700, fill: '#111827' })));
-    ry += (nameLines.length - 1) * LH_NAME;
-
-    ry += LH_META + 4;
-    const casLine = `CAS: ${input.casNumber || '\u2014'}${input.ecNumber ? `  \u00b7  EC: ${input.ecNumber}` : ''}`;
-    parts.push(txt(x, ry, casLine, { size: FS_META, fill: '#6b7280' }));
-    if (input.nominalQty) {
-      ry += LH_META;
-      parts.push(txt(x, ry, `Qty: ${input.nominalQty}`, { size: FS_META, fill: '#4b5563' }));
-    }
-    if (input.batchNumber) {
-      ry += LH_META;
-      parts.push(txt(x, ry, `Batch: ${input.batchNumber}`, { size: FS_META, fill: '#4b5563' }));
-    }
-    if (input.ufiCode) {
-      ry += LH_META;
-      parts.push(txt(x, ry, `UFI: ${input.ufiCode}`, { size: FS_META, fill: '#374151', mono: true }));
-    }
-
-    const hasH = input.hStatements.length > 0;
-    const hasP = input.pStatements.length > 0 || (input.pFormat === 'combined' && !!input.combinedPText);
-    if (hasH || hasP) {
-      ry += 10;
-      parts.push(`<line x1="${x}" y1="${ry}" x2="${x + width}" y2="${ry}" stroke="#e5e7eb" stroke-width="1"/>`);
-      ry += 6;
-    }
-    const secLabel = (s: string) => {
-      ry += FS_SEC + 4;
-      parts.push(txt(x, ry, s, { size: FS_SEC, weight: 700, fill: '#9ca3af' }));
-    };
-    const stmtBlock = (code: string, text: string) => {
-      const lines = hardWrapText(text || '', stmtMax);
-      ry += LH_STMT;
-      parts.push(txt(x, ry, code, { size: FS_STMT, weight: 700, fill: '#111827' }));
-      lines.forEach((ln, i) => parts.push(txt(stmtTextX, ry + i * LH_STMT, ln, { size: FS_STMT, fill: '#374151' })));
-      ry += (lines.length - 1) * LH_STMT + 3;
-    };
-    if (hasH) {
-      secLabel('HAZARD STATEMENTS');
-      for (const h of input.hStatements) stmtBlock(h.code, h.text);
-    }
-    if (hasP) {
-      secLabel('PRECAUTIONARY STATEMENTS');
-      if (input.pFormat === 'combined' && input.combinedPText) {
-        const lines = hardWrapText(input.combinedPText, Math.max(14, Math.floor(width / cw(FS_STMT))));
-        lines.forEach((ln, i) => {
-          if (i === 0) ry += LH_STMT;
-          parts.push(txt(x, ry + i * LH_STMT, ln, { size: FS_STMT, fill: '#374151' }));
-        });
-        ry += (lines.length - 1) * LH_STMT + 3;
-      } else {
-        for (const p of input.pStatements) stmtBlock(p.code, p.text);
-      }
-      if (input.hiddenPCount && input.hiddenPCount > 0) {
-        ry += LH_STMT;
-        parts.push(txt(x, ry, `+${input.hiddenPCount} more \u2014 see SDS`, { size: FS_META, fill: '#92400e' }));
-      }
-    }
-    return { parts, bottom: ry + 6 };
-  };
-
-  // Choose layout: two-column only if its text column is wide enough (>= 50 mm).
+  // Layout chosen once (stable across fill iterations).
   const twoColTextMm = (W - railW - colGap - 2 * pad) / PX_PER_MM;
   const layout: 'two-col' | 'stacked' = twoColTextMm >= 50 ? 'two-col' : 'stacked';
-  const top = pad + Math.round(FS_NAME * 0.5);
-  let body: string[] = [];
-  let contentBottom = top;
+  const pics = input.pictograms.filter((p) => p.svg && p.svg.trim());
 
-  const signalColor =
-    input.signalWord === 'Danger' ? '#dc2626' : input.signalWord === 'Warning' ? '#d97706' : '#6b7280';
+  // Build the content (pictograms + text + footer) at a given font scale.
+  const buildBody = (scale: number): { parts: string[]; neededHeightPx: number } => {
+    const s = scale;
+    const g = (n: number) => Math.round(n * s);
+    const FS_NAME = Math.round(13 * s);
+    const LH_NAME = Math.round(13 * 1.3 * s);
+    const FS_META = Math.round(11 * s);
+    const LH_META = Math.round(11 * 1.35 * s);
+    const FS_SEC = Math.round(9 * s);
+    const FS_STMT = Math.round(11 * s);
+    const LH_STMT = Math.round(11 * 1.35 * s);
+    const picGap = Math.round(2 * PX_PER_MM * s);
 
-  if (layout === 'two-col') {
-    const rightX = pad + railW + colGap;
-    const rightW = W - rightX - pad;
-    const tb = textBlock(rightX, rightW, top);
-    let py = top;
-    for (const p of pics) {
-      body.push(placePictogram(p.svg, pad, py, picBox));
-      py += picBox + picGap;
-    }
-    if (input.signalWord) {
-      py += Math.round(FS_NAME * 1.1);
-      body.push(
-        `<text x="${pad + railW / 2}" y="${py}" text-anchor="middle" font-family="${FONT}" font-size="${Math.max(
-          12,
-          Math.round(picBox * 0.22)
-        )}" font-weight="800" fill="${signalColor}">${escapeXml(input.signalWord.toUpperCase())}</text>`
-      );
-      py += 6;
-    }
-    body = body.concat(tb.parts);
-    contentBottom = Math.max(py, tb.bottom);
-  } else {
-    let rowY = top;
-    let x = pad;
-    let rowBottom = top;
-    for (const p of pics) {
-      if (x + picBox > W - pad && x > pad) {
-        rowY = rowBottom + picGap;
-        x = pad;
+    const txt = (
+      x: number,
+      y: number,
+      str: string,
+      o: { size: number; weight?: number; fill: string; anchor?: string; mono?: boolean }
+    ) =>
+      `<text x="${x}" y="${y}" font-family="${o.mono ? "'Courier New', monospace" : FONT}" font-size="${o.size}"${
+        o.weight ? ` font-weight="${o.weight}"` : ''
+      }${o.anchor ? ` text-anchor="${o.anchor}"` : ''} fill="${o.fill}">${escapeXml(str)}</text>`;
+
+    const textBlock = (x: number, width: number, startY: number): { parts: string[]; bottom: number } => {
+      const parts: string[] = [];
+      let ry = startY;
+      const codeColW = Math.round(FS_STMT * 4.5);
+      const stmtTextX = x + codeColW;
+      const stmtMax = Math.max(10, Math.floor((width - codeColW) / cw(FS_STMT)));
+      const nameMax = Math.max(8, Math.floor(width / cw(FS_NAME)));
+
+      const nameLines = hardWrapText(input.productName || '', nameMax);
+      ry += FS_NAME;
+      nameLines.forEach((ln, i) => parts.push(txt(x, ry + i * LH_NAME, ln, { size: FS_NAME, weight: 700, fill: '#111827' })));
+      ry += (nameLines.length - 1) * LH_NAME;
+
+      ry += LH_META + g(4);
+      const casLine = `CAS: ${input.casNumber || '\u2014'}${input.ecNumber ? `  \u00b7  EC: ${input.ecNumber}` : ''}`;
+      parts.push(txt(x, ry, casLine, { size: FS_META, fill: '#6b7280' }));
+      if (input.nominalQty) {
+        ry += LH_META;
+        parts.push(txt(x, ry, `Qty: ${input.nominalQty}`, { size: FS_META, fill: '#4b5563' }));
       }
-      body.push(placePictogram(p.svg, x, rowY, picBox));
-      x += picBox + picGap;
-      rowBottom = Math.max(rowBottom, rowY + picBox);
+      if (input.batchNumber) {
+        ry += LH_META;
+        parts.push(txt(x, ry, `Batch: ${input.batchNumber}`, { size: FS_META, fill: '#4b5563' }));
+      }
+      if (input.ufiCode) {
+        ry += LH_META;
+        parts.push(txt(x, ry, `UFI: ${input.ufiCode}`, { size: FS_META, fill: '#374151', mono: true }));
+      }
+
+      const hasH = input.hStatements.length > 0;
+      const hasP = input.pStatements.length > 0 || (input.pFormat === 'combined' && !!input.combinedPText);
+      if (hasH || hasP) {
+        ry += g(10);
+        parts.push(`<line x1="${x}" y1="${ry}" x2="${x + width}" y2="${ry}" stroke="#e5e7eb" stroke-width="1"/>`);
+        ry += g(6);
+      }
+      const secLabel = (str: string) => {
+        ry += FS_SEC + g(4);
+        parts.push(txt(x, ry, str, { size: FS_SEC, weight: 700, fill: '#9ca3af' }));
+      };
+      const stmtBlock = (code: string, text: string) => {
+        const lines = hardWrapText(text || '', stmtMax);
+        ry += LH_STMT;
+        parts.push(txt(x, ry, code, { size: FS_STMT, weight: 700, fill: '#111827' }));
+        lines.forEach((ln, i) => parts.push(txt(stmtTextX, ry + i * LH_STMT, ln, { size: FS_STMT, fill: '#374151' })));
+        ry += (lines.length - 1) * LH_STMT + g(3);
+      };
+      if (hasH) {
+        secLabel('HAZARD STATEMENTS');
+        for (const h of input.hStatements) stmtBlock(h.code, h.text);
+      }
+      if (hasP) {
+        secLabel('PRECAUTIONARY STATEMENTS');
+        if (input.pFormat === 'combined' && input.combinedPText) {
+          const lines = hardWrapText(input.combinedPText, Math.max(14, Math.floor(width / cw(FS_STMT))));
+          lines.forEach((ln, i) => {
+            if (i === 0) ry += LH_STMT;
+            parts.push(txt(x, ry + i * LH_STMT, ln, { size: FS_STMT, fill: '#374151' }));
+          });
+          ry += (lines.length - 1) * LH_STMT + g(3);
+        } else {
+          for (const p of input.pStatements) stmtBlock(p.code, p.text);
+        }
+        if (input.hiddenPCount && input.hiddenPCount > 0) {
+          ry += LH_STMT;
+          parts.push(txt(x, ry, `+${input.hiddenPCount} more \u2014 see SDS`, { size: FS_META, fill: '#92400e' }));
+        }
+      }
+      return { parts, bottom: ry + g(6) };
+    };
+
+    const top = pad + Math.round(FS_NAME * 0.5);
+    let body: string[] = [];
+    let contentBottom = top;
+    const signalColor =
+      input.signalWord === 'Danger' ? '#dc2626' : input.signalWord === 'Warning' ? '#d97706' : '#6b7280';
+
+    if (layout === 'two-col') {
+      const rightX = pad + railW + colGap;
+      const rightW = W - rightX - pad;
+      const tb = textBlock(rightX, rightW, top);
+      let py = top;
+      for (const p of pics) {
+        body.push(placePictogram(p.svg, pad, py, picBox));
+        py += picBox + picGap;
+      }
+      if (input.signalWord) {
+        py += Math.round(FS_NAME * 1.1);
+        body.push(
+          `<text x="${pad + railW / 2}" y="${py}" text-anchor="middle" font-family="${FONT}" font-size="${Math.max(
+            12,
+            Math.round(picBox * 0.22)
+          )}" font-weight="800" fill="${signalColor}">${escapeXml(input.signalWord.toUpperCase())}</text>`
+        );
+        py += g(6);
+      }
+      body = body.concat(tb.parts);
+      contentBottom = Math.max(py, tb.bottom);
+    } else {
+      let rowY = top;
+      let x = pad;
+      let rowBottom = top;
+      for (const p of pics) {
+        if (x + picBox > W - pad && x > pad) {
+          rowY = rowBottom + picGap;
+          x = pad;
+        }
+        body.push(placePictogram(p.svg, x, rowY, picBox));
+        x += picBox + picGap;
+        rowBottom = Math.max(rowBottom, rowY + picBox);
+      }
+      if (input.signalWord) {
+        body.push(
+          `<text x="${W - pad}" y="${top + Math.round(picBox * 0.62)}" text-anchor="end" font-family="${FONT}" font-size="${Math.max(
+            13,
+            Math.round(picBox * 0.3)
+          )}" font-weight="800" fill="${signalColor}">${escapeXml(input.signalWord.toUpperCase())}</text>`
+        );
+      }
+      const tb = textBlock(pad, W - 2 * pad, rowBottom + g(2));
+      body = body.concat(tb.parts);
+      contentBottom = tb.bottom;
     }
-    if (input.signalWord) {
-      body.push(
-        `<text x="${W - pad}" y="${top + Math.round(picBox * 0.62)}" text-anchor="end" font-family="${FONT}" font-size="${Math.max(
-          13,
-          Math.round(picBox * 0.3)
-        )}" font-weight="800" fill="${signalColor}">${escapeXml(input.signalWord.toUpperCase())}</text>`
+
+    // Supplier footer (full width, dashed rule).
+    const footParts: string[] = [];
+    let bottom = contentBottom + pad;
+    const supLine = [input.supplier?.name, input.supplier?.address, input.supplier?.phone].filter(Boolean).join('  |  ');
+    if (supLine) {
+      const fy0 = contentBottom + g(12);
+      footParts.push(
+        `<line x1="${pad}" y1="${fy0}" x2="${W - pad}" y2="${fy0}" stroke="#d1d5db" stroke-width="1" stroke-dasharray="3 3"/>`
       );
+      const supMax = Math.max(16, Math.floor((W - pad * 2) / cw(FS_META)));
+      const supLines = hardWrapText(`SUPPLIER: ${supLine}`, supMax);
+      const sy = fy0 + FS_META + g(4);
+      supLines.forEach((ln, i) => footParts.push(txt(pad, sy + i * LH_META, ln, { size: FS_META, fill: '#4b5563' })));
+      bottom = sy + (supLines.length - 1) * LH_META + pad;
     }
-    const tb = textBlock(pad, W - 2 * pad, rowBottom + Math.round(2 * PX_PER_MM));
-    body = body.concat(tb.parts);
-    contentBottom = tb.bottom;
+
+    return { parts: [...body, ...footParts], neededHeightPx: bottom };
+  };
+
+  const targetHpx = Math.round(opt.heightMm * PX_PER_MM);
+  const base = buildBody(1);
+  let result = base;
+  let fits: boolean;
+  if (base.neededHeightPx <= targetHpx) {
+    fits = true;
+    let scale = Math.min(MAX_FILL_SCALE, (targetHpx * FILL_TARGET) / base.neededHeightPx);
+    result = buildBody(scale);
+    // Bigger fonts wrap more (super-linear height), so correct any overshoot.
+    let guard = 0;
+    while (result.neededHeightPx > targetHpx && scale > 1 && guard < 4) {
+      scale = Math.max(1, scale * (targetHpx / result.neededHeightPx) * 0.98);
+      result = buildBody(scale);
+      guard++;
+    }
+  } else {
+    fits = false;
   }
 
-  // Supplier footer (full width, dashed rule).
-  const footParts: string[] = [];
-  let bottom = contentBottom + pad;
-  const supLine = [input.supplier?.name, input.supplier?.address, input.supplier?.phone].filter(Boolean).join('  |  ');
-  if (supLine) {
-    const fy0 = contentBottom + 12;
-    footParts.push(
-      `<line x1="${pad}" y1="${fy0}" x2="${W - pad}" y2="${fy0}" stroke="#d1d5db" stroke-width="1" stroke-dasharray="3 3"/>`
-    );
-    const supMax = Math.max(16, Math.floor((W - pad * 2) / cw(FS_META)));
-    const supLines = hardWrapText(`SUPPLIER: ${supLine}`, supMax);
-    const sy = fy0 + FS_META + 4;
-    supLines.forEach((ln, i) =>
-      footParts.push(txt(pad, sy + i * LH_META, ln, { size: FS_META, fill: '#4b5563' }))
-    );
-    bottom = sy + (supLines.length - 1) * LH_META + pad;
-  }
-
-  const neededHeightPx = bottom;
-  const neededHeightMm = neededHeightPx / PX_PER_MM;
-  const H = Math.max(Math.round(opt.heightMm * PX_PER_MM), neededHeightPx);
-  const fits = neededHeightMm <= opt.heightMm + 0.5;
+  const Hpx = fits ? targetHpx : result.neededHeightPx;
+  const offY = fits ? Math.max(0, Math.round((Hpx - result.neededHeightPx) / 2)) : 0;
+  const content = offY > 0 ? `<g transform="translate(0, ${offY})">${result.parts.join('')}</g>` : result.parts.join('');
   const belowClpMin = opt.widthMm < tier.labelMinW - 0.5 || opt.heightMm < tier.labelMinH - 0.5;
 
   const all = [
-    `<rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>`,
-    `<rect x="${border / 2}" y="${border / 2}" width="${W - border}" height="${H - border}" fill="none" stroke="#dc2626" stroke-width="${border}"/>`,
-    ...body,
-    ...footParts,
+    `<rect x="0" y="0" width="${W}" height="${Hpx}" fill="#ffffff"/>`,
+    `<rect x="${border / 2}" y="${border / 2}" width="${W - border}" height="${Hpx - border}" fill="none" stroke="#dc2626" stroke-width="${border}"/>`,
+    content,
   ];
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${FONT}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${Hpx}" viewBox="0 0 ${W} ${Hpx}" font-family="${FONT}">` +
     all.join('') +
     `</svg>`;
   return {
     svg,
     width: W,
-    height: H,
+    height: Hpx,
     layout,
     fit: {
       fits,
-      neededHeightMm: Math.ceil(neededHeightMm),
-      pictogramMm: tier.pictogramMm,
+      neededHeightMm: Math.ceil(base.neededHeightPx / PX_PER_MM),
+      pictogramMm: Math.round(picMm),
       belowClpMin,
       clpMinLabel: `${tier.labelMinW} \u00d7 ${tier.labelMinH} mm`,
     },

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { buildSizedLabel, downloadSvg, downloadLabelPdf, CLP_TIERS, LABEL_STOCK, type ClpTierKey } from '../lib/labelArtifact'
+import { buildSizedLabel, downloadSvg, downloadLabelPdf, CLP_TIERS, LABEL_STOCK, PX_PER_MM, type ClpTierKey } from '../lib/labelArtifact'
 interface Pictogram { code: string; name_en: string; svg_content: string | null }
 interface HStatement { code: string; text_en: string }
 interface PStatement { code: string; text_en: string }
@@ -178,8 +178,35 @@ export default function GHSLabelConstructor({
       sizeOptions.push({ w: st.widthMm, h: st.heightMm, note: `${st.name} stock` })
     }
   }
+  const outWmm = previewArtifact.width / PX_PER_MM
+  const outHmm = previewArtifact.height / PX_PER_MM
   const supplierIncomplete = !supplierName.trim() || !supplierAddress.trim() || !supplierPhone.trim()
   return (
+    <>
+    <details className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4 sm:p-5">
+      <summary className="cursor-pointer font-semibold text-[#062A78] select-none">How to use this tool</summary>
+      <div className="mt-3 space-y-3 text-sm text-gray-700">
+        <ol className="list-decimal list-inside space-y-1">
+          <li><span className="font-medium">Container capacity</span> — pick your container; this sets the CLP Annex I Table 1.3 minimum label and pictogram size.</li>
+          <li><span className="font-medium">Label size</span> — keep the CLP minimum, choose a stock size, or enter a custom size (toggle mm / in).</li>
+          <li><span className="font-medium">Product &amp; supplier details</span> — fill in quantity, batch, UFI and the CLP Article 17 supplier block.</li>
+          <li><span className="font-medium">Precautionary format</span> — codes with text, or a combined space-saving line.</li>
+          <li><span className="font-medium">Download</span> — PDF for printing, or SVG for label software.</li>
+        </ol>
+        <p>
+          <span className="font-medium">The live preview</span> updates as you type. It is scaled to fit your screen, so it looks larger or smaller than real life — the true print size is shown as <span className="font-medium">Output</span> under the preview. The status line means:
+          <span className="text-green-700"> green</span> = everything fits;
+          <span className="text-amber-700"> amber</span> = content needs a taller label or a fold-out / tie-on tag (CLP Art. 29);
+          <span className="text-red-700"> red</span> = the chosen size is below the CLP minimum.
+        </p>
+        <p>
+          <span className="font-medium">PDF</span> is generated at the exact physical size shown in <span className="font-medium">Output</span> — print it at 100% (actual size) and it lands on your label stock at the right dimensions. If the label had to grow (amber), the PDF is a fold-out / tie-on-tag master.
+        </p>
+        <p>
+          <span className="font-medium">SVG</span> is a scalable vector — open it in label software (e.g. BarTender, Adobe Illustrator) to resize or edit without any loss of quality.
+        </p>
+      </div>
+    </details>
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-start">
       {/* CONTROLS + GATE (left on desktop; below preview on mobile) */}
       <div className="order-2 lg:order-1 space-y-5">
@@ -413,8 +440,15 @@ export default function GHSLabelConstructor({
               dangerouslySetInnerHTML={{ __html: previewSvg }}
             />
           </div>
+          <div className="mt-2 text-center">
+            <p className="text-xs font-medium text-gray-700">
+              Output: {fmtDim(outWmm)} × {fmtDim(outHmm)} {sizeUnit}{!fit.fits ? ' · fold-out / tie-on tag' : ''}
+            </p>
+            <p className="text-[11px] text-gray-400">Preview is scaled to fit your screen — the size above is the real print size.</p>
+          </div>
         </div>
       </div>
     </div>
+    </>
   )
 }
