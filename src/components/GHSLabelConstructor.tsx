@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { buildFullLabelSvg, downloadSvg, downloadPdf } from '../lib/labelArtifact'
+import { buildSizedLabel, downloadSvg, downloadLabelPdf, CLP_TIERS, LABEL_STOCK, type ClpTierKey } from '../lib/labelArtifact'
 interface Pictogram { code: string; name_en: string; svg_content: string | null }
 interface HStatement { code: string; text_en: string }
 interface PStatement { code: string; text_en: string }
@@ -54,6 +54,19 @@ export default function GHSLabelConstructor({
   const [submitError, setSubmitError] = useState('')
   const [agreed, setAgreed] = useState(false)
   const tier = VOLUME_TIERS.find(v => v.key === volume)!
+  // Map the 5 capacity bands to the 4 CLP Table 1.3 tiers (<=0.5 L folds into <=3 L for now).
+  const CLP_TIER_BY_VOLUME: Record<VolumeKey, ClpTierKey> = { xs: 'le3', sm: 'le3', md: 'gt3le50', lg: 'gt50le500', xl: 'gt500' }
+  const clpTierKey = CLP_TIER_BY_VOLUME[volume]
+  const clpTier = CLP_TIERS.find(t => t.key === clpTierKey)!
+  const [sizeUnit, setSizeUnit] = useState<'mm' | 'in'>('mm')
+  const [sizeW, setSizeW] = useState<number>(clpTier.labelMinW)
+  const [sizeH, setSizeH] = useState<number>(clpTier.labelMinH)
+  const handleVolumeChange = (key: VolumeKey) => {
+    setVolume(key)
+    const t = CLP_TIERS.find(x => x.key === CLP_TIER_BY_VOLUME[key])!
+    setSizeW(t.labelMinW)
+    setSizeH(t.labelMinH)
+  }
   const filteredPics = applyPrecedence(pictograms)
   const MAX_P = 6
   const shownP = pStatements.slice(0, MAX_P)
@@ -122,14 +135,14 @@ export default function GHSLabelConstructor({
   }
   const labelFilenameBase = `GHS-label-${(casNumber || 'label').replace(/[^\w.-]+/g, '-')}`
   const buildLabelArtifact = () =>
-    buildFullLabelSvg({
+    buildSizedLabel({
       productName: displayName,
       casNumber,
       ecNumber,
       nominalQty,
       batchNumber,
       ufiCode,
-      signalWord,
+      signalWord: signalWord ?? null,
       pictograms: filteredPics.map((p) => ({ code: p.code, svg: p.svg_content ?? '' })),
       hStatements: hStatements.map((h) => ({ code: h.code, text: h.text_en })),
       pStatements: shownP.map((p) => ({ code: p.code, text: p.text_en })),
@@ -137,7 +150,7 @@ export default function GHSLabelConstructor({
       combinedPText: pFormat === 'combined' ? combinePStatements(shownP) : undefined,
       hiddenPCount,
       supplier: { name: supplierName, address: supplierAddress, phone: supplierPhone },
-    })
+    }, { tierKey: clpTierKey, widthMm: Math.max(20, sizeW), heightMm: Math.max(20, sizeH) })
   const trackLabelDownload = (format: 'svg' | 'pdf') => track('label_download', { format, cas: casNumber })
   const handleDownloadSvg = () => {
     const { svg } = buildLabelArtifact()
@@ -147,27 +160,39 @@ export default function GHSLabelConstructor({
   const handleDownloadPdf = async () => {
     try {
       const artifact = buildLabelArtifact()
-      await downloadPdf(artifact, `${labelFilenameBase}.pdf`)
+      await downloadLabelPdf(artifact, `${labelFilenameBase}.pdf`)
       trackLabelDownload('pdf')
     } catch (e) {
       console.error('PDF download failed', e)
     }
   }
-  const { svg: previewSvg } = buildLabelArtifact()
+  const previewArtifact = buildLabelArtifact()
+  const previewSvg = previewArtifact.svg
+  const fit = previewArtifact.fit
+  const toUnit = (mm: number) => (sizeUnit === 'in' ? Math.round((mm / 25.4) * 100) / 100 : Math.round(mm))
+  const fromUnit = (v: number) => (sizeUnit === 'in' ? v * 25.4 : v)
+  const fmtDim = (mm: number) => (sizeUnit === 'in' ? (mm / 25.4).toFixed(2) : String(Math.round(mm)))
+  const sizeOptions: { w: number; h: number; note: string }[] = [{ w: clpTier.labelMinW, h: clpTier.labelMinH, note: 'CLP minimum' }]
+  for (const st of LABEL_STOCK) {
+    if (st.widthMm >= clpTier.labelMinW && st.heightMm >= clpTier.labelMinH && !(st.widthMm === clpTier.labelMinW && st.heightMm === clpTier.labelMinH)) {
+      sizeOptions.push({ w: st.widthMm, h: st.heightMm, note: `${st.name} stock` })
+    }
+  }
   const supplierIncomplete = !supplierName.trim() || !supplierAddress.trim() || !supplierPhone.trim()
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-start">
       {/* CONTROLS + GATE (left on desktop; below preview on mobile) */}
       <div className="order-2 lg:order-1 space-y-5">
-        {/* Container size */}
+        {/* Container & label size */}
         <section className="bg-blue-50 border border-blue-200 rounded-xl p-4 sm:p-5 space-y-3">
-          <p className="font-semibold text-[#062A78]">Container size</p>
+          <p className="font-semibold text-[#062A78]">Container &amp; label size</p>
+          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Container capacity</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {VOLUME_TIERS.map(v => (
               <button
                 key={v.key}
                 type="button"
-                onClick={() => setVolume(v.key)}
+                onClick={() => handleVolumeChange(v.key)}
                 className={`cursor-pointer flex flex-col items-start rounded-lg border-2 px-3 py-2 text-left transition-colors ${
                   volume === v.key
                     ? 'bg-[#062A78] text-white border-[#062A78]'
@@ -179,10 +204,52 @@ export default function GHSLabelConstructor({
               </button>
             ))}
           </div>
-          <p className="text-xs text-gray-600">
-            CLP Annex I Table 1.3 minimum for this packaging: label <span className="font-semibold">{tier.labelMm}</span>, pictogram <span className="font-semibold">{tier.picMm}</span>.
-          </p>
-          <p className="text-[11px] text-gray-400">Print-sizing the artifact to your container is coming soon — the SVG is fully scalable in label software meanwhile.</p>
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Label size</p>
+            <div className="inline-flex rounded-md border border-gray-300 overflow-hidden text-xs">
+              {(['mm', 'in'] as const).map(u => (
+                <button key={u} type="button" onClick={() => setSizeUnit(u)}
+                  className={`px-2 py-1 cursor-pointer ${sizeUnit === u ? 'bg-[#062A78] text-white' : 'bg-white text-gray-600'}`}>{u}</button>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {sizeOptions.map(o => {
+              const active = Math.abs(o.w - sizeW) < 0.5 && Math.abs(o.h - sizeH) < 0.5
+              return (
+                <button key={`${o.w}x${o.h}`} type="button" onClick={() => { setSizeW(o.w); setSizeH(o.h) }}
+                  className={`cursor-pointer rounded-lg border-2 px-3 py-1.5 text-left transition-colors ${
+                    active ? 'bg-[#062A78] text-white border-[#062A78]' : 'bg-white text-gray-900 border-gray-300 hover:border-[#062A78]'
+                  }`}>
+                  <span className="block text-sm font-medium">{fmtDim(o.w)} × {fmtDim(o.h)} {sizeUnit}</span>
+                  <span className={`block text-[11px] ${active ? 'text-blue-100' : 'text-gray-500'}`}>{o.note}</span>
+                </button>
+              )
+            })}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">Custom:</span>
+            <input type="number" min={10} value={toUnit(sizeW)} onChange={e => setSizeW(fromUnit(Number(e.target.value)))}
+              className="w-20 border border-gray-300 rounded px-2 py-1 text-sm" />
+            <span className="text-gray-400">×</span>
+            <input type="number" min={10} value={toUnit(sizeH)} onChange={e => setSizeH(fromUnit(Number(e.target.value)))}
+              className="w-20 border border-gray-300 rounded px-2 py-1 text-sm" />
+            <span className="text-xs text-gray-500">{sizeUnit}</span>
+          </div>
+          {fit.belowClpMin ? (
+            <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {fmtDim(sizeW)} × {fmtDim(sizeH)} {sizeUnit} is below the CLP minimum ({fit.clpMinLabel}) for this capacity.
+            </p>
+          ) : fit.fits ? (
+            <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              {fmtDim(sizeW)} × {fmtDim(sizeH)} {sizeUnit} · pictograms {fit.pictogramMm} mm · all elements fit
+            </p>
+          ) : (
+            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              Needs about {fit.neededHeightMm} mm height to stay legible — use a taller label, a larger size, or a fold-out / tie-on tag (CLP Art. 29).
+            </p>
+          )}
+          <p className="text-[11px] text-gray-400">PDF prints at this physical size; the SVG is fully scalable in label software.</p>
         </section>
         {/* Product information */}
         <section className="bg-slate-50 border border-slate-200 rounded-xl p-4 sm:p-5 space-y-3">
