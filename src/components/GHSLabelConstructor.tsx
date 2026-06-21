@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { buildFullLabelSvg, downloadSvg, downloadPdf } from '../lib/labelArtifact'
 
 interface Pictogram { code: string; name_en: string; svg_content: string | null }
 interface HStatement { code: string; text_en: string }
@@ -263,6 +264,48 @@ export default function GHSLabelConstructor({
       setSubmitError('Something went wrong. Please try again.')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const labelFilenameBase = `GHS-label-${(casNumber || 'label').replace(/[^\w.-]+/g, '-')}`
+
+  const buildLabelArtifact = () =>
+    buildFullLabelSvg({
+      productName: displayName,
+      casNumber,
+      ecNumber,
+      nominalQty,
+      batchNumber,
+      ufiCode,
+      signalWord,
+      pictograms: filteredPics.map((p) => ({ code: p.code, svg: p.svg_content ?? '' })),
+      hStatements: hStatements.map((h) => ({ code: h.code, text: h.text_en })),
+      pStatements: shownP.map((p) => ({ code: p.code, text: p.text_en })),
+      pFormat,
+      combinedPText: pFormat === 'combined' ? combinePStatements(shownP) : undefined,
+      hiddenPCount,
+      supplier: { name: supplierName, address: supplierAddress, phone: supplierPhone },
+    })
+
+  const trackLabelDownload = (format: 'svg' | 'pdf') => {
+    if (typeof window !== 'undefined' && typeof (window as any).gtag === 'function') {
+      (window as any).gtag('event', 'label_download', { format, cas: casNumber })
+    }
+  }
+
+  const handleDownloadSvg = () => {
+    const { svg } = buildLabelArtifact()
+    downloadSvg(svg, `${labelFilenameBase}.svg`)
+    trackLabelDownload('svg')
+  }
+
+  const handleDownloadPdf = async () => {
+    try {
+      const artifact = buildLabelArtifact()
+      await downloadPdf(artifact, `${labelFilenameBase}.pdf`)
+      trackLabelDownload('pdf')
+    } catch (e) {
+      console.error('PDF download failed', e)
     }
   }
 
@@ -586,17 +629,25 @@ export default function GHSLabelConstructor({
             <div className="max-w-2xl mx-auto space-y-3">
               <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-800">
                 <p className="font-semibold">Ready to download!</p>
-                <p>Print instructions: select &quot;Actual size&quot; in your print dialog. Label size: {tier.labelMm}.</p>
+                <p>Your label is ready below — download it as SVG (scalable, for label software) or PDF. Reference size: {tier.labelMm}.</p>
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
-                <button type="button" onClick={() => window.print()}
-                  className="flex-1 py-3 rounded-lg bg-[#062A78] text-white font-semibold hover:bg-[#051f5c] transition-colors">
-                  Download as PDF
-                </button>
-                <a href="https://ghslabels.com" target="_blank" rel="noopener noreferrer"
-                  className="flex-1 py-3 rounded-lg border-2 border-[#062A78] text-[#062A78] font-semibold hover:bg-[#062A78] hover:text-white transition-colors text-center">
-                  Order certified print
-                </a>
+                <div className="flex-1 flex flex-col gap-2">
+                  <div className="flex gap-3">
+                    <button type="button" onClick={handleDownloadPdf}
+                      className="flex-1 py-3 rounded-lg bg-[#062A78] text-white font-semibold hover:bg-[#051f5c] transition-colors">
+                      Download PDF
+                    </button>
+                    <button type="button" onClick={handleDownloadSvg}
+                      className="flex-1 py-3 rounded-lg border-2 border-[#062A78] text-[#062A78] font-semibold hover:bg-[#062A78] hover:text-white transition-colors">
+                      Download SVG
+                    </button>
+                  </div>
+                  <a href="https://ghslabels.com" target="_blank" rel="noopener noreferrer"
+                    className="block text-center py-2.5 rounded-lg border border-gray-300 text-gray-600 text-sm font-medium hover:border-gray-400 transition-colors">
+                    Need durable, chemical-resistant labels? Browse certified suppliers →
+                  </a>
+                </div>
               </div>
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
                 <p className="font-semibold mb-1">For official use — print on certified materials</p>

@@ -3,18 +3,34 @@
 // and provides SVG + PDF download helpers. Reusable across the Pictogram Selector,
 // Label Constructor and Safety Summary.
 // No build-time deps; jsPDF is lazy-loaded only when a PDF is requested.
-
 export type LabelArtifactInput = {
   jurisdictionTag: string; // e.g. "EU CLP"
   pictograms: { code: string; name: string; svg: string; optional: boolean }[];
   signalWord: string | null; // "Danger" | "Warning" | null
   hStatements: { code: string; text: string }[];
 };
-
 export type LabelArtifact = { svg: string; width: number; height: number };
 
-const FONT = "Arial, Helvetica, 'Helvetica Neue', sans-serif";
+// Full CLP supplier-label artifact input (Label Constructor).
+// Mirrors the data already available in GHSLabelConstructor's UnifiedLabelPreview.
+export type FullLabelInput = {
+  productName: string;
+  casNumber: string;
+  ecNumber?: string | null;
+  nominalQty?: string;
+  batchNumber?: string;
+  ufiCode?: string;
+  signalWord: string | null; // "Danger" | "Warning" | null
+  pictograms: { code: string; svg: string }[]; // svg = pictograms_signals.svg_content
+  hStatements: { code: string; text: string }[];
+  pStatements: { code: string; text: string }[]; // the "shown" subset
+  pFormat: 'codes' | 'combined';
+  combinedPText?: string; // pre-combined string when pFormat === 'combined'
+  hiddenPCount?: number;
+  supplier: { name?: string; address?: string; phone?: string };
+};
 
+const FONT = "Arial, Helvetica, 'Helvetica Neue', sans-serif";
 function escapeXml(s: string): string {
   return String(s)
     .replace(/&/g, '&amp;')
@@ -23,7 +39,6 @@ function escapeXml(s: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
-
 function wrapText(text: string, maxChars: number): string[] {
   const words = String(text).split(/\s+/).filter(Boolean);
   const lines: string[] = [];
@@ -40,7 +55,32 @@ function wrapText(text: string, maxChars: number): string[] {
   if (line) lines.push(line);
   return lines.length ? lines : [''];
 }
-
+// Like wrapText, but also hard-breaks tokens longer than maxChars (e.g. long
+// IUPAC names with few/no spaces), so they cannot overflow a narrow column.
+function hardWrapText(text: string, maxChars: number): string[] {
+  const raw = String(text).split(/\s+/).filter(Boolean);
+  const words: string[] = [];
+  for (const w of raw) {
+    if (w.length <= maxChars) {
+      words.push(w);
+    } else {
+      for (let i = 0; i < w.length; i += maxChars) words.push(w.slice(i, i + maxChars));
+    }
+  }
+  const lines: string[] = [];
+  let line = '';
+  for (const w of words) {
+    const next = line ? line + ' ' + w : w;
+    if (next.length > maxChars && line) {
+      lines.push(line);
+      line = w;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [''];
+}
 // Nest a pictogram's inline SVG at (x,y) sized box×box.
 // Pictogram SVGs may already carry width/height/x/y/preserveAspectRatio on the root <svg>
 // (e.g. GHS01 has width/height in pt), so strip those from the opening tag first, then
@@ -55,17 +95,14 @@ function placePictogram(svgContent: string, x: number, y: number, box: number): 
     .replace(/^<svg\b/i, `<svg x="${x}" y="${y}" width="${box}" height="${box}" preserveAspectRatio="xMidYMid meet"`);
   return openTag + s.slice(m[0].length);
 }
-
 export function buildLabelElementsSvg(input: LabelArtifactInput): LabelArtifact {
   const W = 720;
   const padX = 40;
   const usable = W - padX * 2;
-
   // ---- layout math (everything relative) ----
   const headerTop = 36;
   const headerH = 54;
   let y = headerTop + headerH;
-
   const picBox = 64;
   const cellW = 86;
   const cellH = 106;
@@ -74,20 +111,16 @@ export function buildLabelElementsSvg(input: LabelArtifactInput): LabelArtifact 
   const picList = input.pictograms;
   const hasPics = picList.length > 0;
   const picRows = hasPics ? Math.ceil(picList.length / perRow) : 0;
-
   const secLabelH = 26;
-
   const picSectionTop = y + 8;
   const picGridTop = picSectionTop + secLabelH;
   const picSectionBottom = hasPics
     ? picGridTop + picRows * cellH + (picRows - 1) * 8
     : picGridTop + 22;
-
   const sigTop = picSectionBottom + 18;
   const sigLabelY = sigTop;
   const sigValueY = sigTop + secLabelH + 6;
   const sigBottom = sigValueY + 22;
-
   const hsTop = sigBottom + 18;
   const hsLabelY = hsTop;
   let hsCur = hsTop + secLabelH;
@@ -95,7 +128,6 @@ export function buildLabelElementsSvg(input: LabelArtifactInput): LabelArtifact 
   const textX = padX + codeColW;
   const textMaxChars = Math.max(20, Math.floor((usable - codeColW) / 6.7));
   const lineH = 19;
-
   const hsBlocks: string[] = [];
   if (input.hStatements.length > 0) {
     for (const h of input.hStatements) {
@@ -121,18 +153,14 @@ export function buildLabelElementsSvg(input: LabelArtifactInput): LabelArtifact 
     hsCur += lineH + 8;
   }
   const hsBottom = hsCur;
-
   const footTop = hsBottom + 18;
   const H = footTop + 40;
-
   // ---- build pieces ----
   const parts: string[] = [];
-
   parts.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>`);
   parts.push(
     `<rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" fill="none" stroke="#e6e9f0" stroke-width="1"/>`
   );
-
   // header
   parts.push(
     `<text x="${padX}" y="${headerTop + 22}" font-family="${FONT}" font-size="20" font-weight="700" fill="#16224a">GHS Label Elements</text>`
@@ -149,12 +177,10 @@ export function buildLabelElementsSvg(input: LabelArtifactInput): LabelArtifact 
   parts.push(
     `<line x1="${padX}" y1="${headerTop + headerH - 4}" x2="${W - padX}" y2="${headerTop + headerH - 4}" stroke="#eef1f6" stroke-width="1"/>`
   );
-
   const secLabel = (label: string, yy: number) =>
     `<text x="${padX}" y="${yy}" font-family="${FONT}" font-size="11" font-weight="700" letter-spacing="1.2" fill="#8a94a6">${escapeXml(
       label.toUpperCase()
     )}</text>`;
-
   // pictograms
   parts.push(secLabel('Pictograms', picSectionTop + 14));
   if (hasPics) {
@@ -193,7 +219,6 @@ export function buildLabelElementsSvg(input: LabelArtifactInput): LabelArtifact 
       `<text x="${padX}" y="${picGridTop + 6}" font-family="${FONT}" font-size="13" fill="#8a94a6">No pictogram required for the selected classification.</text>`
     );
   }
-
   // signal word
   parts.push(secLabel('Signal word', sigLabelY + 14));
   const sw = input.signalWord;
@@ -203,11 +228,9 @@ export function buildLabelElementsSvg(input: LabelArtifactInput): LabelArtifact 
       sw || '\u2014'
     )}</text>`
   );
-
   // hazard statements
   parts.push(secLabel('Hazard statements', hsLabelY + 14));
   parts.push(...hsBlocks);
-
   // footer
   parts.push(
     `<line x1="${padX}" y1="${footTop}" x2="${W - padX}" y2="${footTop}" stroke="#eef1f6" stroke-width="1"/>`
@@ -215,12 +238,197 @@ export function buildLabelElementsSvg(input: LabelArtifactInput): LabelArtifact 
   parts.push(
     `<text x="${padX}" y="${footTop + 20}" font-family="${FONT}" font-size="10.5" fill="#9aa3b5">Generated with ghspictograms.com &#8212; reference only. Verify against the current legal text for your jurisdiction.</text>`
   );
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${FONT}">` +
+    parts.join('') +
+    `</svg>`;
+  return { svg, width: W, height: H };
+}
+
+// Full CLP supplier label (Label Constructor). Two-column layout matching the
+// on-screen UnifiedLabelPreview: left rail = pictograms + signal word; right
+// column = product identifier + meta + hazard + precautionary statements; a
+// dashed supplier footer; 3px red border. Height is content-driven.
+export function buildFullLabelSvg(input: FullLabelInput): LabelArtifact {
+  const W = 600;
+  const pad = 20;
+  const border = 3;
+  const railW = 84; // pictogram column width
+  const picBox = 84;
+  const picGap = 8;
+  const colGap = 16;
+
+  const pics = input.pictograms.filter((p) => p.svg && p.svg.trim());
+  const hasLeft = pics.length > 0 || !!input.signalWord;
+  const rightX = hasLeft ? pad + railW + colGap : pad;
+  const rightW = W - rightX - pad;
+
+  const FS_NAME = 16, LH_NAME = 21;
+  const FS_META = 12, LH_META = 16;
+  const FS_SEC = 11;
+  const FS_STMT = 11.5, LH_STMT = 16;
+  const codeColW = 56;
+  const stmtTextX = rightX + codeColW;
+  const stmtTextMax = Math.max(16, Math.floor((rightW - codeColW) / 6.2));
+  const nameMax = Math.max(10, Math.floor(rightW / 8.8));
+
+  const top = pad + 8;
+  let ry = top; // right-column baseline cursor
+
+  const rightParts: string[] = [];
+  const txt = (
+    x: number,
+    y: number,
+    s: string,
+    opt: { size: number; weight?: number; fill: string; anchor?: string; mono?: boolean }
+  ) =>
+    `<text x="${x}" y="${y}" font-family="${opt.mono ? "'Courier New', monospace" : FONT}" font-size="${opt.size}"${
+      opt.weight ? ` font-weight="${opt.weight}"` : ''
+    }${opt.anchor ? ` text-anchor="${opt.anchor}"` : ''} fill="${opt.fill}">${escapeXml(s)}</text>`;
+
+  // product name
+  const nameLines = hardWrapText(input.productName || '', nameMax);
+  ry += FS_NAME;
+  nameLines.forEach((ln, i) => {
+    rightParts.push(txt(rightX, ry + i * LH_NAME, ln, { size: FS_NAME, weight: 700, fill: '#1f2937' }));
+  });
+  ry += (nameLines.length - 1) * LH_NAME;
+
+  // CAS · EC
+  ry += LH_META + 4;
+  const casLine = `CAS: ${input.casNumber || '\u2014'}${input.ecNumber ? `  \u00b7  EC: ${input.ecNumber}` : ''}`;
+  rightParts.push(txt(rightX, ry, casLine, { size: FS_META, fill: '#6b7280' }));
+
+  // qty / batch
+  if (input.nominalQty) {
+    ry += LH_META;
+    rightParts.push(txt(rightX, ry, `Qty: ${input.nominalQty}`, { size: FS_META, fill: '#4b5563' }));
+  }
+  if (input.batchNumber) {
+    ry += LH_META;
+    rightParts.push(txt(rightX, ry, `Batch: ${input.batchNumber}`, { size: FS_META, fill: '#4b5563' }));
+  }
+  if (input.ufiCode) {
+    ry += LH_META;
+    rightParts.push(txt(rightX, ry, `UFI: ${input.ufiCode}`, { size: FS_META, fill: '#374151', mono: true }));
+  }
+
+  const hasH = input.hStatements.length > 0;
+  const hasP = input.pStatements.length > 0 || (input.pFormat === 'combined' && !!input.combinedPText);
+
+  if (hasH || hasP) {
+    ry += 10;
+    rightParts.push(`<line x1="${rightX}" y1="${ry}" x2="${W - pad}" y2="${ry}" stroke="#e5e7eb" stroke-width="1"/>`);
+    ry += 6;
+  }
+
+  const secLabel = (s: string) => {
+    ry += FS_SEC + 4;
+    rightParts.push(
+      `<text x="${rightX}" y="${ry}" font-family="${FONT}" font-size="${FS_SEC}" font-weight="700" letter-spacing="0.8" fill="#9ca3af">${escapeXml(
+        s
+      )}</text>`
+    );
+  };
+
+  const stmtBlock = (code: string, text: string) => {
+    const lines = hardWrapText(text || '', stmtTextMax);
+    ry += LH_STMT;
+    rightParts.push(txt(rightX, ry, code, { size: FS_STMT, weight: 700, fill: '#1f2937' }));
+    lines.forEach((ln, i) => {
+      rightParts.push(txt(stmtTextX, ry + i * LH_STMT, ln, { size: FS_STMT, fill: '#374151' }));
+    });
+    ry += (lines.length - 1) * LH_STMT + 3;
+  };
+
+  if (hasH) {
+    secLabel('HAZARD STATEMENTS');
+    for (const h of input.hStatements) stmtBlock(h.code, h.text);
+  }
+
+  if (hasP) {
+    secLabel('PRECAUTIONARY STATEMENTS');
+    if (input.pFormat === 'combined' && input.combinedPText) {
+      const lines = hardWrapText(input.combinedPText, Math.max(20, Math.floor(rightW / 6.2)));
+      lines.forEach((ln, i) => {
+        if (i === 0) ry += LH_STMT;
+        rightParts.push(txt(rightX, ry + i * LH_STMT, ln, { size: FS_STMT, fill: '#374151' }));
+      });
+      ry += (lines.length - 1) * LH_STMT + 3;
+    } else {
+      for (const p of input.pStatements) stmtBlock(p.code, p.text);
+    }
+    if (input.hiddenPCount && input.hiddenPCount > 0) {
+      ry += LH_STMT;
+      rightParts.push(txt(rightX, ry, `+${input.hiddenPCount} more \u2014 see SDS`, { size: FS_META, fill: '#92400e' }));
+    }
+  }
+
+  const rightBottom = ry + 6;
+
+  // left rail
+  const leftParts: string[] = [];
+  let leftBottom = top;
+  if (hasLeft) {
+    let py = top;
+    const railCx = pad + railW / 2;
+    for (const p of pics) {
+      const px = pad + (railW - picBox) / 2;
+      leftParts.push(placePictogram(p.svg, px, py, picBox));
+      py += picBox + picGap;
+    }
+    if (input.signalWord) {
+      const sw = input.signalWord;
+      const swColor = sw === 'Danger' ? '#dc2626' : sw === 'Warning' ? '#d97706' : '#6b7280';
+      py += 18;
+      leftParts.push(
+        `<text x="${railCx}" y="${py}" text-anchor="middle" font-family="${FONT}" font-size="16" font-weight="800" fill="${swColor}">${escapeXml(
+          sw.toUpperCase()
+        )}</text>`
+      );
+      py += 6;
+    }
+    leftBottom = py;
+  }
+
+  const contentBottom = Math.max(rightBottom, leftBottom);
+
+  // supplier footer
+  const supLine = [input.supplier?.name, input.supplier?.address, input.supplier?.phone]
+    .filter(Boolean)
+    .join('  |  ');
+  const footParts: string[] = [];
+  let H = contentBottom + pad;
+  if (supLine) {
+    const fy0 = contentBottom + 12;
+    footParts.push(
+      `<line x1="${pad}" y1="${fy0}" x2="${W - pad}" y2="${fy0}" stroke="#d1d5db" stroke-width="1" stroke-dasharray="3 3"/>`
+    );
+    const supMax = Math.max(20, Math.floor((W - pad * 2) / 6.0));
+    const supLines = hardWrapText(`SUPPLIER: ${supLine}`, supMax);
+    const sy = fy0 + 16;
+    supLines.forEach((ln, i) => {
+      footParts.push(
+        `<text x="${pad}" y="${sy + i * 14}" font-family="${FONT}" font-size="10.5" fill="#4b5563">${escapeXml(ln)}</text>`
+      );
+    });
+    H = sy + (supLines.length - 1) * 14 + pad;
+  }
+
+  // assemble
+  const parts: string[] = [];
+  parts.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>`);
+  parts.push(
+    `<rect x="${border / 2}" y="${border / 2}" width="${W - border}" height="${H - border}" fill="none" stroke="#dc2626" stroke-width="${border}"/>`
+  );
+  parts.push(...leftParts);
+  parts.push(...rightParts);
+  parts.push(...footParts);
 
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${FONT}">` +
     parts.join('') +
     `</svg>`;
-
   return { svg, width: W, height: H };
 }
 
@@ -234,14 +442,11 @@ function triggerDownload(blob: Blob, filename: string) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
-
 export function downloadSvg(svg: string, filename: string) {
   triggerDownload(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }), filename);
 }
-
 export async function downloadPdf(artifact: LabelArtifact, filename: string) {
   const { jsPDF } = await import('jspdf');
-
   // Rasterize the SVG via <img> -> canvas (reliable; avoids SVG-parser quirks).
   const svgUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(artifact.svg);
   const img = new Image();
@@ -250,7 +455,6 @@ export async function downloadPdf(artifact: LabelArtifact, filename: string) {
     img.onerror = () => reject(new Error('SVG render failed'));
     img.src = svgUrl;
   });
-
   const scale = 2;
   const canvas = document.createElement('canvas');
   canvas.width = artifact.width * scale;
@@ -261,7 +465,6 @@ export async function downloadPdf(artifact: LabelArtifact, filename: string) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
   const png = canvas.toDataURL('image/png');
-
   const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
