@@ -78,6 +78,8 @@ faq:
       needs several language versions.
 ---
 
+import SdsManagerCard from '../../../components/SdsManagerCard.astro'
+
 Writing a safety data sheet is often mistaken for a formatting exercise — dropping information into 16 boxes. In reality, authoring an SDS is a hazard-assessment task with a documentation step at the end. The format is the easy part; the demanding part is classifying the substance or mixture correctly, because every hazard statement, pictogram, precautionary phrase, and handling instruction on the sheet is downstream of that classification.
 
 This article walks through how an SDS is authored: who is responsible for writing it, the classification step that everything depends on, how to populate the 16 sections, and the points where the United States (OSHA HCS) and the European Union (REACH Annex II) diverge. For the section-by-section content rules themselves, see [Safety Data Sheet Format: 16 Sections Explained](/compliance/sds/sds-format-16-sections-explained/); this guide is about the process of producing one.
@@ -127,6 +129,8 @@ Authoring is not a one-time act. Classifications change as criteria are revised,
 A competent author can write an SDS by hand, working from ingredient data, classification criteria, and a template. For a single product in one market, that is entirely workable. The effort scales badly, though: every additional product multiplies the classification work, and every additional market adds a language version and a set of jurisdiction-specific rules.
 
 SDS authoring software and outsourced authoring services exist to manage that scale. A capable tool applies the classification logic automatically, populates the 16 sections from a substance and ingredient database, formats the output for each target jurisdiction, and generates the required language versions — turning a multi-market authoring project from a manual rewrite per country into a single source that is re-rendered per market. The trade-off is cost and the need to keep the underlying data current; the legal responsibility for the result still belongs to the manufacturer or importer.
+
+<SdsManagerCard service="authoring" href="https://sdsmanager.com/us/sds-authoring?fpr=ghs3&fp_sid=gpauth" />
 
 ## Common authoring mistakes
 

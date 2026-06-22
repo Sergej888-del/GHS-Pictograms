@@ -1,0 +1,139 @@
+---
+// SdsManagerCard.astro
+// Reusable affiliate recommendation card for SDS Manager (sdsmanager.com).
+// Place at: src/components/SdsManagerCard.astro
+// Usage in MDX:
+//   import SdsManagerCard from '../../../components/SdsManagerCard.astro'
+//   <SdsManagerCard service="management" href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=gpmgmt" />
+//
+// Marking is mandatory and wired here ONCE: dagger + rel="sponsored nofollow noopener"
+// + target="_blank" + an inline, plain-language disclosure linking to /affiliate-disclosure/.
+// Scoped styles are written to out-specify global .article-content rules.
+
+interface Props {
+  service?: 'general' | 'authoring' | 'management';
+  href: string;
+}
+
+const { service = 'general', href } = Astro.props;
+
+const COPY: Record<'general' | 'authoring' | 'management', { body: string; cta: string }> = {
+  general: {
+    body:
+      'For ongoing SDS authoring and management \u2014 a central online library, version control, automatic regulatory updates, and team access \u2014 the solution we recommend is SDS Manager. It also offers a broader EHS suite.',
+    cta: 'Explore SDS Manager',
+  },
+  authoring: {
+    body:
+      'For creating compliant Safety Data Sheets \u2014 AI-assisted authoring, hazard classification, version control, and 39+ languages \u2014 the solution we recommend is SDS Manager (ExactSDS). It also offers SDS management and a broader EHS suite.',
+    cta: 'Explore SDS authoring',
+  },
+  management: {
+    body:
+      'For managing a compliant SDS library \u2014 central online access, version control, automatic supplier updates, and QR-code access for your team \u2014 the solution we recommend is SDS Manager. It also offers SDS authoring and a broader EHS suite.',
+    cta: 'Explore SDS management',
+  },
+};
+
+const { body, cta } = COPY[service] ?? COPY.general;
+---
+
+<aside class="smc" aria-label="Recommended solution">
+  <div class="smc__accent" aria-hidden="true"></div>
+  <div class="smc__inner">
+    <p class="smc__eyebrow">Recommended solution</p>
+    <h3 class="smc__title">SDS Manager</h3>
+    <p class="smc__body">{body}</p>
+    <a class="smc__cta" href={href} target="_blank" rel="sponsored nofollow noopener">
+      {cta} <span aria-hidden="true">&dagger;</span>
+    </a>
+    <p class="smc__disclosure">
+      <span aria-hidden="true">&dagger;</span> SDS Manager is a partner solution. We may earn a
+      commission if you subscribe through our link, at no extra cost to you. See our
+      <a href="/affiliate-disclosure/">affiliate disclosure</a>.
+    </p>
+  </div>
+</aside>
+
+<style>
+  .smc {
+    display: flex;
+    margin: 2rem 0;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    background: #ffffff;
+    overflow: hidden;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  }
+  .smc__accent {
+    width: 6px;
+    flex-shrink: 0;
+    background: #059669; /* SDS pillar emerald */
+  }
+  .smc__inner {
+    padding: 1.25rem 1.5rem;
+  }
+  .smc__eyebrow {
+    margin: 0;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #047857; /* emerald-700 */
+  }
+  .smc__title {
+    margin: 0.25rem 0 0;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    font-size: 1.125rem;
+    font-weight: 700;
+    line-height: 1.3;
+    color: #062a78; /* brand navy */
+  }
+  .smc__body {
+    margin: 0.5rem 0 0;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: #374151; /* gray-700 */
+  }
+  .smc__cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 1rem;
+    padding: 0.55rem 1rem;
+    border-radius: 0.5rem;
+    background: #f97316; /* brand orange CTA */
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition: background-color 0.15s ease;
+  }
+  .smc__cta:hover {
+    background: #ea6a0a;
+    color: #ffffff;
+  }
+  .smc__cta:focus-visible {
+    outline: 2px solid #062a78;
+    outline-offset: 2px;
+  }
+  .smc__disclosure {
+    margin: 0.75rem 0 0;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: #6b7280; /* gray-500 */
+  }
+  .smc__disclosure a {
+    color: #6b7280;
+    text-decoration: underline;
+  }
+  .smc__disclosure a:hover {
+    color: #374151;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .smc__cta {
+      transition: none;
+    }
+  }
+</style>

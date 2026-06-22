@@ -35,7 +35,7 @@ const GROUP_ORDER = ['PHYSICAL', 'HEALTH', 'ENVIRONMENTAL'];
 //   1) tracking URL in hand (paste into `href`),
 //   2) SDS Manager listed on /affiliate-disclosure/.
 // Marking is mandatory and already wired: † + rel="sponsored nofollow noopener" + target="_blank".
-const SDS_MANAGER = { enabled: false, href: '' };
+const SDS_MANAGER = { enabled: true, href: 'https://sdsmanager.com/us/sds-authoring?fpr=ghs3&fp_sid=gpauth' };
 
 const card: CSSProperties = {
   background: '#ffffff',
@@ -398,11 +398,11 @@ export default function PictogramSelector() {
           {SDS_MANAGER.enabled && SDS_MANAGER.href && (
             <div style={{ ...card, boxShadow: '0 1px 2px rgba(16,32,64,.04)', padding: '18px 22px' }}>
               <h4 style={{ fontFamily: SG, fontWeight: 600, fontSize: 15, margin: '0 0 4px', color: '#16224a' }}>Next step: the full Safety Data Sheet</h4>
-              <p style={{ fontSize: 13, color: '#6b7488', margin: '0 0 12px', lineHeight: 1.5 }}>These are your label pictograms. For the complete 16-section SDS, SDS Manager handles authoring and management.</p>
+              <p style={{ fontSize: 13, color: '#6b7488', margin: '0 0 12px', lineHeight: 1.5 }}>These are your label pictograms. To create the full 16-section Safety Data Sheet, the solution we recommend is SDS Manager (ExactSDS).</p>
               <a href={SDS_MANAGER.href} target="_blank" rel="sponsored nofollow noopener" style={{ display: 'inline-block', border: '1.5px solid #1f5fd0', color: '#1f5fd0', fontWeight: 700, fontSize: 13.5, textDecoration: 'none', padding: '9px 16px', borderRadius: 8 }}>
                 Explore SDS Manager †
               </a>
-              <p style={{ fontSize: 11, color: '#9aa3b5', margin: '10px 0 0' }}>† Affiliate link. See our <a href="/affiliate-disclosure/" style={{ color: '#1f5fd0' }}>affiliate disclosure</a>.</p>
+              <p style={{ fontSize: 11, color: '#9aa3b5', margin: '10px 0 0' }}>† SDS Manager is a partner solution; we may earn a commission if you subscribe through our link, at no extra cost to you. See our <a href="/affiliate-disclosure/" style={{ color: '#1f5fd0' }}>affiliate disclosure</a>.</p>
             </div>
           )}
 
