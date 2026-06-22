@@ -21,13 +21,11 @@ const VOLUME_TIERS = [
   { key: 'lg' as const, label: '50 – 500 L', sublabel: 'Drums, IBCs', labelMm: '105 × 148 mm', picMm: '32 × 32 mm', picSizePx: 100, maxWidthPx: 580, fontScale: 'lg' as const },
   { key: 'xl' as const, label: '> 500 L', sublabel: 'Large IBCs, tanks', labelMm: '148 × 210 mm', picMm: '46 × 46 mm', picSizePx: 140, maxWidthPx: 720, fontScale: 'xl' as const },
 ]
-function applyPrecedence(pictograms: Pictogram[]): Pictogram[] {
-  const codes = pictograms.map(p => p.code)
-  return pictograms.filter(p => {
-    if (p.code === 'GHS07' && (codes.includes('GHS06') || codes.includes('GHS05') || codes.includes('GHS08'))) return false
-    return true
-  })
-}
+// CLP Art 26 pictogram precedence is ALREADY resolved in the source data
+// (substances.ghs_pictogram_codes comes from CLP Annex VI). Do NOT re-derive it
+// from pictogram codes alone: that needs per-H-statement hazard context and wrongly
+// drops GHS07 for substances like thiram (Acute Tox 4 -> GHS07 is never absorbed by a
+// STOT-RE GHS08). Render the official code set as-is.
 function combinePStatements(pStatements: PStatement[]): string {
   return pStatements.map(p => p.text_en).join(' ')
 }
@@ -73,7 +71,7 @@ export default function GHSLabelConstructor({
     setSizeW(t.labelMinW)
     setSizeH(t.labelMinH)
   }
-  const filteredPics = applyPrecedence(pictograms)
+  const filteredPics = pictograms
   const MAX_P = 6
   const shownP = pStatements.slice(0, MAX_P)
   const hiddenPCount = pStatements.length - MAX_P
