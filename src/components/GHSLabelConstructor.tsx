@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type ChangeEvent, type DragEvent } from 'react'
 import { buildSizedLabel, downloadSvg, downloadLabelPdf, CLP_TIERS, LABEL_STOCK, PX_PER_MM, type ClpTierKey } from '../lib/labelArtifact'
 interface Pictogram { code: string; name_en: string; svg_content: string | null }
 interface HStatement { code: string; text_en: string }
@@ -32,6 +32,7 @@ function combinePStatements(pStatements: PStatement[]): string {
   return pStatements.map(p => p.text_en).join(' ')
 }
 const STORAGE_KEY = 'ghs_supplier_data'
+const LOGO_STORAGE_KEY = 'ghs_logo_data'
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#062A78]'
 const labelClass = 'block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wide'
 export default function GHSLabelConstructor({
@@ -53,6 +54,11 @@ export default function GHSLabelConstructor({
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [agreed, setAgreed] = useState(false)
+  const [logo, setLogo] = useState<{ dataUrl: string; aspect: number } | null>(null)
+  const [logoName, setLogoName] = useState('')
+  const [logoError, setLogoError] = useState('')
+  const [dragActive, setDragActive] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const tier = VOLUME_TIERS.find(v => v.key === volume)!
   // Map the 5 capacity bands to the 4 CLP Table 1.3 tiers (<=0.5 L folds into <=3 L for now).
   const CLP_TIER_BY_VOLUME: Record<VolumeKey, ClpTierKey> = { xs: 'le3', sm: 'le3', md: 'gt3le50', lg: 'gt50le500', xl: 'gt500' }
@@ -88,6 +94,18 @@ export default function GHSLabelConstructor({
         if (data.email) setEmail(data.email)
         if (data.company) setCompany(data.company)
         if (data.role) setRole(data.role)
+      }
+    } catch {}
+  }, [])
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LOGO_STORAGE_KEY)
+      if (saved) {
+        const data = JSON.parse(saved)
+        if (data && typeof data.dataUrl === 'string' && typeof data.aspect === 'number') {
+          setLogo({ dataUrl: data.dataUrl, aspect: data.aspect })
+          if (typeof data.name === 'string') setLogoName(data.name)
+        }
       }
     } catch {}
   }, [])
@@ -133,6 +151,61 @@ export default function GHSLabelConstructor({
       setSubmitting(false)
     }
   }
+  const MAX_LOGO_DIM = 600
+  const processLogoFile = (file: File) => {
+    setLogoError('')
+    if (!/^image\/(png|jpeg)$/.test(file.type)) {
+      setLogoError('Please use a PNG or JPEG image.')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const src = String(reader.result || '')
+      const img = new Image()
+      img.onload = () => {
+        const w = img.naturalWidth || img.width
+        const h = img.naturalHeight || img.height
+        if (!w || !h) { setLogoError('Could not read that image.'); return }
+        const scale = Math.min(1, MAX_LOGO_DIM / Math.max(w, h))
+        const cw = Math.max(1, Math.round(w * scale))
+        const ch = Math.max(1, Math.round(h * scale))
+        const canvas = document.createElement('canvas')
+        canvas.width = cw
+        canvas.height = ch
+        const ctx = canvas.getContext('2d')
+        if (!ctx) { setLogoError('Could not process that image.'); return }
+        ctx.drawImage(img, 0, 0, cw, ch)
+        const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg'
+        const dataUrl = canvas.toDataURL(mime, 0.9)
+        const aspect = cw / ch
+        setLogo({ dataUrl, aspect })
+        setLogoName(file.name)
+        try { localStorage.setItem(LOGO_STORAGE_KEY, JSON.stringify({ dataUrl, aspect, name: file.name })) } catch {}
+        track('label_logo_added', { cas: casNumber })
+      }
+      img.onerror = () => setLogoError('Could not read that image.')
+      img.src = src
+    }
+    reader.onerror = () => setLogoError('Could not read that file.')
+    reader.readAsDataURL(file)
+  }
+  const onLogoInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files && e.target.files[0]
+    if (f) processLogoFile(f)
+    e.target.value = ''
+  }
+  const onLogoDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setDragActive(false)
+    const f = e.dataTransfer.files && e.dataTransfer.files[0]
+    if (f) processLogoFile(f)
+  }
+  const removeLogo = () => {
+    setLogo(null)
+    setLogoName('')
+    setLogoError('')
+    try { localStorage.removeItem(LOGO_STORAGE_KEY) } catch {}
+  }
   const labelFilenameBase = `GHS-label-${(casNumber || 'label').replace(/[^\w.-]+/g, '-')}`
   const buildLabelArtifact = () =>
     buildSizedLabel({
@@ -150,6 +223,7 @@ export default function GHSLabelConstructor({
       combinedPText: pFormat === 'combined' ? combinePStatements(shownP) : undefined,
       hiddenPCount,
       supplier: { name: supplierName, address: supplierAddress, phone: supplierPhone },
+      logo: logo ?? undefined,
     }, { tierKey: clpTierKey, widthMm: Math.max(20, sizeW), heightMm: Math.max(20, sizeH) })
   const trackLabelDownload = (format: 'svg' | 'pdf') => track('label_download', { format, cas: casNumber })
   const handleDownloadSvg = () => {
@@ -199,6 +273,7 @@ export default function GHSLabelConstructor({
           <li><span className="font-medium">Container capacity</span> — pick your container; this sets the CLP Annex I Table 1.3 minimum label and pictogram size.</li>
           <li><span className="font-medium">Label size</span> — keep the CLP minimum, choose a stock size, or enter a custom size (toggle mm / in). Sizes follow ISO paper formats: A8 = 52 × 74 mm, A7 = 74 × 105 mm, A6 = 105 × 148 mm, A5 = 148 × 210 mm.</li>
           <li><span className="font-medium">Product &amp; supplier details</span> — fill in quantity, batch, UFI and the CLP Article 17 supplier block.</li>
+          <li><span className="font-medium">Company logo</span> (optional) — drop a PNG or JPEG; it appears beside the supplier block as supplemental information (it must not cover the hazard elements — CLP Art 25 / OSHA HCS C.3.1).</li>
           <li><span className="font-medium">Precautionary format</span> — codes with text, or a combined space-saving line.</li>
           <li><span className="font-medium">Download</span> — PDF for printing, or SVG for label software.</li>
         </ol>
@@ -330,6 +405,32 @@ export default function GHSLabelConstructor({
               Add supplier name, address and phone — required by CLP Article 17 for a compliant label.
             </p>
           )}
+          {/* Brand / logo (optional) — supplemental info, sits with the supplier block */}
+          <div className="pt-1">
+            <label className={labelClass}>Company logo <span className="font-normal text-gray-400">(optional)</span></label>
+            {logo ? (
+              <div className="flex items-center gap-3 rounded-lg border border-gray-300 bg-white px-3 py-2">
+                <img src={logo.dataUrl} alt="Logo preview" className="h-10 w-auto max-w-[120px] object-contain" />
+                <span className="text-xs text-gray-600 truncate flex-1">{logoName || 'logo'}</span>
+                <button type="button" onClick={removeLogo} className="text-xs font-semibold text-red-600 hover:text-red-700 cursor-pointer">Remove</button>
+              </div>
+            ) : (
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setDragActive(true) }}
+                onDragLeave={(e) => { e.preventDefault(); setDragActive(false) }}
+                onDrop={onLogoDrop}
+                className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-3 py-4 text-center cursor-pointer transition-colors ${dragActive ? 'border-[#062A78] bg-blue-50' : 'border-gray-300 bg-white hover:border-[#062A78]'}`}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span className="text-sm text-gray-600">Drop your logo here or click to upload</span>
+                <span className="text-[11px] text-gray-400">PNG or JPEG</span>
+              </div>
+            )}
+            <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" onChange={onLogoInputChange} className="hidden" />
+            {logoError && <p className="text-xs text-red-600 mt-1">{logoError}</p>}
+            <p className="text-[11px] text-gray-400 mt-1">Your logo is added as supplemental information beside the supplier block. It must not cover the hazard pictograms or signal word, or imply the product is non-hazardous (CLP Art 25 / OSHA HCS C.3.1).</p>
+          </div>
         </section>
         {/* P-statement format */}
         <section className="bg-slate-50 border border-slate-200 rounded-xl p-4 sm:p-5 space-y-3">
