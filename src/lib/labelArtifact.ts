@@ -28,6 +28,11 @@ export type FullLabelInput = {
   combinedPText?: string; // pre-combined string when pFormat === 'combined'
   hiddenPCount?: number;
   supplier: { name?: string; address?: string; phone?: string };
+  // Optional company logo, placed as CLP/OSHA "supplemental information" beside
+  // the supplier block in the footer, clear of the grouped pictogram/signal-word/
+  // H/P block, so it cannot impede the mandatory elements (CLP Art 25(3)/32;
+  // OSHA HCS App C.3.1/C.3.2). dataUrl: a raster (PNG/JPEG) data URI; aspect: w/h.
+  logo?: { dataUrl: string; aspect: number };
 };
 
 const FONT = "Arial, Helvetica, 'Helvetica Neue', sans-serif";
@@ -725,11 +730,26 @@ export function buildSizedLabel(
       footParts.push(
         `<line x1="${pad}" y1="${fy0}" x2="${W - pad}" y2="${fy0}" stroke="#d1d5db" stroke-width="1" stroke-dasharray="3 3"/>`
       );
-      const supMax = Math.max(16, Math.floor((W - pad * 2) / cw(FS_META)));
+      let logoBottom = fy0;
+      let textX = pad;
+      if (input.logo && input.logo.dataUrl) {
+        const aspect = input.logo.aspect > 0 ? input.logo.aspect : 1;
+        let lh = Math.round(Math.min(12, opt.heightMm * 0.16) * PX_PER_MM);
+        let lw = Math.round(lh * aspect);
+        const maxLw = Math.round((W - 2 * pad) * 0.35);
+        if (lw > maxLw) { lw = maxLw; lh = Math.round(lw / aspect); }
+        const logoY = fy0 + g(6);
+        footParts.push(
+          `<image x="${pad}" y="${logoY}" width="${lw}" height="${lh}" preserveAspectRatio="xMidYMid meet" href="${input.logo.dataUrl}"/>`
+        );
+        logoBottom = logoY + lh;
+        textX = pad + lw + colGap;
+      }
+      const supMax = Math.max(16, Math.floor((W - pad - textX) / cw(FS_META)));
       const supLines = hardWrapText(`SUPPLIER: ${supLine}`, supMax);
       const sy = fy0 + FS_META + g(4);
-      supLines.forEach((ln, i) => footParts.push(txt(pad, sy + i * LH_META, ln, { size: FS_META, fill: '#4b5563' })));
-      bottom = sy + (supLines.length - 1) * LH_META + pad;
+      supLines.forEach((ln, i) => footParts.push(txt(textX, sy + i * LH_META, ln, { size: FS_META, fill: '#4b5563' })));
+      bottom = Math.max(logoBottom, sy + (supLines.length - 1) * LH_META) + pad;
     }
 
     return { parts: [...body, ...footParts], neededHeightPx: bottom };
