@@ -2,6 +2,7 @@
 export const prerender = true
 import Layout from '../../layouts/Layout.astro'
 import SvgDownloadButton from '../../components/SvgDownloadButton'
+import GhsCalculator from '../../components/GhsCalculator'
 import { supabase } from '../../lib/supabase'
 
 export async function getStaticPaths() {
@@ -344,6 +345,9 @@ const ghsJsonLd = {
       </h2>
       <p class="text-gray-700 leading-relaxed">{meta.description}</p>
     </div>
+
+    <!-- GHS calculator: per-pictogram interactive tool (self-hides when no config) -->
+    <GhsCalculator client:load code={upperCode} />
 
     <!-- H-statements карточки -->
     {hStatements.length > 0 && (
