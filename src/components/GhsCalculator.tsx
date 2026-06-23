@@ -265,6 +265,40 @@ function computeAquatic(values: Record<string, string | boolean>, jur: Jurisdict
   };
 }
 
+// ---------------------------------------------------------------------------
+// GHS05 — skin/eye corrosion from pH. EU CLP Annex I 3.2/3.3 == US OSHA App A
+// A.2.3.1/A.3.3.1 (UN GHS), not jurisdiction-divergent. pH <= 2 or >= 11.5 =>
+// presumptive Skin Corr 1 (H314) in the ABSENCE of other data, subject to acid/
+// alkaline reserve; pH alone cannot assign sub-category 1A/1B/1C. Boundary-tested (8/8).
+// ---------------------------------------------------------------------------
+function computeCorrosion(values: Record<string, string | boolean>, _jur: Jurisdiction): CalcResult {
+  const pH = parseFloat(String(values.ph ?? ''));
+  if (Number.isNaN(pH)) return { ok: false, message: 'Enter a pH value (0-14).' };
+
+  if (pH <= 2 || pH >= 11.5) {
+    const extreme = pH <= 2 ? 'acidic (≤ 2)' : 'alkaline (≥ 11.5)';
+    const reserve = pH <= 2 ? 'acid reserve' : 'alkaline reserve';
+    return {
+      ok: true,
+      classified: true,
+      category: 'Skin Corrosion Category 1 (presumptive)',
+      hCode: 'H314',
+      signal: 'Danger',
+      pictogram: 'GHS05',
+      tone: 'danger',
+      note: `Extreme ${extreme} pH. In the absence of other data this is classified Skin Corr 1 (and Serious Eye Damage 1, H318 — omitted on the label when H314 is shown). pH alone cannot assign sub-category 1A/1B/1C (needs the timed corrosion test). A low ${reserve} (buffering capacity) may mean it is NOT corrosive — confirm before final classification. Identical under EU CLP and US OSHA HazCom.`,
+    };
+  }
+
+  return {
+    ok: true,
+    classified: false,
+    tone: 'neutral',
+    headline: 'No classification triggered by pH alone',
+    note: 'pH between 2 and 11.5 does not by itself trigger a skin/eye corrosion classification. Skin corrosion (H314), irritation (H315) or eye damage/irritation (H318/H319) must come from study data — pH is decisive only at the extremes. Corrosive-to-metals (H290) is a separate metal-corrosion test.',
+  };
+}
+
 const CONFIGS: Record<string, CalcConfig> = {
   GHS02: {
     title: 'Flash point → GHS category',
@@ -309,6 +343,14 @@ const CONFIGS: Record<string, CalcConfig> = {
       { type: 'checkbox', id: 'bioacc', label: 'Bioaccumulative (log Kow ≥ 4 or BCF ≥ 500)' },
     ],
     compute: computeAquatic,
+    affiliate: true,
+  },
+  GHS05: {
+    title: 'pH → skin/eye corrosion trigger',
+    subtitle: 'Enter the pH of the substance or mixture. Extreme pH is a classification trigger.',
+    jurisdictionAware: false,
+    inputs: [{ type: 'number', id: 'ph', label: 'pH', placeholder: 'e.g. 1.5' }],
+    compute: computeCorrosion,
     affiliate: true,
   },
 };
