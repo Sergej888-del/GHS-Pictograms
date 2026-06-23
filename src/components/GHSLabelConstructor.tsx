@@ -224,6 +224,8 @@ export default function GHSLabelConstructor({
       logo: logo ?? undefined,
     }, { tierKey: clpTierKey, widthMm: Math.max(20, sizeW), heightMm: Math.max(20, sizeH) })
   const trackLabelDownload = (format: 'svg' | 'pdf') => track('label_download', { format, cas: casNumber })
+  const trackSdsAffiliateClick = () =>
+    track('affiliate_click', { partner: 'sds_manager', placement: 'label_constructor', cas: casNumber })
   const handleDownloadSvg = () => {
     const { svg } = buildLabelArtifact()
     downloadSvg(svg, `${labelFilenameBase}.svg`)
@@ -526,10 +528,32 @@ export default function GHSLabelConstructor({
                   Download SVG
                 </button>
               </div>
-              <a href="https://ghslabels.com" target="_blank" rel="noopener noreferrer"
-                className="block text-center py-2.5 rounded-lg border border-gray-300 text-gray-600 text-sm font-medium hover:border-gray-400 transition-colors">
-                Need durable, chemical-resistant labels? Browse certified suppliers →
-              </a>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                <p className="text-sm font-semibold text-[#062A78]">
+                  Need a Safety Data Sheet for {displayName}?
+                </p>
+                <p className="mt-1 text-sm text-gray-600">
+                  Your label and a compliant SDS are the two documents that travel with this
+                  substance. SDS Manager is a recommended partner solution for authoring and
+                  managing GHS-compliant Safety Data Sheets.
+                </p>
+                <a
+                  href="https://sdsmanager.com/us/sds-authoring?fpr=ghs3&fp_sid=gpauth"
+                  target="_blank"
+                  rel="sponsored nofollow noopener"
+                  onClick={trackSdsAffiliateClick}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#f97316] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#ea670c]"
+                >
+                  Create an SDS with SDS Manager †
+                </a>
+                <p className="mt-2 text-xs leading-relaxed text-gray-500">
+                  † SDS Manager is a partner solution; we may earn a commission.{' '}
+                  <a href="/affiliate-disclosure/" className="underline hover:text-gray-700">
+                    See disclosure
+                  </a>
+                  .
+                </p>
+              </div>
             </div>
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
               <p className="font-semibold mb-1">For official use — print on certified materials</p>
