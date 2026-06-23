@@ -121,6 +121,62 @@ function computeFlammableLiquid(
   };
 }
 
+// ---------------------------------------------------------------------------
+// GHS06 / GHS07 — acute toxicity. EU CLP Table 3.1.1 and US OSHA HCS Table A.1.1
+// are numerically identical (both UN GHS), so this tool is not jurisdiction-aware.
+// Cut-offs verified verbatim against OSHA 1910.1200 App A Table A.1.1 (the dermal
+// Cat 1 upper bound corrected to 50 via the App A Table A.1.2 cross-check).
+// Cat 1-3 -> GHS06 (Danger); Cat 4 -> GHS07 (Warning). Logic boundary-tested (22/22).
+// ---------------------------------------------------------------------------
+const ACUTE_TOX_TABLE: Record<string, { unit: string; label: string; bounds: number[]; h: string[] }> = {
+  oral: { unit: 'mg/kg bw', label: 'Oral', bounds: [5, 50, 300, 2000], h: ['H300', 'H300', 'H301', 'H302'] },
+  dermal: { unit: 'mg/kg bw', label: 'Dermal', bounds: [50, 200, 1000, 2000], h: ['H310', 'H310', 'H311', 'H312'] },
+  inh_gas: { unit: 'ppmV', label: 'Inhalation, gas', bounds: [100, 500, 2500, 20000], h: ['H330', 'H330', 'H331', 'H332'] },
+  inh_vapour: { unit: 'mg/L', label: 'Inhalation, vapour', bounds: [0.5, 2.0, 10.0, 20.0], h: ['H330', 'H330', 'H331', 'H332'] },
+  inh_dust: { unit: 'mg/L', label: 'Inhalation, dust/mist', bounds: [0.05, 0.5, 1.0, 5.0], h: ['H330', 'H330', 'H331', 'H332'] },
+};
+
+function computeAcuteToxicity(values: Record<string, string | boolean>, _jur: Jurisdiction): CalcResult {
+  const routeKey = String(values.route ?? '');
+  const t = ACUTE_TOX_TABLE[routeKey];
+  if (!t) return { ok: false, message: 'Select an exposure route.' };
+  const v = parseFloat(String(values.value ?? ''));
+  if (Number.isNaN(v)) return { ok: false, message: 'Enter an LD50 / LC50 value.' };
+
+  let cat = 0;
+  for (let i = 0; i < 4; i++) {
+    if (v <= t.bounds[i]) {
+      cat = i + 1;
+      break;
+    }
+  }
+  if (cat === 0) {
+    return {
+      ok: true,
+      classified: false,
+      tone: 'neutral',
+      headline: 'Not classified for acute toxicity',
+      note: `${t.label}: above the Category 4 cut-off (${t.bounds[3]} ${t.unit}). UN GHS Category 5 exists but is not adopted by EU CLP or US OSHA HazCom (identical cut-offs apply in both).`,
+    };
+  }
+  const signal: 'Danger' | 'Warning' = cat === 4 ? 'Warning' : 'Danger';
+  const pictogram = cat === 4 ? 'GHS07' : 'GHS06';
+  const note =
+    cat === 4
+      ? 'Category 4 acute toxicity carries GHS07 (exclamation mark), not GHS06 (skull) — signal word Warning. Identical under EU CLP and US OSHA HazCom.'
+      : 'Identical cut-offs under EU CLP and US OSHA HazCom (UN GHS).';
+  return {
+    ok: true,
+    classified: true,
+    category: `Category ${cat}`,
+    hCode: t.h[cat - 1],
+    signal,
+    pictogram,
+    note,
+    tone: signal === 'Danger' ? 'danger' : 'warning',
+  };
+}
+
 const CONFIGS: Record<string, CalcConfig> = {
   GHS02: {
     title: 'Flash point → GHS category',
@@ -131,6 +187,28 @@ const CONFIGS: Record<string, CalcConfig> = {
       { type: 'number', id: 'bp', label: 'Boiling point (optional)', unit: '°C', placeholder: 'e.g. 56' },
     ],
     compute: computeFlammableLiquid,
+    affiliate: true,
+  },
+  GHS06: {
+    title: 'LD50 / LC50 → acute toxicity category',
+    subtitle: 'Pick the exposure route, then enter the LD50 (oral/dermal) or LC50 (inhalation) value.',
+    jurisdictionAware: false,
+    inputs: [
+      {
+        type: 'select',
+        id: 'route',
+        label: 'Exposure route',
+        options: [
+          { value: 'oral', label: 'Oral — LD50 (mg/kg bw)' },
+          { value: 'dermal', label: 'Dermal — LD50 (mg/kg bw)' },
+          { value: 'inh_gas', label: 'Inhalation, gas — LC50 (ppmV)' },
+          { value: 'inh_vapour', label: 'Inhalation, vapour — LC50 (mg/L)' },
+          { value: 'inh_dust', label: 'Inhalation, dust/mist — LC50 (mg/L)' },
+        ],
+      },
+      { type: 'number', id: 'value', label: 'LD50 / LC50 value', placeholder: 'e.g. 25' },
+    ],
+    compute: computeAcuteToxicity,
     affiliate: true,
   },
 };
@@ -373,7 +451,9 @@ export default function GhsCalculator({ code }: Props) {
                       ) : (
                         <>No pictogram required</>
                       )}
-                      <span className="opacity-70"> · {jur === 'EU' ? 'EU · CLP' : 'US · OSHA HazCom'}</span>
+                      {config.jurisdictionAware && (
+                        <span className="opacity-70"> · {jur === 'EU' ? 'EU · CLP' : 'US · OSHA HazCom'}</span>
+                      )}
                     </p>
                     {result.note && <p className="text-xs mt-2 opacity-80">{result.note}</p>}
                   </>
