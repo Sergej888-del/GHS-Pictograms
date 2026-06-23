@@ -29,16 +29,9 @@ if (pictogramsError) {
 
 const pictogramsRows = pictogramsRaw ?? []
 const featuredPictos = pictogramsRows.filter((p) => ['GHS02', 'GHS05', 'GHS06', 'GHS09'].includes(p.code))
+const labelPictos = pictogramsRows.filter((p) => ['GHS02', 'GHS07'].includes(p.code))
 
 const tools = [
-  {
-    title: 'GHS Label Constructor',
-    description:
-      'Build compliant GHS labels in 5 steps. Add pictograms, H-statements, P-statements, supplier info. Export ready-to-print PDF.',
-    href: '/label-constructor/',
-    badge: 'BETA',
-    cta: 'Build Label →',
-  },
   {
     title: 'Substance Database',
     description:
@@ -538,6 +531,94 @@ const tools = [
         max-height: 100%;
         object-fit: contain;
       }
+      /* Label Constructor banner — sample label card (decorative) */
+      .label-mock {
+        position: relative;
+        z-index: 1;
+        width: 226px;
+        background: #fff;
+        border-radius: 10px;
+        padding: 14px;
+        box-shadow: 0 14px 30px -10px rgba(0, 0, 0, 0.5);
+      }
+      .label-mock-picts {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 11px;
+      }
+      .lm-pict {
+        width: 38px;
+        height: 38px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .lm-pict :global(svg) {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .lm-pict img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+      }
+      .lm-bar {
+        height: 7px;
+        border-radius: 3px;
+        background: #e4e4e4;
+        margin-bottom: 6px;
+      }
+      .lm-bar.lm-title {
+        width: 62%;
+        height: 9px;
+        background: #cdd2da;
+        margin-bottom: 9px;
+      }
+      .lm-bar.w92 {
+        width: 92%;
+      }
+      .lm-bar.w80 {
+        width: 80%;
+        margin-bottom: 12px;
+      }
+      .lm-danger {
+        font-size: 12px;
+        font-weight: 700;
+        color: #e2231a;
+        letter-spacing: 0.04em;
+        margin-bottom: 10px;
+      }
+      .lm-foot {
+        border-top: 1px solid #ececec;
+        padding-top: 10px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .lm-logo {
+        width: 24px;
+        height: 24px;
+        border-radius: 4px;
+        background: #eef0f2;
+        flex-shrink: 0;
+      }
+      .lm-foot-lines {
+        flex: 1;
+      }
+      .lm-fl1 {
+        width: 70%;
+        height: 6px;
+        border-radius: 3px;
+        background: #e4e4e4;
+        margin-bottom: 5px;
+      }
+      .lm-fl2 {
+        width: 50%;
+        height: 6px;
+        border-radius: 3px;
+        background: #e4e4e4;
+      }
 
       /* Tools */
       .tools-section {
@@ -550,10 +631,10 @@ const tools = [
         margin: 0 auto;
       }
 
-      /* 4-column grid на больших экранах для размещения 4 карточек */
+      /* 3-column grid на больших экранах (Label Constructor вынесен в баннер) */
       .tools-grid {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(3, 1fr);
         gap: 1.25rem;
       }
 
@@ -754,7 +835,8 @@ const tools = [
           grid-template-columns: 1fr;
         }
 
-        .featured-pictos {
+        .featured-pictos,
+        .label-mock {
           display: none;
         }
       }
@@ -926,6 +1008,51 @@ const tools = [
               </span>
             ))
           }
+        </div>
+      </a>
+    </section>
+
+    <section class="section">
+      <a href="/label-constructor/" class="featured-tool">
+        <span class="featured-glow" aria-hidden="true"></span>
+        <div class="featured-content">
+          <span class="featured-badge">Beta · Interactive tool</span>
+          <h2 class="featured-title">GHS Label Constructor</h2>
+          <p class="featured-desc">
+            Build print-ready GHS labels sized to your actual container — set the capacity and
+            label size, add your product, supplier details and your own company logo, then export
+            a real PDF or SVG at true physical size.
+          </p>
+          <span class="featured-cta">Build a Label →</span>
+        </div>
+        <div class="label-mock" aria-hidden="true">
+          <div class="label-mock-picts">
+            {
+              labelPictos.map((p) => (
+                <span class="lm-pict">
+                  {p.svg_content && String(p.svg_content).toLowerCase().includes('<svg') ? (
+                    <Fragment set:html={p.svg_content} />
+                  ) : p.svg_url ? (
+                    <img src={p.svg_url} alt="" width="38" height="38" />
+                  ) : (
+                    <span>{p.code}</span>
+                  )}
+                </span>
+              ))
+            }
+          </div>
+          <div class="lm-bar lm-title"></div>
+          <div class="lm-danger">DANGER</div>
+          <div class="lm-bar"></div>
+          <div class="lm-bar w92"></div>
+          <div class="lm-bar w80"></div>
+          <div class="lm-foot">
+            <div class="lm-logo"></div>
+            <div class="lm-foot-lines">
+              <div class="lm-fl1"></div>
+              <div class="lm-fl2"></div>
+            </div>
+          </div>
         </div>
       </a>
     </section>
