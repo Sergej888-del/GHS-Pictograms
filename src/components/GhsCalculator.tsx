@@ -177,6 +177,94 @@ function computeAcuteToxicity(values: Record<string, string | boolean>, _jur: Ju
   };
 }
 
+// ---------------------------------------------------------------------------
+// GHS09 — aquatic environmental hazard. EU CLP Annex I Part 4 (Tables 4.1.0/4.1.1).
+// US OSHA HazCom does NOT regulate environmental hazards -> out of scope.
+// CLP uses Aquatic Acute Category 1 only (H400). GHS09 is carried by Acute 1 (H400),
+// Chronic 1 (H410) and Chronic 2 (H411) only; Chronic 3 (H412) / 4 (H413) = statement
+// only (no pictogram, no signal word). Signal: Acute1 Warning, Chronic1 Warning,
+// Chronic2 none. Chronic categories here use the surrogate method (acute L(E)C50 +
+// adverse fate); adequate chronic NOEC/ECx data takes precedence. Boundary-tested (11/11).
+// ---------------------------------------------------------------------------
+function computeAquatic(values: Record<string, string | boolean>, jur: Jurisdiction): CalcResult {
+  if (jur === 'US') {
+    return {
+      ok: true,
+      classified: false,
+      tone: 'neutral',
+      headline: 'Not classified under US OSHA HazCom',
+      note: 'OSHA HazCom does not cover environmental (aquatic) hazards. GHS09 applies under EU CLP, UN GHS and for transport (marine pollutant) — but not on US workplace labels. Switch to EU · CLP to classify.',
+    };
+  }
+
+  const lc50 = parseFloat(String(values.lc50 ?? ''));
+  if (Number.isNaN(lc50)) return { ok: false, message: 'Enter an acute L(E)C50 / EC50 in mg/L.' };
+  const adverseFate = Boolean(values.notRapid) || Boolean(values.bioacc);
+
+  const acute1 = lc50 <= 1;
+  let chronicCat = 0;
+  if (adverseFate) {
+    if (lc50 <= 1) chronicCat = 1;
+    else if (lc50 <= 10) chronicCat = 2;
+    else if (lc50 <= 100) chronicCat = 3;
+  }
+
+  const hasPicto = acute1 || chronicCat === 1 || chronicCat === 2;
+  const surrogateNote =
+    'Chronic categories use the surrogate method (acute data + environmental fate); adequate chronic NOEC/ECx data takes precedence. Use the lowest L(E)C50 across fish, crustacea and algae.';
+
+  if (hasPicto) {
+    const parts: string[] = [];
+    const codes: string[] = [];
+    if (acute1) {
+      parts.push('Acute 1');
+      codes.push('H400');
+    }
+    if (chronicCat === 1) {
+      parts.push('Chronic 1');
+      codes.push('H410');
+    } else if (chronicCat === 2) {
+      parts.push('Chronic 2');
+      codes.push('H411');
+    }
+    const signal: 'Warning' | undefined = acute1 || chronicCat === 1 ? 'Warning' : undefined;
+    return {
+      ok: true,
+      classified: true,
+      category: `Aquatic ${parts.join(' + ')}`,
+      hCode: codes.join(' + '),
+      signal,
+      pictogram: 'GHS09',
+      tone: 'warning',
+      note:
+        chronicCat > 0
+          ? surrogateNote
+          : 'Acute classification only. Tick degradability / bioaccumulation to also screen long-term (chronic) toxicity.',
+    };
+  }
+
+  if (chronicCat === 3) {
+    return {
+      ok: true,
+      classified: false,
+      tone: 'neutral',
+      headline: 'Aquatic Chronic 3 (H412)',
+      note: `No pictogram and no signal word — hazard statement only. ${surrogateNote}`,
+    };
+  }
+
+  return {
+    ok: true,
+    classified: false,
+    tone: 'neutral',
+    headline: 'Not classified for the aquatic environment (CLP)',
+    note:
+      lc50 > 100
+        ? 'L(E)C50 above 100 mg/L — no acute (CLP Acute 1 needs ≤ 1 mg/L) or surrogate chronic classification.'
+        : "From acute data alone. Tick 'not rapidly degradable' or 'bioaccumulative' to screen chronic classification; a safety-net Chronic 4 (H413) can still apply to poorly soluble substances.",
+  };
+}
+
 const CONFIGS: Record<string, CalcConfig> = {
   GHS02: {
     title: 'Flash point → GHS category',
@@ -209,6 +297,18 @@ const CONFIGS: Record<string, CalcConfig> = {
       { type: 'number', id: 'value', label: 'LD50 / LC50 value', placeholder: 'e.g. 25' },
     ],
     compute: computeAcuteToxicity,
+    affiliate: true,
+  },
+  GHS09: {
+    title: 'Aquatic L(E)C50 → environmental classification',
+    subtitle: 'Enter the lowest acute L(E)C50 / EC50 (fish, crustacea or algae) in mg/L.',
+    jurisdictionAware: true,
+    inputs: [
+      { type: 'number', id: 'lc50', label: 'Acute L(E)C50 / EC50', unit: 'mg/L', placeholder: 'e.g. 0.5' },
+      { type: 'checkbox', id: 'notRapid', label: 'Not rapidly degradable' },
+      { type: 'checkbox', id: 'bioacc', label: 'Bioaccumulative (log Kow ≥ 4 or BCF ≥ 500)' },
+    ],
+    compute: computeAquatic,
     affiliate: true,
   },
 };
