@@ -299,6 +299,52 @@ function computeCorrosion(values: Record<string, string | boolean>, _jur: Jurisd
   };
 }
 
+// ---------------------------------------------------------------------------
+// GHS01 — explosives. Classification is TEST-BASED ONLY (UN Manual of Tests,
+// Series 1-7). This tool implements the GHS/UN screening (waiver) step:
+// OSHA App B B.1.3.1 == UN Manual Appendix 6 == CLP. It never returns a definitive
+// classification (that would be a false safety verdict). Boundary-tested (7/7).
+// ---------------------------------------------------------------------------
+function computeExplosive(values: Record<string, string | boolean>, _jur: Jurisdiction): CalcResult {
+  const groups = Boolean(values.groups);
+  const energy = String(values.energy ?? '');
+
+  if (!groups) {
+    return {
+      ok: true,
+      classified: false,
+      tone: 'neutral',
+      headline: 'Explosive classification can be waived',
+      note: 'No chemical groups associated with explosive properties are present — under the GHS/UN screening (OSHA App B B.1.3.1; UN Manual of Tests, Appendix 6) the explosive classification procedure need not be applied. No GHS01 on this basis. Same screening under EU CLP, US OSHA HazCom and UN transport.',
+    };
+  }
+  if (energy === 'lt500') {
+    return {
+      ok: true,
+      classified: false,
+      tone: 'neutral',
+      headline: 'Explosive classification can be waived',
+      note: 'Explosophoric groups are present, but with an exothermic decomposition energy below 500 J/g and onset below 500 °C the explosive classification can be waived (screening). Confirm the energy by DSC. No GHS01 on this basis.',
+    };
+  }
+  if (energy === 'ge500') {
+    return {
+      ok: true,
+      classified: false,
+      tone: 'warning',
+      headline: 'Potential explosive — UN testing required',
+      note: 'Explosophoric groups plus an exothermic decomposition energy ≥ 500 J/g indicate a potential explosive. This cannot be classified from screening alone — UN Test Series 1 & 2 (Manual of Tests and Criteria) are required. If confirmed: GHS01, signal word Danger (Unstable explosive / Divisions 1.1-1.4; Divisions 1.5 and 1.6 carry no pictogram).',
+    };
+  }
+  return {
+    ok: true,
+    classified: false,
+    tone: 'neutral',
+    headline: 'Measure decomposition energy (DSC) to decide',
+    note: 'Explosophoric groups are present. Determine the exothermic decomposition energy by DSC: if below 500 J/g (onset below 500 °C) the explosive classification can be waived; if ≥ 500 J/g, UN Test Series 1 & 2 are required. Set the energy field once measured.',
+  };
+}
+
 const CONFIGS: Record<string, CalcConfig> = {
   GHS02: {
     title: 'Flash point → GHS category',
@@ -351,6 +397,25 @@ const CONFIGS: Record<string, CalcConfig> = {
     jurisdictionAware: false,
     inputs: [{ type: 'number', id: 'ph', label: 'pH', placeholder: 'e.g. 1.5' }],
     compute: computeCorrosion,
+    affiliate: true,
+  },
+  GHS01: {
+    title: 'Explosive screening (waiver check)',
+    subtitle: 'Explosives are classified only by UN testing — this is the GHS screening (waiver) step.',
+    jurisdictionAware: false,
+    inputs: [
+      { type: 'checkbox', id: 'groups', label: 'Contains explosophoric groups (nitro, nitrate, azide, peroxide, etc.)' },
+      {
+        type: 'select',
+        id: 'energy',
+        label: 'Exothermic decomposition energy (DSC)',
+        options: [
+          { value: 'lt500', label: '< 500 J/g' },
+          { value: 'ge500', label: '≥ 500 J/g' },
+        ],
+      },
+    ],
+    compute: computeExplosive,
     affiliate: true,
   },
 };
