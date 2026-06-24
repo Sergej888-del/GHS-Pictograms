@@ -434,6 +434,44 @@ function computeAspiration(values: Record<string, string | boolean>, _jur: Juris
   };
 }
 
+// ---------------------------------------------------------------------------
+// GHS03 — oxidizers. Classification is TEST-BASED ONLY (UN Test O.2 liquids,
+// O.1/O.3 solids; gases by ISO 10156). This tool implements the GHS/UN screening
+// (waiver) step: OSHA App B B.13.3/B.14.3 == UN GHS == CLP 2.13.4.1/2.14.4.1.
+// Waiver if no oxygen/halogen, or O/halogen bonded only to C/H. Never a verdict.
+// Tested (6/6).
+// ---------------------------------------------------------------------------
+function computeOxidizer(values: Record<string, string | boolean>, _jur: Jurisdiction): CalcResult {
+  const hasOxHal = Boolean(values.hasOxHal);
+  const bondedOnlyCH = Boolean(values.bondedOnlyCH);
+
+  if (!hasOxHal) {
+    return {
+      ok: true,
+      classified: false,
+      tone: 'neutral',
+      headline: 'Oxidizing classification can be waived',
+      note: 'No oxygen or halogen in the molecule — the oxidizing classification procedure need not be applied (GHS 2.13.4.1 / 2.14.4.1; OSHA App B B.13.3/B.14.3). No GHS03 on this basis. Same screening under EU CLP, US OSHA HazCom and UN transport.',
+    };
+  }
+  if (bondedOnlyCH) {
+    return {
+      ok: true,
+      classified: false,
+      tone: 'neutral',
+      headline: 'Oxidizing classification can be waived',
+      note: 'Oxygen/halogen are bonded only to carbon or hydrogen (e.g. alcohols, ethers, chloroalkanes) — the oxidizing classification can be waived. No GHS03 on this basis.',
+    };
+  }
+  return {
+    ok: true,
+    classified: false,
+    tone: 'warning',
+    headline: 'Potential oxidizer — UN testing required',
+    note: 'Oxygen/halogen bonded to other elements (e.g. O–O peroxide, nitrate, chlorate, perchlorate) indicate a potential oxidizer. Classification requires UN testing — Test O.2 (liquids), O.1/O.3 (solids); gases by ISO 10156 calculation. If confirmed: GHS03 — Cat 1 H271 (gases H270) Danger, Cat 2 H272 Danger, Cat 3 H272 Warning. Organic peroxides are generally oxidizing.',
+  };
+}
+
 const CONFIGS: Record<string, CalcConfig> = {
   GHS02: {
     title: 'Flash point → GHS category',
@@ -536,6 +574,17 @@ const CONFIGS: Record<string, CalcConfig> = {
       { type: 'number', id: 'visc', label: 'Kinematic viscosity', unit: 'mm²/s at 40 °C', placeholder: 'e.g. 5' },
     ],
     compute: computeAspiration,
+    affiliate: true,
+  },
+  GHS03: {
+    title: 'Oxidizer screening (waiver check)',
+    subtitle: 'Oxidizers are classified only by UN testing — this is the GHS screening (waiver) step.',
+    jurisdictionAware: false,
+    inputs: [
+      { type: 'checkbox', id: 'hasOxHal', label: 'Contains oxygen or a halogen (O, F, Cl, Br, I)' },
+      { type: 'checkbox', id: 'bondedOnlyCH', label: 'Those atoms are bonded only to carbon or hydrogen' },
+    ],
+    compute: computeOxidizer,
     affiliate: true,
   },
 };
