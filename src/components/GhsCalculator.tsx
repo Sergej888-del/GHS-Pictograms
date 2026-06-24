@@ -345,6 +345,55 @@ function computeExplosive(values: Record<string, string | boolean>, _jur: Jurisd
   };
 }
 
+// ---------------------------------------------------------------------------
+// GHS04 — gases under pressure. EU CLP Annex I 2.5 == US OSHA App B == UN GHS
+// Chapter 2.5 (identical), not jurisdiction-divergent. Group by critical
+// temperature (compressed / high- or low-pressure liquefied -> H280); refrigerated
+// liquefied -> H281; dissolved -> H280. All groups: GHS04 + Warning. Tested (8/8).
+// ---------------------------------------------------------------------------
+const GAS_GROUP_LABEL: Record<string, string> = {
+  compressed: 'Compressed gas',
+  'liquefied-high': 'Liquefied gas (high pressure)',
+  'liquefied-low': 'Liquefied gas (low pressure)',
+  refrigerated: 'Refrigerated liquefied gas',
+  dissolved: 'Dissolved gas',
+};
+
+function computeGasUnderPressure(values: Record<string, string | boolean>, _jur: Jurisdiction): CalcResult {
+  const packaging = String(values.packaging ?? '');
+  let group: string;
+  let hCode: string;
+
+  if (packaging === 'refrigerated') {
+    group = 'refrigerated';
+    hCode = 'H281';
+  } else if (packaging === 'dissolved') {
+    group = 'dissolved';
+    hCode = 'H280';
+  } else {
+    const tc = parseFloat(String(values.tcrit ?? ''));
+    if (Number.isNaN(tc)) return { ok: false, message: 'Enter a critical temperature in °C (or pick a packaging form).' };
+    group = tc <= -50 ? 'compressed' : tc <= 65 ? 'liquefied-high' : 'liquefied-low';
+    hCode = 'H280';
+  }
+
+  const note =
+    hCode === 'H281'
+      ? 'Refrigerated (cryogenic) gases carry H281 (cryogenic burns). GHS04 + Warning, identical under EU CLP, US OSHA HazCom and UN transport (Chapter 2.5).'
+      : 'GHS04 + Warning, identical under EU CLP, US OSHA HazCom and UN transport (Chapter 2.5). For transport (UN Model Regulations) the flammable/toxic-gas pictogram replaces GHS04 if the gas is also flammable or toxic — the pressure classification still stands.';
+
+  return {
+    ok: true,
+    classified: true,
+    category: GAS_GROUP_LABEL[group],
+    hCode,
+    signal: 'Warning',
+    pictogram: 'GHS04',
+    tone: 'warning',
+    note,
+  };
+}
+
 const CONFIGS: Record<string, CalcConfig> = {
   GHS02: {
     title: 'Flash point → GHS category',
@@ -416,6 +465,26 @@ const CONFIGS: Record<string, CalcConfig> = {
       },
     ],
     compute: computeExplosive,
+    affiliate: true,
+  },
+  GHS04: {
+    title: 'Critical temperature → gas-under-pressure group',
+    subtitle: 'Enter the critical temperature, or pick a packaging form for refrigerated/dissolved gases.',
+    jurisdictionAware: false,
+    inputs: [
+      { type: 'number', id: 'tcrit', label: 'Critical temperature', unit: '°C', placeholder: 'e.g. -82' },
+      {
+        type: 'select',
+        id: 'packaging',
+        label: 'Packaging form',
+        options: [
+          { value: 'auto', label: 'Compressed / liquefied (use critical temp)' },
+          { value: 'refrigerated', label: 'Refrigerated liquefied (cryogenic)' },
+          { value: 'dissolved', label: 'Dissolved in solvent' },
+        ],
+      },
+    ],
+    compute: computeGasUnderPressure,
     affiliate: true,
   },
 };
