@@ -472,6 +472,30 @@ function computeOxidizer(values: Record<string, string | boolean>, _jur: Jurisdi
   };
 }
 
+// ---------------------------------------------------------------------------
+// GHS07 — skin sensitisation sub-category. EU CLP == US OSHA HazCom (both 1A/1B).
+// One GHS skin-sens category (Cat 1); LLNA EC3 splits it: EC3 <= 2% (~500 ug/cm2)
+// => 1A; EC3 > 2% => 1B. Both => H317, GHS07, Warning. Not jurisdiction-divergent.
+// Tested (6/6).
+// ---------------------------------------------------------------------------
+function computeSkinSens(values: Record<string, string | boolean>, _jur: Jurisdiction): CalcResult {
+  const ec3 = parseFloat(String(values.ec3 ?? ''));
+  if (Number.isNaN(ec3)) return { ok: false, message: 'Enter an LLNA EC3 value (%).' };
+  if (ec3 <= 0) return { ok: false, message: 'EC3 must be greater than 0%.' };
+
+  const sub = ec3 <= 2 ? '1A' : '1B';
+  return {
+    ok: true,
+    classified: true,
+    category: `Skin Sensitiser Category ${sub}`,
+    hCode: 'H317',
+    signal: 'Warning',
+    pictogram: 'GHS07',
+    tone: 'warning',
+    note: `LLNA EC3 ${ec3 <= 2 ? '≤' : '>'} 2% (≈ 500 µg/cm²) → sub-category ${sub}. Both 1A and 1B are H317 / GHS07 / Warning; where data cannot sub-categorize, classify as Skin Sens. Category 1. Identical under EU CLP and US OSHA HazCom.`,
+  };
+}
+
 const CONFIGS: Record<string, CalcConfig> = {
   GHS02: {
     title: 'Flash point → GHS category',
@@ -585,6 +609,14 @@ const CONFIGS: Record<string, CalcConfig> = {
       { type: 'checkbox', id: 'bondedOnlyCH', label: 'Those atoms are bonded only to carbon or hydrogen' },
     ],
     compute: computeOxidizer,
+    affiliate: true,
+  },
+  GHS07: {
+    title: 'LLNA EC3 → skin-sensitiser sub-category',
+    subtitle: 'Enter the LLNA EC3 value (%) to assign skin-sensitisation sub-category 1A or 1B.',
+    jurisdictionAware: false,
+    inputs: [{ type: 'number', id: 'ec3', label: 'LLNA EC3', unit: '%', placeholder: 'e.g. 1.5' }],
+    compute: computeSkinSens,
     affiliate: true,
   },
 };
