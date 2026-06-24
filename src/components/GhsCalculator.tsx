@@ -394,6 +394,46 @@ function computeGasUnderPressure(values: Record<string, string | boolean>, _jur:
   };
 }
 
+// ---------------------------------------------------------------------------
+// GHS08 — aspiration hazard. EU CLP Annex I 3.10 == US OSHA HCS (both Cat 1 only;
+// Cat 2 / H305, viscosity <= 14 mm2/s, is a UN GHS building block not adopted by
+// either). A liquid hydrocarbon with kinematic viscosity <= 20.5 mm2/s at 40 C =>
+// Asp. Tox. 1 => H304, GHS08, Danger. Not jurisdiction-divergent. Tested (5/5).
+// ---------------------------------------------------------------------------
+function computeAspiration(values: Record<string, string | boolean>, _jur: Jurisdiction): CalcResult {
+  const hydrocarbon = Boolean(values.hydrocarbon);
+  if (!hydrocarbon) {
+    return {
+      ok: true,
+      classified: false,
+      tone: 'neutral',
+      headline: 'Viscosity criterion does not apply',
+      note: 'The kinematic-viscosity route to Aspiration Category 1 applies only to liquid hydrocarbons. For non-hydrocarbons, Asp. Tox. 1 (H304) requires evidence of human aspiration toxicity. Tick "liquid hydrocarbon" if applicable.',
+    };
+  }
+  const v = parseFloat(String(values.visc ?? ''));
+  if (Number.isNaN(v)) return { ok: false, message: 'Enter the kinematic viscosity (mm²/s at 40 °C).' };
+  if (v <= 20.5) {
+    return {
+      ok: true,
+      classified: true,
+      category: 'Aspiration Category 1',
+      hCode: 'H304',
+      signal: 'Danger',
+      pictogram: 'GHS08',
+      tone: 'danger',
+      note: 'Liquid hydrocarbon with kinematic viscosity ≤ 20.5 mm²/s at 40 °C → Asp. Tox. 1. Identical under EU CLP and US OSHA HazCom (both adopt Category 1 only).',
+    };
+  }
+  return {
+    ok: true,
+    classified: false,
+    tone: 'neutral',
+    headline: 'Not classified for aspiration (viscosity > 20.5 mm²/s)',
+    note: 'Above 20.5 mm²/s at 40 °C — outside Aspiration Category 1. (Category 2, viscosity ≤ 14 mm²/s, is a UN GHS building block not adopted by CLP or OSHA.)',
+  };
+}
+
 const CONFIGS: Record<string, CalcConfig> = {
   GHS02: {
     title: 'Flash point → GHS category',
@@ -485,6 +525,17 @@ const CONFIGS: Record<string, CalcConfig> = {
       },
     ],
     compute: computeGasUnderPressure,
+    affiliate: true,
+  },
+  GHS08: {
+    title: 'Hydrocarbon viscosity → aspiration hazard',
+    subtitle: 'For a liquid hydrocarbon, enter the kinematic viscosity (mm²/s at 40 °C).',
+    jurisdictionAware: false,
+    inputs: [
+      { type: 'checkbox', id: 'hydrocarbon', label: 'Liquid hydrocarbon' },
+      { type: 'number', id: 'visc', label: 'Kinematic viscosity', unit: 'mm²/s at 40 °C', placeholder: 'e.g. 5' },
+    ],
+    compute: computeAspiration,
     affiliate: true,
   },
 };
