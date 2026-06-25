@@ -1,6 +1,7 @@
 ---
 import Layout from '../../../layouts/Layout.astro';
 import { getCollection, render } from 'astro:content';
+import SharePage from '../../../components/SharePage.astro';
 
 export const prerender = true;
 
@@ -346,6 +347,10 @@ const articleSchema = pillarArticle
   <!-- ============================================================ -->
   <!-- ARTICLES LIST -->
   <!-- ============================================================ -->
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 pt-8">
+    <SharePage url={pillarPageUrl} title={pillarArticle?.data.title ?? meta.label} />
+  </div>
+
   <section class="bg-gradient-to-b from-slate-100 to-white">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 py-14">
     {articles.length > 0 ? (

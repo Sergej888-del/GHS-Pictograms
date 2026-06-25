@@ -1,6 +1,7 @@
 ---
 import { getCollection, render } from 'astro:content';
 import Layout from '../../../layouts/Layout.astro';
+import SharePage from '../../../components/SharePage.astro';
 
 export const prerender = true;
 
@@ -145,6 +146,7 @@ const faqJsonLd = faqItems.length > 0 ? {
       </div>
     </header>
 
+    <SharePage url={articlePageId} title={article.data.title} />
     <div class="article-content">
       <Content />
     </div>
