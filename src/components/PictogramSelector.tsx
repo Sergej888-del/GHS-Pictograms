@@ -9,6 +9,20 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { loadSelectorData, type LoadedData } from '../lib/selectorData';
 import { resolveSelection, type Selection } from '../lib/pictogramSelector';
 import { buildLabelElementsSvg, downloadSvg, downloadPdf } from '../lib/labelArtifact';
+import ShareResult from './ShareResult';
+
+// --- shareable-link state codec (URL-safe base64) ---
+function encodeState(obj: unknown): string {
+  return btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function decodeState(s: string): Record<string, string> | null {
+  try {
+    const obj = JSON.parse(atob(s.replace(/-/g, '+').replace(/_/g, '/')));
+    return obj && typeof obj === 'object' ? obj : null;
+  } catch {
+    return null;
+  }
+}
 
 const SG = "'Space Grotesk', system-ui, sans-serif";
 
@@ -81,6 +95,25 @@ export default function PictogramSelector() {
     return () => { alive = false; };
   }, []);
 
+  // Restore a shared selection from the URL once reference data has loaded.
+  useEffect(() => {
+    if (!data) return;
+    const params = new URLSearchParams(window.location.search);
+    const j = params.get('j');
+    const p = params.get('p');
+    if (j && data.jurisdictions.some((x) => x.code === j)) setJurisdiction(j);
+    if (p) {
+      const decoded = decodeState(p);
+      if (decoded) {
+        const clean: Record<string, string> = {};
+        for (const [k, v] of Object.entries(decoded)) {
+          if (typeof v === 'string' && v) clean[k] = v;
+        }
+        setPicked(clean);
+      }
+    }
+  }, [data]);
+
   const categoriesByClass = useMemo(() => {
     const out: Record<string, CategoryOption[]> = {};
     if (!data) return out;
@@ -116,6 +149,18 @@ export default function PictogramSelector() {
   );
 
   const result = useMemo(() => (data ? resolveSelection(data, jurisdiction, selection) : null), [data, jurisdiction, selection]);
+
+  // Build a shareable link that re-creates this selection.
+  // SSR-safe: empty string on the server, real URL after hydration.
+  const shareUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const clean: Record<string, string> = {};
+    for (const [k, v] of Object.entries(picked)) { if (v) clean[k] = v; }
+    const params = new URLSearchParams();
+    params.set('j', jurisdiction);
+    if (Object.keys(clean).length > 0) params.set('p', encodeState(clean));
+    return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+  }, [jurisdiction, picked]);
 
   function setClassCategory(classCode: string, cat: string) {
     setPicked((p) => ({ ...p, [classCode]: cat }));
@@ -344,6 +389,8 @@ export default function PictogramSelector() {
               </div>
             )}
           </div>
+
+          {selectedCount > 0 && <ShareResult url={shareUrl} title="My GHS pictogram selection" />}
 
           {/* email */}
           <div style={{ ...card, boxShadow: '0 1px 2px rgba(16,32,64,.04)', padding: '20px 22px' }}>
