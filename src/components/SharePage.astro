@@ -1,0 +1,95 @@
+---
+/**
+ * SharePage.astro — "share this page" row (no backend).
+ * Copy link · native share (mobile only) · X · LinkedIn.
+ * Fires a GA4 'share' event { page, method } on each action.
+ *
+ * Props:
+ *   url   — absolute canonical URL of the page being shared
+ *   title — text used for the X tweet + native share sheet
+ */
+interface Props {
+  url: string;
+  title: string;
+}
+
+const { url, title } = Astro.props;
+const encodedUrl = encodeURIComponent(url);
+const encodedTitle = encodeURIComponent(title);
+const xIntent = `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`;
+const liIntent = `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`;
+---
+
+<div class="share-page flex flex-wrap items-center gap-2 text-sm text-slate-600" data-url={url} data-title={title}>
+  <span class="font-medium text-slate-500">Share this page:</span>
+
+  <button type="button" data-share-copy
+    class="inline-flex items-center rounded-md border border-slate-300 px-2.5 py-1 hover:bg-slate-100 transition-colors">
+    <span data-copy-label>Copy link</span>
+  </button>
+
+  <button type="button" data-share-native hidden
+    class="inline-flex items-center rounded-md border border-slate-300 px-2.5 py-1 hover:bg-slate-100 transition-colors">
+    Share…
+  </button>
+
+  <a href={xIntent} target="_blank" rel="noopener noreferrer" data-share-x
+    class="inline-flex items-center rounded-md border border-slate-300 px-2.5 py-1 hover:bg-slate-100 transition-colors">
+    X
+  </a>
+
+  <a href={liIntent} target="_blank" rel="noopener noreferrer" data-share-li
+    class="inline-flex items-center rounded-md border border-slate-300 px-2.5 py-1 hover:bg-slate-100 transition-colors">
+    LinkedIn
+  </a>
+</div>
+
+<script>
+  function trackShare(method) {
+    if (typeof window.gtag === 'function') {
+      window.gtag('event', 'share', { page: window.location.pathname, method: method });
+    }
+  }
+
+  document.querySelectorAll('.share-page').forEach((root) => {
+    const url = root.getAttribute('data-url') || window.location.href;
+    const title = root.getAttribute('data-title') || document.title;
+
+    // Copy link → clipboard, with "Copied" feedback
+    const copyBtn = root.querySelector('[data-share-copy]');
+    const copyLabel = root.querySelector('[data-copy-label]');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(url);
+          if (copyLabel) {
+            const prev = copyLabel.textContent;
+            copyLabel.textContent = 'Copied';
+            setTimeout(() => { copyLabel.textContent = prev; }, 1800);
+          }
+          trackShare('copy');
+        } catch (e) {
+          window.prompt('Copy this link:', url);
+        }
+      });
+    }
+
+    // Native share — reveal only on devices that support it (mobile)
+    const nativeBtn = root.querySelector('[data-share-native]');
+    if (nativeBtn && typeof navigator.share === 'function') {
+      nativeBtn.hidden = false;
+      nativeBtn.addEventListener('click', async () => {
+        try {
+          await navigator.share({ title: title, url: url });
+          trackShare('native');
+        } catch (e) { /* user cancelled — ignore */ }
+      });
+    }
+
+    // X / LinkedIn open natively; just record the event
+    const xBtn = root.querySelector('[data-share-x]');
+    if (xBtn) xBtn.addEventListener('click', () => trackShare('x'));
+    const liBtn = root.querySelector('[data-share-li]');
+    if (liBtn) liBtn.addEventListener('click', () => trackShare('linkedin'));
+  });
+</script>

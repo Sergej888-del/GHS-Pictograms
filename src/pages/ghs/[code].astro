@@ -3,6 +3,7 @@ export const prerender = true
 import Layout from '../../layouts/Layout.astro'
 import SvgDownloadButton from '../../components/SvgDownloadButton'
 import GhsCalculator from '../../components/GhsCalculator'
+import SharePage from '../../components/SharePage.astro'
 import { supabase } from '../../lib/supabase'
 
 export async function getStaticPaths() {
@@ -337,6 +338,7 @@ const ghsJsonLd = {
   </section>
 
   <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-8">
+    <SharePage url={`https://ghspictograms.com/ghs/${code}/`} title={`${upperCode} — ${meta.name} (GHS pictogram)`} />
 
     <!-- Что означает -->
     <div class="rounded-2xl p-6 border-2" style={`background:${meta.bgLight};border-color:${meta.borderColor}`}>
