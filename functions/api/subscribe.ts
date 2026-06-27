@@ -5,13 +5,13 @@ interface Env {
 }
 
 // --- Brevo double opt-in (DOI) configuration — created 2026-06-27 ---
-// templateId 3 = "DOI Confirmation" built in Brevo's HTML editor, so href="{{ double_opt_in }}"
-// reaches Brevo verbatim (drag-and-drop #1 and simple-editor #2 wrapped the token, so Brevo
-// did not recognise them as DOI templates).
-// Still in debug mode: returns the raw Brevo response as JSON.
-const NEWSLETTER_LIST_ID = 6 // Brevo list "GHS Compliance Updates"
-const DOI_TEMPLATE_ID = 3 // Brevo template "DOI Confirmation" (HTML editor, Active)
-const REDIRECT_URL = 'https://ghspictograms.com/subscribed/'
+// Verified working end-to-end. The DOI template MUST be tagged "optin" in Brevo and contain a
+// button whose link is the token {{ doubleoptin }} (one word) — otherwise Brevo's DOI endpoint
+// returns "An active DOI template does not exist". templateId is also required.
+// The only secret is BREVO_API_KEY, injected via Cloudflare env (same key used by leads.ts).
+const NEWSLETTER_LIST_ID = 6 // Brevo list "GHS Compliance Updates" — CONFIRMED subscribers land here
+const DOI_TEMPLATE_ID = 3 // Brevo template "DOI Confirmation" (HTML, tagged "optin", Active)
+const REDIRECT_URL = 'https://ghspictograms.com/subscribed/' // where Brevo redirects after confirm
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,6 +35,8 @@ export async function onRequestPost(
       })
     }
 
+    // Trigger Brevo's double opt-in flow. Brevo emails the confirmation link; the contact is
+    // added to NEWSLETTER_LIST_ID only AFTER they click confirm, then redirected to REDIRECT_URL.
     const brevoRes = await fetch('https://api.brevo.com/v3/contacts/doubleOptinConfirmation', {
       method: 'POST',
       headers: {
@@ -49,30 +51,44 @@ export async function onRequestPost(
       }),
     })
 
-    const brevoBody = await brevoRes.text().catch(() => '')
+    // 201 = DOI email sent. Treat a "contact already exists / already in list" response as a soft
+    // success so a returning subscriber gets a friendly result instead of an error.
+    if (brevoRes.ok) {
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      })
+    }
 
-    // DEBUG: always 200 + JSON so the browser shows the real Brevo response.
-    return new Response(
-      JSON.stringify({
-        debug: true,
-        brevoOk: brevoRes.ok,
-        brevoStatus: brevoRes.status,
-        brevoStatusText: brevoRes.statusText,
-        brevoBody,
-      }),
-      {
+    const errText = await brevoRes.text().catch(() => '')
+    const alreadyExists =
+      brevoRes.status === 400 &&
+      /duplicate|already\s+(exists|in)|contact\s+already/i.test(errText)
+
+    if (alreadyExists) {
+      return new Response(JSON.stringify({ success: true, alreadySubscribed: true }), {
         status: 200,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      }
-    )
+      })
+    }
+
+    // Genuine failure: log full detail (Cloudflare Functions Logs), return a clean error.
+    console.error('Subscribe API error:', JSON.stringify({
+      step: 'brevo_doi',
+      status: brevoRes.status,
+      statusText: brevoRes.statusText,
+      body: errText,
+    }))
+    return new Response(JSON.stringify({ error: 'Subscription could not be processed' }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    })
   } catch (err) {
-    return new Response(
-      JSON.stringify({ debug: true, error: 'Server exception', detail: String(err) }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      }
-    )
+    console.error('Subscribe API error:', JSON.stringify(err))
+    return new Response(JSON.stringify({ error: 'Server error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    })
   }
 }
 
