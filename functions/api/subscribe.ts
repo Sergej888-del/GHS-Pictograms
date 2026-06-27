@@ -5,12 +5,11 @@ interface Env {
 }
 
 // --- Brevo double opt-in (DOI) configuration — created 2026-06-27 ---
-// NOTE: templateId intentionally OMITTED — Brevo falls back to its built-in DOI template.
-// (Our custom "DOI Confirmation" template was not being recognised as an active DOI template;
-//  custom design can be reintroduced later once the chain is proven to work.)
-// The only secret is BREVO_API_KEY, injected via Cloudflare env (same key used by leads.ts).
-const NEWSLETTER_LIST_ID = 6 // Brevo list "GHS Compliance Updates" — CONFIRMED subscribers land here
-const REDIRECT_URL = 'https://ghspictograms.com/subscribed/' // where Brevo sends the user after they confirm
+// templateId is REQUIRED by Brevo's DOI endpoint ("Template id is missing" without it).
+// Still in debug mode: returns the raw Brevo response as JSON so we can see exactly what it says.
+const NEWSLETTER_LIST_ID = 6 // Brevo list "GHS Compliance Updates"
+const DOI_TEMPLATE_ID = 1 // Brevo template "DOI Confirmation"
+const REDIRECT_URL = 'https://ghspictograms.com/subscribed/'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -34,7 +33,6 @@ export async function onRequestPost(
       })
     }
 
-    // Trigger Brevo's double opt-in flow. No templateId → Brevo uses its built-in DOI email.
     const brevoRes = await fetch('https://api.brevo.com/v3/contacts/doubleOptinConfirmation', {
       method: 'POST',
       headers: {
@@ -44,15 +42,14 @@ export async function onRequestPost(
       body: JSON.stringify({
         email,
         includeListIds: [NEWSLETTER_LIST_ID],
+        templateId: DOI_TEMPLATE_ID,
         redirectionUrl: REDIRECT_URL,
       }),
     })
 
     const brevoBody = await brevoRes.text().catch(() => '')
 
-    // DEBUG: always return 200 + JSON so the browser shows the real Brevo response,
-    // instead of Cloudflare swallowing a non-2xx as an HTML 502 page.
-    // (Will be tightened to a clean success/error response once the chain works.)
+    // DEBUG: always 200 + JSON so the browser shows the real Brevo response.
     return new Response(
       JSON.stringify({
         debug: true,
