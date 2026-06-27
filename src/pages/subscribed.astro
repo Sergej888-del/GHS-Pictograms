@@ -1,0 +1,83 @@
+---
+export const prerender = true
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, follow" />
+    <title>Subscription confirmed — GHS Pictograms</title>
+    <style>
+      :root {
+        --navy: #172554;
+        --cta: #f97316;
+        --ink: #16224a;
+        --muted: #6b7488;
+        --success: #1f8a4c;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        background: var(--navy);
+        color: #fff;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .card {
+        background: #fff;
+        color: var(--ink);
+        max-width: 480px;
+        width: 100%;
+        border-radius: 16px;
+        padding: 40px 32px;
+        text-align: center;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+      }
+      .badge {
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 20px;
+        border-radius: 50%;
+        background: #e8f5ee;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .badge svg { width: 32px; height: 32px; }
+      h1 { font-size: 24px; margin: 0 0 12px; color: var(--ink); }
+      p { font-size: 16px; line-height: 1.6; color: var(--muted); margin: 0 0 12px; }
+      .actions { margin-top: 28px; display: flex; flex-direction: column; gap: 12px; }
+      .btn {
+        display: inline-block;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 15px;
+        padding: 13px 20px;
+        border-radius: 10px;
+      }
+      .btn-primary { background: var(--cta); color: #fff; }
+      .btn-secondary { background: #eef1f8; color: var(--ink); }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#1f8a4c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <h1>You're subscribed!</h1>
+      <p>Thanks for confirming. You'll now receive GHS / CLP / OSHA compliance updates and regulatory deadline alerts from GHS Pictograms.</p>
+      <p>You can unsubscribe at any time using the link at the bottom of any email.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="/">Back to GHS Pictograms</a>
+        <a class="btn btn-secondary" href="/compliance/">Explore the Compliance Hub</a>
+      </div>
+    </main>
+  </body>
+</html>
