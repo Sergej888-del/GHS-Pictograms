@@ -5,11 +5,12 @@ interface Env {
 }
 
 // --- Brevo double opt-in (DOI) configuration — created 2026-06-27 ---
-// templateId 2 = "DOI Confirmation" rebuilt in Brevo's SIMPLE editor so the {{ double_opt_in }}
-// token reaches Brevo un-wrapped (the drag-and-drop template #1 was not recognised as a DOI template).
+// templateId 3 = "DOI Confirmation" built in Brevo's HTML editor, so href="{{ double_opt_in }}"
+// reaches Brevo verbatim (drag-and-drop #1 and simple-editor #2 wrapped the token, so Brevo
+// did not recognise them as DOI templates).
 // Still in debug mode: returns the raw Brevo response as JSON.
 const NEWSLETTER_LIST_ID = 6 // Brevo list "GHS Compliance Updates"
-const DOI_TEMPLATE_ID = 2 // Brevo template "DOI Confirmation" (Simple editor, Active)
+const DOI_TEMPLATE_ID = 3 // Brevo template "DOI Confirmation" (HTML editor, Active)
 const REDIRECT_URL = 'https://ghspictograms.com/subscribed/'
 
 const corsHeaders = {
