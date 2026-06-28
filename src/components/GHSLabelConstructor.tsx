@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type ChangeEvent, type DragEvent } from 'react'
 import { buildSizedLabel, downloadSvg, downloadLabelPdf, CLP_TIERS, LABEL_STOCK, PX_PER_MM, type ClpTierKey } from '../lib/labelArtifact'
+import NewsletterOptIn from './NewsletterOptIn'
 interface Pictogram { code: string; name_en: string; svg_content: string | null }
 interface HStatement { code: string; text_en: string }
 interface PStatement { code: string; text_en: string }
@@ -45,11 +46,7 @@ export default function GHSLabelConstructor({
   const [ufiCode, setUfiCode] = useState('')
   const [batchNumber, setBatchNumber] = useState('')
   const [pFormat, setPFormat] = useState<PFormat>('codes')
-  const [email, setEmail] = useState('')
-  const [company, setCompany] = useState('')
-  const [role, setRole] = useState('')
   const [submitted, setSubmitted] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [agreed, setAgreed] = useState(false)
   const [logo, setLogo] = useState<{ dataUrl: string; aspect: number } | null>(null)
@@ -75,7 +72,6 @@ export default function GHSLabelConstructor({
   const MAX_P = 6
   const shownP = pStatements.slice(0, MAX_P)
   const hiddenPCount = pStatements.length - MAX_P
-  const leadFocusedRef = useRef(false)
   const track = (event: string, params: Record<string, unknown> = {}) => {
     if (typeof window !== 'undefined' && typeof (window as any).gtag === 'function') {
       (window as any).gtag('event', event, params)
@@ -89,9 +85,6 @@ export default function GHSLabelConstructor({
         if (data.supplierName) setSupplierName(data.supplierName)
         if (data.supplierAddress) setSupplierAddress(data.supplierAddress)
         if (data.supplierPhone) setSupplierPhone(data.supplierPhone)
-        if (data.email) setEmail(data.email)
-        if (data.company) setCompany(data.company)
-        if (data.role) setRole(data.role)
       }
     } catch {}
   }, [])
@@ -113,41 +106,16 @@ export default function GHSLabelConstructor({
   const saveToStorage = () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        supplierName, supplierAddress, supplierPhone, email, company, role
+        supplierName, supplierAddress, supplierPhone
       }))
     } catch {}
   }
-  const handleSubmitLead = async () => {
-    if (!email || !email.includes('@')) { setSubmitError('Please enter a valid email address.'); return }
+  const confirmDownload = () => {
     if (!agreed) { setSubmitError('Please confirm the disclaimer.'); return }
-    setSubmitting(true)
     setSubmitError('')
-    try {
-      saveToStorage()
-      await fetch('/api/leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          source: 'label-constructor',
-          tool: 'label-constructor',
-          source_domain: 'ghspictograms.com',
-          email_consent: false,
-          company, role,
-          cas_number: casNumber,
-          substance_name: displayName,
-          label_template: volume,
-          volume_range: tier.label,
-          notes: `Source: label-constructor | CAS: ${casNumber} | Substance: ${displayName} | Volume: ${tier.label} (${volume}) | Company: ${company || '—'} | Role: ${role || '—'}`,
-        }),
-      })
-      setSubmitted(true)
-      track('label_lead_submitted', { cas: casNumber })
-    } catch {
-      setSubmitError('Something went wrong. Please try again.')
-    } finally {
-      setSubmitting(false)
-    }
+    saveToStorage()
+    setSubmitted(true)
+    track('label_download_unlocked', { cas: casNumber })
   }
   const MAX_LOGO_DIM = 600
   const processLogoFile = (file: File) => {
@@ -457,42 +425,7 @@ export default function GHSLabelConstructor({
         {!submitted ? (
           <div className="bg-blue-50 border-2 border-[#062A78] rounded-xl p-4 sm:p-5 space-y-4">
             <p className="font-bold text-[#062A78]">Download your label</p>
-            <p className="text-sm text-gray-600">Enter your details to download PDF and SVG files. Your data is saved for future sessions.</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className={labelClass}>Work email *</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  onFocus={() => {
-                    if (!leadFocusedRef.current) {
-                      leadFocusedRef.current = true
-                      track('label_lead_focus', { cas: casNumber })
-                    }
-                  }}
-                  placeholder="you@company.com"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Company</label>
-                <input type="text" value={company} onChange={e => setCompany(e.target.value)} placeholder="Company name" className={inputClass} />
-              </div>
-              <div className="sm:col-span-2">
-                <label className={labelClass}>Your role</label>
-                <select value={role} onChange={e => setRole(e.target.value)} className={inputClass}>
-                  <option value="">Select role...</option>
-                  <option value="EHS Manager">EHS Manager</option>
-                  <option value="Production Manager">Production Manager</option>
-                  <option value="Lab Technician">Lab Technician</option>
-                  <option value="Logistics">Logistics / Transport</option>
-                  <option value="Packaging Designer">Packaging Designer</option>
-                  <option value="Compliance Officer">Compliance Officer</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-            </div>
+            <p className="text-sm text-gray-600">Free download of your label as PDF and SVG. Please confirm the disclaimer below.</p>
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
               <p className="font-semibold mb-1">Disclaimer — please confirm before downloading:</p>
               <p>This tool generates reference label layouts for informational purposes only. The user bears full responsibility for verifying compliance with applicable regulations (CLP, OSHA HCS, WHMIS). GHS Pictograms is not liable for regulatory penalties or injuries arising from label use.</p>
@@ -504,11 +437,10 @@ export default function GHSLabelConstructor({
             {submitError && <p className="text-red-600 text-sm">{submitError}</p>}
             <button
               type="button"
-              onClick={handleSubmitLead}
-              disabled={submitting}
-              className="w-full py-3 rounded-lg bg-[#062A78] text-white font-semibold hover:bg-[#051f5c] transition-colors disabled:opacity-50"
+              onClick={confirmDownload}
+              className="w-full py-3 rounded-lg bg-[#062A78] text-white font-semibold hover:bg-[#051f5c] transition-colors"
             >
-              {submitting ? 'Processing...' : 'Get download links'}
+              Show download links
             </button>
           </div>
         ) : (
@@ -528,6 +460,7 @@ export default function GHSLabelConstructor({
                   Download SVG
                 </button>
               </div>
+              <NewsletterOptIn source="label_constructor" />
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
                 <p className="text-sm font-semibold text-[#062A78]">
                   Need a Safety Data Sheet for {displayName}?
