@@ -10,6 +10,7 @@ import { loadSelectorData, type LoadedData } from '../lib/selectorData';
 import { resolveSelection, type Selection } from '../lib/pictogramSelector';
 import { buildLabelElementsSvg, downloadSvg, downloadPdf } from '../lib/labelArtifact';
 import ShareResult from './ShareResult';
+import NewsletterOptIn from './NewsletterOptIn';
 
 // --- shareable-link state codec (URL-safe base64) ---
 function encodeState(obj: unknown): string {
@@ -67,14 +68,11 @@ const SCOPED_CSS = `
 .gs-wrap .gs-jur:hover{border-color:#1f5fd0 !important;}
 .gs-wrap .gs-send:hover{background:#e87f45 !important;}
 .gs-wrap .gs-browse:hover{border-color:#cfdcf6 !important;}
-.gs-wrap .gs-email:focus{border-color:#1f5fd0;outline:none;}
 .gs-wrap .gs-picto svg{width:100%;height:100%;display:block;}
 @media (max-width:900px){.gs-wrap .gs-grid{grid-template-columns:1fr !important;}.gs-wrap .gs-aside{position:static !important;}}
 `;
 
 type CategoryOption = { code: string; hint: string | null };
-type LeadState = 'idle' | 'sending' | 'done' | 'error';
-
 export default function PictogramSelector() {
   const [data, setData] = useState<LoadedData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -83,8 +81,6 @@ export default function PictogramSelector() {
   const [jurisdiction, setJurisdiction] = useState('EU_CLP');
   const [picked, setPicked] = useState<Record<string, string>>({});
 
-  const [email, setEmail] = useState('');
-  const [leadState, setLeadState] = useState<LeadState>('idle');
   const [pdfBusy, setPdfBusy] = useState(false);
 
   useEffect(() => {
@@ -164,26 +160,8 @@ export default function PictogramSelector() {
 
   function setClassCategory(classCode: string, cat: string) {
     setPicked((p) => ({ ...p, [classCode]: cat }));
-    if (leadState === 'done') setLeadState('idle');
   }
-  function reset() { setPicked({}); setLeadState('idle'); }
-
-  async function submitLead() {
-    if (!email.includes('@')) return;
-    setLeadState('sending');
-    const sel = selection.map((s) => `${s.class_code} ${s.category_code}`).join('; ');
-    const res = result
-      ? `Jurisdiction: ${jurisdiction} | Pictograms: ${result.pictograms.map((p) => p.code).join(',') || 'none'} | Signal: ${result.signal_word ?? 'none'} | H: ${result.h_codes.join(',') || 'none'}`
-      : '';
-    try {
-      const r = await fetch('/api/leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, source: 'pictogram-selector', tool: 'pictogram-selector', notes: `Selection: ${sel} || ${res}` }),
-      });
-      setLeadState(r.ok ? 'done' : 'error');
-    } catch { setLeadState('error'); }
-  }
+  function reset() { setPicked({}); }
 
   function buildArtifact() {
     if (!result) return null;
@@ -392,54 +370,31 @@ export default function PictogramSelector() {
 
           {selectedCount > 0 && <ShareResult url={shareUrl} title="My GHS pictogram selection" />}
 
-          {/* email */}
-          <div style={{ ...card, boxShadow: '0 1px 2px rgba(16,32,64,.04)', padding: '20px 22px' }}>
-            <h4 style={{ fontFamily: SG, fontWeight: 600, fontSize: 15, margin: '0 0 4px', color: '#16224a' }}>Download this result</h4>
-            <p style={{ fontSize: 13, color: '#6b7488', margin: '0 0 14px', lineHeight: 1.5 }}>Enter your email to download these label elements.</p>
-            {leadState === 'done' ? (
-              <div>
-                <p style={{ fontSize: 13.5, fontWeight: 600, color: '#1f8a4c', margin: '0 0 10px' }}>Ready — download your copy:</p>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    type="button"
-                    onClick={handleDownloadPdf}
-                    disabled={pdfBusy}
-                    style={{ flex: 1, background: '#ef915d', border: 'none', color: '#fff', fontFamily: "'Inter',system-ui,sans-serif", fontWeight: 700, fontSize: 13.5, padding: '10px 14px', borderRadius: 8, cursor: 'pointer', opacity: pdfBusy ? 0.6 : 1 }}
-                  >
-                    {pdfBusy ? 'Preparing…' : 'Download PDF'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDownloadSvg}
-                    style={{ flex: 1, background: '#fff', border: '1px solid #d8deea', color: '#16224a', fontFamily: "'Inter',system-ui,sans-serif", fontWeight: 700, fontSize: 13.5, padding: '10px 14px', borderRadius: 8, cursor: 'pointer' }}
-                  >
-                    Download SVG
-                  </button>
-                </div>
-              </div>
-            ) : (
+          {/* download + optional newsletter opt-in — un-gated 2026-06-28 */}
+          {selectedCount > 0 && (
+            <div style={{ ...card, boxShadow: '0 1px 2px rgba(16,32,64,.04)', padding: '20px 22px' }}>
+              <h4 style={{ fontFamily: SG, fontWeight: 600, fontSize: 15, margin: '0 0 4px', color: '#16224a' }}>Download this result</h4>
+              <p style={{ fontSize: 13, color: '#6b7488', margin: '0 0 14px', lineHeight: 1.5 }}>Free download of these label elements as PDF or SVG.</p>
               <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  className="gs-email"
-                  type="email"
-                  placeholder="you@company.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  style={{ flex: 1, minWidth: 0, padding: '10px 12px', border: '1px solid #d8deea', borderRadius: 8, fontFamily: "'Inter',system-ui,sans-serif", fontSize: 13.5, color: '#16224a', background: '#fff' }}
-                />
                 <button
                   type="button"
-                  className="gs-send"
-                  onClick={submitLead}
-                  disabled={leadState === 'sending' || !email.includes('@')}
-                  style={{ background: '#ef915d', border: 'none', color: '#fff', fontFamily: "'Inter',system-ui,sans-serif", fontWeight: 700, fontSize: 13.5, padding: '10px 18px', borderRadius: 8, cursor: 'pointer', whiteSpace: 'nowrap', opacity: leadState === 'sending' || !email.includes('@') ? 0.55 : 1 }}
+                  onClick={handleDownloadPdf}
+                  disabled={pdfBusy}
+                  style={{ flex: 1, background: '#ef915d', border: 'none', color: '#fff', fontFamily: "'Inter',system-ui,sans-serif", fontWeight: 700, fontSize: 13.5, padding: '10px 14px', borderRadius: 8, cursor: 'pointer', opacity: pdfBusy ? 0.6 : 1 }}
                 >
-                  {leadState === 'sending' ? 'Sending…' : 'Get it'}
+                  {pdfBusy ? 'Preparing…' : 'Download PDF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadSvg}
+                  style={{ flex: 1, background: '#fff', border: '1px solid #d8deea', color: '#16224a', fontFamily: "'Inter',system-ui,sans-serif", fontWeight: 700, fontSize: 13.5, padding: '10px 14px', borderRadius: 8, cursor: 'pointer' }}
+                >
+                  Download SVG
                 </button>
               </div>
-            )}
-            {leadState === 'error' && <p style={{ fontSize: 12, color: '#b23b3b', margin: '8px 0 0' }}>Something went wrong. Please try again.</p>}
-          </div>
+              <NewsletterOptIn source="pictogram_selector" />
+            </div>
+          )}
 
           {/* SDS Manager — next step (DISABLED until tracking URL + disclosure) */}
           {SDS_MANAGER.enabled && SDS_MANAGER.href && (
