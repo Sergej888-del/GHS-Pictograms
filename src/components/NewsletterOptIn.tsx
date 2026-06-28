@@ -81,7 +81,7 @@ export default function NewsletterOptIn({ source }: NewsletterOptInProps) {
           className="mt-0.5 h-4 w-4 accent-blue-600 flex-shrink-0 cursor-pointer"
         />
         <span className="text-xs text-gray-500 leading-snug">
-          Email me GHS / CLP / OSHA compliance updates and regulatory deadline alerts. Unsubscribe anytime.{' '}
+          Email me GHS / CLP / OSHA compliance updates and regulatory deadline alerts, plus a free 2026–2029 compliance deadline calendar. Unsubscribe anytime.{' '}
           <a href="/privacy/" className="underline hover:text-gray-700">Privacy Policy</a>
         </span>
       </label>

@@ -2,6 +2,7 @@
 // Базовый layout для всех страниц ghspictograms.com
 import '../styles/global.css'
 import GoogleAnalytics from '../components/GoogleAnalytics.astro'
+import NewsletterCtaBand from '../components/NewsletterCtaBand.astro'
 
 interface Props {
   title: string
@@ -212,6 +213,7 @@ const canonicalURL = canonical
       <slot />
     </main>
 
+      <NewsletterCtaBand />
       <footer class="bg-[#062A78] mt-24 py-12">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-sm text-blue-200 text-center">
           <p class="text-white font-semibold mb-2">GHS Pictograms</p>

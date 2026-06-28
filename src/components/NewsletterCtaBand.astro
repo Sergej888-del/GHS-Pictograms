@@ -1,0 +1,18 @@
+---
+// Pre-footer newsletter CTA — mounted site-wide, just above the (dark) footer.
+// Light band so the light-themed NewsletterOptIn island stays legible.
+import NewsletterOptIn from './NewsletterOptIn'
+---
+<section class="bg-slate-50 border-t border-slate-200">
+  <div class="max-w-xl mx-auto px-4 sm:px-6 py-12 text-center">
+    <p class="text-xl sm:text-2xl font-bold text-slate-900">
+      Get the free GHS / CLP / OSHA deadline calendar
+    </p>
+    <p class="mt-2 text-sm text-slate-600">
+      Verified 2026–2029 compliance dates in one PDF — plus alerts when the rules change.
+    </p>
+    <div class="text-left mt-2">
+      <NewsletterOptIn source="footer" client:visible />
+    </div>
+  </div>
+</section>
