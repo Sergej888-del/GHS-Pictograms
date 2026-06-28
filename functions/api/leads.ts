@@ -98,44 +98,13 @@ export async function onRequestPost(
       })
     }
 
-    // Brevo — best-effort: не роняем ответ, если лид уже сохранён в Supabase
-    try {
-      const brevoRes = await fetch('https://api.brevo.com/v3/contacts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'api-key': env.BREVO_API_KEY,
-        },
-        body: JSON.stringify({
-          email,
-          attributes: {
-            COMPANY: company,
-            ROLE: role,
-            TOOL: toolUsed,
-            CAS: cas_number,
-            SUBSTANCE: substance_name,
-            GHS_CODE: ghsCode,
-            GHS_NAME: ghsName,
-          },
-          listIds: [3],
-          updateEnabled: true,
-        }),
-      })
-
-      if (!brevoRes.ok) {
-        const brevoText = await brevoRes.text().catch(() => '')
-        console.error('Leads API warning (non-fatal):', JSON.stringify({
-          step: 'brevo_contact_create',
-          status: brevoRes.status,
-          statusText: brevoRes.statusText,
-          body: brevoText,
-        }))
-      }
-    } catch (brevoErr) {
-      console.error('Leads API warning (non-fatal): brevo threw', JSON.stringify(brevoErr))
-    }
-
-    // Лид уже в Supabase — возвращаем success независимо от исхода Brevo
+    // Brevo auto-add REMOVED 2026-06-28 (Phase 3): it added every lead to list 3
+    // with updateEnabled:true and NO consent — the exact GDPR Art 7 defect behind the
+    // 170 unmailable legacy leads. Marketing consent now lives ONLY in the DOI flow
+    // (functions/api/subscribe.ts -> Brevo double opt-in -> list 6). This endpoint no
+    // longer touches Brevo; the Supabase insert above is an internal log only and must
+    // NOT be used for marketing. No client calls this endpoint anymore (all three tools
+    // were un-gated 2026-06-28); it is kept as a harmless 200 for any stale/cached caller.
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
