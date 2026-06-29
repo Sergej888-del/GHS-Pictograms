@@ -5,19 +5,20 @@
 // Usage in MDX:
 //   import SdsManagerCard from '../../../components/SdsManagerCard.astro'
 //   <SdsManagerCard service="management" href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=gpmgmt" />
+//   <SdsManagerCard service="ehs" href="https://ehs.sdsmanager.com/?fpr=ghs3&fp_sid=ehsrisk" />
 //
 // Marking is mandatory and wired here ONCE: dagger + rel="sponsored nofollow noopener"
 // + target="_blank" + an inline, plain-language disclosure linking to /affiliate-disclosure/.
 // Scoped styles are written to out-specify global .article-content rules.
 
 interface Props {
-  service?: 'general' | 'authoring' | 'management';
+  service?: 'general' | 'authoring' | 'management' | 'ehs';
   href: string;
 }
 
 const { service = 'general', href } = Astro.props;
 
-const COPY: Record<'general' | 'authoring' | 'management', { body: string; cta: string }> = {
+const COPY: Record<'general' | 'authoring' | 'management' | 'ehs', { title?: string; body: string; cta: string }> = {
   general: {
     body:
       'For ongoing SDS authoring and management \u2014 a central online library, version control, automatic regulatory updates, and team access \u2014 the solution we recommend is SDS Manager. It also offers a broader EHS suite.',
@@ -33,16 +34,22 @@ const COPY: Record<'general' | 'authoring' | 'management', { body: string; cta: 
       'For managing a compliant SDS library \u2014 central online access, version control, automatic supplier updates, and QR-code access for your team \u2014 the solution we recommend is SDS Manager. It also offers SDS authoring and a broader EHS suite.',
     cta: 'Explore SDS management',
   },
+  ehs: {
+    title: 'SDS Manager EHS',
+    body:
+      'For turning your SDS and chemical inventory into documented risk assessments \u2014 substance-, task-, and process-based, with controls and exposure data tracked per chemical \u2014 the solution we recommend is SDS Manager\u2019s EHS suite. It also covers incident reporting and audit & inspection.',
+    cta: 'Start a 30-day free trial',
+  },
 };
 
-const { body, cta } = COPY[service] ?? COPY.general;
+const { title, body, cta } = COPY[service] ?? COPY.general;
 ---
 
 <aside class="smc" aria-label="Recommended solution">
   <div class="smc__accent" aria-hidden="true"></div>
   <div class="smc__inner">
     <p class="smc__eyebrow">Recommended solution</p>
-    <h3 class="smc__title">SDS Manager</h3>
+    <h3 class="smc__title">{title ?? 'SDS Manager'}</h3>
     <p class="smc__body">{body}</p>
     <a class="smc__cta" href={href} target="_blank" rel="sponsored nofollow noopener">
       {cta} <span aria-hidden="true">&dagger;</span>

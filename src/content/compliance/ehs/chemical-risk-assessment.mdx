@@ -1,0 +1,278 @@
+---
+title: "Chemical Risk Assessment: Steps, Template & Controls"
+description: "How to carry out a chemical risk assessment under EU CAD and UK COSHH: the steps, what to document, the control hierarchy, and SDS-based inputs."
+slug: "chemical-risk-assessment"
+pubDate: 2026-06-29
+updatedDate: 2026-06-29
+category: "compliance"
+pillar: "ehs"
+type: "how-to"
+draft: false
+language: "en-US"
+author: "GHS Pictograms Editorial"
+schemaType: "Article"
+keywords:
+  - "chemical risk assessment"
+  - "chemical risk assessment template"
+  - "chemical risk assessment steps"
+  - "COSHH risk assessment"
+  - "hazardous substance risk assessment"
+  - "process hazard analysis"
+relatedPages:
+  - "/compliance/ehs/"
+  - "/compliance/clp/"
+  - "/compliance/sds/"
+crossDomainLinks:
+  - "https://ghssymbols.com/hazards/"
+  - "https://ghssymbols.com/tools/ate-calculator/"
+---
+
+import SdsManagerCard from '../../../components/SdsManagerCard.astro'
+
+A chemical risk assessment is the document that turns hazard data into workplace controls. Under EU law the Chemical Agents Directive (98/24/EC) requires every employer with hazardous chemical agents to determine what is present and assess the risk before work begins. In the United Kingdom the Control of Substances Hazardous to Health Regulations 2002 (COSHH) go further: work liable to expose anyone to a substance hazardous to health must not start until a suitable and sufficient assessment is in place. Both regimes name the supplier's safety data sheet and the substance's classification as mandatory inputs — not optional references.
+
+This guide walks through the practical steps, what a defensible record should contain, the control hierarchy both laws require, and exactly which SDS sections feed each part of the assessment. It is written for EHS managers, supervisors and compliance officers who need a workable template, not a legal treatise. For the broader EHS programme context — incident reporting and audits alongside risk assessment — see the [EHS pillar overview](/compliance/ehs/).
+
+---
+
+## At a glance
+
+- **EU legal basis:** Chemical Agents Directive 98/24/EC, Article 4 (assessment) and Article 6 (control hierarchy)
+- **UK legal basis:** COSHH 2002, Regulation 6 (assessment) and Regulation 7 (prevention or adequate control)
+- **Trigger:** presence of a hazardous chemical agent (EU) or substance hazardous to health (UK) — defined by [CLP/GHS classification](/compliance/clp/)
+- **Core inputs:** chemical inventory, supplier SDS, occupational exposure limits, task description
+- **Control order:** eliminate → substitute → engineering → administrative → PPE (PPE last)
+- **Recording:** COSHH requires a written record if you employ five or more people; EU law requires documentation and periodic review
+- **Review triggers:** new substance, new process, incident, monitoring exceedance, SDS revision, change in OEL
+
+---
+
+## What the assessment must answer
+
+A chemical risk assessment is not a label audit. It answers four questions for each hazardous substance and the tasks in which it is used:
+
+1. **What are the hazards?** — from classification and SDS Section 2
+2. **Who could be exposed, how, and to how much?** — routes (inhalation, skin, ingestion, eye) and duration
+3. **What controls are needed?** — following the hierarchy, not defaulting to gloves
+4. **Is exposure adequately controlled?** — against any applicable limit and against the hazard severity
+
+The assessment must be **suitable and sufficient** (COSHH) or proportionate to the risk (CAD). That means it covers the actual work, the actual quantities, and the actual people at risk — including contractors and maintenance staff, not only production operators.
+
+---
+
+## Step 1 — Build the chemical inventory
+
+You cannot assess what you do not know you hold. Start with a complete inventory of substances and mixtures used, stored, or generated on site.
+
+For each line item record at minimum:
+
+| Field | Why it matters |
+|---|---|
+| Product / substance name | Links to SDS file |
+| Supplier | Traceability for SDS updates |
+| CAS number(s) | Unambiguous identification; see the [substance hazard database](https://ghssymbols.com/hazards/) |
+| CLP/GHS classification (H-statements, pictograms) | Determines whether assessment is required |
+| Quantity on site (max and typical) | Scales consequence and storage risk |
+| Physical form (liquid, powder, gas) | Drives exposure route |
+| Location / process | Ties substance to tasks |
+| SDS date / version | Proves current data |
+
+The inventory is the scope statement for every assessment on site. If a substance is missing from the inventory, it is missing from compliance.
+
+---
+
+## Step 2 — Collect and verify SDS data
+
+Article 4 of Directive 98/24/EC explicitly lists the supplier's safety data sheet among the factors the employer must take into account. COSHH Regulation 6 does the same for the information the supplier provides.
+
+For each inventoried hazardous product, confirm you hold the **current SDS** for the exact formulation you use — not an older revision, not a similar product from another supplier. Under [REACH](/compliance/reach/) and [OSHA HCS](/compliance/osha-hcs/), suppliers must update SDSs when classification or significant new data changes; your assessment must be revised when the SDS changes.
+
+Map SDS sections to assessment fields:
+
+| SDS section | Assessment use |
+|---|---|
+| **Section 1** — Identification | Product name, supplier emergency number |
+| **Section 2** — Hazard identification | H-statements, pictograms, signal word — core hazard profile |
+| **Section 3** — Composition | Identify constituents for combined exposure |
+| **Section 4** — First-aid measures | Emergency procedures in task instructions |
+| **Section 5** — Fire-fighting | Hot-work and fire planning |
+| **Section 6** — Accidental release | Spill response, containment |
+| **Section 7** — Handling and storage | Segregation, incompatible materials, ventilation |
+| **Section 8** — Exposure controls / PPE | OELs/WELs/PELs, engineering controls, PPE type |
+| **Section 9** — Physical properties | Vapour pressure, flash point — volatility and fire |
+| **Section 10** — Stability | Conditions to avoid in storage and process |
+| **Section 11** — Toxicological | Health effects supporting exposure judgement |
+| **Section 13** — Disposal | Waste-handling controls |
+
+Section 2 and Section 8 do most of the heavy lifting. If your SDS library is incomplete, the assessment is built on sand — see [SDS management](/compliance/sds/sds-management/) for keeping it current.
+
+---
+
+## Step 3 — Identify tasks and exposure scenarios
+
+A substance-based check ("what is benzene?") is necessary but not sufficient. COSHH and good practice require **task-based** assessment: how the substance is actually used.
+
+For each task document:
+
+- **Activity** — e.g. manual transfer, sampling, cleaning, maintenance
+- **Who** — job role, number of people, skill level
+- **Frequency and duration** — occasional vs daily, minutes vs full shift
+- **Exposure routes** — inhalation of vapour/dust, skin contact, splash to eyes, ingestion (hand-to-mouth)
+- **Quantity per use** — decanted volume, surface area, airborne concentration potential
+- **Existing controls** — enclosure, LEV, gloves, procedure
+
+One substance often appears in several tasks with very different risk profiles. Toluene in a closed automated line is not the same as toluene poured by hand at a bench.
+
+Where several hazardous agents are present in the same task, EU law requires assessment on the basis of **all of them in combination** — not each in isolation.
+
+---
+
+## Step 4 — Evaluate exposure and compare to limits
+
+Using Section 8 of the SDS, identify applicable occupational exposure limits:
+
+- **EU** — indicative and binding occupational exposure limit values (OELs) and biological limit values where set at Union level
+- **UK** — Workplace Exposure Limits (WELs) in HSE guidance note EH40
+- **US** (where relevant to multinational programmes) — OSHA permissible exposure limits in 29 CFR 1910.1000
+
+Judgement steps:
+
+1. Is exposure likely to reach the limit under current conditions?
+2. If no limit exists, is exposure reduced to as low as reasonably practicable (ALARP)?
+3. Is the hazard severe enough (CMR, sensitizer, corrosive) that any exposure needs strict control regardless?
+
+Where monitoring is needed — because exposure is significant, controls are uncertain, or regulations require it — plan measurement against the limit and record results. An exceedance triggers review and additional controls under both CAD and COSHH.
+
+---
+
+## Step 5 — Select controls using the hierarchy
+
+Both EU and UK law require the same priority order. **Personal protective equipment is the last resort**, not the first.
+
+### The control hierarchy
+
+| Priority | Control type | Examples |
+|---|---|---|
+| 1 | **Elimination** | Stop using the substance; change product design |
+| 2 | **Substitution** | Replace with lower-hazard alternative (check new SDS) |
+| 3 | **Engineering** | Enclosed process, local exhaust ventilation (LEV), general ventilation |
+| 4 | **Administrative** | Safe systems of work, training, restricted access, job rotation |
+| 5 | **PPE** | Gloves, respirators, eye protection — only where exposure cannot otherwise be adequately controlled |
+
+Article 6 of Directive 98/24/EC states this order explicitly: appropriate work processes and engineering controls first, collective protection at source next, individual protective measures only where exposure cannot be prevented by other means. COSHH Regulation 7 mirrors it: prevent exposure or, where not reasonably practicable, adequately control it.
+
+Document **why** each control was chosen and why lower-priority options were rejected or insufficient. An assessor who writes "wear gloves" without considering enclosure or substitution has not followed the hierarchy.
+
+---
+
+## Step 6 — Record the assessment
+
+### What to document (template checklist)
+
+A defensible chemical risk assessment record should include:
+
+- **Assessor name and competence** — who carried it out and when
+- **Site / location / department**
+- **Substance details** — name, CAS, classification, SDS reference and date
+- **Task description** — step-by-step activity
+- **Hazard summary** — key H-statements and health effects
+- **Exposure routes and people at risk**
+- **Existing controls** — engineering, procedural, PPE
+- **Additional controls required** — with implementation date and owner
+- **OEL/WEL/PEL reference** — value and source (EH40 table, SDS Section 8)
+- **Monitoring plan** — if applicable
+- **Emergency arrangements** — spill, first aid (SDS Sections 4 and 6)
+- **Review date** — and triggers for earlier review
+- **Sign-off** — supervisor or responsible manager
+
+COSHH requires a **written record** if you employ five or more people. Below that threshold the assessment must still exist and be suitable and sufficient — it simply does not have to be written unless an inspector requests evidence. In practice, a written record is advisable at any size because it is the proof of compliance.
+
+There is no single EU-mandated form layout; member states and sector guidance produce templates. HSE publishes COSHH assessment tools and worked examples. Your template should match your tasks — a laboratory, a warehouse and a manufacturing line need different fields, but the checklist above is the common core.
+
+---
+
+## Step 7 — Implement, communicate and review
+
+An assessment in a drawer does not control exposure. Implementation means:
+
+- **Controls installed** — LEV commissioned and tested, PPE stocked and fit-tested
+- **Procedures updated** — work instructions reflect the assessment
+- **Training delivered** — workers know hazards, controls and emergency steps
+- **SDS accessible** — available to workers on every shift ([who needs an SDS](/compliance/sds/who-needs-an-sds/))
+
+**Review** the assessment when:
+
+- A new substance or process is introduced
+- An incident, near-miss or health surveillance finding occurs
+- Monitoring shows exposure at or above the limit
+- The supplier issues a revised SDS or changed classification
+- An OEL/WEL is revised
+- Control equipment fails inspection
+- At planned intervals (many sites review annually as minimum)
+
+EU law requires the assessment to be kept up to date, especially when conditions change. Treat review as a scheduled duty, not an afterthought.
+
+---
+
+## Substance, task and process levels
+
+Most chemical handlers work primarily at **substance** and **task** level — the COSHH model. Larger sites with highly hazardous chemicals above threshold quantities may also need **process hazard analysis** under OSHA's Process Safety Management standard (29 CFR 1910.119(e)) or Seveso III safety reporting in the EU. That process-level work asks how an entire installation could fail catastrophically; task-level COSHH asks whether today's decanting job is safe. Both use SDS data; they answer different questions. The [EHS pillar](/compliance/ehs/) explains where each applies.
+
+<SdsManagerCard service="ehs" href="https://ehs.sdsmanager.com/?fpr=ghs3&fp_sid=ehsrisk" />
+
+---
+
+## Common mistakes
+
+- **Assessing the label, not the task** — copying H-statements without analysing exposure
+- **PPE as the only control** — hierarchy ignored
+- **Stale SDS** — assessment references a superseded revision
+- **Missing combinations** — assessing solvents separately when used together
+- **No review schedule** — one-off document never updated after process change
+- **Inventory drift** — new drums arrive without being added to scope
+- **Contractors excluded** — maintenance and cleaning staff not covered
+
+---
+
+## FAQ
+
+### Q: Is a chemical risk assessment a legal requirement?
+
+Yes. In the EU, the Chemical Agents Directive (98/24/EC) Article 4 requires employers to assess the risk from any hazardous chemical agent before work starts. In the UK, COSHH Regulation 6 requires a suitable and sufficient assessment before any work liable to expose someone to a substance hazardous to health. In the US, exposure is governed by OSHA standards, with a formal process hazard analysis required under Process Safety Management for highly hazardous chemicals above threshold quantities.
+
+### Q: What is the difference between a COSHH assessment and a chemical risk assessment?
+
+They are the same activity under a UK-specific name. "COSHH assessment" is the term from the UK Control of Substances Hazardous to Health Regulations 2002; "chemical risk assessment" is the generic, jurisdiction-neutral term, and the EU framework calls it a risk assessment under the Chemical Agents Directive. The method is identical: identify the substance and its hazards, assess who is exposed and how, and decide controls.
+
+### Q: Which safety data sheet sections do I need for the assessment?
+
+Sections 2 and 8 do most of the work: Section 2 gives the hazard classification, pictograms and H-statements; Section 8 gives the exposure limits and recommended controls. Sections 4 (first aid), 6 (accidental release) and 7 (handling and storage) feed the emergency and storage controls. Always confirm you hold the current SDS revision for the exact product you use.
+
+### Q: Do I need a separate assessment for every chemical?
+
+You assess every hazardous substance, but the assessment is organised around tasks, not products in isolation. One substance used in several tasks may need several exposure scenarios, and where two or more hazardous agents are used together they must be assessed in combination, not separately.
+
+### Q: How often should a chemical risk assessment be reviewed?
+
+Review whenever something changes: a new substance or process, an incident or near-miss, a monitoring result at or above the limit, a revised SDS or classification, or a change to an exposure limit. Many sites also set a fixed interval, often annual, as a backstop. EU and UK law both require the assessment to be kept up to date.
+
+---
+
+## Key takeaways
+
+- EU Chemical Agents Directive Article 4 and COSHH Regulation 6 require a chemical risk assessment before work with hazardous substances; both mandate use of the supplier's SDS and classification data.
+- The practical sequence is: inventory → SDS verification → task exposure analysis → limit comparison → hierarchy-based controls → written record → implementation and review.
+- Sections 2 and 8 of the SDS supply hazards and exposure limits; Sections 4, 6 and 7 feed emergency and storage controls.
+- Elimination and substitution come before engineering; PPE is only where exposure cannot otherwise be adequately controlled.
+- A written template with the checklist fields above gives you auditable evidence; review when substances, processes, SDSs or monitoring results change.
+
+---
+
+## Sources
+
+- EUR-Lex: [Council Directive 98/24/EC on the protection of workers from risks related to chemical agents at work](https://eur-lex.europa.eu/eli/dir/1998/24/oj/eng)
+- legislation.gov.uk: [Control of Substances Hazardous to Health Regulations 2002 (SI 2002/2677)](https://www.legislation.gov.uk/uksi/2002/2677/contents/made)
+- HSE: [COSHH — Control of Substances Hazardous to Health](https://www.hse.gov.uk/coshh/)
+- HSE: [EH40/2005 Workplace exposure limits](https://www.hse.gov.uk/coshh/basics/exposurelimits.htm)
+- OSHA: [Permissible Exposure Limits, 29 CFR 1910.1000](https://www.osha.gov/laws-regs/regulations/standardnumber/1910/1910.1000)
+- OSHA: [Hazard Communication, 29 CFR 1910.1200](https://www.osha.gov/laws-regs/regulations/standardnumber/1910/1910.1200)
