@@ -1,0 +1,138 @@
+---
+title: "Chemical Safety Audit: Checklist and Requirements"
+description: "How to run a chemical safety audit under OSHA PSM, EU Seveso inspections and ISO 14001/45001: the checklist, frequency and what auditors verify."
+slug: "chemical-safety-audit"
+pubDate: 2026-06-30
+updatedDate: 2026-06-30
+category: "compliance"
+pillar: "ehs"
+type: "how-to"
+draft: false
+language: "en-US"
+author: "GHS Pictograms Editorial"
+schemaType: "Article"
+keywords:
+  - "chemical safety audit"
+  - "chemical compliance audit"
+  - "PSM compliance audit"
+  - "chemical safety audit checklist"
+  - "Seveso inspection"
+  - "ISO 14001 internal audit"
+relatedPages:
+  - "/compliance/ehs/"
+  - "/compliance/sds/"
+  - "/compliance/osha-hcs/"
+  - "/compliance/ehs/chemical-risk-assessment/"
+  - "/compliance/ehs/chemical-incident-reporting/"
+crossDomainLinks:
+  - "https://ghssymbols.com/hazards/"
+  - "https://ghssymbols.com/tools/storage-matrix/"
+faq:
+  - q: "How often is a chemical safety audit required?"
+    a: "It depends on which regime applies. Under OSHA's Process Safety Management standard the compliance audit is required at least every three years. Under the EU Seveso III Directive, competent-authority inspections run at least annually for upper-tier sites and at least every three years for lower-tier sites, unless the programme is based on a systematic appraisal of hazards. Certified management systems add annual surveillance audits and a recertification audit every three years, and most handlers also run internal audits on a planned programme regardless of any external requirement."
+  - q: "Who can carry out a chemical safety audit?"
+    a: "For a PSM compliance audit, the audit must include at least one person knowledgeable in the process being audited; it can be internal, but auditors should be objective and not audit their own work. For an ISO internal audit under Clause 9.2, auditors must be competent and independent of the area they assess. Note that under the US RMP rule, the next compliance audit must be conducted by an independent third party after a reportable accident."
+  - q: "What does a chemical safety audit check?"
+    a: "A chemical audit verifies that the SDS library is complete and current, that the recorded inventory matches what is physically on site, that incompatible chemicals are stored separately and within capacity limits, that containers and pipework are correctly labelled, and that the engineering controls and PPE your risk assessments specify are present and maintained. It also checks that incidents are being recorded and closed out and that prior findings have been corrected."
+  - q: "What is the difference between a chemical safety audit and an inspection?"
+    a: "An audit is a systematic, planned verification of the whole management system, combining a review of documentation, a physical inspection of the facilities and interviews with staff. An inspection is usually a narrower check of physical conditions or compliance at a point in time, and in the Seveso context it is carried out by the competent authority. In practice a good audit contains inspection as one of its components."
+  - q: "How long must chemical safety audit reports be kept?"
+    a: "Under OSHA's PSM standard, employers must retain the two most recent compliance audit reports. For certified management systems, audit records are kept according to the system's documented-information requirements. Seveso inspection records are held according to national law. As a practical rule, keep audit reports at least until the next two audit cycles are complete so you can demonstrate a trend of correction."
+---
+
+import SdsManagerCard from '../../../components/SdsManagerCard.astro'
+
+A chemical safety audit is the verification stage of a chemical safety programme: independent confirmation that the controls your risk assessments call for are actually in place, that incidents are being recorded and acted on, and that the SDS, classification and inventory data the whole programme runs on is accurate and current. Unlike a generic EHS audit that treats chemicals as one hazard category among many, a chemical safety audit takes the chemical inventory as its object and works outward from it, which is what makes it a distinct and learnable exercise rather than a box-ticking formality.
+
+This guide is for EHS managers, plant and laboratory supervisors and compliance specialists who need to plan, run or pass a chemical safety audit. It sits in the [EHS pillar](/compliance/ehs/) of this Compliance Hub alongside [chemical risk assessment](/compliance/ehs/chemical-risk-assessment/), the prevent stage, and [chemical incident reporting](/compliance/ehs/chemical-incident-reporting/), the detect-and-respond stage. Audit is the verify stage that confirms both are working. Below: the mandated audits (PSM, Seveso), the management-system audits (ISO 14001 and ISO 45001), the routine internal audit, and a checklist that ties all of them back to your SDS and inventory.
+
+## At a glance
+
+- **A chemical audit verifies, it does not assess.** It confirms that controls, records and data identified elsewhere are present, working and current — the verification stage of the programme.
+- **United States — OSHA PSM 1910.119(o):** where the Process Safety Management standard applies, certify compliance at least every three years; the audit needs at least one person knowledgeable in the process; document a response to each finding; retain the two most recent reports.
+- **United States — EPA RMP (40 CFR Part 68):** the community-facing companion to PSM; the 2024 Safer Communities rule adds third-party audits and root-cause investigation after a reportable accident, with a 2027 compliance date (and is under active revision — confirm current requirements).
+- **European Union — Seveso III Article 20:** competent-authority inspections at least yearly for upper-tier and every three years for lower-tier sites (or risk-based); conclusions to the operator within four months; a follow-up inspection within six months after serious non-compliance.
+- **Voluntary — ISO 14001:2026 and ISO 45001:2018:** the internal audit under Clause 9.2, plus external certification audits, verify an environmental or occupational-health-and-safety management system.
+- **The chemical-safety spine:** every audit check reads back to the SDS, the substance's classification and the inventory. Look up any substance in the [GHSSymbols hazard database](https://ghssymbols.com/hazards/).
+
+## Three kinds of chemical audit
+
+The word "audit" covers three different things in chemical safety, and knowing which one you face changes who runs it, how often, and against what.
+
+The first is the **regulator-mandated audit**. In the US, the PSM compliance audit under 1910.119(o) is a legal duty for covered processes. In the EU, Seveso III inspections are carried out by the competent authority. These have fixed frequencies and defined consequences for failure. The second is the **management-system audit** tied to certification — the internal (first-party) and external (third-party) audits required to gain and keep an ISO 14001 or ISO 45001 certificate. These are voluntary in the sense that certification is voluntary, but once you hold a certificate the audit cadence is contractual. The third is the **routine internal chemical safety audit** that a prudent handler runs as good practice, whether or not any regulator or certificate requires it, to catch drift before it becomes a finding or an incident.
+
+All three ask the same underlying question — are the controls real, the records complete and the data current? — but they differ in authority and stakes. The rest of this guide takes the mandated and certification audits in turn, then gives a single workflow and checklist that serves all three.
+
+## United States: the PSM compliance audit
+
+Where OSHA's Process Safety Management standard applies — to processes handling highly hazardous chemicals at or above the threshold quantities — paragraph (o) of [29 CFR 1910.119](https://www.osha.gov/laws-regs/regulations/standardnumber/1910/1910.119) makes auditing an explicit, recurring obligation. Employers must certify that they have evaluated compliance with the standard **at least every three years**. The audit must be conducted by **at least one person knowledgeable in the process** being audited, a report of the findings must be developed, and the employer must promptly determine and document a response to each finding and document that deficiencies have been corrected. Employers must **retain the two most recent compliance audit reports**.
+
+In practice an effective PSM audit combines three things: a review of the documentation and process safety information, a physical inspection of the facilities, and interviews with staff at all levels — comparing what is written against what is actually done. The PSM modernisation rulemaking that OSHA reopened after recent investigations remains in progress and has not been finalised, so the standard in force is the existing 1910.119.
+
+OSHA's PSM has a community-facing companion at EPA: the Risk Management Program (40 CFR Part 68). Its 2024 Safer Communities by Chemical Accident Prevention rule strengthened the audit duties, most notably requiring that the next scheduled compliance audit be conducted by an independent third party after a facility has had an RMP-reportable accident, alongside a formal root-cause investigation completed within twelve months. These provisions carry a 2027 compliance date and were themselves the subject of a further EPA proposal in 2026, so RMP-covered facilities should confirm the current requirements before relying on them.
+
+## European Union: Seveso inspections and the safety management system
+
+In the EU, audit-and-inspection of chemical major-accident hazards runs on two tracks: external inspection by the authority, and the operator's own safety management system.
+
+Article 20 of the [Seveso III Directive (2012/18/EU)](https://eur-lex.europa.eu/eli/dir/2012/18/oj/eng) requires Member States to ensure competent authorities run a system of inspections of covered establishments. Routine inspections must take place **at least once a year for upper-tier establishments and at least once every three years for lower-tier establishments**, unless the authority has drawn up an inspection programme based on a systematic appraisal of the major-accident hazards of the establishments concerned. Non-routine inspections are carried out as soon as possible to investigate serious complaints, serious accidents, near-misses and incidents of non-compliance. Within **four months** of an inspection the authority communicates its conclusions and the necessary actions to the operator, and where an inspection identifies an important case of non-compliance an **additional inspection follows within six months**. As Seveso governs only higher-threshold establishments, these inspections do not reach the ordinary chemical handler.
+
+The internal side is the safety management system. Under Article 8, operators must draw up a major-accident prevention policy (MAPP) and, for upper-tier sites, implement it through a safety management system proportionate to the major-accident hazards (Annex III). That management system is itself the mechanism through which an operator monitors, self-audits and continually improves its controls between authority inspections.
+
+## Management-system audits: ISO 14001 and ISO 45001
+
+Most chemical handlers run their internal audits inside a certified management system — ISO 14001 for environmental management or ISO 45001 for occupational health and safety. Both are voluntary, both share the same harmonised structure, and both make the internal audit a core requirement under **Clause 9.2**: audits must be planned across a programme that covers the whole system over its cycle, and carried out by auditors who are competent and independent of the work they assess.
+
+A note on current editions, because they have moved. **ISO 14001:2026** was published in April 2026 and replaced ISO 14001:2015, which is now withdrawn; the 2026 edition keeps the same structure but sharpens the requirements around climate change, biodiversity, life-cycle perspective, management of change and documented internal-audit activity, with a transition window to 2029. **ISO 45001:2018** remains the current occupational-health-and-safety standard, carrying the 2024 climate-action amendment, with its own revision not expected before 2027. Cite and audit against ISO 14001:2026 and ISO 45001:2018.
+
+Management-system audits come in three forms. A **first-party** (internal) audit is the one you run on yourself under Clause 9.2 — the most important one, because it is the one you control. A **second-party** audit is one organisation auditing another it has a relationship with, typically a customer auditing a supplier. A **third-party** audit is the certification audit, carried out by an accredited body, that earns and maintains the certificate. For a chemical handler the internal audit is where the chemical-specific checklist below does its work.
+
+## A chemical safety audit workflow
+
+Whatever the regime, the practical sequence of a chemical safety audit is consistent. Each step verifies a part of the programme against the SDS, classification and inventory that underpin it.
+
+1. **Define the scope and assemble the team.** Decide which processes, areas and substances the audit covers, and bring in at least one person who knows the process. Keep auditors independent of the work they assess.
+2. **Review the documentation.** Confirm the SDS library is complete and current, the chemical inventory is up to date, and the [risk assessments](/compliance/ehs/chemical-risk-assessment/) and [incident records](/compliance/ehs/chemical-incident-reporting/) exist and are being maintained.
+3. **Inspect the facilities.** Walk the site. Check that what is physically present matches the inventory, that incompatible chemicals are segregated, that containers and pipework are labelled, and that the specified controls and PPE are in place and maintained.
+4. **Interview the people.** Ask staff at all levels how the controls actually work in practice — the gap between the written procedure and the floor is where most findings live.
+5. **Record findings and assign corrective actions.** Document each finding, determine a response, and assign an owner and a date.
+6. **Track to closure.** Verify that corrective actions are completed and that prior findings have been resolved, and retain the report for the required period.
+
+### What a chemical audit checks
+
+The checklist below is the chemical-specific core of any of the three audit types. Every line reads back to the SDS, the classification or the inventory.
+
+| Audit check | Source or reference | What good looks like |
+|---|---|---|
+| SDS library complete and current | The 16-section [SDS](/compliance/sds/) | An SDS for every inventory item, current revision, accessible to staff |
+| Inventory matches the floor | Chemical inventory plus physical walk | Recorded quantities and locations match what is physically present |
+| Incompatibles segregated | SDS Section 7 plus a [storage matrix](https://ghssymbols.com/tools/storage-matrix/) | Incompatible classes separated and within capacity limits |
+| Containers and pipework labelled | [CLP and HCS labels](/compliance/osha-hcs/), SDS Section 2 | Correct pictograms, signal word and hazard statements on every container |
+| Controls and PPE in place | Risk assessment plus SDS Section 8 | Engineering controls present and maintained; specified PPE available and used |
+| Records complete | Risk assessments, incident logs, training | Assessments current, incidents logged and closed out, training recorded |
+| Corrective actions closed | Audit and incident follow-up | Prior findings tracked to closure with documented evidence |
+
+<SdsManagerCard service="ehs" body="For running chemical safety audits and inspections from a single system, verifying your SDS library is current, your inventory matches the floor, and the controls your assessments call for are in place, the solution we recommend is the SDS Manager EHS suite. It also covers chemical risk assessment and incident reporting." href="https://ehs.sdsmanager.com/?fpr=ghs3&fp_sid=ehsrisk" />
+
+## Common mistakes
+
+- **Treating the audit as a paperwork review.** An audit that never leaves the office misses the gap between the documented control and what is actually on the floor. Inspection and interviews are part of the audit, not extras.
+- **Auditing your own work.** Whether under PSM or ISO Clause 9.2, auditors must be objective and independent of the area they assess. A manager auditing their own department produces findings no one trusts.
+- **Letting the SDS library or inventory drift.** If the audit's own reference data is stale, every downstream check is unreliable. A current SDS library and an accurate inventory are the audit's foundation.
+- **Confusing a certification audit with a regulatory one.** Holding an ISO 14001 certificate does not discharge a PSM compliance-audit duty, and passing a Seveso inspection is not the same as an internal audit. They answer to different authorities.
+- **Closing findings on paper only.** A finding is not resolved until the corrective action is implemented and verified. Tracking to closure, with evidence, is what an auditor looks for next time.
+
+## Key takeaways
+
+- **A chemical safety audit is the verify stage** — it confirms that the controls, records and data the rest of the programme depends on are present, working and current.
+- **The three audit types differ in authority:** regulator-mandated (PSM 1910.119(o), Seveso Article 20 inspections), certification-driven (ISO 14001:2026 and ISO 45001:2018 internal and external audits), and routine internal good practice.
+- **Frequencies are fixed where they are mandated:** PSM at least every three years; Seveso at least yearly (upper-tier) or three-yearly (lower-tier); ISO surveillance annually with recertification every three years.
+- **The same checklist serves all three** — SDS library, inventory, segregation, labelling, controls and PPE, records and corrective actions — and every line traces back to the SDS, classification and inventory.
+- **Independence and follow-through matter most:** objective auditors and findings tracked to closure are what separate a real audit from a formality.
+
+## Sources
+
+- OSHA: [Process Safety Management of Highly Hazardous Chemicals, 29 CFR 1910.119](https://www.osha.gov/laws-regs/regulations/standardnumber/1910/1910.119) (compliance audit at paragraph (o)) and the [regulatory text on eCFR](https://www.ecfr.gov/current/title-29/subtitle-B/chapter-XVII/part-1910/subpart-H/section-1910.119)
+- EPA: [Risk Management Program — Safer Communities by Chemical Accident Prevention final rule](https://www.epa.gov/rmp/risk-management-program-safer-communities-chemical-accident-prevention-final-rule) (third-party audits and root-cause analysis)
+- EUR-Lex: [Directive 2012/18/EU (Seveso III)](https://eur-lex.europa.eu/eli/dir/2012/18/oj/eng) (Article 20 inspections; Article 8 safety management system)
+- ISO: [ISO 14001:2026 Environmental management systems](https://www.iso.org/standard/60857.html) and [ISO 45001:2018 Occupational health and safety management systems](https://www.iso.org/standard/63787.html) (internal audit, Clause 9.2)
