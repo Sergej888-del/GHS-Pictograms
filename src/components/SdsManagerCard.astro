@@ -6,18 +6,20 @@
 //   import SdsManagerCard from '../../../components/SdsManagerCard.astro'
 //   <SdsManagerCard service="management" href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=gpmgmt" />
 //   <SdsManagerCard service="ehs" href="https://ehs.sdsmanager.com/?fpr=ghs3&fp_sid=ehsrisk" />
+//   // Optional per-placement override of the copy (title/body/cta) without adding a new service variant:
+//   <SdsManagerCard service="ehs" body="..." href="https://ehs.sdsmanager.com/?fpr=ghs3&fp_sid=ehsrisk" />
 //
 // Marking is mandatory and wired here ONCE: dagger + rel="sponsored nofollow noopener"
 // + target="_blank" + an inline, plain-language disclosure linking to /affiliate-disclosure/.
 // Scoped styles are written to out-specify global .article-content rules.
-
 interface Props {
   service?: 'general' | 'authoring' | 'management' | 'ehs';
   href: string;
+  title?: string;
+  body?: string;
+  cta?: string;
 }
-
-const { service = 'general', href } = Astro.props;
-
+const { service = 'general', href, title: titleProp, body: bodyProp, cta: ctaProp } = Astro.props;
 const COPY: Record<'general' | 'authoring' | 'management' | 'ehs', { title?: string; body: string; cta: string }> = {
   general: {
     body:
@@ -41,10 +43,11 @@ const COPY: Record<'general' | 'authoring' | 'management' | 'ehs', { title?: str
     cta: 'Start a 30-day free trial',
   },
 };
-
-const { title, body, cta } = COPY[service] ?? COPY.general;
+const base = COPY[service] ?? COPY.general;
+const title = titleProp ?? base.title;
+const body = bodyProp ?? base.body;
+const cta = ctaProp ?? base.cta;
 ---
-
 <aside class="smc" aria-label="Recommended solution">
   <div class="smc__accent" aria-hidden="true"></div>
   <div class="smc__inner">
@@ -61,7 +64,6 @@ const { title, body, cta } = COPY[service] ?? COPY.general;
     </p>
   </div>
 </aside>
-
 <style>
   .smc {
     display: flex;

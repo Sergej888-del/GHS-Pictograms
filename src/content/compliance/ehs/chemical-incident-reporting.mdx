@@ -1,0 +1,150 @@
+---
+title: "Chemical Incident Reporting and Recordkeeping"
+description: "Report and record chemical incidents under OSHA Part 1904, EU Seveso/CAD and UK RIDDOR/COSHH: recordable vs reportable, plus the response workflow."
+slug: "chemical-incident-reporting"
+pubDate: 2026-06-30
+updatedDate: 2026-06-30
+category: "compliance"
+pillar: "ehs"
+type: "how-to"
+draft: false
+language: "en-US"
+author: "GHS Pictograms Editorial"
+schemaType: "Article"
+keywords:
+  - "chemical incident reporting"
+  - "OSHA 300 log chemical exposure"
+  - "recordable vs reportable injury"
+  - "RIDDOR chemical dangerous occurrence"
+  - "Seveso major accident notification"
+  - "chemical incident investigation"
+relatedPages:
+  - "/compliance/ehs/"
+  - "/compliance/osha-hcs/"
+  - "/compliance/sds/"
+  - "/compliance/ehs/chemical-risk-assessment/"
+crossDomainLinks:
+  - "https://ghssymbols.com/hazards/"
+  - "https://ghssymbols.com/tools/ate-calculator/"
+faq:
+  - q: "What is the difference between a recordable and a reportable chemical incident?"
+    a: "A recordable case goes onto your internal injury and illness log; a reportable one must be actively notified to a regulator within a deadline. Under US OSHA rules a chemical illness such as poisoning or a respiratory condition is recorded on the Form 300, while a fatality, in-patient hospitalisation, amputation or loss of an eye must also be reported to OSHA within 8 or 24 hours. The two categories overlap but are not the same duty."
+  - q: "Do I have to report every chemical spill to OSHA?"
+    a: "No. OSHA's recordkeeping standard (29 CFR Part 1904) is about recording work-related injuries and illnesses, not spills as such, and there is no general duty to notify OSHA of a release. You must report to OSHA only when the event causes a death (within 8 hours) or an in-patient hospitalisation, amputation or loss of an eye (within 24 hours). A spill with no such health outcome is handled under your emergency procedures and recorded only if it produced a recordable injury or illness."
+  - q: "How quickly must a chemical incident be reported?"
+    a: "It depends on the jurisdiction and the outcome. In the US, fatalities are reported to OSHA within 8 hours and severe injuries within 24 hours. In Great Britain under RIDDOR, deaths, specified injuries and dangerous occurrences are notified without delay with a full report within 10 days, while an over-seven-day incapacitation has 15 days from the date of the accident. In the EU, a Seveso major accident is notified to the competent authority as soon as the information is available."
+  - q: "Is a chemical near-miss reportable?"
+    a: "Sometimes. OSHA's general recordkeeping rules do not require near-misses to be reported, but the Process Safety Management standard at 1910.119(m) requires you to investigate any incident that could reasonably have resulted in a catastrophic release, even if nothing escaped. In Great Britain, RIDDOR lists specific near-miss events as reportable dangerous occurrences, including a hazardous escape of a substance. Recording and investigating near-misses internally is good practice everywhere because they reveal failing controls before someone is hurt."
+  - q: "How long must chemical incident records be kept?"
+    a: "Under OSHA Part 1904 the Forms 300, 300A and 301 are retained for five years following the year they cover, and PSM incident-investigation reports under 1910.119(m) are also kept for five years. In Great Britain, RIDDOR records must be kept for at least three years, though many organisations keep them longer to cover potential civil claims. Check the rule that applies to each record type rather than assuming a single retention period."
+---
+
+import SdsManagerCard from '../../../components/SdsManagerCard.astro'
+
+Chemical incident management is the detect-and-respond half of a chemical safety programme: when a spill, exposure, near-miss or injury actually happens, the law expects you to capture it, work out why it occurred, and prevent a repeat. The difficulty for most chemical handlers is not the response itself but knowing which event triggers which duty, because the same incident can be a routine internal record in one frame, a regulator notification with a strict deadline in another, and a major-accident report in a third. Getting those distinctions right is the difference between a compliant programme and an enforcement finding.
+
+This guide is for EHS managers, plant and laboratory supervisors, and compliance specialists who handle classified chemicals and need a clear, jurisdiction-aware picture of chemical incident reporting and recordkeeping. It sits inside the [EHS pillar](/compliance/ehs/) of this Compliance Hub, alongside the companion guide on [chemical risk assessment](/compliance/ehs/chemical-risk-assessment/), and it draws the same connective thread: every incident duty reaches back into the safety data sheet and the chemical's classification.
+
+## At a glance
+
+- **Two different duties:** *recording* an event on an internal log is not the same as *reporting* it to a regulator. Many incidents are recorded; only specific ones are reported.
+- **United States — OSHA 29 CFR Part 1904:** record work-related injuries and illnesses on Forms 300, 300A and 301 within 7 calendar days; retain 5 years. Separately, report a fatality within 8 hours and an in-patient hospitalisation, amputation or loss of an eye within 24 hours.
+- **United States — OSHA PSM 1910.119(m):** for highly hazardous chemicals above threshold, investigate any incident that resulted in, or could reasonably have resulted in, a catastrophic release; begin within 48 hours; retain the report 5 years.
+- **European Union:** the Chemical Agents Directive (98/24/EC, Article 7) requires emergency action plans; the Seveso III Directive (2012/18/EU) requires operators of higher-threshold establishments to notify the competent authority of qualifying major accidents.
+- **United Kingdom:** RIDDOR 2013 requires notification of deaths, specified injuries, certain occupational diseases and listed dangerous occurrences; COSHH Regulation 13 requires arrangements to deal with accidents, incidents and emergencies.
+- **The chemical-safety spine:** the SDS drives the response — Section 4 (first aid), Section 5 (firefighting) and Section 6 (accidental release) — and the substance's classification often decides whether an injury or illness is recordable at all. Look up any substance in the [GHSSymbols hazard database](https://ghssymbols.com/hazards/).
+
+## Recordable, reportable or major accident?
+
+Three separate questions sit behind every chemical incident, and confusing them is the single most common compliance error.
+
+The first question is whether the event must be **recorded** on an internal log. Recording is a documentation duty: the event is logged, kept and used to spot trends, but no one is actively notified. The second question is whether it must be **reported** — actively notified to a regulator, usually within a tight deadline. Reporting is reserved for the more serious outcomes. The third question, in the EU, is whether the event is a **major accident** under Seveso III, a category that applies only to higher-threshold establishments and a defined set of consequences, and that has nothing to do with everyday spills.
+
+A single chlorine release illustrates all three at once. The release itself might be recorded internally as a near-miss; if a worker is hospitalised, it becomes reportable to OSHA within 24 hours in the US, or a RIDDOR matter in Great Britain; and if the site holds chlorine above its Seveso threshold and the consequences meet the directive's criteria, it is additionally a notifiable major accident in the EU. The remainder of this guide takes each jurisdiction in turn, then gives a single response-and-reporting workflow that works across all of them.
+
+## United States: OSHA recordkeeping and severe-event reporting
+
+OSHA's injury and illness recordkeeping standard, [29 CFR Part 1904](https://www.osha.gov/recordkeeping), is the backbone of US incident documentation. Most employers with more than ten employees must keep records, with certain lower-hazard industries partially exempt. Three forms do the work: the OSHA 300 Log of work-related injuries and illnesses, the 300A annual summary, and the 301 incident report. A recordable case must be entered within **seven calendar days** of the employer learning of it, and the records are retained for **five years**.
+
+Chemical exposure sits squarely inside this regime, because recordable illnesses include poisoning, respiratory conditions, skin disorders and occupational cancers — all of which can arise from chemical exposure. Poisoning, respiratory conditions and skin disorders each have their own illness column on the Form 300; an occupational cancer is equally recordable but is entered under the "all other illnesses" category rather than a dedicated column. Whether a given health effect is work-related and recordable often turns on the substance's classification, which is exactly why a current SDS library and the underlying [hazard classification](/compliance/osha-hcs/) matter to recordkeeping and not just to labelling.
+
+Reporting is a separate, narrower duty. Regardless of size or industry exemption, every employer must report a work-related **fatality within 8 hours**, and a work-related **in-patient hospitalisation, amputation or loss of an eye within 24 hours**, directly to OSHA. There is no general duty to report a spill or release as such — only these severe human outcomes. Finally, larger establishments in designated high-hazard industries must submit their case-level data electronically each year through the Injury Tracking Application under 1904.41; that electronic-submission rule expanded in 2023 and took effect for the 2023 data year, but it changed *who submits* and *how*, not *what is recordable*.
+
+## United States: process safety incident investigation
+
+For sites that handle highly hazardous chemicals at or above the threshold quantities in the Process Safety Management standard, paragraph (m) of [29 CFR 1910.119](https://www.osha.gov/laws-regs/regulations/standardnumber/1910/1910.119) adds a dedicated incident-investigation duty. It applies to any incident that resulted in, or could reasonably have resulted in, a catastrophic release of a highly hazardous chemical — which deliberately captures near-misses, not just actual releases.
+
+The mechanics are specific. The investigation must be initiated as promptly as possible and **no later than 48 hours** after the incident. An investigation team must include at least one person knowledgeable in the process involved, plus a contract employee where the incident involved contract work. The report must state, at a minimum, the **date of the incident, the date the investigation began, a description of the incident, the factors that contributed to it, and any resulting recommendations**. The employer must then operate a system to resolve those findings, document the corrective actions, and review the report with all affected personnel. Investigation reports are **retained for five years**. Where a PSM investigation exposes a gap in the underlying hazard analysis, it feeds straight back into the process hazard analysis described in the [chemical risk assessment guide](/compliance/ehs/chemical-risk-assessment/).
+
+## European Union: Seveso III and the Chemical Agents Directive
+
+EU incident handling operates on two levels, and it is important not to conflate them.
+
+The everyday level is the **Chemical Agents Directive (98/24/EC)**. Article 7, titled "Arrangements to deal with accidents, incidents and emergencies," requires every employer that has hazardous chemical agents present to establish procedures — action plans — that can be put into effect when an accident, incident or emergency occurs, supported by relevant safety drills at regular intervals and appropriate first-aid facilities. When such an event happens, the employer must immediately take steps to mitigate its effects and inform the workers concerned, and only workers essential to the necessary repair work may be allowed into the affected area. Information on the emergency arrangements must be available to the internal and external emergency services. This is a workplace-protection duty, not a regulator-notification duty.
+
+The higher-consequence level is the **Seveso III Directive (2012/18/EU)**, which controls major-accident hazards at establishments holding dangerous substances above the qualifying quantities in its Annex I, classified as lower-tier or upper-tier sites. Seveso applies only to those higher-threshold establishments; it does not govern routine workplace incidents. When a major accident occurs, Article 16 requires the operator to inform the competent authority of the prescribed information as soon as it becomes available and to take the necessary mitigation and remediation steps. The criteria that define a notifiable major accident for onward reporting to the European Commission are set out in Annex VI — they include the involvement of a dangerous substance at a quantity of at least 5% of the Annex I qualifying quantity, specified injuries or property damage, environmental damage, and cross-border effects — and qualifying accidents are reported through the Commission's Major Accident Reporting System (eMARS).
+
+## United Kingdom: RIDDOR and COSHH
+
+Great Britain splits the same logic across two instruments. **COSHH Regulation 13**, "Arrangements to deal with accidents, incidents and emergencies," is the planning-and-response duty: employers must prepare emergency procedures including first aid, make technical information on foreseeable accidents available to the emergency services, and install suitable alarms and warning and communication systems. (A note for anyone reading the regulations directly: an identically named "regulation 8" exists in the separate DSEAR 2002 regime for flammable and explosive atmospheres — for toxic and harmful substances the relevant provision is COSHH Regulation 13.)
+
+The reporting duty is **RIDDOR 2013** (the Reporting of Injuries, Diseases and Dangerous Occurrences Regulations). Three categories matter for chemical handlers. Work-related **deaths and specified injuries** to workers, and injuries to members of the public taken directly to hospital, must be notified to the HSE without delay, with a full report submitted **within 10 days**; an **over-seven-day incapacitation** of a worker has a longer window of **15 days from the date of the accident**. Certain **occupational diseases** attributable to chemical exposure — including occupational cancer, dermatitis and occupational asthma — are reportable on diagnosis. And a chemical release can be a reportable **dangerous occurrence** in its own right: RIDDOR 2013 Schedule 2, paragraph 27 ("hazardous escapes of substances") covers the unintentional release or escape of any substance that could cause personal injury, other than through the combustion of flammable liquids or gases. RIDDOR records must be kept for at least three years.
+
+## A chemical-incident response and reporting workflow
+
+The legal duties differ by jurisdiction, but the practical sequence after a chemical incident is consistent. Each step leans on the SDS, which is why a complete and accessible SDS library is an operational necessity, not a filing exercise.
+
+1. **Make safe and give first aid.** Protect people first. Section 4 of the SDS gives the first-aid measures, Section 5 the firefighting guidance, and Section 6 the spill-containment and accidental-release procedures. Restrict the area to essential responders.
+2. **Capture the facts immediately.** Record what happened, when, which substance and quantity, who was exposed and how, and what controls were in place. Memory and physical evidence degrade fast, so log it at the time.
+3. **Classify the event.** Decide, against the rules above, whether it is recordable, reportable, both, or a Seveso major accident. Resolve the question early, because reporting clocks (8/24 hours; without delay) start running from the event or from your knowledge of it.
+4. **Notify within the deadline.** If the event meets a reporting threshold, notify the right regulator in time — OSHA within 8 or 24 hours, the HSE without delay under RIDDOR, or the competent authority under Seveso. Build the deadlines into the procedure so they are not missed.
+5. **Record it on the log.** Enter recordable injuries and illnesses on the appropriate form within the required window (the OSHA 300 Log within seven days), independently of any regulator notification.
+6. **Investigate the cause.** Establish what actually failed, looking past the immediate trigger to the contributing factors. For PSM-covered processes this investigation is mandatory and must begin within 48 hours.
+7. **Act and prevent recurrence.** Implement and document corrective actions, update the relevant [chemical risk assessment](/compliance/ehs/chemical-risk-assessment/) and controls, and review the findings with the people affected.
+8. **Retain and trend.** Keep the records for the required period and analyse them over time — a cluster of small exposures from the same task is an early warning that a control is failing.
+
+### Worked example: a chlorine release
+
+Consider a transfer operation where a valve fails and releases chlorine (CAS 7782-50-5), a toxic, corrosive gas; one worker inhales it and is admitted to hospital. The full hazard profile, classification and statements are on the [chlorine page at GHSSymbols](https://ghssymbols.com/hazards/7782-50-5/), and its SDS Section 4, 5 and 6 drive the immediate response. The reporting picture then depends on jurisdiction: in the US the in-patient hospitalisation is reportable to OSHA within 24 hours, and the resulting respiratory condition is recorded on the Form 300; in Great Britain the hospitalisation is a RIDDOR matter, the gas escape may itself be a Schedule 2 paragraph 27 dangerous occurrence, and an absence beyond seven days becomes an over-seven-day injury reportable within 15 days; in the EU the CAD Article 7 action plan governs the immediate response, and if the site holds chlorine above its Seveso threshold and the consequences meet Annex VI, it is additionally a notifiable major accident. One event, several parallel duties — which is exactly why the classification step cannot be skipped.
+
+### Mapping the SDS to the incident
+
+The same SDS that supports the [risk assessment](/compliance/ehs/chemical-risk-assessment/) supports the incident response. The sections map onto the stages of an incident as follows.
+
+| Incident stage | SDS section | What it provides |
+|---|---|---|
+| Immediate first aid | Section 4 | First-aid measures by exposure route and symptoms |
+| Fire involving the substance | Section 5 | Suitable extinguishing media and firefighting hazards |
+| Spill or release containment | Section 6 | Accidental-release measures, containment and clean-up |
+| Deciding recordability | Section 2 / Section 11 | Hazard classification and health-effect information |
+| Exposure assessment after the event | Section 8 | Occupational exposure limits and control parameters |
+
+For the underlying classification that determines whether a health effect is recordable, the [SDS pillar](/compliance/sds/) explains the 16-section structure, and the [GHSSymbols hazard database](https://ghssymbols.com/hazards/) provides the per-substance hazard data.
+
+<SdsManagerCard service="ehs" body="For logging chemical spills, exposures and near-misses, running investigations and tracking corrective actions in one place, linked to the SDS and inventory each incident involves, the solution we recommend is the SDS Manager EHS suite. It also covers chemical risk assessment and audit and inspection." href="https://ehs.sdsmanager.com/?fpr=ghs3&fp_sid=ehsrisk" />
+
+## Common mistakes
+
+- **Confusing recording with reporting.** Logging a recordable injury on the Form 300 does not discharge the separate duty to report a hospitalisation to OSHA within 24 hours, and vice versa. They are independent obligations.
+- **Missing the reporting clock.** The 8-hour and 24-hour OSHA windows, and the RIDDOR without-delay and 15-day deadlines, start at the event or at your knowledge of it — not when the investigation finishes.
+- **Treating Seveso as routine logging.** Seveso III is a major-accident regime for higher-threshold establishments, not a place to record everyday spills. Applying it to ordinary incidents wastes effort and signals a misunderstanding of scope.
+- **Ignoring near-misses.** A release that hurt no one can still be a PSM-investigable event or a RIDDOR dangerous occurrence, and is always a free lesson about a failing control.
+- **Letting the SDS library go stale.** If Section 4, 6 or 8 is missing or out of date, the incident response is improvised at the worst possible moment.
+
+## Key takeaways
+
+- **Recording and reporting are different duties.** Most incidents are recorded internally; only specific outcomes must be actively reported to a regulator within a deadline.
+- **US duties split three ways:** routine recordkeeping on the Forms 300/300A/301 (Part 1904), severe-event reporting to OSHA (8 and 24 hours), and PSM incident investigation for highly hazardous chemicals (1910.119(m), begin within 48 hours).
+- **EU duties split by threshold:** CAD Article 7 emergency planning for any workplace with hazardous chemical agents, and Seveso III major-accident notification for higher-threshold establishments only.
+- **UK duties split by instrument:** COSHH Regulation 13 for emergency arrangements and RIDDOR 2013 for notification, including the Schedule 2 paragraph 27 hazardous-escape dangerous occurrence.
+- **The SDS is the operational reference for the response,** and the substance's classification frequently decides whether an event is recordable at all — which is why incident management is inseparable from your classification and SDS data.
+
+## Sources
+
+- OSHA: [Recordkeeping (29 CFR Part 1904)](https://www.osha.gov/recordkeeping) and the [regulatory text on eCFR](https://www.ecfr.gov/current/title-29/subtitle-B/chapter-XVII/part-1904)
+- OSHA: [Report a fatality or severe injury](https://www.osha.gov/report) (8-hour and 24-hour reporting)
+- OSHA: [Process Safety Management of Highly Hazardous Chemicals, 29 CFR 1910.119](https://www.osha.gov/laws-regs/regulations/standardnumber/1910/1910.119) (incident investigation at paragraph (m))
+- EUR-Lex: [Council Directive 98/24/EC on chemical agents at work](https://eur-lex.europa.eu/eli/dir/1998/24/oj/eng) (Article 7)
+- EUR-Lex: [Directive 2012/18/EU (Seveso III)](https://eur-lex.europa.eu/eli/dir/2012/18/oj/eng) (Article 16 and Annex VI)
+- legislation.gov.uk: [Reporting of Injuries, Diseases and Dangerous Occurrences Regulations 2013](https://www.legislation.gov.uk/uksi/2013/1471/contents/made) and HSE: [RIDDOR reportable incidents](https://www.hse.gov.uk/riddor/reportable-incidents.htm)
+- legislation.gov.uk: [Control of Substances Hazardous to Health Regulations 2002](https://www.legislation.gov.uk/uksi/2002/2677/contents/made) (Regulation 13) and HSE: [COSHH guidance](https://www.hse.gov.uk/coshh/)
