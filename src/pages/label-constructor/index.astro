@@ -5,12 +5,23 @@ import Layout from '../../layouts/Layout.astro'
 import LabelConstructorLoader from '../../components/LabelConstructorLoader'
 ---
 <Layout
-  title="GHS Label Constructor — Build a compliant label"
-  description="Create a CLP-compliant GHS label for any chemical substance. Auto-filled from our database."
+  title="GHS Label Maker — Free Online GHS Label Generator"
+  description="Free online GHS label maker: auto-fills hazard pictograms, signal word and H/P statements for 4,000+ chemicals, sizes the label to your container per CLP Annex I, and prints — no signup, no software install."
   canonical="https://ghspictograms.com/label-constructor/"
 >
   <div class="max-w-5xl mx-auto px-4 py-10">
-    <h1 class="text-3xl font-bold text-gray-900 mb-2">GHS Label Constructor</h1>
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">GHS Label Maker</h1>
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "GHS Label Maker",
+      "alternateName": "GHS Label Generator",
+      "url": "https://ghspictograms.com/label-constructor/",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Any (web browser)",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "description": "Free online GHS label maker that auto-fills pictograms, signal word and hazard statements from a CLP substance database and generates print-ready labels."
+    })} />
     <p class="text-gray-600 mb-8">
       Build a CLP-compliant label. Select a substance from the
       <a href="/pictograms/" class="text-[#062A78] underline">pictogram database</a>
