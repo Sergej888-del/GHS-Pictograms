@@ -1,12 +1,11 @@
 ---
-// Chemical Storage Compatibility Matrix — flagship storage tool (SHELL v1)
-// Static page (astro.config output: 'static'). The interactive island lands in
-// a later step and will replace the two-column region below; this shell renders
-// the route, hero, layout skeleton, and methodology so the page goes live.
+// Chemical Storage Compatibility Matrix — flagship storage tool (v2)
+// Static page (astro.config output: 'static'). The interactive island
+// (StorageTool) renders the two-column search + verdict UI; hero and
+// methodology are static. Verdict data comes from the get_storage_verdict RPC.
 export const prerender = true
 import Layout from '../../layouts/Layout.astro'
-
-const hazardFilters = ['All', 'Flammable', 'Oxidizer', 'Corrosive', 'Toxic', 'Reactive', 'Gas']
+import StorageTool from '../../components/StorageTool'
 ---
 <Layout
   title="Chemical Storage Compatibility Matrix — what can be stored together"
@@ -30,49 +29,9 @@ const hazardFilters = ['All', 'Flammable', 'Oxidizer', 'Corrosive', 'Toxic', 'Re
     </div>
   </section>
 
-  <!-- TOOL (two-column skeleton; the interactive island replaces this region later) -->
+  <!-- TOOL (interactive island) -->
   <section class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <div class="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-6">
-      <!-- LEFT: hazard filter + substance search -->
-      <aside class="lg:sticky lg:top-20 self-start">
-        <div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
-          <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Filter by hazard</p>
-          <div class="mt-2.5 flex flex-wrap gap-2">
-            {hazardFilters.map((f, i) => (
-              <span
-                class={`inline-flex items-center rounded-full px-3 py-1 text-sm border ${
-                  i === 0
-                    ? 'bg-[#1e3a8a] text-white border-[#1e3a8a]'
-                    : 'bg-white text-gray-700 border-gray-300'
-                }`}
-              >{f}</span>
-            ))}
-          </div>
-
-          <div class="mt-4">
-            <label for="substance-search" class="sr-only">Search by name or CAS number</label>
-            <input
-              id="substance-search"
-              type="search"
-              placeholder="Search by name or CAS number…"
-              disabled
-              class="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400"
-            />
-          </div>
-          <p class="mt-3 text-sm text-gray-400">Start typing to find a substance.</p>
-        </div>
-      </aside>
-
-      <!-- RIGHT: verdict panel (empty state) -->
-      <div>
-        <div class="rounded-xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center">
-          <p class="text-base font-medium text-gray-700">Pick a substance to see its storage verdict</p>
-          <p class="mt-2 text-sm text-gray-500 max-w-md mx-auto">
-            You'll see what to never store with, what to keep separate, its reactivity hazards, and its ADR transport class.
-          </p>
-        </div>
-      </div>
-    </div>
+    <StorageTool client:load />
   </section>
 
   <!-- HOW IT WORKS -->
