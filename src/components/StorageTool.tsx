@@ -40,6 +40,7 @@ interface Verdict {
   class_names: { code: string; name: string }[]
   reactive_groups: string[]
   segregation: SegItem[]
+  predicted_gases: { label: string; toxic: boolean }[]
   adr: AdrItem[]
 }
 
@@ -209,6 +210,17 @@ export default function StorageTool() {
   }, [verdict])
   const activeAdr = adrList[selectedAdrIdx] ?? adrList[0] ?? null
 
+  // Danger signals that make an unclassified substance NOT safe to call "general
+  // practice": acutely-toxic predicted gases, or a high-risk ADR transport class
+  // (1 explosive, 4.1/4.2/4.3 reactive solids, 5.1/5.2 oxidizers/peroxides).
+  const hasToxicGas = (verdict?.predicted_gases ?? []).some(g => g.toxic)
+  const DANGEROUS_ADR = ['1', '4.1', '4.2', '4.3', '5.1', '5.2']
+  const hasDangerousAdr = (verdict?.adr ?? []).some(
+    a => a.class != null && DANGEROUS_ADR.includes(a.class),
+  )
+  const unclassifiedButRisky = !!verdict && verdict.classes.length === 0 &&
+    !verdict.is_corrosive_h314 && (hasToxicGas || hasDangerousAdr)
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-6">
       {/* LEFT — filter + search + list (+ ADR form picker) */}
@@ -347,13 +359,21 @@ export default function StorageTool() {
               )}
             </div>
 
-            {/* no-class / corrosive note */}
+            {/* no-class / corrosive note (context-aware) */}
             {verdict.classes.length === 0 && (
-              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                {verdict.is_corrosive_h314
-                  ? 'Corrosive (GHS H314) — acid vs. base could not be determined automatically. Verify against SDS section 10 before co-storage.'
-                  : 'No special storage segregation class from its GHS codes. Store per general good practice and verify against SDS section 7.'}
-              </div>
+              verdict.is_corrosive_h314 ? (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                  Corrosive (GHS H314) — acid vs. base could not be determined automatically. Verify against SDS section 10 before co-storage.
+                </div>
+              ) : unclassifiedButRisky ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  No storage class was derived from this substance's GHS codes, but it shows hazardous reactivity{hasDangerousAdr ? ' and a high-risk transport class' : ''} (see below). Do not treat it as inert — verify against SDS sections 7 and 10 before storing.
+                </div>
+              ) : (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                  No special storage segregation class from its GHS codes. Store per general good practice and verify against SDS section 7.
+                </div>
+              )
             )}
 
             {/* never store with */}
@@ -413,13 +433,31 @@ export default function StorageTool() {
               </section>
             )}
 
-            {/* reactivity / predicted gases — placeholdered until curation */}
-            <section className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3">
-              <p className="text-sm font-medium text-gray-600">Reactivity &amp; predicted gases</p>
-              <p className="mt-0.5 text-xs text-gray-500">
-                In preparation — we're curating CAMEO reaction data for accuracy before showing it here.
-              </p>
-            </section>
+            {/* predicted gases on contact (CAMEO, curated) */}
+            {(verdict.predicted_gases?.length ?? 0) > 0 && (
+              <section>
+                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
+                  <span aria-hidden="true">☁️</span> On contact — predicted gases
+                </h3>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {verdict.predicted_gases.map(g => (
+                    <span
+                      key={g.label}
+                      className={`inline-flex items-center rounded-full px-3 py-1 text-sm border ${
+                        g.toxic
+                          ? 'bg-red-50 text-red-700 border-red-200'
+                          : 'bg-gray-100 text-gray-700 border-gray-200'
+                      }`}
+                    >
+                      {g.label}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-xs text-gray-400">
+                  Gases that a spill or bad mix may release (CAMEO). Red = acutely toxic.
+                </p>
+              </section>
+            )}
 
             <p className="text-xs leading-relaxed text-gray-400">
               Reference aid only — always verify storage against the substance's SDS (sections 7 and 10) and local regulations.
