@@ -1,10 +1,13 @@
-// Chemical Storage Compatibility Matrix — interactive island (2c, rev2)
+// Chemical Storage Compatibility Matrix — interactive island (2c, rev3)
 // Left: hazard chips + fuzzy search (name / CAS / EC) over clean-CAS substances.
 // Right: live verdict from supabase.rpc('get_storage_verdict').
 // Segregation + ADR panels are live; reactivity/predicted-gases are placeholdered
 // until the CAMEO gas curation pass lands.
 // rev2: ADR form picker is keyed by ROW INDEX (not UN — multiple rows can share a
 // UN) and de-duplicates identical rows.
+// rev3: CAMEO special-hazard flags — warning badges (1c) + they count as a danger
+// signal for the "no class" note; and cameo_known drives a "check CAMEO" branch
+// for substances CAMEO doesn't know (1d). Needs get_storage_verdict v3.
 import { useEffect, useMemo, useState } from 'react'
 import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
@@ -33,12 +36,14 @@ interface AdrItem {
 interface Verdict {
   cas: string
   found: boolean
+  cameo_known: boolean
   name: string | null
   signal_word: string | null
   is_corrosive_h314: boolean
   classes: string[]
   class_names: { code: string; name: string }[]
   reactive_groups: string[]
+  special_flags: string[]
   segregation: SegItem[]
   predicted_gases: { label: string; toxic: boolean }[]
   adr: AdrItem[]
@@ -73,6 +78,24 @@ const SHORT_LABELS: Record<string, string> = {
   FLAM_SOL: 'Flammable solids',
 }
 const short = (code: string) => SHORT_LABELS[code] ?? code
+
+// Short badge labels for CAMEO special-hazard flags (canonical DB string ->
+// display). Unknown flags fall back to the raw string.
+const FLAG_LABELS: Record<string, string> = {
+  'Highly Flammable': 'Highly Flammable',
+  'Water-Reactive': 'Water-Reactive',
+  'Strong Oxidizing Agent': 'Strong Oxidizer',
+  'Strong Reducing Agent': 'Strong Reducer',
+  'Explosive': 'Explosive',
+  'Peroxidizable Compound': 'Peroxidizable',
+  'Polymerizable': 'Polymerizable',
+  'Air-Reactive': 'Air-Reactive',
+  'Pyrophoric': 'Pyrophoric',
+  'Known Catalytic Activity': 'Catalytic',
+  'Decomposes at Elevated Temperatures (<120 deg. C)': 'Decomposes <120 °C',
+  'Radioactive Material': 'Radioactive',
+}
+const flagLabel = (f: string) => FLAG_LABELS[f] ?? f
 
 // Normalize US/UK spelling so `sulfuric` finds `sulphuric`, etc. Applied to both
 // the indexed names and the query. Covers the common chemistry pairs.
@@ -211,15 +234,17 @@ export default function StorageTool() {
   const activeAdr = adrList[selectedAdrIdx] ?? adrList[0] ?? null
 
   // Danger signals that make an unclassified substance NOT safe to call "general
-  // practice": acutely-toxic predicted gases, or a high-risk ADR transport class
-  // (1 explosive, 4.1/4.2/4.3 reactive solids, 5.1/5.2 oxidizers/peroxides).
+  // practice": CAMEO special-hazard flags, acutely-toxic predicted gases, or a
+  // high-risk ADR transport class (1 explosive, 4.1/4.2/4.3 reactive solids,
+  // 5.1/5.2 oxidizers/peroxides).
+  const hasSpecialFlags = (verdict?.special_flags ?? []).length > 0
   const hasToxicGas = (verdict?.predicted_gases ?? []).some(g => g.toxic)
   const DANGEROUS_ADR = ['1', '4.1', '4.2', '4.3', '5.1', '5.2']
   const hasDangerousAdr = (verdict?.adr ?? []).some(
     a => a.class != null && DANGEROUS_ADR.includes(a.class),
   )
   const unclassifiedButRisky = !!verdict && verdict.classes.length === 0 &&
-    !verdict.is_corrosive_h314 && (hasToxicGas || hasDangerousAdr)
+    !verdict.is_corrosive_h314 && (hasSpecialFlags || hasToxicGas || hasDangerousAdr)
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-6">
@@ -351,8 +376,18 @@ export default function StorageTool() {
               {verdict.class_names.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {verdict.class_names.map(c => (
-                    <span key={c.code} className="inline-flex items-center rounded-md bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                    <span key={c.code} className="inline-flex items-center rounded-md bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800"> 
                       {short(c.code)}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {/* CAMEO special-hazard flags (intrinsic to the substance) */}
+              {verdict.special_flags.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {verdict.special_flags.map(f => (
+                    <span key={f} className="inline-flex items-center gap-1 rounded-md border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-800">
+                      <span aria-hidden="true">⚠</span> {flagLabel(f)}
                     </span>
                   ))}
                 </div>
@@ -367,7 +402,28 @@ export default function StorageTool() {
                 </div>
               ) : unclassifiedButRisky ? (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  No storage class was derived from this substance's GHS codes, but it shows hazardous reactivity{hasDangerousAdr ? ' and a high-risk transport class' : ''} (see below). Do not treat it as inert — verify against SDS sections 7 and 10 before storing.
+                  No storage class was derived from this substance's GHS codes, but it is not inert.
+                  {hasSpecialFlags && (
+                    <> CAMEO flags it as <strong>{verdict.special_flags.map(flagLabel).join(', ')}</strong>.</>
+                  )}
+                  {(hasToxicGas || hasDangerousAdr) && (
+                    <> It shows hazardous reactivity{hasDangerousAdr ? ' and a high-risk transport class' : ''} (see below).</>
+                  )}
+                  {' '}Do not treat it as safe to co-store — verify against SDS sections 7 and 10.
+                </div>
+              ) : !verdict.cameo_known ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  No storage class was derived from its GHS codes, and this substance isn't in CAMEO's reactivity
+                  database — so reactive hazards can't be ruled out automatically. Before storing, look it up in{' '}
+                  <a
+                    href="https://cameochemicals.noaa.gov/search/simple"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold underline underline-offset-2 hover:text-amber-900"
+                  >
+                    CAMEO Chemicals (NOAA)
+                  </a>{' '}
+                  (search CAS {verdict.cas}) and verify against SDS sections 7 and 10.
                 </div>
               ) : (
                 <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
