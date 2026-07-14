@@ -8,9 +8,17 @@
 // rev3: CAMEO special-hazard flags — warning badges (1c) + they count as a danger
 // signal for the "no class" note; and cameo_known drives a "check CAMEO" branch
 // for substances CAMEO doesn't know (1d). Needs get_storage_verdict v3.
+// rev4 (P3): segregation pills are interactive — click a "never/keep-separate"
+// class to preview 6 of its substances inline (get_class_substances) + link to
+// its /storage-compatibility/<slug>/ page. Own-class badges link to that page.
+// Class labels/slugs now come from the shared storageClasses module (de-dup).
+// rev5 (design): teal signature — filter chips, focus, ADR picker, preview links
+// switch navy->teal; segregation pills gain hover depth. Semantics (red/amber/
+// green) unchanged. ADR strip stays navy (transport).
 import { useEffect, useMemo, useState } from 'react'
 import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
+import { shortForCode, urlForCode } from '../lib/storageClasses'
 
 interface SubstanceRow {
   cas_number: string
@@ -61,23 +69,15 @@ const HAZARD_CHIPS: { label: string; pic: string | null }[] = [
   { label: 'Gas', pic: 'GHS04' },
 ]
 
-// Short display labels for the 13 storage classes (pills + badges).
-const SHORT_LABELS: Record<string, string> = {
-  OXID: 'Oxidizers',
-  WATER_RX: 'Water-reactives',
-  FLAM_LIQ: 'Flammable liquids',
-  GAS: 'Compressed gases',
-  ORG_PEROX: 'Organic peroxides',
-  OX_ACID: 'Oxidizing acids',
-  ORG_ACID: 'Organic acids',
-  MIN_ACID: 'Mineral acids',
-  BASE: 'Bases',
-  REACT_METAL: 'Reactive metals',
-  TOXIC: 'Acute toxics',
-  CN_S: 'Cyanides & sulfides',
-  FLAM_SOL: 'Flammable solids',
+// Class labels (short) + category-page URLs now come from ../lib/storageClasses
+// (shortForCode / urlForCode) — single source of truth shared with the pages.
+
+// Inline preview of a storage class's substances (P3 pill expansion).
+interface ClassPreview {
+  sc_code: string
+  total: number
+  items: { cas: string; name: string; signal_word: string | null }[]
 }
-const short = (code: string) => SHORT_LABELS[code] ?? code
 
 // Short badge labels for CAMEO special-hazard flags (canonical DB string ->
 // display). Unknown flags fall back to the raw string.
@@ -118,6 +118,11 @@ export default function StorageTool() {
   const [verdict, setVerdict] = useState<Verdict | null>(null)
   const [verdictLoading, setVerdictLoading] = useState(false)
   const [selectedAdrIdx, setSelectedAdrIdx] = useState(0)
+
+  // P3: inline class preview (which class pill is open + cache + loading).
+  const [activeClass, setActiveClass] = useState<string | null>(null)
+  const [classCache, setClassCache] = useState<Record<string, ClassPreview>>({})
+  const [classLoading, setClassLoading] = useState(false)
 
   // Load all clean-CAS substances once (same runtime pattern as the browse tool).
   useEffect(() => {
@@ -197,6 +202,7 @@ export default function StorageTool() {
     let cancelled = false
     setVerdictLoading(true)
     setSelectedAdrIdx(0)
+    setActiveClass(null)
     supabase
       .rpc('get_storage_verdict', { p_cas: selectedCas })
       .then(({ data, error }) => {
@@ -246,6 +252,21 @@ export default function StorageTool() {
   const unclassifiedButRisky = !!verdict && verdict.classes.length === 0 &&
     !verdict.is_corrosive_h314 && (hasSpecialFlags || hasToxicGas || hasDangerousAdr)
 
+  // P3: open/close a class preview; fetch (and cache) 6 substances on first open.
+  async function togglePreview(code: string) {
+    if (activeClass === code) {
+      setActiveClass(null)
+      return
+    }
+    setActiveClass(code)
+    if (!classCache[code]) {
+      setClassLoading(true)
+      const { data } = await supabase.rpc('get_class_substances', { p_sc_code: code, p_limit: 6 })
+      if (data) setClassCache(prev => ({ ...prev, [code]: data as ClassPreview }))
+      setClassLoading(false)
+    }
+  }
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-6">
       {/* LEFT — filter + search + list (+ ADR form picker) */}
@@ -260,8 +281,8 @@ export default function StorageTool() {
                 onClick={() => setChip(c.label)}
                 className={`inline-flex items-center rounded-full px-3 py-1 text-sm border transition-colors ${
                   chip === c.label
-                    ? 'bg-[#1e3a8a] text-white border-[#1e3a8a]'
-                    : 'bg-white text-gray-700 border-gray-300 hover:border-[#1e3a8a]'
+                    ? 'bg-teal-600 text-white border-teal-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:border-teal-500'
                 }`}
               >
                 {c.label}
@@ -277,7 +298,7 @@ export default function StorageTool() {
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="Search name, CAS, or EC number…"
-              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/20 outline-none"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none"
             />
           </div>
 
@@ -323,8 +344,8 @@ export default function StorageTool() {
                   onClick={() => setSelectedAdrIdx(i)}
                   className={`w-full text-left rounded-lg border px-3 py-2 transition-colors ${
                     selectedAdrIdx === i
-                      ? 'bg-[#1e3a8a] text-white border-[#1e3a8a]'
-                      : 'bg-white text-gray-700 border-gray-300 hover:border-[#1e3a8a]'
+                      ? 'bg-teal-600 text-white border-teal-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-teal-500'
                   }`}
                 >
                   <span className="block text-sm font-semibold">
@@ -376,9 +397,13 @@ export default function StorageTool() {
               {verdict.class_names.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {verdict.class_names.map(c => (
-                    <span key={c.code} className="inline-flex items-center rounded-md bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800"> 
-                      {short(c.code)}
-                    </span>
+                    <a
+                      key={c.code}
+                      href={urlForCode(c.code)}
+                      className="inline-flex items-center rounded-md bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-200 transition-colors"
+                    >
+                      {shortForCode(c.code)}
+                    </a>
                   ))}
                 </div>
               )}
@@ -440,9 +465,18 @@ export default function StorageTool() {
                 </h3>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {never.map(s => (
-                    <span key={s.class} className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-sm text-red-700">
-                      {short(s.class)}
-                    </span>
+                    <button
+                      key={s.class}
+                      type="button"
+                      onClick={() => togglePreview(s.class)}
+                      className={`inline-flex items-center rounded-full border px-3 py-1 text-sm transition-all hover:shadow-sm ${
+                        activeClass === s.class
+                          ? 'border-red-400 bg-red-100 text-red-800 ring-2 ring-red-200'
+                          : 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                      }`}
+                    >
+                      {shortForCode(s.class)}
+                    </button>
                   ))}
                 </div>
               </section>
@@ -456,12 +490,69 @@ export default function StorageTool() {
                 </h3>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {separate.map(s => (
-                    <span key={s.class} className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm text-amber-800">
-                      {short(s.class)}
-                    </span>
+                    <button
+                      key={s.class}
+                      type="button"
+                      onClick={() => togglePreview(s.class)}
+                      className={`inline-flex items-center rounded-full border px-3 py-1 text-sm transition-all hover:shadow-sm ${
+                        activeClass === s.class
+                          ? 'border-amber-400 bg-amber-100 text-amber-900 ring-2 ring-amber-200'
+                          : 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                      }`}
+                    >
+                      {shortForCode(s.class)}
+                    </button>
                   ))}
                 </div>
               </section>
+            )}
+
+            {/* P3: inline class preview (opens under the segregation pills) */}
+            {activeClass && (never.length > 0 || separate.length > 0) && (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-gray-900">
+                    In {shortForCode(activeClass)}
+                    {classCache[activeClass] ? ` (${classCache[activeClass].total})` : ''}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveClass(null)}
+                    className="text-xs text-gray-400 hover:text-gray-600"
+                    aria-label="Close preview"
+                  >
+                    ✕
+                  </button>
+                </div>
+                {classLoading && !classCache[activeClass] ? (
+                  <p className="mt-2 text-sm text-gray-500">Loading…</p>
+                ) : classCache[activeClass] ? (
+                  <>
+                    <ul className="mt-2 space-y-1">
+                      {classCache[activeClass].items.map(it => (
+                        <li key={it.cas}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCas(it.cas)}
+                            className="text-left text-sm text-teal-700 hover:underline"
+                          >
+                            {it.name}
+                            <span className="ml-1 font-mono text-xs text-gray-400">{it.cas}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <a
+                      href={urlForCode(activeClass)}
+                      className="mt-2 inline-block text-sm font-semibold text-teal-700 hover:underline"
+                    >
+                      View all {classCache[activeClass].total} in {shortForCode(activeClass)} →
+                    </a>
+                  </>
+                ) : (
+                  <p className="mt-2 text-sm text-gray-500">No preview available.</p>
+                )}
+              </div>
             )}
 
             {/* ADR */}

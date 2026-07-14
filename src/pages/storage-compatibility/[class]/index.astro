@@ -12,7 +12,7 @@
 // pages should not be linked/sitemapped until prose lands (publication control
 // handled outside this file — see P2 notes).
 import Layout from '../../../layouts/Layout.astro'
-import { STORAGE_CLASSES, shortForCode, urlForCode } from '../../../lib/storageClasses'
+import { STORAGE_CLASSES, shortForCode, urlForCode, familyStyleForCode, HERO_BG, HERO_DOTS } from '../../../lib/storageClasses'
 import { supabase } from '../../../lib/supabase'
 import { getCollection, render } from 'astro:content'
 
@@ -100,28 +100,43 @@ if (entry?.data.faq?.length) {
   })
 }
 
-const pillBase = 'inline-flex items-center rounded-full border px-3 py-1 text-sm transition-colors'
+const pillBase = 'inline-flex items-center rounded-full border px-3 py-1 text-sm transition-all hover:shadow-sm'
+const fam = familyStyleForCode(cls.code)
 ---
 
 <Layout title={title} description={description} canonical={canonical}>
   <!-- Data-only pages (no prose entry) stay out of the index until P4 prose lands -->
   {!entry && <meta name="robots" content="noindex,follow" slot="head" />}
 
-  <!-- HERO -->
-  <section class="bg-gradient-to-br from-[#172554] to-[#1e3a8a] text-white">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
-      <nav class="text-sm text-blue-200 mb-3" aria-label="Breadcrumb">
-        <a href={TOOL} class="hover:text-white transition-colors">Storage compatibility matrix</a>
-        <span class="mx-1 text-blue-300">/</span>
-        <span class="text-blue-100">{cls.short}</span>
+  <!-- HERO: textured gradient + dot overlay (shared with hub) -->
+  <section class="relative overflow-hidden text-white" style={`background:${HERO_BG};`}>
+    <div class="absolute inset-0 opacity-40" style={`background-image:${HERO_DOTS};background-size:22px 22px;`} aria-hidden="true"></div>
+    <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
+      <nav class="text-sm text-slate-300 mb-6" aria-label="Breadcrumb">
+        <a href="/storage-compatibility/" class="hover:text-white transition-colors">Storage compatibility</a>
+        <span class="mx-1 text-slate-500">/</span>
+        <span class="text-slate-200">{cls.short}</span>
       </nav>
-      <h1 class="text-3xl sm:text-4xl font-bold tracking-tight" style="font-family:'Space Grotesk',sans-serif;">
-        {title}
-      </h1>
-      <p class="mt-3 text-lg text-blue-100 max-w-3xl">
-        {entry?.data.intro ??
-          `Storage segregation, incompatibilities, and the ${total} substances in this class in our database.`}
-      </p>
+      <div class="flex items-start gap-4">
+        <div class="hidden sm:flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-teal-500 shadow-lg shadow-teal-900/40">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+            <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+          </svg>
+        </div>
+        <div>
+          <p class="text-xs font-bold uppercase tracking-[0.2em] text-teal-300">{fam.label} · storage class</p>
+          <h1 class="mt-1.5 text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.05]" style="font-family:'Space Grotesk',sans-serif;">
+            {title}
+          </h1>
+          <p class="mt-4 text-lg text-slate-200 max-w-3xl leading-relaxed">
+            {entry?.data.intro ??
+              `Storage segregation, incompatibilities, and the ${total} substances in this class in our database.`}
+          </p>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -205,7 +220,7 @@ const pillBase = 'inline-flex items-center rounded-full border px-3 py-1 text-sm
             <li class={i >= COLLAPSE_AT ? 'ss-extra' : undefined}>
               <a
                 href={`${TOOL}?substance=${encodeURIComponent(s.cas)}`}
-                class="flex items-baseline justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2.5 hover:border-[#1e3a8a] hover:bg-gray-50 transition-colors"
+                class="flex items-baseline justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2.5 hover:border-teal-300 hover:bg-teal-50/50 hover:shadow-sm transition-all"
               >
                 <span class="min-w-0">
                   <span class="block text-sm font-medium text-gray-900 truncate">{s.name}</span>
@@ -233,7 +248,7 @@ const pillBase = 'inline-flex items-center rounded-full border px-3 py-1 text-sm
           id="ss-toggle"
           type="button"
           data-all={`Show all ${total} substances ↓`}
-          class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[#1e3a8a] hover:underline"
+          class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-teal-700 hover:underline"
         >
           Show all {total} substances ↓
         </button>
@@ -261,7 +276,7 @@ const pillBase = 'inline-flex items-center rounded-full border px-3 py-1 text-sm
     <section class="rounded-xl border border-gray-200 bg-gray-50 p-6">
       <p class="text-sm text-gray-600">
         Need the verdict for a specific substance? Search it in the
-        <a href={TOOL} class="font-semibold text-[#1e3a8a] hover:underline">storage compatibility matrix</a>.
+        <a href={TOOL} class="font-semibold text-teal-700 hover:underline">storage compatibility matrix</a>.
       </p>
       <p class="mt-3 text-xs text-gray-400 leading-relaxed">
         Reference aid only — class-level segregation is a starting point, not a substitute for a substance's Safety
