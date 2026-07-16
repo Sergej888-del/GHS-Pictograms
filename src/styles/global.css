@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./storage-prose.css";
 
 :root {
   --font-body: 'Inter', sans-serif;

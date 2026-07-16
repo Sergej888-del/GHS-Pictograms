@@ -1,0 +1,142 @@
+/* Typography for markdown-rendered prose (storage-class category pages).
+   Tailwind's preflight deliberately strips heading sizes/weights, paragraph
+   margins and table borders. Component markup re-dresses each element with
+   utility classes; markdown output cannot. This restores those properties for
+   the closed set of tags our MDX actually emits, in the teal design system.
+   Unlayered on purpose: unlayered CSS outranks Tailwind's @layer base. */
+
+.storage-prose {
+  color: #111827;
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.storage-prose > :first-child {
+  margin-top: 0;
+}
+
+/* Headings ---------------------------------------------------------------- */
+
+.storage-prose h2 {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #111827;
+  margin: 2.5rem 0 0.875rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #14b8a6;
+}
+
+.storage-prose h3 {
+  font-family: var(--font-heading);
+  font-size: 1.1875rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 2rem 0 0.625rem;
+}
+
+/* Body -------------------------------------------------------------------- */
+
+.storage-prose p {
+  margin: 0 0 1rem;
+}
+
+.storage-prose strong {
+  font-weight: 600;
+  color: #111827;
+}
+
+.storage-prose a {
+  color: #0f766e;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: #5eead4;
+  transition: text-decoration-color 0.15s;
+}
+
+.storage-prose a:hover {
+  text-decoration-color: #0f766e;
+}
+
+.storage-prose ul,
+.storage-prose ol {
+  margin: 0 0 1rem;
+  padding-left: 1.5rem;
+}
+
+.storage-prose ul { list-style: disc; }
+.storage-prose ol { list-style: decimal; }
+.storage-prose li { margin: 0.375rem 0; }
+
+/* Tables ------------------------------------------------------------------ */
+
+.storage-prose table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 0.9375rem;
+  margin: 1.5rem 0;
+}
+
+.storage-prose thead th {
+  background: #134e4a;
+  color: #99f6e4;
+  font-family: var(--font-heading);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 0.625rem 0.875rem;
+  white-space: nowrap;
+}
+
+.storage-prose tbody td {
+  padding: 0.625rem 0.875rem;
+  border-top: 1px solid #e5e7eb;
+  vertical-align: top;
+}
+
+.storage-prose tbody tr:nth-child(even) {
+  background: #f9fafb;
+}
+
+.storage-prose tbody td:first-child {
+  font-weight: 500;
+  color: #111827;
+  white-space: nowrap;
+}
+
+.storage-prose tbody td:not(:first-child) {
+  color: #111827;
+}
+
+/* Blockquote (regulatory citations) --------------------------------------- */
+
+.storage-prose blockquote {
+  margin: 1.5rem 0;
+  padding: 0.875rem 1.25rem;
+  background: #f0fdfa;
+  border-left: 3px solid #14b8a6;
+  color: #134e4a;
+  font-size: 1.0625rem;
+}
+
+.storage-prose blockquote p {
+  margin: 0;
+}
+
+/* Narrow screens ---------------------------------------------------------- */
+
+@media (max-width: 640px) {
+  .storage-prose h2 { font-size: 1.3125rem; }
+  .storage-prose h3 { font-size: 1.0625rem; }
+  .storage-prose table { font-size: 0.8125rem; }
+  .storage-prose thead th,
+  .storage-prose tbody td { padding: 0.5rem 0.5rem; }
+  .storage-prose tbody td:first-child { white-space: normal; }
+}
