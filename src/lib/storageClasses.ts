@@ -24,7 +24,7 @@ export const STORAGE_CLASSES: StorageClass[] = [
   { code: 'ORG_ACID',    slug: 'organic-acids',         short: 'Organic acids',       family: 'corrosive' },
   { code: 'BASE',        slug: 'bases',                 short: 'Bases',               family: 'corrosive' },
   { code: 'WATER_RX',    slug: 'water-reactives',       short: 'Water-reactives',     family: 'reactive'  },
-  { code: 'ORG_PEROX',   slug: 'organic-peroxides',     short: 'Organic peroxides',   family: 'oxidizing' },
+  { code: 'ORG_PEROX',   slug: 'organic-peroxides',     short: 'Organic peroxides & self-reactives',   family: 'oxidizing' },
   { code: 'GAS',         slug: 'compressed-gases',      short: 'Compressed gases',    family: 'reactive'  },
   { code: 'FLAM_SOL',    slug: 'flammable-solids',      short: 'Flammable solids',    family: 'flammable' },
   { code: 'REACT_METAL', slug: 'reactive-metals',       short: 'Reactive metals',     family: 'reactive'  },
