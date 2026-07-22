@@ -4,6 +4,7 @@
 
 ## Tools
 
+- [Chemical Storage Compatibility](https://ghspictograms.com/tools/chemical-storage-compatibility/): Check GHS storage segregation for any substance — never-store/keep-separate verdicts across 13 hazard classes, with ADR transport data and partner-specific reaction gases
 - [GHS Label Constructor](https://ghspictograms.com/label-constructor/): Build CLP-compliant chemical labels with pictograms, signal words, H/P-statements across 5 volume tiers
 - [Substance Database](https://ghspictograms.com/pictograms/): Search 4,178 CLP Annex VI substances with full GHS classification, pictograms and signal words
 - [GHS vs ADR/DOT Inspector](https://ghspictograms.com/inspector/): Compare GHS hazard classification with transport (ADR/DOT) classification side by side
@@ -14,6 +15,9 @@
 - [OSHA HCS](https://ghspictograms.com/compliance/osha-hcs/): US Hazard Communication Standard, including the 2024 update
 - [CLP (EU)](https://ghspictograms.com/compliance/clp/): EU Regulation EC 1272/2008 on classification, labelling and packaging
 - [SDS Format](https://ghspictograms.com/compliance/sds/): Safety Data Sheet 16-section format requirements
+- [EHS](https://ghspictograms.com/compliance/ehs/): Environment, health and safety management for chemical operations
+- [REACH](https://ghspictograms.com/compliance/reach/): EU Regulation EC 1907/2006 on registration, evaluation and authorisation of chemicals
+- [SVHC](https://ghspictograms.com/compliance/svhc/): Substances of Very High Concern, the SCIP database and candidate-list obligations
 
 ## GHS Pictograms Reference
 
@@ -34,8 +38,8 @@
 
 ## Sister sites
 
-- [ghssymbols.com](https://ghssymbols.com): Per-substance hazard pages, ATE Calculator, H/P-statement reference
-- [ghslabels.com](https://ghslabels.com): Certified GHS label ordering (BS5609 marine grade)
+- [ghssymbols.com](https://ghssymbols.com): Per-substance hazard pages, H/P-statement reference
+- [ghslabels.com](https://ghslabels.com): GHS chemical label suppliers and BS5609 marine-grade label procurement (referral directory)
 
 ## Data
 
