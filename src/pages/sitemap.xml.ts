@@ -16,6 +16,7 @@ const STATIC_PAGES = [
   { url: '/inspector/', changefreq: 'monthly', priority: '0.8' },
   { url: '/faq/', changefreq: 'monthly', priority: '0.7' },
   { url: '/blog/', changefreq: 'weekly', priority: '0.8' },
+  { url: '/tools/', changefreq: 'weekly', priority: '0.85' },
   { url: '/label-constructor/', changefreq: 'weekly', priority: '0.85' },
   { url: '/pictogram-selector/', changefreq: 'weekly', priority: '0.85' },
   { url: '/compliance/', changefreq: 'weekly', priority: '0.9' },
@@ -35,6 +36,17 @@ const COMPLIANCE_PILLAR_PAGES = [
   { url: '/compliance/sds/', changefreq: 'weekly', priority: '0.85' },
   { url: '/compliance/reach/', changefreq: 'weekly', priority: '0.85' },
   { url: '/compliance/svhc/', changefreq: 'weekly', priority: '0.85' },
+  { url: '/compliance/ehs/', changefreq: 'weekly', priority: '0.85' },
+];
+
+/** Storage-compatibility tool, hub and the 4 indexable category pages (P4 prose). */
+const STORAGE_PAGES = [
+  { url: '/tools/chemical-storage-compatibility/', changefreq: 'weekly', priority: '0.85' },
+  { url: '/storage-compatibility/', changefreq: 'weekly', priority: '0.9' },
+  { url: '/storage-compatibility/flammable-liquids/', changefreq: 'monthly', priority: '0.7' },
+  { url: '/storage-compatibility/oxidizers/', changefreq: 'monthly', priority: '0.7' },
+  { url: '/storage-compatibility/water-reactives/', changefreq: 'monthly', priority: '0.7' },
+  { url: '/storage-compatibility/organic-peroxides/', changefreq: 'monthly', priority: '0.7' },
 ];
 
 async function fetchBlogSitemapEntries(): Promise<
@@ -69,6 +81,7 @@ export const GET: APIRoute = async () => {
     ...STATIC_PAGES,
     ...GHS_PAGES,
     ...COMPLIANCE_PILLAR_PAGES,
+    ...STORAGE_PAGES,
     ...compliancePages,
     ...blogPages,
   ];
