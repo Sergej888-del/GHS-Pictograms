@@ -54,6 +54,7 @@ interface Verdict {
   special_flags: string[]
   segregation: SegItem[]
   predicted_gases: { label: string; toxic: boolean }[]
+  reactivity: { reacts_with: string; status: string; hazard_codes: string[]; gases: { label: string; toxic: boolean }[] }[]
   adr: AdrItem[]
 }
 
@@ -580,28 +581,38 @@ export default function StorageTool() {
               </section>
             )}
 
-            {/* predicted gases on contact (CAMEO, curated) */}
-            {(verdict.predicted_gases?.length ?? 0) > 0 && (
+            {/* gas release on contact — attributed to the incompatible class that triggers it (CAMEO, curated) */}
+            {(verdict.reactivity ?? []).some(r => (r.gases?.length ?? 0) > 0) && (
               <section>
                 <h3 className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
-                  <span aria-hidden="true">☁️</span> On contact — predicted gases
+                  <span aria-hidden="true">☁️</span> Gas release on contact
                 </h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {verdict.predicted_gases.map(g => (
-                    <span
-                      key={g.label}
-                      className={`inline-flex items-center rounded-full px-3 py-1 text-sm border ${
-                        g.toxic
-                          ? 'bg-red-50 text-red-700 border-red-200'
-                          : 'bg-gray-100 text-gray-700 border-gray-200'
-                      }`}
-                    >
-                      {g.label}
-                    </span>
-                  ))}
-                </div>
-                <p className="mt-1.5 text-xs text-gray-400">
-                  Gases that a spill or bad mix may release (CAMEO). Red = acutely toxic.
+                <ul className="mt-2 flex flex-col gap-2">
+                  {verdict.reactivity
+                    .filter(r => (r.gases?.length ?? 0) > 0)
+                    .map(r => (
+                      <li key={r.reacts_with} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                        <span className="text-gray-600">With <span className="font-medium text-gray-800">{r.reacts_with}</span></span>
+                        <span aria-hidden="true" className="text-gray-400">→</span>
+                        <span className="flex flex-wrap gap-1.5">
+                          {r.gases.map(g => (
+                            <span
+                              key={g.label}
+                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm border ${
+                                g.toxic
+                                  ? 'bg-red-50 text-red-700 border-red-200'
+                                  : 'bg-gray-100 text-gray-700 border-gray-200'
+                              }`}
+                            >
+                              {g.label}
+                            </span>
+                          ))}
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+                <p className="mt-2 text-xs text-gray-400">
+                  Each gas is shown with the class that triggers it — released only on contact, never by the substance alone. Where CAMEO lists both a specific gas (HCl) and the general form (hydrogen halide), both appear. Red = acutely toxic.
                 </p>
               </section>
             )}
