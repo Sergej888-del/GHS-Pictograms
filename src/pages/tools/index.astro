@@ -4,6 +4,15 @@ import Layout from '../../layouts/Layout.astro'
 // Flagship interactive tools (own pages)
 const flagship = [
   {
+    name: 'Chemical Storage Compatibility',
+    href: '/tools/chemical-storage-compatibility/',
+    badge: 'Segregation',
+    accent: 'border-t-teal-600',
+    badgeColor: 'text-teal-700',
+    desc: 'Check which chemicals can be stored together. Enter a substance or pick hazard classes to get GHS segregation verdicts — never-store, keep-separate and compatible — with ADR transport data and predicted reaction gases.',
+    cta: 'Check Compatibility →',
+  },
+  {
     name: 'GHS Label Maker',
     href: '/label-constructor/',
     badge: 'Most popular',
@@ -73,7 +82,7 @@ const itemList = {
 ---
 <Layout
   title="Free GHS Tools & Software — Label Maker, Calculators, Selector"
-  description="11 free online GHS compliance tools: label maker, pictogram selector, 9 classification calculators (flash point, LD50, pH, aquatic toxicity) and a GHS vs ADR/DOT inspector. No signup, no install — built on a 4,000+ substance CLP database."
+  description="13 free online GHS compliance tools: chemical storage compatibility matrix, label maker, pictogram selector, 9 classification calculators (flash point, LD50, pH, aquatic toxicity) and a GHS vs ADR/DOT inspector. No signup, no install — built on a 4,000+ substance CLP database."
   canonical="https://ghspictograms.com/tools/"
 >
   <!-- Navy hero -->
@@ -87,7 +96,7 @@ const itemList = {
         substances with harmonised CLP classifications.
       </p>
       <div class="mt-8 flex flex-wrap gap-3">
-        <span class="inline-flex items-center rounded-full bg-white/10 border border-white/20 px-4 py-1.5 text-sm font-medium text-blue-100">11 tools</span>
+        <span class="inline-flex items-center rounded-full bg-white/10 border border-white/20 px-4 py-1.5 text-sm font-medium text-blue-100">13 tools</span>
         <span class="inline-flex items-center rounded-full bg-white/10 border border-white/20 px-4 py-1.5 text-sm font-medium text-blue-100">4,178 substances</span>
         <span class="inline-flex items-center rounded-full bg-white/10 border border-white/20 px-4 py-1.5 text-sm font-medium text-blue-100">CLP Annex VI data</span>
       </div>
