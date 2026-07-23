@@ -3,7 +3,7 @@ slug: organic-peroxides
 title: "Organic Peroxides & Self-Reactive Substances: Examples & Storage"
 description: "What an organic peroxide is, why hydrogen peroxide is not one, how types A to G and the SADT work, why organic peroxides and self-reactive substances share the same hazard codes, and what this class must never be stored beside."
 intro: "An organic peroxide is a derivative of hydrogen peroxide with an organic group bolted on — and that single change turns a bleaching agent into a molecule that carries fuel, oxygen and its own thermal trigger in one structure. It is the only class on this site with no compatible neighbours at all."
-updatedDate: 2026-07-16
+updatedDate: 2026-07-23
 keywords:
   - organic peroxide
   - organic peroxides
@@ -50,8 +50,6 @@ This is the question Google itself asks on this topic, and the answer falls stra
 The regulation is remarkably explicit about the family relationship. Appendix B sets the boundary of the organic-peroxide class using the *hydrogen peroxide content* of the mixture: a formulation is excluded when it holds no more than 1.0% available oxygen from organic peroxides while containing no more than 1.0% hydrogen peroxide, or no more than 0.5% available oxygen while containing between 1.0% and 7.0% hydrogen peroxide (B.15.2.1). The criteria for the children are written in terms of the parent.
 
 Hazard-wise the two behave in opposite ways. Hydrogen peroxide is classified as an **oxidizer** — it donates oxygen to someone else's fuel. An organic peroxide already has the fuel. That is why hydrogen peroxide belongs on our [oxidizers page](/storage-compatibility/oxidizers/) and not this one.
-
-> **A note on our own data.** Hydrogen peroxide currently appears in this class's substance list below. It should not. The entry arrives through a reactivity-group link that treats it as a member of "Peroxides, Organic" rather than as their parent, and we have not yet corrected it. We would rather show you the flaw than quietly filter it and let you find it in an audit. Everything else on this page is unaffected.
 
 ## Why organic peroxides and self-reactive substances share H240 to H242
 
