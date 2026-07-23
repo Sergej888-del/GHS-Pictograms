@@ -612,13 +612,17 @@ export default function StorageTool() {
                     ))}
                 </ul>
                 <p className="mt-2 text-xs text-gray-400">
-                  Each gas is shown with the class that triggers it — released only on contact, never by the substance alone. Where CAMEO lists both a specific gas (HCl) and the general form (hydrogen halide), both appear. Red = acutely toxic.
+                  Each gas is shown with the class that triggers it — released only on contact, never by the substance alone. Where CAMEO lists both a specific gas (HCl) and the general form (hydrogen halide), both appear.
+                </p>
+                <p className="mt-2 text-xs leading-relaxed text-gray-400">
+                  <span className="font-medium text-gray-600">Red</span> means the gas carries an acute inhalation toxicity classification — H330, H331 or H332 — in CLP Annex VI. That is a legal classification, not our judgement: it is why hydrogen chloride and ammonia are red while hydrogen iodide is not, since Annex VI classifies the first two as acutely toxic and the third only as corrosive.{' '}
+                  <span className="font-medium text-gray-600">Grey does not mean safe.</span> Hydrogen iodide and sulphuric acid mist are corrosive, carbon dioxide and nitrogen displace oxygen in a confined space, hydrogen is flammable and oxygen intensifies any fire. A few gases have no harmonised entry at all and are marked by hand, erring towards caution.
                 </p>
               </section>
             )}
 
-            <p className="text-xs leading-relaxed text-gray-400">
-              Reference aid only — always verify storage against the substance's SDS (sections 7 and 10) and local regulations.
+            <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs leading-relaxed text-gray-600">
+              <span className="font-semibold text-gray-800">Reference aid only.</span> Colour and class are a triage signal, not a classification — always verify storage and gas hazards against the substance&apos;s safety data sheet (sections 7 and 10) and local regulations.
             </p>
           </div>
         )}
