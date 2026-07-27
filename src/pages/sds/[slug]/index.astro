@@ -1,7 +1,11 @@
 ---
-// SDS substance page — /sds/<slug>/  (v1.1 — full-report layout)
-// One page per `sds_pages` row with status='live'. Fully data-driven, no island;
-// the storage verdict and all lists are BAKED into HTML at build time.
+// SDS substance page — /sds/<slug>/  (v2 — mockup restyle, 2026-07-27)
+// Visual target: _active-docs/sds-page-mockup-v1.html (approved), with the
+// §3.2 corrections from claude/sds-pages-concept.md applied:
+//   (1) NO ACGIH TLV anywhere (copyright DROP list) — §8 ships NIOSH REL instead, at import.
+//   (2) All mockup numbers were placeholders — every value below comes from the DB (D10).
+//   (3) "Full substance report →" button lives in the TOOL, not on this page.
+//   (4) Emergency button copy TBD — whole button gated behind EMERGENCY_ENABLED (v1.5, ERG import).
 //
 // ROLE (Sergej, 2026-07-27): this page is NOT an SDS and NOT a PDF. It is an
 // SDS-style substance report that collects organic traffic and routes it:
@@ -9,15 +13,26 @@
 //   -> SDS Manager (for real SDS management)  -> supplier PDFs (official docs)
 //   -> compliance hub + primary sources.
 // Sections mirror the 16-section SDS convention (chemists search "sds section 9").
-// Sections render only when data exists — imports light them up with no code change.
+// Sections render only when data exists — imports light them up with no code change:
+//   §8 OEL        -> Step-3 import (substance_oel table; IOELV + OSHA PEL + NIOSH REL, never ACGIH)
+//   §9 fire trio  -> Step-1 import (LEL/UEL + autoignition columns; flash_point already live)
+//   §12 ecology   -> eco import (lc50_fish / ec50_daphnia / ec50_algae — live-wired below, > 0 guard)
+//   §15 regulatory-> Step-4 import (substance_regulatory_status: SVHC, Seveso, TSCA/DSL, precursor flags)
+//   EUH codes     -> EUH import (0 in DB today; acetone is missing EUH066)
+//   §14 tunnel/LQ -> tunnel-letter + LQ import (dg tunnel_code holds the KEMLER number, not the letter)
 import Layout from '../../../layouts/Layout.astro'
 import SdsManagerCard from '../../../components/SdsManagerCard.astro'
 import SharePage from '../../../components/SharePage.astro'
-import { shortForCode, urlForCode, HERO_DOTS } from '../../../lib/storageClasses'
+import { shortForCode, urlForCode } from '../../../lib/storageClasses'
 import { supabase } from '../../../lib/supabase'
 
 const SITE = 'https://ghspictograms.com'
 const TOOL = '/tools/chemical-storage-compatibility/'
+
+// v1.5 flip: set to true after the ERG 2024 import lands (UN -> guide map).
+// Never ship a dead emergency button on a safety page — that's why this gates
+// the whole hero button, not just its href. Button copy TBD (concept §3.2 #4).
+const EMERGENCY_ENABLED = false
 
 export async function getStaticPaths() {
   const { data: pages } = await supabase
@@ -38,12 +53,13 @@ export async function getStaticPaths() {
       let hRows: any[] = []
       let pRows: any[] = []
       let similar: any[] = []
+      let dgRows: any[] = []
 
       if (page.substance_id) {
         const { data: s } = await supabase
           .from('substances')
           .select(
-            'cas_number, ec_number, index_number, iupac_name, h_statement_codes, ghs_pictogram_codes, signal_word, p_statement_codes, molecular_formula, molecular_weight, melting_point, boiling_point, flash_point, water_solubility, log_kow, ate_oral, ate_dermal, ate_inhalation_vapour, ate_inhalation_dust, ate_inhalation_gas',
+            'cas_number, ec_number, index_number, reach_reg_number, iupac_name, h_statement_codes, ghs_pictogram_codes, signal_word, p_statement_codes, molecular_formula, molecular_weight, melting_point, boiling_point, flash_point, water_solubility, log_kow, ate_oral, ate_dermal, ate_inhalation_vapour, ate_inhalation_dust, ate_inhalation_gas, lc50_fish, ec50_daphnia, ec50_algae',
           )
           .eq('id', page.substance_id)
           .single()
@@ -76,6 +92,25 @@ export async function getStaticPaths() {
               .in('code', substance.p_statement_codes)
             pRows = (p ?? []).sort((a, b) => a.code.localeCompare(b.code))
           }
+
+          // §14: full ADR row incl. Kemler (dg_substances.tunnel_code holds the
+          // Kemler/HIN number — 33/80/X886 — NOT the ADR tunnel letter).
+          // Requires the anon read policy from supabase/rls_dg_read_v1.sql;
+          // until it is applied this returns [] and we fall back to verdict.adr
+          // (same cards, no Kemler plate) — the build never breaks either way.
+          const { data: links } = await supabase
+            .from('substance_un_link')
+            .select('un_number')
+            .eq('cas_number', substance.cas_number)
+          const uns = (links ?? []).map((l: any) => l.un_number)
+          if (uns.length) {
+            const { data: dg } = await supabase
+              .from('dg_substances')
+              .select('un_number, proper_shipping_name, transport_class, classification_code, packing_group, label_codes, transport_category, tunnel_code, adr_version')
+              .in('un_number', uns)
+            dgRows = (dg ?? []).sort((a: any, b: any) => a.un_number.localeCompare(b.un_number))
+          }
+
           const firstClass = verdict?.classes?.[0]
           if (firstClass) {
             const { data: sim } = await supabase.rpc('get_class_substances', {
@@ -90,13 +125,13 @@ export async function getStaticPaths() {
       }
       return {
         params: { slug: page.slug },
-        props: { page, substance, verdict, pictos, hRows, pRows, similar, liveMap },
+        props: { page, substance, verdict, pictos, hRows, pRows, similar, dgRows, liveMap },
       }
     }),
   )
 }
 
-const { page, substance, verdict, pictos, hRows, pRows, similar, liveMap } = Astro.props as any
+const { page, substance, verdict, pictos, hRows, pRows, similar, dgRows, liveMap } = Astro.props as any
 
 // --- CLP hazard class + category labels (fixed CLP assignments, not curation) ---
 const CLP_CLASS: Record<string, string> = {
@@ -134,6 +169,17 @@ const CLP_CLASS: Record<string, string> = {
   H420: 'Hazardous to the ozone layer',
 }
 
+// Short class label for hero pills: the parenthetical when present ("Flam. Liq. 2"),
+// otherwise the part after the em-dash ("STOT SE 3"), otherwise the full label.
+function clpShort(code: string): string | null {
+  const full = CLP_CLASS[code]
+  if (!full) return null
+  const paren = full.match(/\(([^)]+)\)\s*$/)
+  if (paren) return paren[1]
+  const parts = full.split(' — ')
+  return parts.length > 1 ? parts[parts.length - 1] : full
+}
+
 const name = page.display_name
 const cap = name.charAt(0).toUpperCase() + name.slice(1)
 const cas = page.cas_number
@@ -161,24 +207,105 @@ const nIncompat = reactivity.filter((r) => r.status === 'incompatible').length
 const nCaution = reactivity.filter((r) => r.status === 'caution').length
 const adr: any[] = verdict?.adr ?? []
 
-// S9 physical properties — render only filled values (imports light rows up)
+// §7 headline — computed, never hardcoded
+const verdictHeadline =
+  neverWith.length > 0
+    ? `Never store with ${neverWith.length} storage group${neverWith.length === 1 ? '' : 's'}`
+    : keepSeparate.length > 0
+      ? `Keep separate from ${keepSeparate.length} storage group${keepSeparate.length === 1 ? '' : 's'}`
+      : 'No storage segregation conflicts documented'
+
+// §14 transport rows — dg_substances (with Kemler) preferred, verdict.adr fallback
+const transportRows =
+  dgRows.length > 0
+    ? dgRows.map((d: any) => ({
+        un: d.un_number,
+        name: d.proper_shipping_name,
+        class: d.transport_class,
+        pg: d.packing_group,
+        code: d.classification_code,
+        cat: d.transport_category,
+        labels: d.label_codes ?? [],
+        kemler: d.tunnel_code,
+        ver: d.adr_version,
+      }))
+    : adr.map((a: any) => ({
+        un: a.un, name: a.name, class: a.class, pg: a.pg,
+        code: null, cat: null, labels: [], kemler: null, ver: null,
+      }))
+const adrVersion = transportRows.find((t: any) => t.ver)?.ver ?? '2025'
+
+// Hero hazard-summary pills (derived from harmonised data only)
+const hCodes: string[] = substance?.h_statement_codes ?? []
+const dedupe = (arr: (string | null)[]) => [...new Set(arr.filter(Boolean) as string[])]
+const physShorts = dedupe(hCodes.filter((c) => c.startsWith('H2')).map(clpShort))
+const healthShorts = dedupe(hCodes.filter((c) => c.startsWith('H3')).map(clpShort))
+const envShorts = dedupe(hCodes.filter((c) => c.startsWith('H4')).map(clpShort))
+const capList = (l: string[], n = 3) => (l.length > n ? [...l.slice(0, n), `+${l.length - n}`] : l)
+const heroPills: { text: string; dot: string | null; mono: boolean }[] = []
+if (substance?.signal_word || physShorts.length) {
+  heroPills.push({
+    text: [substance?.signal_word, ...capList(physShorts, 2)].filter(Boolean).join(' · '),
+    dot: 'bg-red-400', mono: false,
+  })
+}
+if (healthShorts.length) heroPills.push({ text: capList(healthShorts).join(' · '), dot: 'bg-amber-400', mono: false })
+if (envShorts.length) heroPills.push({ text: capList(envShorts, 2).join(' · '), dot: 'bg-emerald-400', mono: false })
+if (transportRows.length === 1) {
+  const t = transportRows[0]
+  heroPills.push({
+    text: `UN ${t.un} · ADR ${t.class}${t.pg ? ` · PG ${t.pg}` : ''}`,
+    dot: null, mono: true,
+  })
+}
+
+// §9 physical properties — render only filled values (imports light rows up).
+// Fire-relevant value pulled out first (mockup: fire values decide the regime).
+// LEL/UEL + autoignition cards join the strip at Step-1 import (no columns yet).
+const flashPoint: number | null = substance?.flash_point ?? null
 const physRows: { label: string; value: string }[] = []
 if (substance?.melting_point != null) physRows.push({ label: 'Melting point', value: `${substance.melting_point} °C` })
 if (substance?.boiling_point != null) physRows.push({ label: 'Boiling point', value: `${substance.boiling_point} °C` })
-if (substance?.flash_point != null) physRows.push({ label: 'Flash point', value: `${substance.flash_point} °C` })
 if (substance?.water_solubility) physRows.push({ label: 'Water solubility', value: `${substance.water_solubility}` })
 if (substance?.log_kow != null) physRows.push({ label: 'Partition coefficient (log Kow)', value: `${substance.log_kow}` })
+// density / vapor_pressure exist as columns but are 0-filled placeholders today;
+// wire them here at Step-1 import once units are pinned (never render 0).
 
-// S11 ATE — regulatory acute toxicity estimates (CLP / OSHA HCS App. A units).
+// §11 ATE — regulatory acute toxicity estimates (CLP / OSHA HCS App. A units).
 // STRICTLY > 0: the ate_* columns contain 0 as an unfilled placeholder (73 of the
 // 78 shortlist rows) and an ATE of zero is physically meaningless — rendering it
-// would publish wrong data. Section auto-hides until a real value lands.
-const ateRows: { label: string; value: string }[] = []
-if (substance?.ate_oral > 0) ateRows.push({ label: 'Oral (mg/kg bw)', value: `${substance.ate_oral}` })
-if (substance?.ate_dermal > 0) ateRows.push({ label: 'Dermal (mg/kg bw)', value: `${substance.ate_dermal}` })
-if (substance?.ate_inhalation_gas > 0) ateRows.push({ label: 'Inhalation, gas (ppmV, 4 h)', value: `${substance.ate_inhalation_gas}` })
-if (substance?.ate_inhalation_vapour > 0) ateRows.push({ label: 'Inhalation, vapour (mg/L, 4 h)', value: `${substance.ate_inhalation_vapour}` })
-if (substance?.ate_inhalation_dust > 0) ateRows.push({ label: 'Inhalation, dust/mist (mg/L, 4 h)', value: `${substance.ate_inhalation_dust}` })
+// would publish wrong data. Section auto-hides until a real value lands; within
+// the table, empty routes render as "No data", never as a numeric zero.
+const ateRoutes: { label: string; value: number | null }[] = [
+  { label: 'Oral (mg/kg bw)', value: substance?.ate_oral > 0 ? substance.ate_oral : null },
+  { label: 'Dermal (mg/kg bw)', value: substance?.ate_dermal > 0 ? substance.ate_dermal : null },
+  { label: 'Inhalation, gas (ppmV, 4 h)', value: substance?.ate_inhalation_gas > 0 ? substance.ate_inhalation_gas : null },
+  { label: 'Inhalation, vapour (mg/L, 4 h)', value: substance?.ate_inhalation_vapour > 0 ? substance.ate_inhalation_vapour : null },
+  { label: 'Inhalation, dust / mist (mg/L, 4 h)', value: substance?.ate_inhalation_dust > 0 ? substance.ate_inhalation_dust : null },
+]
+const ateReal = ateRoutes.filter((r) => r.value != null)
+const acuteToxCodes = hCodes.filter((c) =>
+  ['H300', 'H301', 'H302', 'H310', 'H311', 'H312', 'H330', 'H331', 'H332'].includes(c),
+)
+
+// §12 ecology — live-wired to existing columns, > 0 guard (all zero-filled today,
+// so the whole section stays hidden until the eco import lands).
+// readily_biodegradable / bioaccumulation are booleans whose "false" cannot be
+// distinguished from "never imported" — do NOT render them until the eco import
+// defines their semantics (same placeholder trap as ate_*).
+const ecoCards: { label: string; value: string }[] = []
+if (substance?.lc50_fish > 0) ecoCards.push({ label: 'Fish · LC50 96 h', value: `${substance.lc50_fish} mg/L` })
+if (substance?.ec50_daphnia > 0) ecoCards.push({ label: 'Daphnia · EC50 48 h', value: `${substance.ec50_daphnia} mg/L` })
+if (substance?.ec50_algae > 0) ecoCards.push({ label: 'Algae · EC50 72 h', value: `${substance.ec50_algae} mg/L` })
+
+// §8 OEL — Step-3 import (substance_oel: EU IOELV · OSHA PEL · NIOSH REL — the
+// mockup's ACGIH TLV row is DROPPED: private body, copyrighted values).
+// §15 regulatory — Step-4 import (substance_regulatory_status: SVHC, Seveso
+// derived from H-codes, TSCA/DSL, precursor flags EU 2019/1148 + EC 273/2004).
+// Both sections auto-appear once their queries return rows; until then they are
+// hidden — no skeletons on the public page.
+const oelRows: any[] = []
+const regRows: any[] = []
 
 // SEO (D11)
 const title = `${cap} SDS (MSDS): GHS hazards, classification & storage`
@@ -196,21 +323,29 @@ const suppliers = cas
     ]
   : []
 
-// Identity strip (S1 + S3)
+// Identity strip (S1 + S3). REACH reg. no. is live-wired: renders as soon as the
+// reach_reg_number import fills the column (empty today).
 const identity: { label: string; value: string }[] = []
 if (cas) identity.push({ label: 'CAS number', value: cas })
 if (substance?.ec_number) identity.push({ label: 'EC number', value: substance.ec_number })
 if (substance?.index_number) identity.push({ label: 'CLP Annex VI index', value: substance.index_number })
 if (substance?.molecular_formula) identity.push({ label: 'Molecular formula', value: substance.molecular_formula })
 if (substance?.molecular_weight != null) identity.push({ label: 'Molar mass', value: `${substance.molecular_weight} g/mol` })
+if (substance?.reach_reg_number) identity.push({ label: 'REACH reg. no.', value: substance.reach_reg_number })
 
-const pills = [
-  ...(substance ? [{ id: 'hazards', label: '#hazards' }, { id: 'storage', label: '#storage' }] : []),
-  ...(physRows.length || identity.length ? [{ id: 'properties', label: '#properties' }] : []),
-  ...(ateRows.length ? [{ id: 'toxicology', label: '#toxicology' }] : []),
-  ...(adr.length ? [{ id: 'transport', label: '#transport' }] : []),
-  { id: 'msds', label: '#msds' },
-  { id: 'faq', label: '#faq' },
+// §-numbered sticky nav — only sections that actually render (hybrid nav, D3)
+const navItems = [
+  ...(substance ? [{ id: 's2', label: '§2 Hazards' }, { id: 's7', label: '§7 Storage' }] : []),
+  ...(oelRows.length ? [{ id: 's8', label: '§8 OEL' }] : []),
+  ...(substance ? [{ id: 's9', label: '§9 Properties' }] : []),
+  ...(substance && (reactiveGroups.length || nIncompat + nCaution > 0) ? [{ id: 's10', label: '§10 Reactivity' }] : []),
+  ...(ateReal.length ? [{ id: 's11', label: '§11 Toxicology' }] : []),
+  ...(ecoCards.length ? [{ id: 's12', label: '§12 Ecology' }] : []),
+  ...(transportRows.length ? [{ id: 's14', label: '§14 Transport' }] : []),
+  ...(regRows.length ? [{ id: 's15', label: '§15 Regulatory' }] : []),
+  { id: 's16', label: '§16 Sources' },
+  { id: 'msds', label: 'MSDS' },
+  { id: 'faq', label: 'FAQ' },
 ]
 
 // FAQ
@@ -275,69 +410,129 @@ const jsonLd: Record<string, unknown>[] = [
   },
 ]
 
-const sectionCls = 'scroll-mt-32'
-const h2Cls = 'text-xl font-bold text-gray-900'
-const h2Style = "font-family:'Space Grotesk',sans-serif;"
-const sdsTag = 'ml-2 align-middle rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-gray-500'
+// --- style tokens (mockup design language) ---
+const mono = "font-family:'JetBrains Mono',ui-monospace,monospace;"
+const grotesk = "font-family:'Space Grotesk',sans-serif;"
+const sectionCls = 'scroll-mt-28'
+// §-label above every section heading
+const secLabelCls = 'text-[11px] font-semibold uppercase tracking-[0.11em] text-teal-600'
+const h2Cls = 'mt-1.5 text-2xl sm:text-[29px] font-bold tracking-tight text-gray-900'
+const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
 ---
 
 <Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
-  <!-- HERO (S1) -->
-  <section class="relative overflow-hidden text-white" style="background:linear-gradient(135deg,#0f172a 0%,#134e4a 100%);">
-    <div class="absolute inset-0 opacity-40" style={`background-image:${HERO_DOTS};background-size:22px 22px;`} aria-hidden="true"></div>
-    <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <nav class="text-sm text-slate-300 mb-5" aria-label="Breadcrumb">
-        <a href="/sds/" class="hover:text-white transition-colors">SDS library</a>
-        <span class="mx-1 text-slate-500">/</span>
-        <span class="text-slate-200">{cap}</span>
-      </nav>
-      <p class="text-xs font-bold uppercase tracking-[0.2em] text-teal-300">
-        Safety data sheet reference{cas && ` · CAS ${cas}`}
-      </p>
-      <h1 class="mt-1.5 text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.05]" style="font-family:'Space Grotesk',sans-serif;">
-        {cap} SDS
-      </h1>
-      <p class="mt-3 text-sm text-slate-300 max-w-3xl leading-relaxed">
-        also: {alsoParts.join(' · ')}
-      </p>
+  <link
+    slot="head"
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&display=swap"
+    rel="stylesheet"
+  />
 
-      {substance && (
-        <div class="mt-6 flex flex-wrap items-start gap-4">
-          {pictos.map((p: any) =>
-            p.svg_content ? (
-              <span class="flex flex-col items-center gap-1">
-                <span
-                  class="inline-flex h-16 w-16 items-center justify-center rounded-lg bg-white p-1 shadow-lg [&>svg]:h-full [&>svg]:w-full"
-                  set:html={p.svg_content}
-                />
-                <span class="text-[11px] text-slate-300">{p.name_en}</span>
-                <span class="font-mono text-[10px] text-slate-400">{p.code}</span>
+  <!-- HERO (S1) — mockup: navy gradient, teal dots, pills, side column -->
+  <section class="relative overflow-hidden text-white" style="background:linear-gradient(135deg,#0f172a 0%,#062A78 48%,#134e4a 100%);">
+    <div class="absolute inset-0 opacity-35" style="background-image:radial-gradient(rgba(94,234,212,0.55) 1px, transparent 1px);background-size:22px 22px;" aria-hidden="true"></div>
+    <div class="absolute inset-0" style="background:linear-gradient(90deg,rgba(15,23,42,0.75) 0%,rgba(15,23,42,0) 65%);" aria-hidden="true"></div>
+    <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-11 grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
+      <div>
+        <nav class="text-sm text-slate-300 mb-5" aria-label="Breadcrumb">
+          <a href="/sds/" class="hover:text-white transition-colors">SDS library</a>
+          <span class="mx-1 text-slate-500">/</span>
+          <span class="text-slate-200">{cap}</span>
+        </nav>
+        <p class="text-[11px] font-medium uppercase tracking-[0.11em] text-teal-300" style={mono}>
+          Safety data sheet reference{cas && ` · CAS ${cas}`}
+        </p>
+        <h1 class="mt-2 text-4xl sm:text-[56px] font-bold tracking-tight leading-[1.02]" style={grotesk}>
+          {cap} SDS
+        </h1>
+        <p class="mt-3 text-sm text-slate-300 max-w-2xl leading-relaxed">
+          also: {alsoParts.join(' · ')}
+        </p>
+
+        {heroPills.length > 0 && (
+          <div class="mt-5 flex flex-wrap gap-2.5">
+            {heroPills.map((p) => (
+              <span
+                class={`inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/[0.07] px-3.5 py-1.5 ${
+                  p.mono ? 'text-[11.5px] tracking-[0.05em] text-slate-200' : 'text-[12.5px] font-semibold text-white'
+                }`}
+                style={p.mono ? mono : undefined}
+              >
+                {p.dot && <span class={`h-[7px] w-[7px] rounded-full ${p.dot}`} aria-hidden="true"></span>}
+                {p.text}
               </span>
-            ) : (
-              <span class="inline-flex items-center rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold">{p.code}</span>
-            ),
-          )}
-          {substance.signal_word && (
-            <span
-              class={`mt-4 inline-flex items-center rounded-md px-3 py-1.5 text-sm font-bold uppercase tracking-wide ${
-                substance.signal_word === 'Danger' ? 'bg-red-500 text-white' : 'bg-amber-400 text-gray-900'
-              }`}
-            >
-              {substance.signal_word}
-            </span>
-          )}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+
+        {substance && pictos.length > 0 && (
+          <div class="mt-6 flex flex-wrap items-end gap-4">
+            {pictos.map((p: any) =>
+              p.svg_content ? (
+                <span class="flex flex-col items-center gap-1.5">
+                  <span
+                    class="inline-flex h-[66px] w-[66px] items-center justify-center rounded-[10px] bg-white p-1 shadow-[0_8px_24px_rgba(0,0,0,0.35)] [&>svg]:h-full [&>svg]:w-full"
+                    set:html={p.svg_content}
+                  />
+                  <span class="text-[11px] text-slate-300">{p.name_en}</span>
+                  <span class="text-[10px] text-slate-400" style={mono}>{p.code}</span>
+                </span>
+              ) : (
+                <span class="inline-flex items-center rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold">{p.code}</span>
+              ),
+            )}
+          </div>
+        )}
+        {/* Variant selector (concentration / gas-vs-solution) renders here for
+            template variants D/E once the variant data model exists — no live
+            D/E page yet, so no selector markup ships today. */}
+      </div>
+
+      <!-- Hero side column: Emergency (gated, v1.5) + supplier PDF hand-off -->
+      <div class="flex flex-col gap-3.5">
+        {EMERGENCY_ENABLED && (
+          <a
+            href="#emergency"
+            class="block w-full rounded-xl border border-red-400 p-5 text-left shadow-[0_0_0_1px_rgba(220,38,38,0.4),0_12px_34px_rgba(220,38,38,0.35)] transition hover:brightness-110"
+            style="background:linear-gradient(135deg,#dc2626 0%,#991b1b 100%);"
+          >
+            <span class="block text-[10.5px] uppercase tracking-[0.12em] text-red-200" style={mono}>Incident in progress</span>
+            <span class="mt-1.5 block text-[22px] font-bold tracking-tight" style={grotesk}>Emergency mode →</span>
+            <span class="mt-1 block text-[12.5px] text-white/80">First aid · fire · spill, full screen</span>
+          </a>
+        )}
+
+        {suppliers.length > 0 && (
+          <div class="rounded-xl border border-white/15 bg-white/[0.06] px-4 py-3.5">
+            <p class="text-[10px] uppercase tracking-[0.1em] text-slate-400" style={mono}>Official PDF from supplier</p>
+            <div class="mt-2.5 flex flex-wrap gap-2">
+              {suppliers.map((s) => (
+                <a
+                  href={s.href}
+                  target="_blank"
+                  rel="nofollow noopener"
+                  class="inline-flex items-center gap-1 rounded-[7px] border border-white/25 px-2.5 py-1 text-xs font-semibold text-slate-200 hover:border-teal-300 hover:text-white transition-colors"
+                >
+                  {s.label} ↗
+                </a>
+              ))}
+            </div>
+            <p class="mt-2.5 text-[11.5px] leading-relaxed text-slate-400">
+              This page is a reference, not the legal document.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   </section>
 
-  <!-- STICKY ANCHOR PILLS -->
+  <!-- STICKY §-NAV (hybrid nav, D3 — behaves like tabs on mobile) -->
   <nav class="sticky top-16 z-40 border-b border-gray-200 bg-white/95 backdrop-blur" aria-label="On this page">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-2 overflow-x-auto py-2.5">
-      {pills.map((p) => (
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-1 overflow-x-auto">
+      {navItems.map((p) => (
         <a
           href={`#${p.id}`}
-          class="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 font-mono text-xs text-teal-700 hover:bg-teal-50 hover:border-teal-300 transition-colors"
+          class="shrink-0 whitespace-nowrap px-2.5 py-3 text-[11px] uppercase tracking-[0.06em] text-slate-500 hover:text-teal-700 transition-colors"
+          style={mono}
         >
           {p.label}
         </a>
@@ -345,386 +540,504 @@ const sdsTag = 'ml-2 align-middle rounded bg-gray-100 px-1.5 py-0.5 font-mono te
     </div>
   </nav>
 
-  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
-    <SharePage url={canonical} title={`${cap} SDS — GHS hazards, classification & storage`} />
+  <div class="bg-slate-50">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-9 space-y-11">
+      <SharePage url={canonical} title={`${cap} SDS — GHS hazards, classification & storage`} />
 
-    <!-- SUPPLIER PDF HAND-OFF -->
-    {suppliers.length > 0 && (
-      <section class="rounded-xl border border-gray-200 bg-gray-50 p-5 sm:flex sm:items-center sm:justify-between sm:gap-6">
-        <p class="text-sm text-gray-700 font-medium">
-          This page is a reference, not the legal document. Need the official {name} SDS PDF? Get it from your supplier:
-        </p>
-        <div class="mt-3 sm:mt-0 flex flex-wrap gap-2">
-          {suppliers.map((s) => (
-            <a
-              href={s.href}
-              target="_blank"
-              rel="nofollow noopener"
-              class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800 hover:border-teal-400 hover:text-teal-700 transition-colors"
-            >
-              {s.label} ↗
-            </a>
-          ))}
-        </div>
-      </section>
-    )}
-
-    <!-- IDENTITY STRIP (S1 + S3) -->
-    {identity.length > 0 && (
-      <section id="properties" class={sectionCls}>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {identity.map((i) => (
-            <div class="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p class="text-[11px] uppercase tracking-wide text-gray-500">{i.label}</p>
-              <p class="mt-0.5 font-mono text-sm font-semibold text-gray-900">{i.value}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-    )}
-
-    {substance ? (
-      <>
-        <!-- SECTION 2: HAZARDS -->
-        <section id="hazards" class={sectionCls}>
-          <h2 class={h2Cls} style={h2Style}>
-            Hazards identification <span class={sdsTag}>SDS §2</span>
-          </h2>
-          <p class="mt-1 text-sm text-gray-500">
-            Harmonised EU classification — CLP Annex VI{substance.index_number && ` · Index ${substance.index_number}`}.
-            A supplier SDS may add self-classified hazards; this is the legal minimum.
-          </p>
-          {hRows.length > 0 && (
-            <ul class="mt-4 space-y-2">
-              {hRows.map((h: any) => (
-                <li class="rounded-lg border border-red-100 bg-red-50/50 px-3 py-2.5">
-                  <div class="flex items-baseline gap-3">
-                    <span class="shrink-0 font-mono text-sm font-bold text-red-800">{h.code}</span>
-                    <span class="text-sm text-gray-800">{h.text_en}</span>
-                  </div>
-                  {CLP_CLASS[h.code] && (
-                    <p class="mt-0.5 pl-12 text-xs text-gray-500">{CLP_CLASS[h.code]}</p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {pRows.length > 0 && (
-            <div class="mt-6">
-              <h3 class="text-sm font-semibold text-gray-900">Precautionary statements (P-codes)</h3>
-              <ul class="mt-2 grid gap-2 sm:grid-cols-2">
-                {pRows.map((p: any) => (
-                  <li class="flex items-baseline gap-3 rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2">
-                    <span class="shrink-0 font-mono text-xs font-bold text-emerald-800">{p.code}</span>
-                    <span class="text-xs text-gray-700">{p.text_en}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+      <!-- IDENTITY STRIP (S1 + S3) -->
+      {identity.length > 0 && (
+        <section aria-label="Substance identifiers">
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+            {identity.map((i) => (
+              <div class="rounded-[10px] border border-gray-200 bg-white px-3 py-2.5">
+                <p class={cardLabelCls} style={mono}>{i.label}</p>
+                <p class="mt-1 text-sm font-semibold text-gray-900" style={mono}>{i.value}</p>
+              </div>
+            ))}
+          </div>
         </section>
+      )}
 
-        <!-- SECTION 7: HANDLING & STORAGE (the computed differentiator) -->
-        <section id="storage" class={sectionCls}>
-          <div class="rounded-xl border-2 border-teal-200 bg-teal-50/50 p-6">
-            <div class="flex flex-wrap items-center gap-2">
-              <h2 class={h2Cls} style={h2Style}>Handling and storage</h2>
-              <span class={sdsTag}>SDS §7</span>
-              <span class="rounded-full bg-teal-600 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">computed</span>
-            </div>
-            <p class="mt-1 text-sm text-gray-600">
-              Derived from CLP Annex VI classification and CAMEO reactive-group data — not copied from a PDF.
+      {substance ? (
+        <>
+          <!-- §2 HAZARDS -->
+          <section id="s2" class={sectionCls}>
+            <p class={secLabelCls} style={mono}>§ 02 · Hazards identification</p>
+            <h2 class={h2Cls} style={grotesk}>Harmonised EU classification</h2>
+            <p class="mt-2 text-sm text-gray-500 max-w-2xl leading-relaxed">
+              CLP Annex VI{substance.index_number && ` · Index ${substance.index_number}`}. A supplier SDS may add
+              self-classified hazards — this is the legal minimum.
             </p>
 
-            {storageClasses.length > 0 && (
-              <p class="mt-4 text-sm text-gray-700">
-                Storage class:
+            <div class="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] items-start">
+              <div class="flex flex-col gap-2">
+                {hRows.map((h: any) => (
+                  <div class="flex items-baseline gap-3.5 rounded-[10px] border border-red-200 bg-red-50 px-3.5 py-3">
+                    <span class="min-w-[52px] shrink-0 text-sm font-bold text-red-800" style={mono}>{h.code}</span>
+                    <span class="flex-1">
+                      <span class="block text-[14.5px] text-slate-800">{h.text_en}</span>
+                      {CLP_CLASS[h.code] && (
+                        <span class="mt-0.5 block text-xs text-gray-500">{CLP_CLASS[h.code]}</span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+                {/* Supplemental EUH-code block renders here after the EUH import
+                    (0 in DB today — acetone is missing EUH066). */}
+              </div>
+
+              {pRows.length > 0 && (
+                <div>
+                  <h3 class="text-[15px] font-semibold text-gray-900" style={grotesk}>Precautionary statements</h3>
+                  <div class="mt-2.5 grid gap-1.5">
+                    {pRows.map((p: any) => (
+                      <div class="flex gap-3 rounded-lg border border-teal-100 bg-teal-50/60 px-3 py-2">
+                        <span class="min-w-[44px] shrink-0 text-[11.5px] font-bold text-teal-800" style={mono}>{p.code}</span>
+                        <span class="text-[12.5px] leading-relaxed text-slate-700">{p.text_en}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <!-- §7 HANDLING & STORAGE (the computed differentiator) -->
+          <section id="s7" class={sectionCls}>
+            <p class={secLabelCls} style={mono}>§ 07 · Handling and storage</p>
+            <h2 class={h2Cls} style={grotesk}>Computed storage verdict</h2>
+
+            <div class="mt-5 overflow-hidden rounded-[14px] border border-teal-200 bg-white">
+              <!-- dark verdict header -->
+              <div class="flex flex-wrap items-center gap-3 px-5 py-4 text-white sm:px-6" style="background:linear-gradient(135deg,#0f766e 0%,#134e4a 100%);">
+                <span class="text-lg sm:text-xl font-bold tracking-tight" style={grotesk}>{verdictHeadline}</span>
                 {storageClasses.map((c: string) => (
-                  <a href={urlForCode(c)} class="ml-1.5 inline-flex items-center rounded-full border border-teal-300 bg-white px-3 py-1 text-sm font-semibold text-teal-800 hover:bg-teal-50 transition-colors">
+                  <a
+                    href={urlForCode(c)}
+                    class="inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-3 py-1 text-[11px] tracking-[0.06em] hover:bg-white/20 transition-colors"
+                    style={mono}
+                  >
                     {shortForCode(c)}
                   </a>
                 ))}
-              </p>
-            )}
-
-            {specialFlags.length > 0 && (
-              <p class="mt-3 text-sm text-gray-700">
-                {specialFlags.map((f: string) => (
-                  <span class="mr-1.5 inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">⚠ {f}</span>
-                ))}
-              </p>
-            )}
-
-            {neverWith.length > 0 && (
-              <div class="mt-4">
-                <h3 class="flex items-center gap-1.5 text-sm font-semibold text-red-700">
-                  <span aria-hidden="true">⛔</span> Never store with
-                </h3>
-                <div class="mt-2 flex flex-wrap gap-2">
-                  {neverWith.map((c: any) => (
-                    <a href={urlForCode(c.class)} class="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-sm text-red-700 hover:bg-red-100 transition-colors">
-                      {shortForCode(c.class)}
-                    </a>
-                  ))}
-                </div>
               </div>
-            )}
+              <div class="px-5 py-5 sm:px-6">
+                <p class="text-sm leading-relaxed text-slate-700">
+                  Derived from CLP Annex VI classification and CAMEO reactive-group data — not copied from a PDF.
+                </p>
 
-            {keepSeparate.length > 0 && (
-              <div class="mt-4">
-                <h3 class="flex items-center gap-1.5 text-sm font-semibold text-amber-700">
-                  <span aria-hidden="true">↔</span> Keep separate
-                </h3>
-                <div class="mt-2 flex flex-wrap gap-2">
-                  {keepSeparate.map((c: any) => (
-                    <a href={urlForCode(c.class)} class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm text-amber-800 hover:bg-amber-100 transition-colors">
-                      {shortForCode(c.class)}
-                    </a>
-                  ))}
-                </div>
+                {specialFlags.length > 0 && (
+                  <p class="mt-3">
+                    {specialFlags.map((f: string) => (
+                      <span class="mr-1.5 inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">⚠ {f}</span>
+                    ))}
+                  </p>
+                )}
+
+                {neverWith.length > 0 && (
+                  <div class="mt-4">
+                    <p class="text-[10px] uppercase tracking-[0.09em] text-red-600 font-semibold" style={mono}>⛔ Never store with</p>
+                    <div class="mt-2 flex flex-wrap gap-1.5">
+                      {neverWith.map((c: any) => (
+                        <a href={urlForCode(c.class)} class="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[12.5px] font-medium text-red-700 hover:bg-red-100 transition-colors">
+                          {shortForCode(c.class)}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {keepSeparate.length > 0 && (
+                  <div class="mt-4">
+                    <p class="text-[10px] uppercase tracking-[0.09em] text-amber-700 font-semibold" style={mono}>↔ Keep separate</p>
+                    <div class="mt-2 flex flex-wrap gap-1.5">
+                      {keepSeparate.map((c: any) => (
+                        <a href={urlForCode(c.class)} class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[12.5px] font-medium text-amber-800 hover:bg-amber-100 transition-colors">
+                          {shortForCode(c.class)}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <p class="mt-5 text-sm">
+                  <a href={`${TOOL}?substance=${encodeURIComponent(substance.cas_number)}`} class="font-semibold text-teal-700 hover:underline">
+                    Full interactive verdict — reactions, gas release on contact, ADR forms →
+                  </a>
+                </p>
               </div>
-            )}
+            </div>
+          </section>
 
-            <p class="mt-5 text-sm">
-              <a href={`${TOOL}?substance=${encodeURIComponent(substance.cas_number)}`} class="font-semibold text-teal-700 hover:underline">
-                Full interactive verdict — reactions, gas release on contact, ADR forms →
-              </a>
-            </p>
-          </div>
-        </section>
+          <!-- §8 EXPOSURE CONTROLS — hidden until Step-3 import (substance_oel).
+               Ships EU IOELV + OSHA PEL + NIOSH REL. NEVER ACGIH TLV (© private body). -->
+          {oelRows.length > 0 && (
+            <section id="s8" class={sectionCls}>
+              <p class={secLabelCls} style={mono}>§ 08 · Exposure controls</p>
+              <h2 class={h2Cls} style={grotesk}>Occupational exposure limits</h2>
+            </section>
+          )}
 
-        <!-- SECTION 9: PHYSICAL & CHEMICAL PROPERTIES -->
-        <section class={sectionCls}>
-          <h2 class={h2Cls} style={h2Style}>
-            Physical and chemical properties <span class={sdsTag}>SDS §9</span>
-          </h2>
-          {physRows.length > 0 ? (
-            <dl class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {physRows.map((r) => (
-                <div class="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-                  <dt class="text-[11px] uppercase tracking-wide text-gray-500">{r.label}</dt>
-                  <dd class="mt-0.5 text-sm font-semibold text-gray-900">{r.value}</dd>
+          <!-- §9 PHYSICAL & CHEMICAL PROPERTIES — fire values first -->
+          {(flashPoint != null || physRows.length > 0) ? (
+            <section id="s9" class={sectionCls}>
+              <p class={secLabelCls} style={mono}>§ 09 · Physical and chemical properties</p>
+              <h2 class={h2Cls} style={grotesk}>Measured properties</h2>
+              {flashPoint != null && (
+                <p class="mt-2 text-sm text-gray-500 max-w-2xl leading-relaxed">
+                  Fire-relevant values first — the flash point decides the storage and ventilation regime.
+                </p>
+              )}
+
+              {flashPoint != null && (
+                <div class="mt-5 grid gap-2.5 sm:grid-cols-3">
+                  <div class="rounded-xl border border-red-200 px-4 py-4" style="background:linear-gradient(135deg,#fef2f2 0%,#fff 70%);">
+                    <p class="text-[10px] uppercase tracking-[0.09em] text-red-700 font-semibold" style={mono}>Flash point</p>
+                    <p class="mt-1.5 text-3xl font-bold tracking-tight text-red-900" style={grotesk}>{flashPoint} °C</p>
+                  </div>
+                  {/* Explosion-limits (LEL/UEL) and autoignition cards join this
+                      strip at Step-1 import — columns don't exist yet. */}
                 </div>
-              ))}
-            </dl>
+              )}
+
+              {physRows.length > 0 && (
+                <div class="mt-2.5 overflow-hidden rounded-xl border border-gray-200 bg-white">
+                  <div class="grid sm:grid-cols-2">
+                    {physRows.map((r) => (
+                      <div class="flex items-baseline justify-between gap-4 border-b border-slate-100 px-4 py-3 sm:odd:border-r">
+                        <span class="text-[13.5px] text-gray-500">{r.label}</span>
+                        <span class="text-[13px] font-semibold text-gray-900 text-right" style={mono}>{r.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <p class="mt-2 text-[10.5px] text-gray-400" style={mono}>Source: harmonised + registration data as imported; per-value source refs land with the Step-1 import.</p>
+            </section>
           ) : (
-            <p class="mt-2 text-sm text-gray-500">
-              The full physical-property table (melting/boiling point, flash point, explosion limits, vapour
-              pressure, density) is being populated for this substance from ECHA registration data and will
-              appear here as it lands.
+            <section id="s9" class={sectionCls}>
+              <p class={secLabelCls} style={mono}>§ 09 · Physical and chemical properties</p>
+              <h2 class={h2Cls} style={grotesk}>Measured properties</h2>
+              <p class="mt-2 text-sm text-gray-500 max-w-2xl">
+                The full physical-property table (melting/boiling point, flash point, explosion limits, vapour
+                pressure, density) is being populated for this substance from ECHA registration data and will
+                appear here as it lands.
+              </p>
+            </section>
+          )}
+
+          <!-- §10 STABILITY & REACTIVITY -->
+          {(reactiveGroups.length > 0 || nIncompat + nCaution > 0) && (
+            <section id="s10" class={sectionCls}>
+              <p class={secLabelCls} style={mono}>§ 10 · Stability and reactivity</p>
+              <div class="mt-3.5 grid gap-6 rounded-xl border border-gray-200 bg-white px-5 py-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-6">
+                <p class="text-[14.5px] leading-relaxed text-slate-700">
+                  {reactiveGroups.length > 0 && (
+                    <>Reactive group (CAMEO/NOAA): <strong>{reactiveGroups.join(', ')}</strong>. </>
+                  )}
+                  {nIncompat + nCaution > 0 && (
+                    <>
+                      Our database documents <strong>{nIncompat} incompatible</strong> and{' '}
+                      <strong>{nCaution} caution</strong> reaction-partner groups for {name} — including which
+                      combinations release gas on contact.
+                    </>
+                  )}
+                  <a href={`${TOOL}?substance=${encodeURIComponent(substance.cas_number)}`} class="mt-2 inline-block font-semibold text-teal-700 hover:underline">
+                    See the per-partner breakdown with gas release →
+                  </a>
+                </p>
+                {nIncompat + nCaution > 0 && (
+                  <div class="flex gap-2.5">
+                    <div class="rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-center">
+                      <p class="text-[28px] font-bold leading-none text-red-700" style={grotesk}>{nIncompat}</p>
+                      <p class="mt-1.5 text-[10px] uppercase tracking-[0.08em] text-red-700" style={mono}>Incompatible</p>
+                    </div>
+                    <div class="rounded-[10px] border border-orange-200 bg-orange-50 px-4 py-3 text-center">
+                      <p class="text-[28px] font-bold leading-none text-orange-700" style={grotesk}>{nCaution}</p>
+                      <p class="mt-1.5 text-[10px] uppercase tracking-[0.08em] text-orange-700" style={mono}>Caution</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          <!-- §11 TOXICOLOGY — hidden until a real (> 0) ATE exists -->
+          {ateReal.length > 0 && (
+            <section id="s11" class={sectionCls}>
+              <p class={secLabelCls} style={mono}>§ 11 · Toxicological information</p>
+              <h2 class={h2Cls} style={grotesk}>Acute toxicity estimates</h2>
+
+              <div class="mt-5 overflow-hidden rounded-xl border border-gray-200 bg-white">
+                <div class="flex flex-wrap items-center gap-3 border-b border-teal-100 bg-teal-50/60 px-4 py-3">
+                  <span class="text-[10px] uppercase tracking-[0.09em] text-teal-700" style={mono}>Acute tox. classification</span>
+                  <span class="text-[13.5px] font-semibold text-teal-900">
+                    {acuteToxCodes.length > 0
+                      ? `Classified under CLP: ${acuteToxCodes.join(', ')}`
+                      : 'Not classified under CLP — no acute-toxicity H-code'}
+                  </span>
+                </div>
+                <table class="w-full border-collapse text-[13.5px]">
+                  <thead>
+                    <tr class="bg-slate-50 text-left">
+                      <th class="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-500" style={mono}>Route</th>
+                      <th class="px-4 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-500" style={mono}>ATE value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ateRoutes.map((r) => (
+                      <tr class="border-t border-slate-100 even:bg-slate-50/50">
+                        <td class="px-4 py-2.5 text-slate-700">{r.label}</td>
+                        <td class={`px-4 py-2.5 text-right ${r.value != null ? 'font-semibold text-gray-900' : 'text-gray-400'}`} style={mono}>
+                          {r.value != null ? r.value : 'No data'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p class="border-t border-slate-100 bg-slate-50 px-4 py-2.5 text-xs leading-relaxed text-gray-500">
+                  Acute Toxicity Estimates (ATE) are regulatory values used for classification under CLP and OSHA
+                  HCS Appendix A — not a measure of "safe dose". Empty routes render as "No data", never as a
+                  numeric zero.
+                </p>
+              </div>
+            </section>
+          )}
+
+          <!-- §12 ECOLOGY — live-wired, hidden until the eco import fills lc50/ec50 -->
+          {ecoCards.length > 0 && (
+            <section id="s12" class={sectionCls}>
+              <p class={secLabelCls} style={mono}>§ 12 · Ecological information</p>
+              <h2 class={h2Cls} style={grotesk}>Aquatic toxicity</h2>
+              <div class="mt-5 grid gap-2.5 sm:grid-cols-3">
+                {ecoCards.map((c) => (
+                  <div class="rounded-xl border border-gray-200 bg-white px-4 py-4">
+                    <p class={cardLabelCls} style={mono}>{c.label}</p>
+                    <p class="mt-1.5 text-2xl font-bold tracking-tight text-gray-900" style={grotesk}>{c.value}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <!-- §13 DISPOSAL -->
+          <section id="s13" class={sectionCls}>
+            <p class={secLabelCls} style={mono}>§ 13 · Disposal considerations</p>
+            <p class="mt-3 max-w-3xl text-[14.5px] leading-relaxed text-slate-700">
+              Dispose of waste and residues in accordance with local and national regulations — in the EU under
+              the Waste Framework Directive 2008/98/EC. Never discharge to drains or municipal waste; hand
+              contaminated packaging and unused product to an authorised waste-disposal company. The supplier's
+              SDS section 13 lists the applicable waste codes for the specific product.
             </p>
+          </section>
+
+          <!-- §14 TRANSPORT -->
+          {transportRows.length > 0 && (
+            <section id="s14" class={sectionCls}>
+              <p class={secLabelCls} style={mono}>§ 14 · Transport information</p>
+              <h2 class={h2Cls} style={grotesk}>Road transport — ADR {adrVersion}</h2>
+
+              <div class="mt-5 space-y-5">
+                {transportRows.map((t: any) => (
+                  <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px] items-start">
+                    <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                      <div class="rounded-[10px] border border-gray-200 bg-white px-3.5 py-3">
+                        <p class={cardLabelCls} style={mono}>UN number</p>
+                        <p class="mt-1 text-[15px] font-semibold text-gray-900" style={mono}>UN {t.un}</p>
+                      </div>
+                      {t.name && (
+                        <div class="rounded-[10px] border border-gray-200 bg-white px-3.5 py-3">
+                          <p class={cardLabelCls} style={mono}>Proper shipping name</p>
+                          <p class="mt-1 text-sm font-semibold text-gray-900">{t.name}</p>
+                        </div>
+                      )}
+                      <div class="rounded-[10px] border border-gray-200 bg-white px-3.5 py-3">
+                        <p class={cardLabelCls} style={mono}>Class · PG</p>
+                        <p class="mt-1 text-[15px] font-semibold text-gray-900" style={mono}>{t.class}{t.pg ? ` · ${t.pg}` : ''}</p>
+                      </div>
+                      {t.code && (
+                        <div class="rounded-[10px] border border-gray-200 bg-white px-3.5 py-3">
+                          <p class={cardLabelCls} style={mono}>Classification code</p>
+                          <p class="mt-1 text-[15px] font-semibold text-gray-900" style={mono}>{t.code}</p>
+                        </div>
+                      )}
+                      {t.cat != null && (
+                        <div class="rounded-[10px] border border-gray-200 bg-white px-3.5 py-3">
+                          <p class={cardLabelCls} style={mono}>Transport category</p>
+                          <p class="mt-1 text-[15px] font-semibold text-gray-900" style={mono}>{t.cat}</p>
+                        </div>
+                      )}
+                      {t.labels.length > 0 && (
+                        <div class="rounded-[10px] border border-gray-200 bg-white px-3.5 py-3">
+                          <p class={cardLabelCls} style={mono}>ADR labels</p>
+                          <p class="mt-1 text-[15px] font-semibold text-gray-900" style={mono}>{t.labels.join(', ')}</p>
+                        </div>
+                      )}
+                      {/* Tunnel-restriction letter + Limited Quantity cards join
+                          this grid at their import — tunnel_code in the DB is the
+                          KEMLER number (rendered on the plate), not the letter. */}
+                    </div>
+
+                    {t.kemler && (
+                      <div class="rounded-xl border border-gray-200 bg-white px-4 py-4 text-center">
+                        <p class={cardLabelCls} style={mono}>Hazard ID (Kemler) / UN plate</p>
+                        <div class="mx-auto mt-3 w-[176px] rounded-[5px] border-[3px] border-zinc-900" style="background:#f97316;">
+                          <div class="border-b-[3px] border-zinc-900 py-1.5 text-[38px] font-bold leading-[1.05] tracking-[0.06em] text-zinc-900" style={mono}>{t.kemler}</div>
+                          <div class="py-1.5 text-[38px] font-bold leading-[1.05] tracking-[0.06em] text-zinc-900" style={mono}>{t.un}</div>
+                        </div>
+                        <p class="mt-2.5 text-xs leading-relaxed text-gray-500">
+                          Top: hazard identification number (Kemler). Bottom: UN number — as carried on the
+                          orange plate of the transport unit.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p class="mt-2 text-[10.5px] text-gray-400" style={mono}>
+                Source: UN ADR {adrVersion} (ECE/TRANS/352), Table A. Road (ADR) only — for sea (IMDG) and air (IATA), consult the supplier's SDS §14.
+              </p>
+            </section>
+          )}
+
+          <!-- §15 REGULATORY — hidden until Step-4 import (substance_regulatory_status) -->
+          {regRows.length > 0 && (
+            <section id="s15" class={sectionCls}>
+              <p class={secLabelCls} style={mono}>§ 15 · Regulatory information</p>
+              <h2 class={h2Cls} style={grotesk}>Regulatory status</h2>
+            </section>
+          )}
+        </>
+      ) : (
+        <!-- VARIANT B / C — honest fallback -->
+        <section class="rounded-xl border border-gray-200 bg-white p-6">
+          {page.template_variant === 'C' ? (
+            <>
+              <h2 class="text-xl font-bold text-gray-900" style={grotesk}>This is a product, not a single substance</h2>
+              <p class="mt-2 text-sm text-gray-700 leading-relaxed">
+                {cap} is a formulated product / mixture. Its hazard profile depends on the exact formulation,
+                so there is no single harmonised classification we could honestly show here — the authoritative
+                document is the SDS issued by the manufacturer of the specific product you purchased. Use the
+                supplier links above to obtain it.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 class="text-xl font-bold text-gray-900" style={grotesk}>No harmonised EU classification</h2>
+              <p class="mt-2 text-sm text-gray-700 leading-relaxed">
+                {cap} has no entry in CLP Annex VI — there is no harmonised EU-wide classification for it.
+                <strong> That is not evidence of safety.</strong> Suppliers remain obliged to self-classify it
+                under CLP, and workplace hazards (dust, asphyxiation, thermal) can exist without a harmonised
+                entry. Always obtain the supplier's SDS for the product you actually use.
+              </p>
+            </>
           )}
         </section>
+      )}
 
-        <!-- SECTION 10: STABILITY & REACTIVITY -->
-        {(reactiveGroups.length > 0 || nIncompat + nCaution > 0) && (
-          <section class={sectionCls}>
-            <h2 class={h2Cls} style={h2Style}>
-              Stability and reactivity <span class={sdsTag}>SDS §10</span>
-            </h2>
-            <p class="mt-2 text-sm text-gray-700">
-              {reactiveGroups.length > 0 && (
-                <>Reactive group (CAMEO/NOAA): <strong>{reactiveGroups.join(', ')}</strong>. </>
-              )}
-              {nIncompat + nCaution > 0 && (
-                <>
-                  Our database documents <strong>{nIncompat}</strong> incompatible and{' '}
-                  <strong>{nCaution}</strong> caution reaction-partner groups for {name} — including which
-                  gases each contact can release.
-                </>
-              )}
-            </p>
-            <p class="mt-3 text-sm">
-              <a href={`${TOOL}?substance=${encodeURIComponent(substance.cas_number)}`} class="font-semibold text-teal-700 hover:underline">
-                See the per-partner breakdown with gas release →
-              </a>
-            </p>
-          </section>
-        )}
+      <!-- MSDS vs SDS -->
+      <section id="msds" class={sectionCls}>
+        <p class={secLabelCls} style={mono}>MSDS vs SDS</p>
+        <h2 class={h2Cls} style={grotesk}>MSDS vs SDS: is there a difference?</h2>
+        <p class="mt-2 text-sm text-gray-700 leading-relaxed max-w-3xl">
+          MSDS (Material Safety Data Sheet) is the older name for the same document. In the US, OSHA's Hazard
+          Communication Standard (2012) adopted the GHS-standardised 16-section Safety Data Sheet; in the EU the
+          format is set by REACH Annex II. So a "{name} MSDS" and a "{name} SDS" refer to the same document —
+          today it is issued as an SDS.
+          <a href="/compliance/sds/sds-vs-msds-differences/" class="font-semibold text-teal-700 hover:underline">
+            Full breakdown of the differences →
+          </a>
+        </p>
+      </section>
 
-        <!-- SECTION 11: TOXICOLOGY -->
-        {ateRows.length > 0 && (
-          <section id="toxicology" class={sectionCls}>
-            <h2 class={h2Cls} style={h2Style}>
-              Toxicological information <span class={sdsTag}>SDS §11</span>
-            </h2>
-            <p class="mt-1 text-sm text-gray-500">
-              Acute Toxicity Estimates (ATE) — regulatory values used for classification under CLP and OSHA
-              HCS Appendix A. Not a measure of "safe dose".
-            </p>
-            <dl class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {ateRows.map((r) => (
-                <div class="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-                  <dt class="text-[11px] uppercase tracking-wide text-gray-500">{r.label}</dt>
-                  <dd class="mt-0.5 text-sm font-semibold text-gray-900">{r.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-        )}
+      <!-- SDS MANAGER (affiliate) -->
+      <SdsManagerCard service="management" href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=sdspage" />
 
-        <!-- SECTION 13: DISPOSAL -->
-        <section class={sectionCls}>
-          <h2 class={h2Cls} style={h2Style}>
-            Disposal considerations <span class={sdsTag}>SDS §13</span>
+      <!-- SIMILAR SUBSTANCES -->
+      {similar.length > 0 && storageClasses.length > 0 && (
+        <section>
+          <h2 class="text-xl font-bold text-gray-900" style={grotesk}>
+            Other {shortForCode(storageClasses[0]).toLowerCase()} in our database
           </h2>
-          <p class="mt-2 text-sm text-gray-700 max-w-3xl">
-            Dispose of waste and residues in accordance with local and national regulations — in the EU under
-            the Waste Framework Directive 2008/98/EC. Never discharge to drains or municipal waste; hand
-            contaminated packaging and unused product to an authorised waste-disposal company. The supplier's
-            SDS section 13 lists the applicable waste codes for the specific product.
-          </p>
+          <ul class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            {similar.map((s: any) => (
+              <li>
+                <a
+                  href={liveMap[s.cas] ? `/sds/${liveMap[s.cas]}/` : `${TOOL}?substance=${encodeURIComponent(s.cas)}`}
+                  class="flex flex-col rounded-lg border border-gray-200 bg-white px-3 py-2.5 hover:border-teal-300 hover:bg-teal-50/50 transition-all"
+                >
+                  <span class="text-sm font-medium text-gray-900 truncate">{s.name}</span>
+                  <span class="text-xs text-gray-500" style={mono}>{s.cas}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
         </section>
+      )}
 
-        <!-- SECTION 14: TRANSPORT -->
-        {adr.length > 0 && (
-          <section id="transport" class={sectionCls}>
-            <h2 class={h2Cls} style={h2Style}>
-              Transport information <span class={sdsTag}>SDS §14</span>
-            </h2>
-            <div class="mt-4 grid gap-3 sm:grid-cols-2">
-              {adr.map((a: any) => (
-                <div class="rounded-lg border border-gray-200 bg-white p-4">
-                  <p class="font-mono text-lg font-bold text-gray-900">UN {a.un}</p>
-                  <p class="mt-0.5 text-sm text-gray-700">{a.name}</p>
-                  <p class="mt-2 text-sm text-gray-600">
-                    Class {a.class}{a.pg && <> · Packing group {a.pg}</>}
-                  </p>
-                </div>
-              ))}
-            </div>
-            <p class="mt-2 text-xs text-gray-400">Source: UN ADR 2025 (ECE/TRANS/352), Table A. Road (ADR) only — for sea (IMDG) and air (IATA) requirements, consult the supplier's SDS section 14.</p>
-          </section>
-        )}
-      </>
-    ) : (
-      <!-- VARIANT B / C — honest fallback -->
-      <section class="rounded-xl border border-gray-200 bg-white p-6">
-        {page.template_variant === 'C' ? (
-          <>
-            <h2 class={h2Cls} style={h2Style}>This is a product, not a single substance</h2>
-            <p class="mt-2 text-sm text-gray-700 leading-relaxed">
-              {cap} is a formulated product / mixture. Its hazard profile depends on the exact formulation,
-              so there is no single harmonised classification we could honestly show here — the authoritative
-              document is the SDS issued by the manufacturer of the specific product you purchased. Use the
-              supplier links above to obtain it.
-            </p>
-          </>
-        ) : (
-          <>
-            <h2 class={h2Cls} style={h2Style}>No harmonised EU classification</h2>
-            <p class="mt-2 text-sm text-gray-700 leading-relaxed">
-              {cap} has no entry in CLP Annex VI — there is no harmonised EU-wide classification for it.
-              <strong> That is not evidence of safety.</strong> Suppliers remain obliged to self-classify it
-              under CLP, and workplace hazards (dust, asphyxiation, thermal) can exist without a harmonised
-              entry. Always obtain the supplier's SDS for the product you actually use.
-            </p>
-          </>
-        )}
-      </section>
-    )}
-
-    <!-- MSDS vs SDS -->
-    <section id="msds" class={sectionCls}>
-      <h2 class={h2Cls} style={h2Style}>MSDS vs SDS: is there a difference?</h2>
-      <p class="mt-2 text-sm text-gray-700 leading-relaxed max-w-3xl">
-        MSDS (Material Safety Data Sheet) is the older name for the same document. In the US, OSHA's Hazard
-        Communication Standard (2012) adopted the GHS-standardised 16-section Safety Data Sheet; in the EU the
-        format is set by REACH Annex II. So a "{name} MSDS" and a "{name} SDS" refer to the same document —
-        today it is issued as an SDS.
-        <a href="/compliance/sds/sds-vs-msds-differences/" class="font-semibold text-teal-700 hover:underline">
-          Full breakdown of the differences →
+      <!-- CROSS-LINKS: compliance hub + tools -->
+      <section class="grid gap-3 sm:grid-cols-2">
+        <a href="/compliance/sds/" class="rounded-xl border border-blue-200 bg-blue-50/50 p-5 hover:border-blue-300 transition-colors">
+          <p class="text-[11px] font-bold uppercase tracking-wide text-blue-700" style={mono}>Compliance hub</p>
+          <p class="mt-1 text-sm font-semibold text-gray-900">From classification to SDS</p>
+          <p class="mt-1 text-xs text-gray-600">
+            The classification above corresponds to Section 2 of a Safety Data Sheet. Learn how a compliant
+            16-section SDS is structured and authored →
+          </p>
         </a>
-      </p>
-    </section>
-
-    <!-- SDS MANAGER (affiliate) -->
-    <SdsManagerCard service="management" href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=sdspage" />
-
-    <!-- SIMILAR SUBSTANCES -->
-    {similar.length > 0 && storageClasses.length > 0 && (
-      <section>
-        <h2 class={h2Cls} style={h2Style}>
-          Other {shortForCode(storageClasses[0]).toLowerCase()} in our database
-        </h2>
-        <ul class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          {similar.map((s: any) => (
-            <li>
-              <a
-                href={liveMap[s.cas] ? `/sds/${liveMap[s.cas]}/` : `${TOOL}?substance=${encodeURIComponent(s.cas)}`}
-                class="flex flex-col rounded-lg border border-gray-200 bg-white px-3 py-2.5 hover:border-teal-300 hover:bg-teal-50/50 transition-all"
-              >
-                <span class="text-sm font-medium text-gray-900 truncate">{s.name}</span>
-                <span class="text-xs text-gray-500 font-mono">{s.cas}</span>
-              </a>
-            </li>
-          ))}
-        </ul>
+        <a href="/label-constructor/" class="rounded-xl border border-orange-200 bg-orange-50/50 p-5 hover:border-orange-300 transition-colors">
+          <p class="text-[11px] font-bold uppercase tracking-wide text-orange-700" style={mono}>GHS label maker</p>
+          <p class="mt-1 text-sm font-semibold text-gray-900">Build the label for {name}</p>
+          <p class="mt-1 text-xs text-gray-600">
+            Pictograms, signal word and H-statements combined into a compliant label layout →
+          </p>
+        </a>
       </section>
-    )}
 
-    <!-- CROSS-LINKS: compliance hub + tools -->
-    <section class="grid gap-3 sm:grid-cols-2">
-      <a href="/compliance/sds/" class="rounded-xl border border-blue-200 bg-blue-50/50 p-5 hover:border-blue-300 transition-colors">
-        <p class="text-[11px] font-bold uppercase tracking-wide text-blue-700">Compliance hub</p>
-        <p class="mt-1 text-sm font-semibold text-gray-900">From classification to SDS</p>
-        <p class="mt-1 text-xs text-gray-600">
-          The classification above corresponds to Section 2 of a Safety Data Sheet. Learn how a compliant
-          16-section SDS is structured and authored →
-        </p>
-      </a>
-      <a href="/label-constructor/" class="rounded-xl border border-orange-200 bg-orange-50/50 p-5 hover:border-orange-300 transition-colors">
-        <p class="text-[11px] font-bold uppercase tracking-wide text-orange-700">GHS label maker</p>
-        <p class="mt-1 text-sm font-semibold text-gray-900">Build the label for {name}</p>
-        <p class="mt-1 text-xs text-gray-600">
-          Pictograms, signal word and H-statements combined into a compliant label layout →
-        </p>
-      </a>
-    </section>
-
-    <!-- SECTION 16: SOURCES + DISCLAIMER -->
-    <section class="rounded-xl border border-gray-200 bg-gray-50 p-6">
-      <h2 class="text-sm font-bold text-gray-900" style={h2Style}>
-        Sources <span class={sdsTag}>SDS §16</span>
-      </h2>
-      <ul class="mt-2 space-y-1 text-xs text-gray-600">
-        <li>
-          Classification: <a href="https://eur-lex.europa.eu/eli/reg/2008/1272/oj" target="_blank" rel="noopener" class="text-teal-700 hover:underline">Regulation (EC) No 1272/2008 (CLP), Annex VI</a>
-        </li>
-        <li>
-          Transport: <a href="https://unece.org/transport/dangerous-goods" target="_blank" rel="noopener" class="text-teal-700 hover:underline">UN ADR 2025 (UNECE)</a>
-        </li>
-        <li>
-          Reactivity: CAMEO Chemicals (NOAA/EPA, public domain)
-        </li>
-        {cas && (
+      <!-- §16 SOURCES + DISCLAIMER -->
+      <section id="s16" class={`${sectionCls} rounded-xl border border-gray-200 bg-slate-100 px-5 py-5 sm:px-6`}>
+        <p class="text-[11px] font-semibold uppercase tracking-[0.11em] text-slate-500" style={mono}>§ 16 · Sources</p>
+        <ul class="mt-3 space-y-1 text-[12.5px] leading-relaxed text-slate-600 list-disc pl-4">
           <li>
-            Substance data: <a href={`https://pubchem.ncbi.nlm.nih.gov/#query=${cas}`} target="_blank" rel="noopener" class="text-teal-700 hover:underline">PubChem</a> ·{' '}
-            <a href={`https://echa.europa.eu/search-for-chemicals?p_p_id=disssimplesearch_WAR_disssearchportlet&_disssimplesearch_WAR_disssearchportlet_searchOccurred=true&_disssimplesearch_WAR_disssearchportlet_ssKeyword=${cas}`} target="_blank" rel="noopener" class="text-teal-700 hover:underline">ECHA</a>
+            Classification: <a href="https://eur-lex.europa.eu/eli/reg/2008/1272/oj" target="_blank" rel="noopener" class="text-teal-700 hover:underline">Regulation (EC) No 1272/2008 (CLP), Annex VI</a>
           </li>
-        )}
-      </ul>
-      <p class="mt-4 text-xs text-gray-500 leading-relaxed">
-        <strong class="text-gray-700">Reference aid only.</strong> This page summarises the harmonised EU
-        classification and computed storage guidance — it is not a Safety Data Sheet and does not replace one.
-        Always verify hazards, handling and storage against the supplier's SDS (sections 7 and 10) and local
-        regulations before use. Page updated {buildDate}.
-      </p>
-    </section>
+          <li>
+            Transport: <a href="https://unece.org/transport/dangerous-goods" target="_blank" rel="noopener" class="text-teal-700 hover:underline">UN ADR {adrVersion} (UNECE)</a>, Table A
+          </li>
+          <li>
+            Reactivity: NOAA CAMEO Chemicals reactive-group matrix (public domain)
+          </li>
+          {cas && (
+            <li>
+              Substance data: <a href={`https://pubchem.ncbi.nlm.nih.gov/#query=${cas}`} target="_blank" rel="noopener" class="text-teal-700 hover:underline">PubChem</a> ·{' '}
+              <a href={`https://echa.europa.eu/search-for-chemicals?p_p_id=disssimplesearch_WAR_disssearchportlet&_disssimplesearch_WAR_disssearchportlet_searchOccurred=true&_disssimplesearch_WAR_disssearchportlet_ssKeyword=${cas}`} target="_blank" rel="noopener" class="text-teal-700 hover:underline">ECHA</a>
+            </li>
+          )}
+          {/* OEL source lines (Directive 2000/39/EC · 29 CFR 1910.1000 · NIOSH REL)
+              join this list with the Step-3 import. QR "print & stick" card is a
+              separate decision (qrcode package) — not part of this restyle. */}
+        </ul>
+        <p class="mt-4 text-xs text-gray-500 leading-relaxed">
+          <strong class="text-gray-700">Reference aid only.</strong> This page summarises the harmonised EU
+          classification and computed storage guidance — it is not a Safety Data Sheet and does not replace one.
+          Always verify hazards, handling and storage against the supplier's SDS (sections 7 and 10) and local
+          regulations before use. Page updated {buildDate}.
+        </p>
+      </section>
 
-    <!-- FAQ -->
-    <section id="faq" class={sectionCls}>
-      <h2 class={h2Cls} style={h2Style}>Frequently asked questions</h2>
-      <div class="mt-4 space-y-4">
-        {faq.map((f) => (
-          <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
-            <p class="text-sm font-semibold text-gray-900">{f.q}</p>
-            <p class="mt-1 text-sm text-gray-600">{f.a}</p>
-          </div>
-        ))}
-      </div>
-    </section>
+      <!-- FAQ -->
+      <section id="faq" class={sectionCls}>
+        <h2 class={h2Cls} style={grotesk}>Frequently asked questions</h2>
+        <div class="mt-4 space-y-4">
+          {faq.map((f) => (
+            <div class="rounded-lg border border-gray-200 bg-white p-4">
+              <p class="text-sm font-semibold text-gray-900">{f.q}</p>
+              <p class="mt-1 text-sm text-gray-600">{f.a}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
   </div>
 
   {jsonLd.map((block) => (

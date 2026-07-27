@@ -25,3 +25,6 @@ pnpm-debug.log*
 
 # jetbrains setting folder
 .idea/
+
+# Local-only GHS pictogram SVGs for npm run dev (prod serves them elsewhere)
+public/pictograms/
