@@ -59,7 +59,7 @@ export async function getStaticPaths() {
         const { data: s } = await supabase
           .from('substances')
           .select(
-            'cas_number, ec_number, index_number, reach_reg_number, iupac_name, h_statement_codes, ghs_pictogram_codes, signal_word, p_statement_codes, molecular_formula, molecular_weight, melting_point, boiling_point, flash_point, water_solubility, log_kow, ate_oral, ate_dermal, ate_inhalation_vapour, ate_inhalation_dust, ate_inhalation_gas, lc50_fish, ec50_daphnia, ec50_algae',
+            'cas_number, ec_number, index_number, reach_reg_number, iupac_name, h_statement_codes, ghs_pictogram_codes, signal_word, p_statement_codes, molecular_formula, molecular_weight, melting_point, boiling_point, flash_point, density, lel_vol_pct, uel_vol_pct, autoignition_c, water_solubility, log_kow, ate_oral, ate_dermal, ate_inhalation_vapour, ate_inhalation_dust, ate_inhalation_gas, lc50_fish, ec50_daphnia, ec50_algae',
           )
           .eq('id', page.substance_id)
           .single()
@@ -264,16 +264,21 @@ if (transportRows.length === 1) {
 }
 
 // §9 physical properties — render only filled values (imports light rows up).
-// Fire-relevant value pulled out first (mockup: fire values decide the regime).
-// LEL/UEL + autoignition cards join the strip at Step-1 import (no columns yet).
+// Fire-relevant values pulled out first (mockup: fire values decide the regime).
+// Filled by the CAMEO import (phys_data_cameo_v1.sql): °C, vol %, relative
+// density (water = 1). Per-value source refs live in substance_property_source.
 const flashPoint: number | null = substance?.flash_point ?? null
+const lel: number | null = substance?.lel_vol_pct ?? null
+const uel: number | null = substance?.uel_vol_pct ?? null
+const autoignition: number | null = substance?.autoignition_c ?? null
+const hasFire = flashPoint != null || lel != null || uel != null || autoignition != null
 const physRows: { label: string; value: string }[] = []
 if (substance?.melting_point != null) physRows.push({ label: 'Melting point', value: `${substance.melting_point} °C` })
 if (substance?.boiling_point != null) physRows.push({ label: 'Boiling point', value: `${substance.boiling_point} °C` })
+if (substance?.density > 0) physRows.push({ label: 'Relative density (water = 1)', value: `${substance.density}` })
 if (substance?.water_solubility) physRows.push({ label: 'Water solubility', value: `${substance.water_solubility}` })
 if (substance?.log_kow != null) physRows.push({ label: 'Partition coefficient (log Kow)', value: `${substance.log_kow}` })
-// density / vapor_pressure exist as columns but are 0-filled placeholders today;
-// wire them here at Step-1 import once units are pinned (never render 0).
+// vapor_pressure stays unwired: temperature-dependent, lands with the ECHA import.
 
 // §11 ATE — regulatory acute toxicity estimates (CLP / OSHA HCS App. A units).
 // STRICTLY > 0: the ate_* columns contain 0 as an unfilled placeholder (73 of the
@@ -573,6 +578,19 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
               self-classified hazards — this is the legal minimum.
             </p>
 
+            {(page.template_variant === 'D' || page.template_variant === 'E') && (
+              <div class="mt-4 max-w-3xl rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-3">
+                <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-amber-800" style={mono}>
+                  Concentration / form dependent — CLP Note B
+                </p>
+                <p class="mt-1 text-[13px] leading-relaxed text-amber-900">
+                  {cap} is placed on the market in different concentrations or forms whose classification can
+                  differ. This page shows the harmonised Annex VI entry for the substance as such — always match
+                  the supplier's SDS to the concentration and form you actually use.
+                </p>
+              </div>
+            )}
+
             <div class="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] items-start">
               <div class="flex flex-col gap-2">
                 {hRows.map((h: any) => (
@@ -683,24 +701,38 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
           )}
 
           <!-- §9 PHYSICAL & CHEMICAL PROPERTIES — fire values first -->
-          {(flashPoint != null || physRows.length > 0) ? (
+          {(hasFire || physRows.length > 0) ? (
             <section id="s9" class={sectionCls}>
               <p class={secLabelCls} style={mono}>§ 09 · Physical and chemical properties</p>
               <h2 class={h2Cls} style={grotesk}>Measured properties</h2>
-              {flashPoint != null && (
+              {hasFire && (
                 <p class="mt-2 text-sm text-gray-500 max-w-2xl leading-relaxed">
-                  Fire-relevant values first — the flash point decides the storage and ventilation regime.
+                  Fire-relevant values first — flash point and explosion limits decide the storage and
+                  ventilation regime.
                 </p>
               )}
 
-              {flashPoint != null && (
+              {hasFire && (
                 <div class="mt-5 grid gap-2.5 sm:grid-cols-3">
-                  <div class="rounded-xl border border-red-200 px-4 py-4" style="background:linear-gradient(135deg,#fef2f2 0%,#fff 70%);">
-                    <p class="text-[10px] uppercase tracking-[0.09em] text-red-700 font-semibold" style={mono}>Flash point</p>
-                    <p class="mt-1.5 text-3xl font-bold tracking-tight text-red-900" style={grotesk}>{flashPoint} °C</p>
-                  </div>
-                  {/* Explosion-limits (LEL/UEL) and autoignition cards join this
-                      strip at Step-1 import — columns don't exist yet. */}
+                  {flashPoint != null && (
+                    <div class="rounded-xl border border-red-200 px-4 py-4" style="background:linear-gradient(135deg,#fef2f2 0%,#fff 70%);">
+                      <p class="text-[10px] uppercase tracking-[0.09em] text-red-700 font-semibold" style={mono}>Flash point</p>
+                      <p class="mt-1.5 text-3xl font-bold tracking-tight text-red-900" style={grotesk}>{flashPoint} °C</p>
+                    </div>
+                  )}
+                  {lel != null && uel != null && (
+                    <div class="rounded-xl border border-red-200 px-4 py-4" style="background:linear-gradient(135deg,#fef2f2 0%,#fff 70%);">
+                      <p class="text-[10px] uppercase tracking-[0.09em] text-red-700 font-semibold" style={mono}>Explosion limits</p>
+                      <p class="mt-1.5 text-3xl font-bold tracking-tight text-red-900" style={grotesk}>{lel} – {uel} %</p>
+                      <p class="mt-1 text-xs text-gray-400">LEL / UEL in air, vol.</p>
+                    </div>
+                  )}
+                  {autoignition != null && (
+                    <div class="rounded-xl border border-red-200 px-4 py-4" style="background:linear-gradient(135deg,#fef2f2 0%,#fff 70%);">
+                      <p class="text-[10px] uppercase tracking-[0.09em] text-red-700 font-semibold" style={mono}>Autoignition</p>
+                      <p class="mt-1.5 text-3xl font-bold tracking-tight text-red-900" style={grotesk}>{autoignition} °C</p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -716,7 +748,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
                   </div>
                 </div>
               )}
-              <p class="mt-2 text-[10.5px] text-gray-400" style={mono}>Source: harmonised + registration data as imported; per-value source refs land with the Step-1 import.</p>
+              <p class="mt-2 text-[10.5px] text-gray-400" style={mono}>Source: CAMEO Chemicals (NOAA, public domain); per-value source references stored in the database.</p>
             </section>
           ) : (
             <section id="s9" class={sectionCls}>
@@ -1010,6 +1042,9 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
           </li>
           <li>
             Reactivity: NOAA CAMEO Chemicals reactive-group matrix (public domain)
+          </li>
+          <li>
+            Physical properties: CAMEO Chemicals (NOAA, public domain) — per-value source references stored in the database
           </li>
           {cas && (
             <li>
