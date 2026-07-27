@@ -1,0 +1,82 @@
+---
+// SDS library hub — /sds/
+// Lists every live page from the `sds_pages` registry. Grows automatically as
+// registry rows are flipped to status='live' — no code change per substance.
+import Layout from '../../layouts/Layout.astro'
+import { supabase } from '../../lib/supabase'
+
+const SITE = 'https://ghspictograms.com'
+
+const { data: pagesRaw } = await supabase
+  .from('sds_pages')
+  .select('slug, cas_number, display_name, formula_display, template_variant')
+  .eq('status', 'live')
+  .order('display_name')
+const pages = pagesRaw ?? []
+
+const title = 'SDS library: safety data sheets by substance'
+const description =
+  'Safety data sheet reference pages for common industrial chemicals: GHS classification from CLP Annex VI, computed storage compatibility verdicts, ADR transport data, and links to official supplier SDS PDFs.'
+const canonical = `${SITE}/sds/`
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: title,
+  description,
+  url: canonical,
+}
+---
+
+<Layout title={title} description={description} canonical={canonical}>
+  <section class="relative overflow-hidden text-white" style="background:linear-gradient(135deg,#0f172a 0%,#134e4a 100%);">
+    <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
+      <p class="text-xs font-bold uppercase tracking-[0.2em] text-teal-300">Reference · SDS</p>
+      <h1 class="mt-1.5 text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.05]" style="font-family:'Space Grotesk',sans-serif;">
+        SDS library
+      </h1>
+      <p class="mt-4 text-lg text-slate-200 max-w-3xl leading-relaxed">
+        Safety data sheet reference by substance: harmonised GHS classification, a computed storage
+        verdict you won't find in a PDF, transport data, and honest links to official supplier SDS documents.
+      </p>
+    </div>
+  </section>
+
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    {pages.length > 0 ? (
+      <ul class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {pages.map((p) => (
+          <li>
+            <a
+              href={`/sds/${p.slug}/`}
+              class="flex items-baseline justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 hover:border-teal-300 hover:bg-teal-50/50 hover:shadow-sm transition-all"
+            >
+              <span class="min-w-0">
+                <span class="block text-sm font-semibold text-gray-900 truncate">
+                  {p.display_name.charAt(0).toUpperCase() + p.display_name.slice(1)} SDS
+                </span>
+                {p.cas_number && <span class="block text-xs text-gray-500 font-mono">CAS {p.cas_number}</span>}
+              </span>
+              {p.formula_display && (
+                <span class="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-gray-700">
+                  {p.formula_display}
+                </span>
+              )}
+            </a>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p class="text-sm text-gray-500">Pages are being prepared — check back shortly.</p>
+    )}
+
+    <p class="mt-8 text-sm text-gray-500">
+      More substances are added in waves — the full shortlist covers 100+ of the most-requested
+      industrial chemicals. Missing one you need? The
+      <a href="/tools/chemical-storage-compatibility/" class="font-semibold text-teal-700 hover:underline">storage compatibility tool</a>
+      already covers 3,600+ substances by CAS number.
+    </p>
+  </div>
+
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+</Layout>

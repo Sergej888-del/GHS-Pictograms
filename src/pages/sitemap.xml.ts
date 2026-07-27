@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
+import { supabase } from '../lib/supabase';
 
 export const prerender = true;
 
@@ -71,10 +72,30 @@ async function fetchComplianceSitemapEntries(): Promise<
   }));
 }
 
+/** SDS library: hub + every live page from the sds_pages registry (grows with no code change). */
+async function fetchSdsSitemapEntries(): Promise<
+  { url: string; changefreq: string; priority: string }[]
+> {
+  const { data } = await supabase
+    .from('sds_pages')
+    .select('slug')
+    .eq('status', 'live');
+  const live = data ?? [];
+  return [
+    { url: '/sds/', changefreq: 'weekly', priority: '0.9' },
+    ...live.map((p) => ({
+      url: `/sds/${p.slug}/`,
+      changefreq: 'monthly',
+      priority: '0.85',
+    })),
+  ];
+}
+
 export const GET: APIRoute = async () => {
-  const [blogPages, compliancePages] = await Promise.all([
+  const [blogPages, compliancePages, sdsPages] = await Promise.all([
     fetchBlogSitemapEntries(),
     fetchComplianceSitemapEntries(),
+    fetchSdsSitemapEntries(),
   ]);
 
   const allPages = [
@@ -82,6 +103,7 @@ export const GET: APIRoute = async () => {
     ...GHS_PAGES,
     ...COMPLIANCE_PILLAR_PAGES,
     ...STORAGE_PAGES,
+    ...sdsPages,
     ...compliancePages,
     ...blogPages,
   ];

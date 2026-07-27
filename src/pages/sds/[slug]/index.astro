@@ -1,0 +1,471 @@
+---
+// SDS substance page — /sds/<slug>/
+// One page per row in `sds_pages` with status='live' (the registry is the
+// publication lever: flip a row to 'live' -> the page exists on next build).
+// Fully data-driven, no content collection, no React island — the storage
+// verdict is BAKED into the HTML at build time so "never store with" lists
+// are visible to search engines and AI crawlers.
+// Variants: A (full harmonised substance) renders every card; B (no Annex VI
+// entry) and C (product/mixture) render the honest fallback blocks.
+// Sources on page: CLP Annex VI (classification), CAMEO (reactivity),
+// ADR 2025 (transport via get_storage_verdict adr[]).
+import Layout from '../../../layouts/Layout.astro'
+import SdsManagerCard from '../../../components/SdsManagerCard.astro'
+import { shortForCode, urlForCode } from '../../../lib/storageClasses'
+import { supabase } from '../../../lib/supabase'
+
+const SITE = 'https://ghspictograms.com'
+const TOOL = '/tools/chemical-storage-compatibility/'
+
+export async function getStaticPaths() {
+  const { data: pages } = await supabase
+    .from('sds_pages')
+    .select('slug, cas_number, substance_id, tier, template_variant, display_name, synonyms_display, synonyms_search, formula_display')
+    .eq('status', 'live')
+  if (!pages || pages.length === 0) return []
+
+  return await Promise.all(
+    pages.map(async (page) => {
+      let substance: any = null
+      let verdict: any = null
+      let pictos: any[] = []
+      let hRows: any[] = []
+
+      if (page.substance_id) {
+        const { data: s } = await supabase
+          .from('substances')
+          .select('cas_number, ec_number, index_number, iupac_name, h_statement_codes, ghs_pictogram_codes, signal_word, molecular_formula, molecular_weight')
+          .eq('id', page.substance_id)
+          .single()
+        substance = s ?? null
+
+        if (substance) {
+          const { data: v } = await supabase.rpc('get_storage_verdict', {
+            p_cas: substance.cas_number,
+          })
+          verdict = v ?? null
+
+          if (substance.ghs_pictogram_codes?.length) {
+            const { data: p } = await supabase
+              .from('pictograms_signals')
+              .select('code, name_en, svg_content')
+              .in('code', substance.ghs_pictogram_codes)
+            pictos = (p ?? []).sort((a, b) => a.code.localeCompare(b.code))
+          }
+          if (substance.h_statement_codes?.length) {
+            const { data: h } = await supabase
+              .from('h_statements')
+              .select('code, text_en')
+              .in('code', substance.h_statement_codes)
+            hRows = (h ?? []).sort((a, b) => a.code.localeCompare(b.code))
+          }
+        }
+      }
+      return { params: { slug: page.slug }, props: { page, substance, verdict, pictos, hRows } }
+    }),
+  )
+}
+
+const { page, substance, verdict, pictos, hRows } = Astro.props as {
+  page: {
+    slug: string
+    cas_number: string | null
+    substance_id: string | null
+    tier: string
+    template_variant: 'A' | 'B' | 'C' | 'D' | 'E'
+    display_name: string
+    synonyms_display: string[] | null
+    synonyms_search: string[] | null
+    formula_display: string | null
+  }
+  substance: {
+    cas_number: string
+    ec_number: string | null
+    index_number: string | null
+    iupac_name: string
+    h_statement_codes: string[] | null
+    ghs_pictogram_codes: string[] | null
+    signal_word: string | null
+    molecular_formula: string | null
+    molecular_weight: number | null
+  } | null
+  verdict: any
+  pictos: { code: string; name_en: string; svg_content: string | null }[]
+  hRows: { code: string; text_en: string }[]
+}
+
+const name = page.display_name
+const cap = name.charAt(0).toUpperCase() + name.slice(1)
+const cas = page.cas_number
+const formula = page.formula_display
+const synsDisplay = page.synonyms_display ?? []
+
+// "also:" line — msds + safety data sheet tokens by design (D11)
+const alsoParts = [
+  `${name} MSDS`,
+  'safety data sheet',
+  ...(formula ? [formula] : []),
+  ...(cas ? [`CAS ${cas}`] : []),
+  ...(substance?.ec_number ? [`EC ${substance.ec_number}`] : []),
+  ...synsDisplay,
+]
+
+// Storage verdict pieces (baked)
+const segregation: { class: string; name: string; status: string }[] = verdict?.segregation ?? []
+const neverWith = segregation.filter((s) => s.status === 'prohibited')
+const keepSeparate = segregation.filter((s) => s.status === 'separate')
+const specialFlags: string[] = verdict?.special_flags ?? []
+const storageClasses: string[] = verdict?.classes ?? []
+const adr: { un: string; name: string; class: string; pg: string | null }[] = verdict?.adr ?? []
+
+// SEO (D11: head term first, never "SDS for X")
+const title = `${cap} SDS (MSDS): GHS hazards, classification & storage`
+const description = substance
+  ? `Safety data sheet overview for ${name}${cas ? ` (CAS ${cas})` : ''}: GHS pictograms and H-statements from CLP Annex VI, a computed storage compatibility verdict, ADR transport data, and links to official supplier SDS / MSDS PDFs.`
+  : `Safety data sheet overview for ${name}${cas ? ` (CAS ${cas})` : ''}: classification status, storage guidance, and links to official supplier SDS / MSDS PDFs.`
+const canonical = `${SITE}/sds/${page.slug}/`
+
+// Supplier SDS search links (honest hand-off; nofollow, verified by eye in dev)
+const suppliers = cas
+  ? [
+      { label: 'Sigma-Aldrich', href: `https://www.sigmaaldrich.com/US/en/search/${cas}` },
+      { label: 'Fisher Scientific', href: `https://www.fishersci.com/us/en/catalog/search/products?keyword=${cas}` },
+      { label: 'Carl Roth', href: `https://www.carlroth.com/en/en/search?query=${cas}` },
+    ]
+  : []
+
+// Anchor pills — only sections that actually render
+const pills = [
+  ...(substance ? [{ id: 'storage', label: '#storage' }, { id: 'ghs', label: '#ghs' }] : []),
+  ...(adr.length ? [{ id: 'transport', label: '#transport' }] : []),
+  { id: 'msds', label: '#msds' },
+  { id: 'faq', label: '#faq' },
+]
+
+// FAQ — self-contained, data-derived answers (AI-citable)
+const faq: { q: string; a: string }[] = []
+faq.push({
+  q: 'Is an MSDS the same as an SDS?',
+  a: `In practice, yes. MSDS (Material Safety Data Sheet) is the older name for the same document. In the US, OSHA's Hazard Communication Standard (2012) adopted the GHS-standardised 16-section Safety Data Sheet; in the EU the SDS format is set by REACH Annex II. A document you find labelled "${name} MSDS" is today issued as an SDS.`,
+})
+if (substance && pictos.length) {
+  faq.push({
+    q: `What GHS pictograms does ${name} require?`,
+    a: `Under the harmonised EU classification (CLP Annex VI), ${name} carries ${pictos.map((p) => p.code).join(' and ')} with the signal word "${substance.signal_word ?? '—'}". Hazard statements: ${(substance.h_statement_codes ?? []).join(', ')}. A supplier's SDS may add self-classified hazards on top of this harmonised minimum.`,
+  })
+}
+if (substance && neverWith.length) {
+  faq.push({
+    q: `What should ${name} never be stored with?`,
+    a: `Based on its storage class${storageClasses.length > 1 ? 'es' : ''} (${storageClasses.map((c) => shortForCode(c)).join(', ')}), ${name} must not share storage with: ${neverWith.map((s) => shortForCode(s.class)).join('; ')}. Verify against the supplier's SDS sections 7 and 10 before finalising storage.`,
+  })
+}
+faq.push({
+  q: `Where can I download an official ${name} SDS PDF?`,
+  a: `From your own supplier — an SDS is issued per product and supplier, so the correct PDF for an inspection is the one matching the product you actually purchased. The supplier links on this page lead to the official SDS libraries of major distributors.`,
+})
+
+// Structured data
+const jsonLd: Record<string, unknown>[] = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'ChemicalSubstance',
+    name: cap,
+    url: canonical,
+    ...(cas ? { identifier: cas } : {}),
+    alternateName: [...synsDisplay, ...(formula ? [formula] : []), `${name} MSDS`],
+    ...(substance?.molecular_formula ? { chemicalComposition: substance.molecular_formula } : {}),
+    description,
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE}/` },
+      { '@type': 'ListItem', position: 2, name: 'SDS library', item: `${SITE}/sds/` },
+      { '@type': 'ListItem', position: 3, name: `${cap} SDS`, item: canonical },
+    ],
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faq.map((f) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a },
+    })),
+  },
+]
+
+const sectionCls = 'scroll-mt-32'
+const h2Cls = 'text-xl font-bold text-gray-900'
+const h2Style = "font-family:'Space Grotesk',sans-serif;"
+---
+
+<Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
+  <!-- HERO -->
+  <section class="relative overflow-hidden text-white" style="background:linear-gradient(135deg,#0f172a 0%,#134e4a 100%);">
+    <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <nav class="text-sm text-slate-300 mb-5" aria-label="Breadcrumb">
+        <a href="/sds/" class="hover:text-white transition-colors">SDS library</a>
+        <span class="mx-1 text-slate-500">/</span>
+        <span class="text-slate-200">{cap}</span>
+      </nav>
+      <p class="text-xs font-bold uppercase tracking-[0.2em] text-teal-300">
+        Safety data sheet reference{cas && ` · CAS ${cas}`}
+      </p>
+      <h1 class="mt-1.5 text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.05]" style="font-family:'Space Grotesk',sans-serif;">
+        {cap} SDS
+      </h1>
+      <p class="mt-3 text-sm text-slate-300 max-w-3xl leading-relaxed">
+        also: {alsoParts.join(' · ')}
+      </p>
+
+      {substance && (
+        <div class="mt-6 flex flex-wrap items-center gap-3">
+          {pictos.map((p) =>
+            p.svg_content ? (
+              <span
+                class="inline-flex h-16 w-16 items-center justify-center rounded-lg bg-white p-1 shadow-lg [&>svg]:h-full [&>svg]:w-full"
+                title={`${p.code} — ${p.name_en}`}
+                set:html={p.svg_content}
+              />
+            ) : (
+              <span class="inline-flex items-center rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold">{p.code}</span>
+            ),
+          )}
+          {substance.signal_word && (
+            <span
+              class={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-bold uppercase tracking-wide ${
+                substance.signal_word === 'Danger' ? 'bg-red-500 text-white' : 'bg-amber-400 text-gray-900'
+              }`}
+            >
+              {substance.signal_word}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  </section>
+
+  <!-- STICKY ANCHOR PILLS (hybrid nav: behaves like tabs on mobile) -->
+  <nav class="sticky top-16 z-40 border-b border-gray-200 bg-white/95 backdrop-blur" aria-label="On this page">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-2 overflow-x-auto py-2.5">
+      {pills.map((p) => (
+        <a
+          href={`#${p.id}`}
+          class="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 font-mono text-xs text-teal-700 hover:bg-teal-50 hover:border-teal-300 transition-colors"
+        >
+          {p.label}
+        </a>
+      ))}
+    </div>
+  </nav>
+
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
+    <!-- SUPPLIER PDF HAND-OFF -->
+    {suppliers.length > 0 && (
+      <section class="rounded-xl border border-gray-200 bg-gray-50 p-5 sm:flex sm:items-center sm:justify-between sm:gap-6">
+        <p class="text-sm text-gray-700 font-medium">
+          Need the official {name} SDS PDF for an inspection? Get it from your supplier:
+        </p>
+        <div class="mt-3 sm:mt-0 flex flex-wrap gap-2">
+          {suppliers.map((s) => (
+            <a
+              href={s.href}
+              target="_blank"
+              rel="nofollow noopener"
+              class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-800 hover:border-teal-400 hover:text-teal-700 transition-colors"
+            >
+              {s.label} ↗
+            </a>
+          ))}
+        </div>
+      </section>
+    )}
+
+    {substance ? (
+      <>
+        <!-- STORAGE VERDICT (computed — the differentiator) -->
+        <section id="storage" class={sectionCls}>
+          <div class="rounded-xl border-2 border-teal-200 bg-teal-50/50 p-6">
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 class={h2Cls} style={h2Style}>Storage verdict</h2>
+              <span class="rounded-full bg-teal-600 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">computed</span>
+            </div>
+            <p class="mt-1 text-sm text-gray-600">
+              Derived from CLP Annex VI classification and CAMEO reactive-group data — not copied from a PDF.
+            </p>
+
+            {storageClasses.length > 0 && (
+              <p class="mt-4 text-sm text-gray-700">
+                Storage class:
+                {storageClasses.map((c) => (
+                  <a href={urlForCode(c)} class="ml-1.5 inline-flex items-center rounded-full border border-teal-300 bg-white px-3 py-1 text-sm font-semibold text-teal-800 hover:bg-teal-50 transition-colors">
+                    {shortForCode(c)}
+                  </a>
+                ))}
+              </p>
+            )}
+
+            {specialFlags.length > 0 && (
+              <p class="mt-3 text-sm text-gray-700">
+                {specialFlags.map((f) => (
+                  <span class="mr-1.5 inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">⚠ {f}</span>
+                ))}
+              </p>
+            )}
+
+            {neverWith.length > 0 && (
+              <div class="mt-4">
+                <h3 class="flex items-center gap-1.5 text-sm font-semibold text-red-700">
+                  <span aria-hidden="true">⛔</span> Never store with
+                </h3>
+                <div class="mt-2 flex flex-wrap gap-2">
+                  {neverWith.map((c) => (
+                    <a href={urlForCode(c.class)} class="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-sm text-red-700 hover:bg-red-100 transition-colors">
+                      {shortForCode(c.class)}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {keepSeparate.length > 0 && (
+              <div class="mt-4">
+                <h3 class="flex items-center gap-1.5 text-sm font-semibold text-amber-700">
+                  <span aria-hidden="true">↔</span> Keep separate
+                </h3>
+                <div class="mt-2 flex flex-wrap gap-2">
+                  {keepSeparate.map((c) => (
+                    <a href={urlForCode(c.class)} class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm text-amber-800 hover:bg-amber-100 transition-colors">
+                      {shortForCode(c.class)}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <p class="mt-5 text-sm">
+              <a href={`${TOOL}?substance=${encodeURIComponent(substance.cas_number)}`} class="font-semibold text-teal-700 hover:underline">
+                Full interactive verdict — reactions, gas release on contact, ADR forms →
+              </a>
+            </p>
+          </div>
+        </section>
+
+        <!-- GHS CLASSIFICATION -->
+        <section id="ghs" class={sectionCls}>
+          <h2 class={h2Cls} style={h2Style}>GHS classification</h2>
+          <p class="mt-1 text-sm text-gray-500">
+            Harmonised EU classification — CLP Annex VI{substance.index_number && ` · Index ${substance.index_number}`}. A supplier SDS may add self-classified hazards; this is the legal minimum.
+          </p>
+          {hRows.length > 0 && (
+            <ul class="mt-4 space-y-2">
+              {hRows.map((h) => (
+                <li class="flex items-baseline gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2.5">
+                  <span class="shrink-0 font-mono text-sm font-bold text-gray-900">{h.code}</span>
+                  <span class="text-sm text-gray-700">{h.text_en}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {(substance.molecular_formula || substance.molecular_weight) && (
+            <p class="mt-3 text-xs text-gray-500">
+              {substance.molecular_formula && <span class="font-mono">{substance.molecular_formula}</span>}
+              {substance.molecular_weight && <span> · MW {substance.molecular_weight}</span>}
+            </p>
+          )}
+        </section>
+
+        <!-- TRANSPORT (ADR) -->
+        {adr.length > 0 && (
+          <section id="transport" class={sectionCls}>
+            <h2 class={h2Cls} style={h2Style}>Transport (ADR 2025)</h2>
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
+              {adr.map((a) => (
+                <div class="rounded-lg border border-gray-200 bg-white p-4">
+                  <p class="font-mono text-lg font-bold text-gray-900">UN {a.un}</p>
+                  <p class="mt-0.5 text-sm text-gray-700">{a.name}</p>
+                  <p class="mt-2 text-sm text-gray-600">
+                    Class {a.class}{a.pg && <> · Packing group {a.pg}</>}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <p class="mt-2 text-xs text-gray-400">Source: UN ADR 2025 (ECE/TRANS/352), Table A.</p>
+          </section>
+        )}
+      </>
+    ) : (
+      <!-- VARIANT B / C — honest fallback -->
+      <section class="rounded-xl border border-gray-200 bg-white p-6">
+        {page.template_variant === 'C' ? (
+          <>
+            <h2 class={h2Cls} style={h2Style}>This is a product, not a single substance</h2>
+            <p class="mt-2 text-sm text-gray-700 leading-relaxed">
+              {cap} is a formulated product / mixture. Its hazard profile depends on the exact formulation,
+              so there is no single harmonised classification we could honestly show here — the authoritative
+              document is the SDS issued by the manufacturer of the specific product you purchased. Use the
+              supplier links above to obtain it.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 class={h2Cls} style={h2Style}>No harmonised EU classification</h2>
+            <p class="mt-2 text-sm text-gray-700 leading-relaxed">
+              {cap} has no entry in CLP Annex VI — there is no harmonised EU-wide classification for it.
+              <strong> That is not evidence of safety.</strong> Suppliers remain obliged to self-classify it
+              under CLP, and workplace hazards (dust, asphyxiation, thermal) can exist without a harmonised
+              entry. Always obtain the supplier's SDS for the product you actually use.
+            </p>
+          </>
+        )}
+      </section>
+    )}
+
+    <!-- MSDS vs SDS -->
+    <section id="msds" class={sectionCls}>
+      <h2 class={h2Cls} style={h2Style}>MSDS vs SDS: is there a difference?</h2>
+      <p class="mt-2 text-sm text-gray-700 leading-relaxed max-w-3xl">
+        MSDS (Material Safety Data Sheet) is the older name for the same document. In the US, OSHA's Hazard
+        Communication Standard (2012) adopted the GHS-standardised 16-section Safety Data Sheet; in the EU the
+        format is set by REACH Annex II. So a "{name} MSDS" and a "{name} SDS" refer to the same document —
+        today it is issued as an SDS.
+        <a href="/compliance/sds/sds-vs-msds-differences/" class="font-semibold text-teal-700 hover:underline">
+          Full breakdown of the differences →
+        </a>
+      </p>
+    </section>
+
+    <!-- SDS MANAGER (affiliate — behaviour-qualified placement) -->
+    <SdsManagerCard service="management" href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=sdspage" />
+
+    <!-- FAQ -->
+    <section id="faq" class={sectionCls}>
+      <h2 class={h2Cls} style={h2Style}>Frequently asked questions</h2>
+      <div class="mt-4 space-y-4">
+        {faq.map((f) => (
+          <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <p class="text-sm font-semibold text-gray-900">{f.q}</p>
+            <p class="mt-1 text-sm text-gray-600">{f.a}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- DISCLAIMER -->
+    <section class="rounded-xl border border-gray-200 bg-gray-50 p-6">
+      <p class="text-xs text-gray-500 leading-relaxed">
+        <strong class="text-gray-700">Reference aid only.</strong> This page summarises the harmonised EU
+        classification and computed storage guidance — it is not a Safety Data Sheet and does not replace one.
+        Always verify hazards, handling and storage against the supplier's SDS (sections 7 and 10) and local
+        regulations before use.
+      </p>
+    </section>
+  </div>
+
+  {jsonLd.map((block) => (
+    <script type="application/ld+json" set:html={JSON.stringify(block)} />
+  ))}
+</Layout>
