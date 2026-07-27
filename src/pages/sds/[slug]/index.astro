@@ -98,10 +98,14 @@ export async function getStaticPaths() {
           // Requires the anon read policy from supabase/rls_dg_read_v1.sql;
           // until it is applied this returns [] and we fall back to verdict.adr
           // (same cards, no Kemler plate) — the build never breaks either way.
+          // Look up by BOTH CAS forms: substances.cas_number (truncated for the
+          // 5 recovered multi-CAS rows) and sds_pages.cas_number (the real CAS
+          // the backfilled links are keyed by — e.g. xylene 1330-20-7).
+          const casForms = [...new Set([substance.cas_number, page.cas_number].filter(Boolean))]
           const { data: links } = await supabase
             .from('substance_un_link')
             .select('un_number')
-            .eq('cas_number', substance.cas_number)
+            .in('cas_number', casForms)
           const uns = (links ?? []).map((l: any) => l.un_number)
           if (uns.length) {
             const { data: dg } = await supabase
