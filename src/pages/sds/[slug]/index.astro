@@ -246,6 +246,15 @@ const physShorts = dedupe(hCodes.filter((c) => c.startsWith('H2')).map(clpShort)
 const healthShorts = dedupe(hCodes.filter((c) => c.startsWith('H3')).map(clpShort))
 const envShorts = dedupe(hCodes.filter((c) => c.startsWith('H4')).map(clpShort))
 const capList = (l: string[], n = 3) => (l.length > n ? [...l.slice(0, n), `+${l.length - n}`] : l)
+
+// Petroleum-stream UVCB entries (Annex VI index 649-…): the converted harmonised
+// entry covers ONLY the listed hazard classes — everything else (incl. flammability
+// for diesel/kerosene) is supplier self-classification under CLP Art. 4.
+// Note P text is gated to the verified gasoline entry (649-378-00-4) only —
+// verify the notes of each new petroleum entry before extending this.
+const isPetroleumUvcb = Boolean(substance?.index_number?.startsWith('649-'))
+const uvcbLacksFlam =
+  isPetroleumUvcb && !hCodes.some((c) => ['H224', 'H225', 'H226', 'H228'].includes(c))
 const heroPills: { text: string; dot: string | null; mono: boolean }[] = []
 if (substance?.signal_word || physShorts.length) {
   heroPills.push({
@@ -588,6 +597,28 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
                   differ. This page shows the harmonised Annex VI entry for the substance as such — always match
                   the supplier's SDS to the concentration and form you actually use.
                 </p>
+              </div>
+            )}
+
+            {isPetroleumUvcb && (
+              <div class="mt-4 max-w-3xl rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-3">
+                <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-amber-800" style={mono}>
+                  Petroleum UVCB — entry covers the listed classes only
+                </p>
+                <p class="mt-1 text-[13px] leading-relaxed text-amber-900">
+                  {cap} is a petroleum UVCB (substance of unknown or variable composition). Its harmonised
+                  Annex VI entry covers only the hazard classes listed on this page — for every other hazard
+                  class, suppliers self-classify under CLP Art. 4{uvcbLacksFlam &&
+                    ', which is why market fuels typically add flammability (e.g. Flam. Liq. 3, H226) that this entry does not carry'}.
+                  Always match the supplier&rsquo;s SDS for the actual product you use.
+                </p>
+                {substance.index_number === '649-378-00-4' && (
+                  <p class="mt-1.5 text-[13px] leading-relaxed text-amber-900">
+                    <span class="font-semibold">CLP Note P:</span> the harmonised carcinogen and mutagen
+                    classification need not apply if the substance contains less than 0.1&nbsp;% w/w benzene
+                    (EC 200-753-7) — the supplier&rsquo;s SDS states the classification that applies.
+                  </p>
+                )}
               </div>
             )}
 
