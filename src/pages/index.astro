@@ -32,6 +32,13 @@ const pictogramsRows = pictogramsRaw ?? []
 const featuredPictos = pictogramsRows.filter((p) => ['GHS02', 'GHS05', 'GHS06', 'GHS09'].includes(p.code))
 const labelPictos = pictogramsRows.filter((p) => ['GHS02', 'GHS07'].includes(p.code))
 
+// SDS library banner — live page count from the registry (falls back to '100+').
+const { count: sdsCountRaw } = await supabase
+  .from('sds_pages')
+  .select('slug', { count: 'exact', head: true })
+  .eq('status', 'live')
+const sdsCount: number | null = sdsCountRaw ?? null
+
 const tools = [
   {
     title: 'Substance Database',
@@ -532,6 +539,46 @@ const tools = [
         max-height: 100%;
         object-fit: contain;
       }
+      /* SDS library banner — /sds/ family identity (navy→teal + teal dots) */
+      .featured-tool--sds {
+        background:
+          radial-gradient(rgba(94, 234, 212, 0.5) 1px, transparent 1.4px) 0 0 / 22px 22px,
+          linear-gradient(135deg, #0f172a 0%, #062a78 48%, #134e4a 100%);
+        border-color: rgba(94, 234, 212, 0.28);
+      }
+      .featured-tool--sds .featured-glow {
+        background: radial-gradient(circle, rgba(45, 212, 191, 0.25), transparent 65%);
+      }
+      .featured-tool--sds .featured-badge {
+        color: #99f6e4;
+        border-color: rgba(94, 234, 212, 0.4);
+        background: rgba(45, 212, 191, 0.12);
+      }
+      .featured-tool--sds .featured-cta {
+        background: #0d9488;
+      }
+      .featured-tool--sds:hover .featured-cta {
+        background: #0f766e;
+      }
+      .sds-chips {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+      }
+      .sds-chips .sc {
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-size: 0.72rem;
+        letter-spacing: 0.07em;
+        color: #ccfbf1;
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(94, 234, 212, 0.3);
+        border-radius: 999px;
+        padding: 0.45rem 0.9rem;
+        white-space: nowrap;
+      }
+
       /* Label Constructor banner — sample label card (decorative) */
       .label-mock {
         position: relative;
@@ -1078,6 +1125,27 @@ const tools = [
             <rect x="8"  y="64" width="48" height="48" rx="8" fill="#5eead4"/>
             <rect x="64" y="64" width="48" height="48" rx="8" fill="#0d9488"/>
           </svg>
+        </div>
+      </a>
+    </section>
+
+    <section class="section">
+      <a href="/sds/" class="featured-tool featured-tool--sds">
+        <span class="featured-glow" aria-hidden="true"></span>
+        <div class="featured-content">
+          <span class="featured-badge">New · Reference library</span>
+          <h2 class="featured-title">SDS Library{sdsCount ? ` — ${sdsCount} Substances` : ''}</h2>
+          <p class="featured-desc">
+            Safety data sheet reference pages for the most-requested industrial chemicals: harmonised
+            CLP Annex VI classification, a computed storage verdict you won't find in a PDF, ADR
+            transport data with hazard plates, and honest links to official supplier SDS documents.
+          </p>
+          <span class="featured-cta">Browse the SDS Library →</span>
+        </div>
+        <div class="sds-chips" aria-hidden="true">
+          <span class="sc">§ 02 · Hazards</span>
+          <span class="sc">§ 07 · Storage verdict</span>
+          <span class="sc">§ 14 · Transport</span>
         </div>
       </a>
     </section>

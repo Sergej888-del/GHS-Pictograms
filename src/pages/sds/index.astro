@@ -2,6 +2,9 @@
 // SDS library hub — /sds/
 // Lists every live page from the `sds_pages` registry. Grows automatically as
 // registry rows are flipped to status='live' — no code change per substance.
+// rev2 (session 8): restyled to the v2.1 substance-page identity (navy hero +
+// teal dots + JetBrains Mono labels) + client-side search over name / CAS /
+// formula / synonyms_search (brands included, search-only — never displayed).
 import Layout from '../../layouts/Layout.astro'
 import { supabase } from '../../lib/supabase'
 
@@ -9,10 +12,19 @@ const SITE = 'https://ghspictograms.com'
 
 const { data: pagesRaw } = await supabase
   .from('sds_pages')
-  .select('slug, cas_number, display_name, formula_display, template_variant')
+  .select('slug, cas_number, display_name, formula_display, template_variant, synonyms_search')
   .eq('status', 'live')
   .order('display_name')
 const pages = pagesRaw ?? []
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+// One lowercase haystack per card for the client-side filter.
+const searchBlob = (p: any) =>
+  [p.display_name, p.cas_number, p.formula_display, ...(p.synonyms_search ?? [])]
+    .filter(Boolean)
+    .join(' | ')
+    .toLowerCase()
 
 const title = 'SDS library: safety data sheets by substance'
 const description =
@@ -25,40 +37,82 @@ const jsonLd = {
   name: title,
   description,
   url: canonical,
+  numberOfItems: pages.length,
 }
+
+const mono = "font-family:'JetBrains Mono',ui-monospace,monospace;"
+const grotesk = "font-family:'Space Grotesk',sans-serif;"
 ---
 
 <Layout title={title} description={description} canonical={canonical}>
-  <section class="relative overflow-hidden text-white" style="background:linear-gradient(135deg,#0f172a 0%,#134e4a 100%);">
-    <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
-      <p class="text-xs font-bold uppercase tracking-[0.2em] text-teal-300">Reference · SDS</p>
-      <h1 class="mt-1.5 text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.05]" style="font-family:'Space Grotesk',sans-serif;">
+  <link
+    slot="head"
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- HERO — same identity as the substance pages (navy gradient, teal dots) -->
+  <section class="relative overflow-hidden text-white" style="background:linear-gradient(135deg,#0f172a 0%,#062A78 48%,#134e4a 100%);">
+    <div class="absolute inset-0 opacity-35" style="background-image:radial-gradient(rgba(94,234,212,0.55) 1px, transparent 1px);background-size:22px 22px;" aria-hidden="true"></div>
+    <div class="absolute inset-0" style="background:linear-gradient(90deg,rgba(15,23,42,0.75) 0%,rgba(15,23,42,0) 65%);" aria-hidden="true"></div>
+    <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <p class="text-[11px] font-medium uppercase tracking-[0.11em] text-teal-300" style={mono}>
+        Reference · SDS library
+      </p>
+      <h1 class="mt-2 text-4xl sm:text-[52px] font-bold tracking-tight leading-[1.05]" style={grotesk}>
         SDS library
       </h1>
-      <p class="mt-4 text-lg text-slate-200 max-w-3xl leading-relaxed">
+      <p class="mt-4 text-[15px] text-slate-300 max-w-3xl leading-relaxed">
         Safety data sheet reference by substance: harmonised GHS classification, a computed storage
         verdict you won't find in a PDF, transport data, and honest links to official supplier SDS documents.
       </p>
+
+      <div class="mt-5 flex flex-wrap gap-2.5">
+        <span class="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/[0.07] px-3.5 py-1.5 text-[11.5px] tracking-[0.05em] text-slate-200" style={mono}>
+          <span class="h-[7px] w-[7px] rounded-full bg-teal-400" aria-hidden="true"></span>
+          {pages.length} substances
+        </span>
+        <span class="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/[0.07] px-3.5 py-1.5 text-[11.5px] tracking-[0.05em] text-slate-200" style={mono}>
+          CLP Annex VI · computed storage verdicts
+        </span>
+      </div>
+
+      <div class="mt-7 max-w-xl">
+        <label for="sds-search" class="sr-only">Search substances by name, CAS number, formula, or synonym</label>
+        <input
+          id="sds-search"
+          type="search"
+          placeholder="Search name, CAS, formula, or synonym…"
+          autocomplete="off"
+          class="w-full rounded-xl border border-white/25 bg-white/10 px-4 py-3 text-[15px] text-white placeholder-slate-400 backdrop-blur-sm focus:border-teal-300 focus:bg-white/15 focus:ring-2 focus:ring-teal-400/30 outline-none transition-colors"
+        />
+      </div>
     </div>
   </section>
 
   <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <p class="text-[11px] font-medium uppercase tracking-[0.11em] text-gray-400" style={mono}>
+      <span id="sds-count">{pages.length}</span> substances · A–Z
+    </p>
+
     {pages.length > 0 ? (
-      <ul class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <ul id="sds-grid" class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {pages.map((p) => (
-          <li>
+          <li data-search={searchBlob(p)}>
             <a
               href={`/sds/${p.slug}/`}
               class="flex items-baseline justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 hover:border-teal-300 hover:bg-teal-50/50 hover:shadow-sm transition-all"
             >
               <span class="min-w-0">
                 <span class="block text-sm font-semibold text-gray-900 truncate">
-                  {p.display_name.charAt(0).toUpperCase() + p.display_name.slice(1)} SDS
+                  {cap(p.display_name)} SDS
                 </span>
-                {p.cas_number && <span class="block text-xs text-gray-500 font-mono">CAS {p.cas_number}</span>}
+                {p.cas_number && (
+                  <span class="block text-xs text-gray-500" style={mono}>CAS {p.cas_number}</span>
+                )}
               </span>
               {p.formula_display && (
-                <span class="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-gray-700">
+                <span class="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-semibold text-gray-700" style={mono}>
                   {p.formula_display}
                 </span>
               )}
@@ -67,16 +121,46 @@ const jsonLd = {
         ))}
       </ul>
     ) : (
-      <p class="text-sm text-gray-500">Pages are being prepared — check back shortly.</p>
+      <p class="mt-4 text-sm text-gray-500">Pages are being prepared — check back shortly.</p>
     )}
 
+    <p id="sds-empty" class="mt-6 hidden rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+      Nothing matches that search here yet. The
+      <a href="/tools/chemical-storage-compatibility/" class="font-semibold text-teal-700 hover:underline">storage compatibility tool</a>
+      covers 3,600+ substances by CAS number — try it there.
+    </p>
+
     <p class="mt-8 text-sm text-gray-500">
-      More substances are added in waves — the full shortlist covers 100+ of the most-requested
-      industrial chemicals. Missing one you need? The
+      More substances are added in waves. Missing one you need? The
       <a href="/tools/chemical-storage-compatibility/" class="font-semibold text-teal-700 hover:underline">storage compatibility tool</a>
       already covers 3,600+ substances by CAS number.
     </p>
   </div>
+
+  <script>
+    // Client-side filter: every query token must match the card's search blob
+    // (name + CAS + formula + synonyms_search, brands included search-only).
+    const input = document.getElementById('sds-search') as HTMLInputElement | null
+    const grid = document.getElementById('sds-grid')
+    const countEl = document.getElementById('sds-count')
+    const emptyEl = document.getElementById('sds-empty')
+    if (input && grid) {
+      const cards = Array.from(grid.querySelectorAll<HTMLLIElement>('li[data-search]'))
+      const norm = (s: string) => s.toLowerCase().replace(/sulph/g, 'sulf').replace(/\s+/g, ' ').trim()
+      const blobs = cards.map((c) => norm(c.dataset.search ?? ''))
+      input.addEventListener('input', () => {
+        const tokens = norm(input.value).split(' ').filter(Boolean)
+        let visible = 0
+        cards.forEach((card, i) => {
+          const show = tokens.every((t) => blobs[i].includes(t))
+          card.classList.toggle('hidden', !show)
+          if (show) visible++
+        })
+        if (countEl) countEl.textContent = String(visible)
+        if (emptyEl) emptyEl.classList.toggle('hidden', visible > 0)
+      })
+    }
+  </script>
 
   <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
 </Layout>

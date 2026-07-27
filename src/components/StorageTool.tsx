@@ -15,20 +15,40 @@
 // rev5 (design): teal signature — filter chips, focus, ADR picker, preview links
 // switch navy->teal; segregation pills gain hover depth. Semantics (red/amber/
 // green) unchanged. ADR strip stays navy (transport).
+// rev6 (tool ↔ /sds/ linkage, owed since session 6): (a) common_name + synonyms
+// join the Fuse index and the list shows the common name ("gasoline", not the
+// Annex VI UVCB monster string); (b) bracketed multi-CAS rows (heptane, xylene,
+// MDI, TDI, boric acid) are now INCLUDED when a live /sds/ page provides their
+// canonical display CAS — the RPC still gets the substances.cas_number key,
+// which get_storage_verdict v5 resolves via substance_cas_alias; (c) verdict
+// header gains a "Full substance report →" link to the live /sds/<slug>/ page
+// (109 live targets), slug matched via sds_pages.substance_id OR either CAS form.
 import { useEffect, useMemo, useState } from 'react'
 import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
 import { shortForCode, urlForCode } from '../lib/storageClasses'
 
 interface SubstanceRow {
+  id: string
   cas_number: string
   iupac_name: string
+  common_name: string | null
+  synonyms: string[] | null
   ec_number: string | null
   ghs_pictogram_codes: string[] | null
 }
 interface IndexedSubstance extends SubstanceRow {
   cas_nodash: string
   name_norm: string
+  /** common_name if present, else iupac_name — what the list shows */
+  display_name: string
+  display_norm: string
+  /** normalized synonyms, joined for the Fuse index */
+  syn_norm: string
+  /** clean CAS for display/search (canonical page CAS for bracketed rows) */
+  display_cas: string
+  /** slug of the live /sds/ page, when one exists */
+  sdsSlug: string | null
 }
 interface SegItem {
   class: string
@@ -125,25 +145,58 @@ export default function StorageTool() {
   const [classCache, setClassCache] = useState<Record<string, ClassPreview>>({})
   const [classLoading, setClassLoading] = useState(false)
 
-  // Load all clean-CAS substances once (same runtime pattern as the browse tool).
+  // Load all substances once (same runtime pattern as the browse tool).
+  // rev6: live /sds/ pages load first (one small query) so each row can carry
+  // its report slug; bracketed multi-CAS rows join the list via their page's
+  // canonical CAS instead of being skipped.
   useEffect(() => {
     let cancelled = false
     async function loadAll() {
+      // 1. Live /sds/ page registry → slug by substance_id + by CAS (both forms).
+      const bySubstanceId = new Map<string, { slug: string; cas: string }>()
+      const slugByPageCas = new Map<string, string>()
+      {
+        const { data } = await supabase
+          .from('sds_pages')
+          .select('slug, cas_number, substance_id')
+          .eq('status', 'live')
+        for (const p of data ?? []) {
+          if (p.substance_id) bySubstanceId.set(p.substance_id, { slug: p.slug, cas: p.cas_number })
+          if (p.cas_number) slugByPageCas.set(p.cas_number, p.slug)
+        }
+      }
+
       const rows: IndexedSubstance[] = []
       let from = 0
       const size = 1000
       while (true) {
         const { data, error } = await supabase
           .from('substances')
-          .select('cas_number, iupac_name, ec_number, ghs_pictogram_codes')
+          .select('id, cas_number, iupac_name, common_name, synonyms, ec_number, ghs_pictogram_codes')
           .not('cas_number', 'is', null)
           .order('cas_number', { ascending: true })
           .range(from, from + size - 1)
         if (error || !data || data.length === 0) break
         for (const r of data as SubstanceRow[]) {
           const cas = r.cas_number?.trim()
-          if (!cas || cas === '-' || cas.includes('[')) continue
-          rows.push({ ...r, cas_number: cas, cas_nodash: cas.replace(/-/g, ''), name_norm: norm(r.iupac_name) })
+          if (!cas || cas === '-') continue
+          const page = bySubstanceId.get(r.id) ?? null
+          // Bracketed multi-CAS rows only make sense with a canonical CAS from
+          // their live page; without one they stay out (as before rev6).
+          if (cas.includes('[') && !page) continue
+          const displayCas = cas.includes('[') ? page!.cas : cas
+          const displayName = r.common_name?.trim() || r.iupac_name
+          rows.push({
+            ...r,
+            cas_number: cas,
+            cas_nodash: displayCas.replace(/-/g, ''),
+            name_norm: norm(r.iupac_name),
+            display_name: displayName,
+            display_norm: norm(displayName),
+            syn_norm: (r.synonyms ?? []).map(norm).filter(Boolean).join(' | '),
+            display_cas: displayCas,
+            sdsSlug: page?.slug ?? slugByPageCas.get(cas) ?? null,
+          })
         }
         if (data.length < size) break
         from += size
@@ -170,9 +223,12 @@ export default function StorageTool() {
     () =>
       new Fuse(all, {
         keys: [
+          { name: 'display_norm', weight: 2.5 },
           { name: 'name_norm', weight: 2 },
           { name: 'iupac_name', weight: 2 },
+          { name: 'syn_norm', weight: 1.5 },
           { name: 'cas_number', weight: 1.5 },
+          { name: 'display_cas', weight: 1.5 },
           { name: 'cas_nodash', weight: 1.5 },
           { name: 'ec_number', weight: 1 },
         ],
@@ -224,6 +280,15 @@ export default function StorageTool() {
 
   const never = verdict?.segregation.filter(s => s.status === 'prohibited') ?? []
   const separate = verdict?.segregation.filter(s => s.status === 'separate') ?? []
+
+  // rev6: the selected row (if the selection came from the list) and the live
+  // /sds/ report slug for it. Deep links (?substance=CAS) may arrive with either
+  // CAS form — try the row match first, then either CAS column of the registry.
+  const selectedRow = useMemo(
+    () => (selectedCas ? all.find(s => s.cas_number === selectedCas || s.display_cas === selectedCas) ?? null : null),
+    [all, selectedCas],
+  )
+  const selectedSlug = selectedRow?.sdsSlug ?? null
 
   // De-duplicate ADR rows: identical (un, pg, name) collapse to one; genuinely
   // different forms (e.g. by packing group or shipping-name variant) stay.
@@ -321,10 +386,11 @@ export default function StorageTool() {
                         selectedCas === s.cas_number ? 'bg-blue-50' : ''
                       }`}
                     >
-                      <span className="block text-sm font-medium text-gray-900 truncate">{s.iupac_name}</span>
+                      <span className="block text-sm font-medium text-gray-900 truncate">{s.display_name}</span>
                       <span className="block text-xs text-gray-500">
-                        {s.cas_number}
+                        {s.display_cas}
                         {s.ec_number ? ` · EC ${s.ec_number}` : ''}
+                        {s.sdsSlug ? ' · report available' : ''}
                       </span>
                     </button>
                   </li>
@@ -391,9 +457,9 @@ export default function StorageTool() {
             <div>
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <h2 className="text-xl font-bold text-gray-900" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                  {verdict.name ?? selectedCas}
+                  {selectedRow?.display_name ?? verdict.name ?? selectedCas}
                 </h2>
-                <span className="text-sm font-mono text-gray-400">{verdict.cas}</span>
+                <span className="text-sm font-mono text-gray-400">{selectedRow?.display_cas ?? verdict.cas}</span>
               </div>
               {verdict.class_names.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -417,6 +483,16 @@ export default function StorageTool() {
                     </span>
                   ))}
                 </div>
+              )}
+              {/* rev6: hand off to the SDS-style full report when a live page exists */}
+              {selectedSlug && (
+                <a
+                  href={`/sds/${selectedSlug}/`}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
+                >
+                  Full substance report
+                  <span aria-hidden="true">→</span>
+                </a>
               )}
             </div>
 
