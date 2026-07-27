@@ -85,6 +85,15 @@ const SOURCE_STYLE: Record<Resolved['source'], { label: string; cls: string }> =
 
 const fmt = (n: number) => (n >= 100 ? n.toFixed(0) : n >= 1 ? n.toFixed(1) : n.toPrecision(2))
 
+// SDS Manager affiliate (results slot) — matches the GhsCalculator placement +
+// its registered fp_sid=gpauth so conversions land in the existing dashboard link.
+const SDS_AUTHORING_URL = 'https://sdsmanager.com/us/sds-authoring?fpr=ghs3&fp_sid=gpauth'
+function track(event: string, params: Record<string, unknown>): void {
+  if (typeof window !== 'undefined' && typeof (window as any).gtag === 'function') {
+    ;(window as any).gtag('event', event, params)
+  }
+}
+
 export default function AteMixtureCalculator() {
   const [all, setAll] = useState<IndexedSub[]>([])
   const [loading, setLoading] = useState(true)
@@ -477,6 +486,26 @@ export default function AteMixtureCalculator() {
           <div className="rounded-xl border border-teal-200 bg-white p-4">
             <p className="mb-3 text-sm font-medium text-gray-900">Download the full classification report for your SDS section 2 / 3.</p>
             <button type="button" onClick={downloadReport} className="rounded-lg bg-teal-600 px-6 py-2 text-sm font-semibold text-white hover:bg-teal-700">Download PDF report</button>
+          </div>
+
+          {/* SDS Manager affiliate slot — the classification result belongs in SDS section 2. */}
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+            <p className="text-sm text-emerald-900">
+              This mixture classification belongs in <strong>section 2</strong> of your Safety Data Sheet.
+            </p>
+            <a
+              href={SDS_AUTHORING_URL}
+              target="_blank"
+              rel="sponsored nofollow noopener"
+              onClick={() => track('affiliate_click', { partner: 'sds_manager', placement: 'ate_mixture_calculator' })}
+              className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 hover:text-emerald-800"
+            >
+              Author the SDS with SDS Manager †
+            </a>
+            <p className="mt-2 text-[11px] text-gray-500">
+              † SDS Manager is a partner solution; we may earn a commission.{' '}
+              <a href="/affiliate-disclosure/" className="underline">See disclosure</a>.
+            </p>
           </div>
 
           <p className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs leading-relaxed text-gray-600">

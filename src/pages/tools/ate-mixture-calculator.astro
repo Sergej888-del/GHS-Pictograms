@@ -6,6 +6,7 @@
 export const prerender = true
 import Layout from '../../layouts/Layout.astro'
 import AteMixtureCalculator from '../../components/AteMixtureCalculator'
+import SdsManagerCard from '../../components/SdsManagerCard.astro'
 
 const SITE = 'https://ghspictograms.com'
 const canonical = `${SITE}/tools/ate-mixture-calculator/`
@@ -133,6 +134,14 @@ const jsonLd = {
         authoring — always review the outcome against each ingredient's safety data sheet and Annex VI entry.
       </p>
     </div>
+  </section>
+
+  <!-- SDS Manager (affiliate) -->
+  <section class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <SdsManagerCard
+      service="management"
+      href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=gpmgmt"
+    />
   </section>
 
   <!-- FAQ -->
