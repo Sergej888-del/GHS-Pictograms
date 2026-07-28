@@ -18,7 +18,8 @@
 //   §9 fire trio  -> Step-1 import (LEL/UEL + autoignition columns; flash_point already live)
 //   §12 ecology   -> eco import (lc50_fish / ec50_daphnia / ec50_algae — live-wired below, > 0 guard)
 //   §15 regulatory-> Step-4 import (substance_regulatory_status: SVHC, Seveso, TSCA/DSL, precursor flags)
-//   EUH codes     -> EUH import (0 in DB today; acetone is missing EUH066)
+//   EUH codes     -> ✅ imported session 10 (euh_codes on 148 substances, in-force ATP-state;
+//                    ECHA ATP23 export with 2027 changes excluded — see euh_import_v1.sql)
 //   §14 tunnel/LQ -> tunnel-letter + LQ import (dg tunnel_code holds the KEMLER number, not the letter)
 import Layout from '../../../layouts/Layout.astro'
 import SdsManagerCard from '../../../components/SdsManagerCard.astro'
@@ -51,6 +52,7 @@ export async function getStaticPaths() {
       let verdict: any = null
       let pictos: any[] = []
       let hRows: any[] = []
+      let euhRows: any[] = []
       let pRows: any[] = []
       let similar: any[] = []
       let dgRows: any[] = []
@@ -59,7 +61,7 @@ export async function getStaticPaths() {
         const { data: s } = await supabase
           .from('substances')
           .select(
-            'cas_number, ec_number, index_number, reach_reg_number, iupac_name, h_statement_codes, ghs_pictogram_codes, signal_word, p_statement_codes, molecular_formula, molecular_weight, melting_point, boiling_point, flash_point, density, lel_vol_pct, uel_vol_pct, autoignition_c, water_solubility, log_kow, ate_oral, ate_dermal, ate_inhalation_vapour, ate_inhalation_dust, ate_inhalation_gas, lc50_fish, ec50_daphnia, ec50_algae',
+            'cas_number, ec_number, index_number, reach_reg_number, iupac_name, h_statement_codes, euh_codes, ghs_pictogram_codes, signal_word, p_statement_codes, molecular_formula, molecular_weight, melting_point, boiling_point, flash_point, density, lel_vol_pct, uel_vol_pct, autoignition_c, water_solubility, log_kow, ate_oral, ate_dermal, ate_inhalation_vapour, ate_inhalation_dust, ate_inhalation_gas, lc50_fish, ec50_daphnia, ec50_algae',
           )
           .eq('id', page.substance_id)
           .single()
@@ -84,6 +86,14 @@ export async function getStaticPaths() {
               .select('code, text_en')
               .in('code', substance.h_statement_codes)
             hRows = (h ?? []).sort((a, b) => a.code.localeCompare(b.code))
+          }
+          // EUH supplementary statements (CLP Annex VI) — texts live in h_statements too.
+          if (substance.euh_codes?.length) {
+            const { data: eh } = await supabase
+              .from('h_statements')
+              .select('code, text_en')
+              .in('code', substance.euh_codes)
+            euhRows = (eh ?? []).sort((a, b) => a.code.localeCompare(b.code))
           }
           if (substance.p_statement_codes?.length) {
             const { data: p } = await supabase
@@ -129,13 +139,13 @@ export async function getStaticPaths() {
       }
       return {
         params: { slug: page.slug },
-        props: { page, substance, verdict, pictos, hRows, pRows, similar, dgRows, liveMap },
+        props: { page, substance, verdict, pictos, hRows, euhRows, pRows, similar, dgRows, liveMap },
       }
     }),
   )
 }
 
-const { page, substance, verdict, pictos, hRows, pRows, similar, dgRows, liveMap } = Astro.props as any
+const { page, substance, verdict, pictos, hRows, euhRows, pRows, similar, dgRows, liveMap } = Astro.props as any
 
 // --- CLP hazard class + category labels (fixed CLP assignments, not curation) ---
 const CLP_CLASS: Record<string, string> = {
@@ -635,8 +645,15 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
                     </span>
                   </div>
                 ))}
-                {/* Supplemental EUH-code block renders here after the EUH import
-                    (0 in DB today — acetone is missing EUH066). */}
+                {euhRows.map((h: any) => (
+                  <div class="flex items-baseline gap-3.5 rounded-[10px] border border-amber-200 bg-amber-50 px-3.5 py-3">
+                    <span class="min-w-[52px] shrink-0 text-sm font-bold text-amber-800" style={mono}>{h.code}</span>
+                    <span class="flex-1">
+                      <span class="block text-[14.5px] text-slate-800">{h.text_en}</span>
+                      <span class="mt-0.5 block text-xs text-gray-500">EU supplementary hazard statement (CLP Annex VI)</span>
+                    </span>
+                  </div>
+                ))}
               </div>
 
               {pRows.length > 0 && (
