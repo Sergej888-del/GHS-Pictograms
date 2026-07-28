@@ -1,0 +1,311 @@
+---
+// Site-wide header — design system v2 (navy glass, dropdowns, orange CTA).
+// Used by Layout.astro (all pages) AND by the standalone homepage (src/pages/index.astro).
+// Requires design-tokens.css (imported via global.css).
+interface Props {
+  /** SDS Library live count label; homepage passes the live number, elsewhere the manual default. */
+  sdsCount?: string
+}
+const { sdsCount = '109' } = Astro.props
+---
+
+<header class="sh-header">
+  <div class="sh-wrap sh-row">
+    <a href="/" class="sh-logo"><span class="dot"></span>ghspictograms<span class="tld">.com</span></a>
+
+    <nav class="sh-nav" aria-label="Main">
+      <button type="button" id="nav-tools-btn" aria-expanded="false">Tools<span class="caret">▼</span></button>
+      <button type="button" id="nav-data-btn" aria-expanded="false">Substance data<span class="caret">▼</span></button>
+      <a href="/compliance/">Compliance</a>
+      <a href="/#pictograms">Pictograms</a>
+    </nav>
+    <a href="/label-constructor/" class="sh-cta">Build a label</a>
+
+    <button type="button" class="sh-burger" id="nav-mobile-btn" aria-expanded="false">Menu</button>
+  </div>
+
+  <div class="sh-panel" id="nav-tools-panel">
+    <div class="sh-wrap sh-panel-grid">
+      <div class="sh-panel-col">
+        <p class="head teal">Flagship</p>
+        <a href="/tools/chemical-storage-compatibility/" class="primary">Storage Compatibility Matrix</a>
+        <a href="/tools/ate-mixture-calculator/" class="primary">ATE Mixture Calculator</a>
+      </div>
+      <div class="sh-panel-col">
+        <p class="head">Labelling</p>
+        <a href="/label-constructor/">GHS Label Maker</a>
+        <a href="/pictogram-selector/">Pictogram Selector</a>
+        <a href="/tools/">9 per-pictogram calculators</a>
+      </div>
+      <div class="sh-panel-col">
+        <p class="head">Transport</p>
+        <a href="/inspector/">GHS vs ADR/DOT Inspector</a>
+        <a href="/tools/">All 14 free tools →</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="sh-panel" id="nav-data-panel">
+    <div class="sh-wrap sh-panel-grid">
+      <div class="sh-panel-col">
+        <p class="head teal">Reports</p>
+        <a href="/sds/" class="primary">SDS Library — {sdsCount} substances</a>
+        <a href="/tools/chemical-storage-compatibility/">Storage verdicts</a>
+      </div>
+      <div class="sh-panel-col">
+        <p class="head">Classification</p>
+        <a href="/pictograms/">Substance database — 4,178 entries</a>
+        <a href="/pictograms/">CLP Annex VI lookup</a>
+      </div>
+      <div class="sh-panel-col">
+        <p class="head">Reference</p>
+        <a href="/#pictograms">GHS01–GHS09 pictograms + SVGs</a>
+        <a href="/storage-compatibility/">Storage class pages</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="sh-mobile" id="nav-mobile-panel">
+    <a href="/tools/">Tools — 14 free</a>
+    <a href="/sds/">SDS Library — {sdsCount} substances</a>
+    <a href="/compliance/">Compliance Hub</a>
+    <a href="/pictograms/">Pictograms &amp; substance data</a>
+    <a href="/label-constructor/" class="sh-cta mobile-cta">Build a label</a>
+  </div>
+</header>
+
+<script is:inline>
+  ;(function () {
+    var toolsBtn = document.getElementById('nav-tools-btn')
+    var dataBtn = document.getElementById('nav-data-btn')
+    var toolsPanel = document.getElementById('nav-tools-panel')
+    var dataPanel = document.getElementById('nav-data-panel')
+    var mobileBtn = document.getElementById('nav-mobile-btn')
+    var mobilePanel = document.getElementById('nav-mobile-panel')
+
+    function closePanels() {
+      toolsPanel.classList.remove('open')
+      dataPanel.classList.remove('open')
+      toolsBtn.setAttribute('aria-expanded', 'false')
+      dataBtn.setAttribute('aria-expanded', 'false')
+    }
+    function toggle(btn, panel) {
+      var isOpen = panel.classList.contains('open')
+      closePanels()
+      if (!isOpen) {
+        panel.classList.add('open')
+        btn.setAttribute('aria-expanded', 'true')
+      }
+    }
+    toolsBtn.addEventListener('click', function (e) {
+      e.stopPropagation()
+      toggle(toolsBtn, toolsPanel)
+    })
+    dataBtn.addEventListener('click', function (e) {
+      e.stopPropagation()
+      toggle(dataBtn, dataPanel)
+    })
+    document.addEventListener('click', function (e) {
+      if (!toolsPanel.contains(e.target) && !dataPanel.contains(e.target)) closePanels()
+    })
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closePanels()
+    })
+    mobileBtn.addEventListener('click', function () {
+      var open = mobilePanel.classList.toggle('open')
+      mobileBtn.setAttribute('aria-expanded', open ? 'true' : 'false')
+    })
+  })()
+</script>
+
+<style>
+  .sh-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(6, 42, 120, 0.97);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  }
+  .sh-header * {
+    box-sizing: border-box;
+  }
+  .sh-wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+  .sh-row {
+    height: 64px;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+  }
+  .sh-logo {
+    display: flex;
+    align-items: baseline;
+    color: #ffffff;
+    text-decoration: none;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 17px;
+    letter-spacing: -0.02em;
+    flex: 0 0 auto;
+  }
+  .sh-logo .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--teal-300);
+    box-shadow: 0 0 10px rgba(94, 234, 212, 0.8);
+    margin-right: 8px;
+    align-self: center;
+  }
+  .sh-logo .tld {
+    color: var(--ink-dark-4);
+  }
+  .sh-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .sh-nav a,
+  .sh-nav button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 0;
+    color: var(--ink-dark-1);
+    text-decoration: none;
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 9px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 300ms ease-out;
+    white-space: nowrap;
+  }
+  .sh-nav a:hover,
+  .sh-nav button:hover {
+    background: rgba(255, 255, 255, 0.09);
+    color: #ffffff;
+  }
+  .sh-nav .caret {
+    font-size: 9px;
+    opacity: 0.7;
+  }
+  .sh-cta {
+    background: linear-gradient(180deg, #fb923c 0%, #f97316 100%);
+    color: #ffffff;
+    text-decoration: none;
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px 16px;
+    border-radius: 8px;
+    box-shadow: 0 8px 18px rgba(249, 115, 22, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    transition: all 300ms ease-out;
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+  .sh-cta:hover {
+    background: linear-gradient(180deg, #fdba74 0%, #ea580c 100%);
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 12px 24px rgba(249, 115, 22, 0.5);
+  }
+  .sh-burger {
+    display: none;
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .sh-panel {
+    display: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    background: var(--navy-panel);
+  }
+  .sh-panel.open {
+    display: block;
+  }
+  .sh-panel-grid {
+    padding-top: 24px;
+    padding-bottom: 24px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 20px 32px;
+  }
+  .sh-panel-col {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .sh-panel-col .head {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-dark-4);
+  }
+  .sh-panel-col .head.teal {
+    color: var(--teal-300);
+  }
+  .sh-panel-col a {
+    color: var(--ink-dark-1);
+    text-decoration: none;
+    font-size: 14px;
+  }
+  .sh-panel-col a:hover {
+    color: #ffffff;
+  }
+  .sh-panel-col a.primary {
+    color: #ffffff;
+    font-size: 14.5px;
+    font-weight: 600;
+  }
+  .sh-mobile {
+    display: none;
+    background: var(--navy-panel);
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 16px 24px 22px;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .sh-mobile.open {
+    display: flex;
+  }
+  .sh-mobile a {
+    color: #ffffff;
+    text-decoration: none;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .sh-mobile a.mobile-cta {
+    text-align: center;
+    margin-top: 4px;
+    padding: 12px;
+    font-size: 14px;
+  }
+  @media (max-width: 1059px) {
+    .sh-nav,
+    .sh-row > .sh-cta {
+      display: none;
+    }
+    .sh-burger {
+      display: block;
+    }
+  }
+</style>

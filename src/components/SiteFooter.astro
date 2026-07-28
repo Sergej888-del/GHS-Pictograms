@@ -1,0 +1,159 @@
+---
+// Site-wide footer — design system v2 (navy, gradient bar, 5 columns).
+// Used by Layout.astro (all pages) AND by the standalone homepage.
+// No ghssymbols link — «одна крыша» (Sergej, session 11).
+---
+
+<footer class="sf-footer">
+  <div class="sf-bar"></div>
+  <div class="sf-wrap sf-grid">
+    <div>
+      <div class="sf-logo"><span class="dot"></span>ghspictograms<span class="tld">.com</span></div>
+      <p class="sf-tagline">
+        Chemical safety reference data and free GHS/CLP tools. Independent, sourced, free to use.
+      </p>
+    </div>
+    <div class="sf-col">
+      <p class="head">Tools</p>
+      <a href="/tools/chemical-storage-compatibility/">Storage Compatibility Matrix</a>
+      <a href="/tools/ate-mixture-calculator/">ATE Mixture Calculator</a>
+      <a href="/label-constructor/">GHS Label Maker</a>
+      <a href="/pictogram-selector/">Pictogram Selector</a>
+      <a href="/inspector/">ADR/DOT Inspector</a>
+      <a href="/tools/">All 14 tools</a>
+    </div>
+    <div class="sf-col">
+      <p class="head">Data</p>
+      <a href="/sds/">SDS Library</a>
+      <a href="/pictograms/">Substance database</a>
+      <a href="/#pictograms">GHS01–GHS09</a>
+      <a href="/storage-compatibility/">Storage classes</a>
+    </div>
+    <div class="sf-col">
+      <p class="head">Compliance</p>
+      <a href="/compliance/un-ghs/">UN GHS</a>
+      <a href="/compliance/osha-hcs/">OSHA HCS</a>
+      <a href="/compliance/clp/">EU CLP</a>
+      <a href="/compliance/reach/">REACH</a>
+      <a href="/compliance/svhc/">SVHC</a>
+    </div>
+    <div class="sf-col">
+      <p class="head">Site</p>
+      <a href="/blog/">Blog</a>
+      <a href="/faq/">FAQ</a>
+      <a href="/privacy/">Privacy policy</a>
+      <a href="/terms/">Terms</a>
+      <a href="/affiliate-disclosure/">Affiliate disclosure</a>
+      <a href="#" onclick="window.openCookieSettings&&window.openCookieSettings();return false;">Cookie settings</a>
+    </div>
+  </div>
+  <div class="sf-bottom">
+    <div class="sf-wrap sf-bottom-row">
+      <p class="legal">
+        Reference data from EU CLP Annex VI and published regulations. This site is not a
+        substitute for your supplier's safety data sheet — verify before use. Pictograms are UN
+        GHS artwork, public domain by treaty.
+      </p>
+      <p class="copy">© 2026 ghspictograms.com</p>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .sf-footer {
+    background: var(--navy);
+    color: var(--ink-dark-2);
+  }
+  .sf-footer * {
+    box-sizing: border-box;
+  }
+  .sf-footer p {
+    margin: 0;
+  }
+  .sf-bar {
+    height: 3px;
+    background: linear-gradient(90deg, var(--teal-600) 0%, #1e3a8a 50%, #f97316 100%);
+  }
+  .sf-wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+  .sf-grid {
+    padding-top: clamp(40px, 5vw, 64px);
+    padding-bottom: 28px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 32px;
+  }
+  .sf-logo {
+    display: flex;
+    align-items: baseline;
+    color: #ffffff;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 16px;
+  }
+  .sf-logo .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--teal-300);
+    margin-right: 8px;
+    align-self: center;
+  }
+  .sf-logo .tld {
+    color: var(--ink-dark-4);
+  }
+  .sf-tagline {
+    margin-top: 14px !important;
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--ink-dark-3);
+    max-width: 260px;
+  }
+  .sf-col {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .sf-col .head {
+    margin-bottom: 4px !important;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--teal-300);
+  }
+  .sf-col a {
+    color: var(--ink-dark-2);
+    text-decoration: none;
+    font-size: 14px;
+  }
+  .sf-col a:hover {
+    color: #ffffff;
+  }
+  .sf-bottom {
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+  }
+  .sf-bottom-row {
+    padding-top: 20px;
+    padding-bottom: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 28px;
+    justify-content: space-between;
+  }
+  .sf-bottom-row .legal {
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--ink-dark-3);
+    max-width: 760px;
+  }
+  .sf-bottom-row .copy {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--ink-dark-4);
+  }
+</style>
