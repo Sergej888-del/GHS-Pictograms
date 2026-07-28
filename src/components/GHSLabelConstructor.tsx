@@ -249,7 +249,7 @@ export default function GHSLabelConstructor({
           <span className="font-medium">The live preview</span> updates as you type. It is scaled to fit your screen, so it looks larger or smaller than real life — the true print size is shown as <span className="font-medium">Output</span> under the preview. The status line means:
           <span className="text-green-700"> green</span> = everything fits;
           <span className="text-amber-700"> amber</span> = content needs a taller label or a fold-out / tie-on tag (CLP Art. 29);
-          <span className="text-red-700"> red</span> = the chosen size is below the CLP minimum.
+          <span className="text-rose-700"> red</span> = the chosen size is below the CLP minimum.
         </p>
         <p>
           <span className="font-medium">PDF</span> is generated at the exact physical size shown in <span className="font-medium">Output</span> — print it at 100% (actual size) and it lands on your label stock at the right dimensions. If the label had to grow (amber), the PDF is a fold-out / tie-on-tag master.
@@ -316,7 +316,7 @@ export default function GHSLabelConstructor({
             <span className="text-xs text-gray-500">{sizeUnit}</span>
           </div>
           {fit.belowClpMin ? (
-            <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
               {fmtDim(sizeW)} × {fmtDim(sizeH)} {sizeUnit} is below the CLP minimum ({fit.clpMinLabel}) for this capacity.
             </p>
           ) : fit.fits ? (
@@ -380,7 +380,7 @@ export default function GHSLabelConstructor({
               <div className="flex items-center gap-3 rounded-lg border border-gray-300 bg-white px-3 py-2">
                 <img src={logo.dataUrl} alt="Logo preview" className="h-10 w-auto max-w-[120px] object-contain" />
                 <span className="text-xs text-gray-600 truncate flex-1">{logoName || 'logo'}</span>
-                <button type="button" onClick={removeLogo} className="text-xs font-semibold text-red-600 hover:text-red-700 cursor-pointer">Remove</button>
+                <button type="button" onClick={removeLogo} className="text-xs font-semibold text-rose-600 hover:text-rose-700 cursor-pointer">Remove</button>
               </div>
             ) : (
               <div
@@ -396,7 +396,7 @@ export default function GHSLabelConstructor({
               </div>
             )}
             <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" onChange={onLogoInputChange} className="hidden" />
-            {logoError && <p className="text-xs text-red-600 mt-1">{logoError}</p>}
+            {logoError && <p className="text-xs text-rose-600 mt-1">{logoError}</p>}
             <p className="text-[11px] text-gray-400 mt-1">Your logo is added as supplemental information beside the supplier block. It must not cover the hazard pictograms or signal word, or imply the product is non-hazardous (CLP Art 25 / OSHA HCS C.3.1).</p>
           </div>
         </section>
@@ -434,7 +434,7 @@ export default function GHSLabelConstructor({
               <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} className="mt-1 w-4 h-4 accent-[#062A78]" />
               <span className="text-sm text-gray-800">I accept full responsibility for verifying label compliance before use.</span>
             </label>
-            {submitError && <p className="text-red-600 text-sm">{submitError}</p>}
+            {submitError && <p className="text-rose-600 text-sm">{submitError}</p>}
             <button
               type="button"
               onClick={confirmDownload}

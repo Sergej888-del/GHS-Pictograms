@@ -118,7 +118,7 @@ export default function NewsletterOptIn({ source }: NewsletterOptInProps) {
       </div>
 
       {status === 'error' && (
-        <p className="text-red-500 text-xs mt-2">{errorMsg}</p>
+        <p className="text-rose-500 text-xs mt-2">{errorMsg}</p>
       )}
     </div>
   );

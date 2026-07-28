@@ -93,7 +93,7 @@ export default function PictogramsBrowse() {
       )}
 
       {error && (
-        <p className="mt-4 text-red-600 text-sm" role="alert">
+        <p className="mt-4 text-rose-600 text-sm" role="alert">
           {error}
         </p>
       )}

@@ -178,7 +178,7 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
             className={`px-4 py-1.5 rounded-full text-xs font-semibold border-2 transition-colors ${
               signalFilter === sw
                 ? sw === 'Danger'
-                  ? 'bg-red-600 text-white border-red-600'
+                  ? 'bg-rose-600 text-white border-rose-600'
                   : 'bg-amber-500 text-white border-amber-500'
                 : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
             }`}

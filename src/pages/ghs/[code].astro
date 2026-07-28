@@ -359,9 +359,9 @@ const ghsJsonLd = {
         </h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {hStatements.map(h => (
-            <div class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex gap-3 items-start">
-              <span class="font-mono font-bold text-red-700 shrink-0 text-sm mt-0.5">{h.code}</span>
-              <span class="text-red-900 text-sm leading-snug">{h.text_en}</span>
+            <div class="bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 flex gap-3 items-start">
+              <span class="font-mono font-bold text-rose-700 shrink-0 text-sm mt-0.5">{h.code}</span>
+              <span class="text-rose-900 text-sm leading-snug">{h.text_en}</span>
             </div>
           ))}
         </div>
@@ -439,7 +439,7 @@ const ghsJsonLd = {
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
                   {s.signal_word && (
-                    <span class={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.signal_word === 'Danger' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                    <span class={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.signal_word === 'Danger' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
                       {s.signal_word}
                     </span>
                   )}

@@ -414,7 +414,7 @@ export default function AteMixtureCalculator() {
                   )}
                 </div>
                 {comps.length > 1 && (
-                  <button type="button" onClick={() => removeComp(c.key)} className="shrink-0 p-2 text-gray-400 hover:text-red-500" aria-label="Remove component">✕</button>
+                  <button type="button" onClick={() => removeComp(c.key)} className="shrink-0 p-2 text-gray-400 hover:text-rose-500" aria-label="Remove component">✕</button>
                 )}
               </div>
 
@@ -499,7 +499,7 @@ export default function AteMixtureCalculator() {
         <div className="space-y-6 rounded-2xl border border-teal-200 bg-teal-50/60 p-6">
           <div className="flex flex-wrap items-center gap-4">
             <h3 className="text-lg font-bold text-gray-900" style={{ fontFamily: "'Space Grotesk',sans-serif" }}>Classification result</h3>
-            <span className={`rounded-full px-5 py-1.5 text-sm font-bold ${result.signalWord === 'Danger' ? 'bg-red-600 text-white' : result.signalWord === 'Warning' ? 'bg-yellow-400 text-yellow-900' : 'bg-gray-200 text-gray-600'}`}>
+            <span className={`rounded-full px-5 py-1.5 text-sm font-bold ${result.signalWord === 'Danger' ? 'bg-rose-600 text-white' : result.signalWord === 'Warning' ? 'bg-yellow-400 text-yellow-900' : 'bg-gray-200 text-gray-600'}`}>
               {result.signalWord ?? 'Not classified for acute toxicity'}
             </span>
           </div>
@@ -528,7 +528,7 @@ export default function AteMixtureCalculator() {
                   <>
                     <div className="mt-0.5 text-2xl font-bold text-gray-900">{fmt(rr.ateMix)}</div>
                     <div className="text-xs text-gray-400">{UNITS[rr.key]}</div>
-                    <div className={`mt-2 inline-block rounded px-2 py-1 text-xs font-bold ${(rr.category as number) <= 2 ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                    <div className={`mt-2 inline-block rounded px-2 py-1 text-xs font-bold ${(rr.category as number) <= 2 ? 'bg-rose-100 text-rose-700' : 'bg-yellow-100 text-yellow-700'}`}>
                       Category {rr.category} · {rr.hCode}
                     </div>
                     {rr.corrected && <p className="mt-2 text-xs text-amber-600">Corrected for {rr.unknownConc.toFixed(1)}% unknown toxicity</p>}
@@ -545,7 +545,7 @@ export default function AteMixtureCalculator() {
               <h4 className="mb-2 text-sm font-semibold text-gray-700">Hazard statements</h4>
               <div className="space-y-2">
                 {hStatements.map(h => (
-                  <div key={h.code} className="flex gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-800">
+                  <div key={h.code} className="flex gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-800">
                     <span className="w-14 shrink-0 font-mono font-bold">{h.code}</span><p className="font-medium">{h.text_en}</p>
                   </div>
                 ))}

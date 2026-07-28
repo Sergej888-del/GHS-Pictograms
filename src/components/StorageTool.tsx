@@ -517,7 +517,7 @@ export default function StorageTool() {
                   Corrosive (GHS H314) — acid vs. base could not be determined automatically. Verify against SDS section 10 before co-storage.
                 </div>
               ) : unclassifiedButRisky ? (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                   No storage class was derived from this substance's GHS codes, but it is not inert.
                   {hasSpecialFlags && (
                     <> CAMEO flags it as <strong>{verdict.special_flags.map(flagLabel).join(', ')}</strong>.</>
@@ -551,7 +551,7 @@ export default function StorageTool() {
             {/* never store with */}
             {never.length > 0 && (
               <section>
-                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-red-700">
+                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-rose-700">
                   <span aria-hidden="true">⛔</span> Never store with
                 </h3>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -562,8 +562,8 @@ export default function StorageTool() {
                       onClick={() => togglePreview(s.class)}
                       className={`inline-flex items-center rounded-full border px-3 py-1 text-sm transition-all hover:shadow-sm ${
                         activeClass === s.class
-                          ? 'border-red-400 bg-red-100 text-red-800 ring-2 ring-red-200'
-                          : 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                          ? 'border-rose-400 bg-rose-100 text-rose-800 ring-2 ring-rose-200'
+                          : 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
                       }`}
                     >
                       {shortForCode(s.class)}
@@ -690,7 +690,7 @@ export default function StorageTool() {
                               key={g.label}
                               className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm border ${
                                 g.toxic
-                                  ? 'bg-red-50 text-red-700 border-red-200'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
                                   : 'bg-gray-100 text-gray-700 border-gray-200'
                               }`}
                             >

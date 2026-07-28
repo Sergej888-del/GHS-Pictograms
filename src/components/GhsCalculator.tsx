@@ -739,7 +739,7 @@ export default function GhsCalculator({ code }: Props) {
 
   const toneCls = (tone?: string): string =>
     tone === 'danger'
-      ? 'bg-red-50 border-red-200 text-red-900'
+      ? 'bg-rose-50 border-rose-200 text-rose-900'
       : tone === 'warning'
         ? 'bg-amber-50 border-amber-200 text-amber-900'
         : 'bg-slate-50 border-slate-200 text-slate-800';
