@@ -107,6 +107,7 @@ export default function AteMixtureCalculator() {
   const [pictograms, setPictograms] = useState<Pictogram[]>([])
   const [hStatements, setHStatements] = useState<HRow[]>([])
   const [calcInhalForm, setCalcInhalForm] = useState<InhalForm>('vapour')
+  const [generating, setGenerating] = useState(false)
 
   // Load substances + live /sds/ registry once (StorageTool rev6 pattern).
   useEffect(() => {
@@ -286,9 +287,10 @@ export default function AteMixtureCalculator() {
     } else setHStatements([])
   }
 
-  // ── Professional report (print). No email gate. ────────────────────────────
-  function downloadReport() {
-    if (!result) return
+  // ── Professional report — true PDF download (no email gate, no print dialog).
+  async function downloadReport() {
+    if (!result || generating) return
+    setGenerating(true)
     const date = new Date().toISOString().slice(0, 10)
     const formLabel = INHAL_FORMS.find(f => f.value === calcInhalForm)!.label
     const compRows = comps.filter(c => c.name).map(c => {
@@ -304,17 +306,32 @@ export default function AteMixtureCalculator() {
     const pRows = result.pCodes.map(p => `<tr><td style="font-family:monospace;font-weight:700;color:#166534">${p}</td><td>${P_TEXT[p] ?? ''}</td></tr>`).join('')
     const picto = pictograms.map(p => `<div style="width:74px;height:74px;border:2px solid #111;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;transform:rotate(45deg);margin:8px 14px"><div style="transform:rotate(-45deg);width:52px;height:52px">${p.svg_content ?? p.code}</div></div>`).join('')
     const sig = result.signalWord ?? 'Not classified'
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>ATE Mixture Report</title><style>
-      *{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:13px;color:#0f172a;margin:38px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-      h1{font-size:21px;margin:0 0 2px}.meta{color:#64748b;font-size:11px;margin-bottom:18px}
-      h2{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#475569;border-bottom:1px solid #e2e8f0;padding-bottom:4px;margin:22px 0 10px}
-      table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f1f5f9;text-align:left;padding:6px 8px;border:1px solid #e2e8f0}td{padding:6px 8px;border:1px solid #eef2f7;vertical-align:top}
-      .sig{display:inline-block;padding:6px 22px;border-radius:20px;font-weight:800;font-size:15px;background:${sig === 'Danger' ? '#dc2626' : sig === 'Warning' ? '#facc15' : '#e5e7eb'};color:${sig === 'Danger' ? '#fff' : '#0f172a'}}
-      .cards{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 4px}.rc{border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;min-width:150px}
-      .rl{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#64748b}.rv{font-size:22px;font-weight:800;margin-top:2px}.us{font-size:11px;font-weight:500;color:#94a3b8}
-      .cat{display:inline-block;margin-top:6px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:9px}.catd{background:#fee2e2;color:#991b1b}.catw{background:#fef9c3;color:#854d0e}
-      .warn{margin-top:5px;font-size:10px;color:#b45309}.foot{margin-top:26px;font-size:10px;color:#94a3b8;border-top:1px solid #eef2f7;padding-top:10px;line-height:1.5}
-      svg{max-width:100%;max-height:100%}</style></head><body>
+    const sigBg = sig === 'Danger' ? '#dc2626' : sig === 'Warning' ? '#facc15' : '#e5e7eb'
+    const sigFg = sig === 'Danger' ? '#ffffff' : '#0f172a'
+    // Self-contained fragment; every rule scoped under .ate-pdf-root so nothing
+    // leaks onto the live page while html2pdf renders it offscreen.
+    const reportHtml = `<div class="ate-pdf-root">
+      <style>
+        .ate-pdf-root{font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:13px;color:#0f172a;background:#fff;width:760px;padding:32px}
+        .ate-pdf-root *{box-sizing:border-box}
+        .ate-pdf-root h1{font-size:21px;margin:0 0 2px}
+        .ate-pdf-root .meta{color:#64748b;font-size:11px;margin-bottom:18px}
+        .ate-pdf-root h2{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#475569;border-bottom:1px solid #e2e8f0;padding-bottom:4px;margin:22px 0 10px}
+        .ate-pdf-root table{width:100%;border-collapse:collapse;font-size:12px}
+        .ate-pdf-root th{background:#f1f5f9;text-align:left;padding:6px 8px;border:1px solid #e2e8f0}
+        .ate-pdf-root td{padding:6px 8px;border:1px solid #eef2f7;vertical-align:top}
+        .ate-pdf-root .sig{display:inline-block;padding:6px 22px;border-radius:20px;font-weight:800;font-size:15px;background:${sigBg};color:${sigFg}}
+        .ate-pdf-root .cards{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 4px}
+        .ate-pdf-root .rc{border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;min-width:150px}
+        .ate-pdf-root .rl{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#64748b}
+        .ate-pdf-root .rv{font-size:22px;font-weight:800;margin-top:2px}
+        .ate-pdf-root .us{font-size:11px;font-weight:500;color:#94a3b8}
+        .ate-pdf-root .cat{display:inline-block;margin-top:6px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:9px}
+        .ate-pdf-root .catd{background:#fee2e2;color:#991b1b}.ate-pdf-root .catw{background:#fef9c3;color:#854d0e}
+        .ate-pdf-root .warn{margin-top:5px;font-size:10px;color:#b45309}
+        .ate-pdf-root .foot{margin-top:26px;font-size:10px;color:#94a3b8;border-top:1px solid #eef2f7;padding-top:10px;line-height:1.5}
+        .ate-pdf-root svg{max-width:100%;max-height:100%}
+      </style>
       <h1>ATE Mixture Classification Report</h1>
       <div class="meta">Generated ${date} · ghspictograms.com · Method: UN GHS Chapter 3.1 / CLP Annex I 3.1.3 (additivity formula, Table 3.1.2 conversion)</div>
       <div class="sig">${sig}${result.pictogram ? ` · ${result.pictogram}` : ''}</div>
@@ -324,21 +341,30 @@ export default function AteMixtureCalculator() {
       ${hRows ? `<h2>Hazard statements</h2><table><thead><tr><th style="width:64px">Code</th><th>Statement</th></tr></thead><tbody>${hRows}</tbody></table>` : ''}
       ${pRows ? `<h2>Precautionary statements</h2><table><thead><tr><th style="width:82px">Code</th><th>Statement</th></tr></thead><tbody>${pRows}</tbody></table>` : ''}
       <div class="foot">Formula: 100 / ATE<sub>mix</sub> = &Sigma;(C<sub>i</sub> / ATE<sub>i</sub>) over ingredients &ge; 1% with a known ATE. Where ingredients of unknown acute toxicity exceed 10%, the numerator is corrected to (100 − &Sigma;C<sub>unknown</sub>). Converted point estimates follow GHS Table 3.1.2. Inhalation classified as ${formLabel.toLowerCase()}. This report is a computed aid for SDS authoring, not a substitute for classification review — verify against each ingredient's SDS and Annex VI.</div>
-      </body></html>`
-    // Print via a hidden same-origin iframe — no popup, so it isn't blocked.
-    // The browser's print dialog lets the user "Save as PDF".
-    const iframe = document.createElement('iframe')
-    iframe.setAttribute('aria-hidden', 'true')
-    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;'
-    iframe.onload = () => {
-      const win = iframe.contentWindow
-      if (!win) { iframe.remove(); return }
-      win.focus()
-      win.print()
-      setTimeout(() => iframe.remove(), 1000)
+    </div>`
+    try {
+      // html2pdf.js = jsPDF + html2canvas. Dynamic import → code-split, loads only
+      // on click. Renders the fragment offscreen and downloads a real .pdf file.
+      const html2pdf = (await import('html2pdf.js')).default as any
+      const holder = document.createElement('div')
+      holder.style.cssText = 'position:fixed;left:-10000px;top:0;'
+      holder.innerHTML = reportHtml
+      document.body.appendChild(holder)
+      await html2pdf()
+        .set({
+          margin: [10, 10, 12, 10],
+          filename: `ate-mixture-report-${date}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['css', 'legacy', 'avoid-all'] },
+        })
+        .from(holder.firstElementChild as HTMLElement)
+        .save()
+      holder.remove()
+    } finally {
+      setGenerating(false)
     }
-    iframe.srcdoc = html
-    document.body.appendChild(iframe)
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -541,9 +567,10 @@ export default function AteMixtureCalculator() {
           )}
 
           <div className="rounded-xl border border-teal-200 bg-white p-4">
-            <p className="mb-1 text-sm font-medium text-gray-900">Save the full classification report for your SDS section 2 / 3.</p>
-            <p className="mb-3 text-xs text-gray-500">Opens your print dialog — choose “Save as PDF” as the destination.</p>
-            <button type="button" onClick={downloadReport} className="rounded-lg bg-teal-600 px-6 py-2 text-sm font-semibold text-white hover:bg-teal-700">Download PDF report</button>
+            <p className="mb-3 text-sm font-medium text-gray-900">Download the full classification report as a PDF for your SDS section 2 / 3.</p>
+            <button type="button" onClick={downloadReport} disabled={generating} className="rounded-lg bg-teal-600 px-6 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60 disabled:cursor-wait">
+              {generating ? 'Generating PDF…' : 'Download PDF report'}
+            </button>
             <ShareResult url={shareUrl} title={shareTitle} />
           </div>
 
