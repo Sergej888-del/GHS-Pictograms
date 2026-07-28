@@ -18,6 +18,7 @@ const STATIC_PAGES = [
   { url: '/faq/', changefreq: 'monthly', priority: '0.7' },
   { url: '/blog/', changefreq: 'weekly', priority: '0.8' },
   { url: '/tools/', changefreq: 'weekly', priority: '0.85' },
+  { url: '/tools/ate-mixture-calculator/', changefreq: 'weekly', priority: '0.85' },
   { url: '/label-constructor/', changefreq: 'weekly', priority: '0.85' },
   { url: '/pictogram-selector/', changefreq: 'weekly', priority: '0.85' },
   { url: '/compliance/', changefreq: 'weekly', priority: '0.9' },
@@ -40,7 +41,7 @@ const COMPLIANCE_PILLAR_PAGES = [
   { url: '/compliance/ehs/', changefreq: 'weekly', priority: '0.85' },
 ];
 
-/** Storage-compatibility tool, hub and the 4 indexable category pages (P4 prose). */
+/** Storage-compatibility tool, hub and the 5 indexable category pages (P4 prose). */
 const STORAGE_PAGES = [
   { url: '/tools/chemical-storage-compatibility/', changefreq: 'weekly', priority: '0.85' },
   { url: '/storage-compatibility/', changefreq: 'weekly', priority: '0.9' },
@@ -48,6 +49,7 @@ const STORAGE_PAGES = [
   { url: '/storage-compatibility/oxidizers/', changefreq: 'monthly', priority: '0.7' },
   { url: '/storage-compatibility/water-reactives/', changefreq: 'monthly', priority: '0.7' },
   { url: '/storage-compatibility/organic-peroxides/', changefreq: 'monthly', priority: '0.7' },
+  { url: '/storage-compatibility/acute-toxics/', changefreq: 'monthly', priority: '0.7' },
 ];
 
 async function fetchBlogSitemapEntries(): Promise<

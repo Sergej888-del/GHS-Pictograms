@@ -1,13 +1,18 @@
 # GHS Pictograms
 
-> GHS pictogram library, label builder, ADR/DOT inspector and compliance hub for chemical safety professionals serving GHS, CLP, OSHA HCS 2024 and SDS workflows.
+> GHS pictogram library, substance SDS library, label builder, ATE mixture calculator, ADR/DOT inspector and compliance hub for chemical safety professionals serving GHS, CLP, OSHA HCS 2024 and SDS workflows.
 
 ## Tools
 
 - [Chemical Storage Compatibility](https://ghspictograms.com/tools/chemical-storage-compatibility/): Check GHS storage segregation for any substance — never-store/keep-separate verdicts across 13 hazard classes, with ADR transport data and partner-specific reaction gases
+- [ATE Mixture Calculator](https://ghspictograms.com/tools/ate-mixture-calculator/): Compute the GHS/CLP Acute Toxicity Estimate of a mixture — 5 routes (oral, dermal, inhalation as gas/vapour/dust), automatic ATE from harmonised Annex VI H-codes, the 10% unknown-ingredient rule, and the resulting label outcome (pictogram, signal word, H/P statements)
 - [GHS Label Constructor](https://ghspictograms.com/label-constructor/): Build CLP-compliant chemical labels with pictograms, signal words, H/P-statements across 5 volume tiers
 - [Substance Database](https://ghspictograms.com/pictograms/): Search 4,178 CLP Annex VI substances with full GHS classification, pictograms and signal words
 - [GHS vs ADR/DOT Inspector](https://ghspictograms.com/inspector/): Compare GHS hazard classification with transport (ADR/DOT) classification side by side
+
+## SDS Library
+
+- [SDS Library](https://ghspictograms.com/sds/): Substance safety reports for 109 chemicals — full GHS/CLP classification with provenance, computed storage-compatibility verdicts, ADR transport data, links to official supplier SDS PDFs, and an "MSDS vs SDS" explainer on every page
 
 ## Compliance Hub
 
@@ -38,11 +43,11 @@
 
 ## Sister sites
 
-- [ghssymbols.com](https://ghssymbols.com): Per-substance hazard pages, H/P-statement reference
 - [ghslabels.com](https://ghslabels.com): GHS chemical label suppliers and BS5609 marine-grade label procurement (referral directory)
 
 ## Data
 
 - 4,178 substances from EU CLP Annex VI (harmonised classification list)
+- 109 substance SDS pages with computed storage verdicts and sourced regulatory data
 - Free SVG downloads for all 9 GHS pictograms
 - CLP/GHS compliant label builder with adaptive layout for 5 volume tiers
