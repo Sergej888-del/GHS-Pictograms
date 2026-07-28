@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "./storage-prose.css";
 @import "./design-tokens.css";
+@import "./hub.css";
 
 :root {
   --font-body: 'Inter', sans-serif;

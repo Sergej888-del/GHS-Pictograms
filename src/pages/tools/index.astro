@@ -1,14 +1,18 @@
 ---
 import Layout from '../../layouts/Layout.astro'
 
-// Flagship interactive tools (own pages)
+// Flagship interactive tools (own pages).
+// v2 card accents (Фаза 3, session 12): per-tool colours kept — Sergej's call.
+// acc = border/hover · line = resting border · soft = card fill top · ink = badge/CTA text.
 const flagship = [
   {
     name: 'Chemical Storage Compatibility',
     href: '/tools/chemical-storage-compatibility/',
     badge: 'Segregation',
-    accent: 'border-t-teal-600',
-    badgeColor: 'text-teal-700',
+    acc: '#0d9488',
+    line: '#99f6e4',
+    soft: '#f0fdfa',
+    ink: '#0f766e',
     desc: 'Check which chemicals can be stored together. Enter a substance or pick hazard classes to get GHS segregation verdicts — never-store, keep-separate and compatible — with ADR transport data and predicted reaction gases.',
     cta: 'Check Compatibility →',
   },
@@ -16,8 +20,10 @@ const flagship = [
     name: 'GHS Label Maker',
     href: '/label-constructor/',
     badge: 'Most popular',
-    accent: 'border-t-orange-500',
-    badgeColor: 'text-orange-600',
+    acc: '#f97316',
+    line: '#fed7aa',
+    soft: '#fff7ed',
+    ink: '#ea580c',
     desc: 'Build print-ready GHS labels sized to your actual container per CLP Annex I — auto-filled pictograms, signal word and H/P statements for 4,000+ substances, your logo, PDF/SVG export. Free, no signup.',
     cta: 'Build a Label →',
   },
@@ -25,8 +31,10 @@ const flagship = [
     name: 'ATE Mixture Calculator',
     href: '/tools/ate-mixture-calculator/',
     badge: 'Acute toxicity',
-    accent: 'border-t-teal-500',
-    badgeColor: 'text-teal-700',
+    acc: '#14b8a6',
+    line: '#99f6e4',
+    soft: '#f0fdfa',
+    ink: '#0f766e',
     desc: 'Classify a chemical mixture for acute toxicity under GHS/CLP. Auto-fills each ingredient ATE from harmonised Annex VI data (Table 3.1.2), runs the additivity formula across oral, dermal and inhalation routes, applies the 10% unknown rule and returns category, H-statements, pictogram and a printable report.',
     cta: 'Classify a Mixture →',
   },
@@ -34,8 +42,10 @@ const flagship = [
     name: 'GHS Pictogram Selector',
     href: '/pictogram-selector/',
     badge: 'Jurisdiction-aware',
-    accent: 'border-t-sky-500',
-    badgeColor: 'text-sky-600',
+    acc: '#0ea5e9',
+    line: '#bae6fd',
+    soft: '#f0f9ff',
+    ink: '#0284c7',
     desc: 'Pick hazard classes and categories to get the correct label pictograms, signal word and hazard statements for UN GHS, EU CLP, GB CLP and OSHA HazCom — with CLP Article 26 precedence applied and explained.',
     cta: 'Open the Selector →',
   },
@@ -43,8 +53,10 @@ const flagship = [
     name: 'GHS vs ADR/DOT Inspector',
     href: '/inspector/',
     badge: 'Transport',
-    accent: 'border-t-blue-700',
-    badgeColor: 'text-blue-700',
+    acc: '#1d4ed8',
+    line: '#bfdbfe',
+    soft: '#eff6ff',
+    ink: '#1d4ed8',
     desc: 'Compare workplace GHS classification with ADR/DOT transport requirements: ADR class, packing group and transport placards for any substance in the database.',
     cta: 'Open the Inspector →',
   },
@@ -94,35 +106,41 @@ const itemList = {
   description="14 free online GHS compliance tools: ATE mixture calculator, chemical storage compatibility matrix, label maker, pictogram selector, 9 classification calculators (flash point, LD50, pH, aquatic toxicity) and a GHS vs ADR/DOT inspector. No signup, no install — built on a 4,000+ substance CLP database."
   canonical="https://ghspictograms.com/tools/"
 >
-  <!-- Navy hero -->
-  <section class="bg-gradient-to-br from-[#172554] to-[#1e3a8a] text-white">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-12">
-      <p class="text-xs font-semibold uppercase tracking-widest text-orange-400 mb-3">Free · No signup · Runs in your browser</p>
-      <h1 class="text-3xl sm:text-5xl font-bold leading-tight mb-4">Free GHS Tools &amp; Software</h1>
-      <p class="text-lg text-blue-200 max-w-3xl leading-relaxed">
+  <!-- Animated navy hero (v2) -->
+  <section class="hub-hero">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+    <div class="glow" aria-hidden="true"></div>
+
+    <div class="hub-wrap hub-hero-inner">
+      <p class="hub-hero-eyebrow">Free · No signup · Runs in your browser</p>
+      <h1>Free GHS Tools &amp; Software</h1>
+      <p class="hub-hero-sub">
         Build compliant labels, pick the right pictograms by jurisdiction, and run the
         classification calculators — free GHS software backed by a database of 4,000+
         substances with harmonised CLP classifications.
       </p>
-      <div class="mt-8 flex flex-wrap gap-3">
-        <span class="inline-flex items-center rounded-full bg-white/10 border border-white/20 px-4 py-1.5 text-sm font-medium text-blue-100">14 tools</span>
-        <span class="inline-flex items-center rounded-full bg-white/10 border border-white/20 px-4 py-1.5 text-sm font-medium text-blue-100">4,178 substances</span>
-        <span class="inline-flex items-center rounded-full bg-white/10 border border-white/20 px-4 py-1.5 text-sm font-medium text-blue-100">CLP Annex VI data</span>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">14 tools</span>
+        <span class="hub-hero-chip">4,178 substances</span>
+        <span class="hub-hero-chip">CLP Annex VI data</span>
       </div>
     </div>
   </section>
 
   <!-- Flagship tools -->
-  <section class="bg-white">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <h2 class="text-2xl font-bold text-gray-900 mb-6">Interactive tools</h2>
-      <div class="grid gap-5 md:grid-cols-3">
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">01 · Tools</p>
+      <h2 class="hub-h2">Interactive tools</h2>
+      <div class="hub-cards">
         {flagship.map((t) => (
-          <a href={t.href} class={`flex flex-col rounded-xl border border-gray-200 border-t-4 ${t.accent} bg-white p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200`}>
-            <span class={`text-xs font-semibold uppercase tracking-wide ${t.badgeColor} mb-2`}>{t.badge}</span>
-            <h3 class="text-lg font-bold text-gray-900 mb-2">{t.name}</h3>
-            <p class="text-sm text-gray-600 leading-relaxed flex-1">{t.desc}</p>
-            <span class="mt-5 text-sm font-bold text-orange-600">{t.cta}</span>
+          <a href={t.href} class="hub-card" style={`--acc:${t.acc};--acc-line:${t.line};--acc-soft:${t.soft};--acc-ink:${t.ink}`}>
+            <p class="tag">{t.badge}</p>
+            <h3>{t.name}</h3>
+            <p class="copy">{t.desc}</p>
+            <span class="cta">{t.cta}</span>
           </a>
         ))}
       </div>
@@ -130,19 +148,20 @@ const itemList = {
   </section>
 
   <!-- Calculators -->
-  <section class="bg-gray-50 border-y border-gray-200">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <h2 class="text-2xl font-bold text-gray-900 mb-2">GHS classification calculators</h2>
-      <p class="text-sm text-gray-600 mb-6 max-w-3xl">
+  <section class="hub-sec-b">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">02 · Calculators</p>
+      <h2 class="hub-h2">GHS classification calculators</h2>
+      <p class="hub-sub">
         Nine boundary-tested calculators — one per hazard pictogram. Each lives on its pictogram page
         alongside the hazard explanation, the official SVG download and the full substance list.
       </p>
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div class="hub-mini-cards">
         {calculators.map((c) => (
-          <a href={`/ghs/${c.code.toLowerCase()}/`} class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 hover:border-orange-400 transition-all duration-200">
-            <span class="inline-block rounded-md bg-blue-50 border border-blue-100 px-2 py-0.5 text-xs font-mono font-semibold text-blue-800 mb-2">{c.code}</span>
-            <div class="font-semibold text-sm text-gray-900 mb-1">{c.name}</div>
-            <p class="text-xs text-gray-500 leading-relaxed">{c.desc}</p>
+          <a href={`/ghs/${c.code.toLowerCase()}/`} class="hub-mini-card">
+            <span class="code">{c.code}</span>
+            <h4>{c.name}</h4>
+            <p class="copy">{c.desc}</p>
           </a>
         ))}
       </div>
@@ -150,19 +169,20 @@ const itemList = {
   </section>
 
   <!-- Closing / SDS bridge -->
-  <section class="bg-white">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 pb-16">
-      <div class="rounded-2xl bg-gradient-to-br from-[#172554] to-[#1e3a8a] p-8 text-white shadow-lg">
-        <h2 class="text-xl font-bold mb-3">Why free, browser-based GHS tools?</h2>
-        <p class="text-sm text-blue-100 leading-relaxed max-w-3xl">
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <div class="hub-close-panel">
+        <div class="dots" aria-hidden="true"></div>
+        <h2>Why free, browser-based GHS tools?</h2>
+        <p>
           Most GHS labeling software is desktop-based and licensed per seat. These tools cover the
           everyday tasks — checking a classification boundary, picking pictograms for a jurisdiction,
           printing a correctly sized label — directly in the browser, using harmonised classifications
           from CLP Annex VI. Need the data for one specific chemical? Our
-          <a href="/sds/" class="text-orange-400 font-semibold hover:text-orange-300 underline underline-offset-2">SDS library</a>
+          <a href="/sds/">SDS library</a>
           has substance-level reference pages with classification, storage verdicts and transport data.
           For managing a full SDS library, authoring Safety Data Sheets or running a
-          chemical register, see our <a href="/compliance/sds/" class="text-orange-400 font-semibold hover:text-orange-300 underline underline-offset-2">SDS compliance guides</a>.
+          chemical register, see our <a href="/compliance/sds/">SDS compliance guides</a>.
         </p>
       </div>
     </div>
