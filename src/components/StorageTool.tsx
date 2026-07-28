@@ -23,10 +23,24 @@
 // which get_storage_verdict v5 resolves via substance_cas_alias; (c) verdict
 // header gains a "Full substance report →" link to the live /sds/<slug>/ page
 // (109 live targets), slug matched via sds_pages.substance_id OR either CAS form.
+// rev7: SDS Manager affiliate link inside the "Reference aid only" disclaimer
+// callout (management intent; fp_sid=gpmgmt reused per the session-9 decision)
+// + GA affiliate_click. Hazard copy in the callout is UNCHANGED — placement,
+// not pressure (CLAUDE.md §8).
 import { useEffect, useMemo, useState } from 'react'
 import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
 import { shortForCode, urlForCode } from '../lib/storageClasses'
+
+// SDS Manager affiliate — the callout already tells the reader to verify against
+// the SDS; this link serves that exact moment. GA separates placements via the
+// affiliate_click `placement` param even though the fp_sid is shared with ATE.
+const SDS_MANAGEMENT_URL = 'https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=gpmgmt'
+function track(event: string, params: Record<string, unknown>): void {
+  if (typeof window !== 'undefined' && typeof (window as any).gtag === 'function') {
+    ;(window as any).gtag('event', event, params)
+  }
+}
 
 interface SubstanceRow {
   id: string
@@ -698,7 +712,21 @@ export default function StorageTool() {
             )}
 
             <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs leading-relaxed text-gray-600">
-              <span className="font-semibold text-gray-800">Reference aid only.</span> Colour and class are a triage signal, not a classification — always verify storage and gas hazards against the substance&apos;s safety data sheet (sections 7 and 10) and local regulations.
+              <span className="font-semibold text-gray-800">Reference aid only.</span> Colour and class are a triage signal, not a classification — always verify storage and gas hazards against the substance&apos;s safety data sheet (sections 7 and 10) and local regulations.{' '}
+              Managing SDSs for a whole inventory?{' '}
+              <a
+                href={SDS_MANAGEMENT_URL}
+                target="_blank"
+                rel="sponsored nofollow noopener"
+                onClick={() => track('affiliate_click', { partner: 'sds_manager', placement: 'storage_tool' })}
+                className="font-semibold text-teal-700 underline hover:text-teal-800"
+              >
+                SDS Manager keeps them current and audit-ready&nbsp;†
+              </a>
+              <span className="mt-1 block text-[11px] text-gray-500">
+                † SDS Manager is a partner solution; we may earn a commission.{' '}
+                <a href="/affiliate-disclosure/" className="underline">See disclosure</a>.
+              </span>
             </p>
           </div>
         )}
