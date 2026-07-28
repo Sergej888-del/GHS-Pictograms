@@ -16,6 +16,7 @@
 //   7. A full professional report (print) — no email gate.
 import { useEffect, useMemo, useState } from 'react'
 import Fuse from 'fuse.js'
+import ShareResult from './ShareResult'
 import { supabase } from '../lib/supabase'
 import {
   resolveRoute, computeRoute, rollUp, tableKey, UNITS, P_TEXT,
@@ -152,18 +153,63 @@ export default function AteMixtureCalculator() {
     return () => { cancelled = true }
   }, [])
 
-  // Deep-link ?substance=CAS → prefill first component after load.
+  // Deep-links after load:
+  //   ?mix=CAS:conc,CAS:conc&form=vapour  → rebuild a shared mixture (from Share)
+  //   ?substance=CAS                       → prefill a single component (from /sds/)
   useEffect(() => {
     if (loading || all.length === 0) return
-    const cas = new URLSearchParams(window.location.search).get('substance')?.trim()
+    const params = new URLSearchParams(window.location.search)
+    const findByCas = (cas: string) => all.find(x => x.cas_number === cas || x.display_cas === cas)
+    const toComp = (s: IndexedSub, conc: number): Comp => ({
+      ...newComp(), substance_id: s.id, cas: s.display_cas, name: s.display_name, slug: s.sdsSlug,
+      hCodes: s.h_statement_codes, dbAteOral: s.ate_oral, concentration: Math.max(0, Math.min(100, conc)),
+    })
+
+    const form = params.get('form')
+    if (form === 'gas' || form === 'vapour' || form === 'dust_mist') setInhalForm(form)
+
+    const mix = params.get('mix')
+    if (mix) {
+      const built: Comp[] = []
+      const texts: Record<string, string> = {}
+      for (const part of mix.split(',')) {
+        const [cas, concStr] = part.split(':')
+        const s = cas && findByCas(cas.trim())
+        if (!s) continue
+        const c = toComp(s, parseFloat(concStr) || 0)
+        built.push(c); texts[c.key] = s.display_name
+      }
+      if (built.length) { setComps(built); setSearchTexts(texts); return }
+    }
+
+    const cas = params.get('substance')?.trim()
     if (!cas) return
-    const s = all.find(x => x.cas_number === cas || x.display_cas === cas)
+    const s = findByCas(cas)
     if (!s) return
-    const c: Comp = { ...newComp(), substance_id: s.id, cas: s.display_cas, name: s.display_name, slug: s.sdsSlug, hCodes: s.h_statement_codes, dbAteOral: s.ate_oral, concentration: 100 }
+    const c = toComp(s, 100)
     setComps([c])
-    setSearchTexts(t => ({ ...t, [c.key]: s.display_name }))
+    setSearchTexts({ [c.key]: s.display_name })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading])
+
+  // Shareable URL that reproduces the current mixture on the recipient's side.
+  const shareUrl = useMemo(() => {
+    if (typeof window === 'undefined') return ''
+    const mix = comps
+      .filter(c => c.cas && c.concentration > 0)
+      .map(c => `${c.cas}:${c.concentration}`)
+      .join(',')
+    const base = `${window.location.origin}/tools/ate-mixture-calculator/`
+    const qs = new URLSearchParams()
+    if (mix) qs.set('mix', mix)
+    if (inhalForm !== 'vapour') qs.set('form', inhalForm)
+    const q = qs.toString()
+    return q ? `${base}?${q}` : base
+  }, [comps, inhalForm])
+
+  const shareTitle = result?.signalWord
+    ? `GHS/CLP acute toxicity: ${result.signalWord}${result.hCodes.length ? ' · ' + result.hCodes.join(', ') : ''} — ATE Mixture Calculator`
+    : 'ATE Mixture Calculator — GHS/CLP acute toxicity classification'
 
   const fuse = useMemo(
     () => new Fuse(all, {
@@ -279,9 +325,20 @@ export default function AteMixtureCalculator() {
       ${pRows ? `<h2>Precautionary statements</h2><table><thead><tr><th style="width:82px">Code</th><th>Statement</th></tr></thead><tbody>${pRows}</tbody></table>` : ''}
       <div class="foot">Formula: 100 / ATE<sub>mix</sub> = &Sigma;(C<sub>i</sub> / ATE<sub>i</sub>) over ingredients &ge; 1% with a known ATE. Where ingredients of unknown acute toxicity exceed 10%, the numerator is corrected to (100 − &Sigma;C<sub>unknown</sub>). Converted point estimates follow GHS Table 3.1.2. Inhalation classified as ${formLabel.toLowerCase()}. This report is a computed aid for SDS authoring, not a substitute for classification review — verify against each ingredient's SDS and Annex VI.</div>
       </body></html>`
-    const w = window.open('', '_blank')
-    if (!w) return
-    w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 250)
+    // Print via a hidden same-origin iframe — no popup, so it isn't blocked.
+    // The browser's print dialog lets the user "Save as PDF".
+    const iframe = document.createElement('iframe')
+    iframe.setAttribute('aria-hidden', 'true')
+    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;'
+    iframe.onload = () => {
+      const win = iframe.contentWindow
+      if (!win) { iframe.remove(); return }
+      win.focus()
+      win.print()
+      setTimeout(() => iframe.remove(), 1000)
+    }
+    iframe.srcdoc = html
+    document.body.appendChild(iframe)
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -484,8 +541,10 @@ export default function AteMixtureCalculator() {
           )}
 
           <div className="rounded-xl border border-teal-200 bg-white p-4">
-            <p className="mb-3 text-sm font-medium text-gray-900">Download the full classification report for your SDS section 2 / 3.</p>
+            <p className="mb-1 text-sm font-medium text-gray-900">Save the full classification report for your SDS section 2 / 3.</p>
+            <p className="mb-3 text-xs text-gray-500">Opens your print dialog — choose “Save as PDF” as the destination.</p>
             <button type="button" onClick={downloadReport} className="rounded-lg bg-teal-600 px-6 py-2 text-sm font-semibold text-white hover:bg-teal-700">Download PDF report</button>
+            <ShareResult url={shareUrl} title={shareTitle} />
           </div>
 
           {/* SDS Manager affiliate slot — the classification result belongs in SDS section 2. */}
