@@ -1,21 +1,16 @@
 ---
 export const prerender = true
-// ghspictograms.com — главная (светлая тема, Space Grotesk + Inter)
+// ghspictograms.com — главная v2 (Claude Design mockup 2026-07-28, data-first hero).
+// Дизайн-система: navy #062A78 / teal #0d9488 / orange CTA. Space Grotesk + Inter.
+// Данные виджетов выверены по get_storage_verdict + ate.ts (session 11).
 import '../styles/global.css'
 import GoogleAnalytics from '../components/GoogleAnalytics.astro'
 import { Fragment } from 'astro/jsx-runtime'
 import { supabase } from '../lib/supabase'
 import NewsletterCtaBand from '../components/NewsletterCtaBand.astro'
 
-const stats = [
-  { value: '4,178', label: 'Substances' },
-  { value: '9', label: 'GHS Pictograms' },
-  { value: 'CLP/GHS', label: 'EU Compliant' },
-  { value: 'Free · No Registration', label: '' },
-]
-
 /**
- * pictograms_signals: id (= pictogram_id в смысле записи), code, name_en, svg_content, svg_url
+ * pictograms_signals: id, code, name_en, svg_content, svg_url
  * (полей pictogram_id / name в таблице нет — см. supabase/schema.sql)
  */
 const { data: pictogramsRaw, error: pictogramsError } = await supabase
@@ -29,41 +24,153 @@ if (pictogramsError) {
 }
 
 const pictogramsRows = pictogramsRaw ?? []
-const featuredPictos = pictogramsRows.filter((p) => ['GHS02', 'GHS05', 'GHS06', 'GHS09'].includes(p.code))
-const labelPictos = pictogramsRows.filter((p) => ['GHS02', 'GHS07'].includes(p.code))
+const ghs02 = pictogramsRows.find((p) => p.code === 'GHS02')
 
-// SDS library banner — live page count from the registry (falls back to '100+').
+// SDS library — live page count from the registry (falls back to '109').
 const { count: sdsCountRaw } = await supabase
   .from('sds_pages')
   .select('slug', { count: 'exact', head: true })
   .eq('status', 'live')
-const sdsCount: number | null = sdsCountRaw ?? null
+const sdsLabel = sdsCountRaw ? String(sdsCountRaw) : '109'
 
-const tools = [
+// ── Storage widget: real verdicts (get_storage_verdict, verified 2026-07-28).
+// Labels = shortForCode() wording from src/lib/storageClasses.ts.
+type VerdictKey = 'never' | 'separate' | 'ok'
+const storageDemo: { key: string; label: string; rows: { group: string; v: VerdictKey }[] }[] = [
   {
-    title: 'Substance Database',
-    description:
-      'Browse GHS01–GHS09 pictograms for 4,178 classified substances. Find the correct hazard symbols for any chemical by CAS number.',
-    href: '/pictograms/',
-    badge: '4,178 SUBSTANCES',
-    cta: 'Browse Database →',
+    key: 'acetone',
+    label: 'Acetone',
+    rows: [
+      { group: 'Oxidizers', v: 'never' },
+      { group: 'Oxidizing acids', v: 'never' },
+      { group: 'Bases', v: 'separate' },
+      { group: 'Flammable solids', v: 'ok' },
+    ],
   },
   {
-    title: 'GHS vs ADR/DOT Inspector',
-    description:
-      'Compare workplace GHS labels vs transport placards side-by-side. Essential for logistics and distribution compliance.',
+    key: 'sulfuric',
+    label: 'Sulfuric acid',
+    rows: [
+      { group: 'Flammable liquids', v: 'never' },
+      { group: 'Bases', v: 'never' },
+      { group: 'Acute toxics', v: 'separate' },
+      { group: 'Oxidizers', v: 'ok' },
+    ],
+  },
+  {
+    key: 'peroxide',
+    label: 'Hydrogen peroxide',
+    rows: [
+      { group: 'Flammable liquids', v: 'never' },
+      { group: 'Organic acids', v: 'never' },
+      { group: 'Bases', v: 'separate' },
+      { group: 'Oxidizing acids', v: 'ok' },
+    ],
+  },
+]
+const verdictStyle: Record<VerdictKey, { label: string; bg: string; ink: string }> = {
+  never: { label: 'Never store', bg: '#fff1f2', ink: '#9f1239' },
+  separate: { label: 'Keep separate', bg: '#fffbeb', ink: '#92400e' },
+  ok: { label: 'Compatible', bg: '#f0fdfa', ink: '#0f766e' },
+}
+
+// ── ATE demo: computed through src/lib/ate.ts (methanol 40 % w/w in water;
+// converted point estimates from H301/H311/H331; verified 2026-07-28).
+const ateDemo = [
+  { route: 'Oral', ate: '250 mg/kg', cat: 'Acute Tox. 3' },
+  { route: 'Dermal', ate: '750 mg/kg', cat: 'Acute Tox. 3' },
+  { route: 'Inhalation, vapour', ate: '7.5 mg/l', cat: 'Acute Tox. 3' },
+]
+
+// ── SDS teaser table: classifications + ADR verified against the DB 2026-07-28.
+const sdsRows = [
+  {
+    href: '/sds/acetone/',
+    name: 'Acetone',
+    cas: '67-64-1',
+    cls: 'Flam. Liq. 2 · Eye Irrit. 2 · STOT SE 3',
+    verdict: 'Never with oxidizers',
+    adr: 'UN1090 · 3 · II',
+  },
+  {
+    href: '/sds/sulfuric-acid/',
+    name: 'Sulfuric acid',
+    cas: '7664-93-9',
+    cls: 'Skin Corr. 1A',
+    verdict: 'Never with bases',
+    adr: 'UN1830 · 8 · II',
+  },
+  {
+    href: '/sds/hydrogen-peroxide/',
+    name: 'Hydrogen peroxide',
+    cas: '7722-84-1',
+    cls: 'Ox. Liq. 1 · Acute Tox. 4 · Skin Corr. 1A',
+    verdict: 'Never with flammables',
+    adr: 'UN2014 · 5.1 · II',
+  },
+]
+
+// ── The other tools (real routes).
+const otherTools = [
+  {
+    href: '/label-constructor/',
+    accent: '#1e3a8a',
+    tag: 'Labelling',
+    title: 'GHS Label Maker',
+    copy: 'Print-ready labels sized to the container, exported as PDF or SVG at true physical size.',
+  },
+  {
+    href: '/pictogram-selector/',
+    accent: '#2563eb',
+    tag: 'Labelling',
+    title: 'Pictogram Selector',
+    copy: 'Hazard classes in, correct pictograms out — with CLP Article 26 precedence applied.',
+  },
+  {
     href: '/inspector/',
-    badge: 'NEW',
-    cta: 'Try Inspector →',
+    accent: '#7c3aed',
+    tag: 'Transport',
+    title: 'GHS vs ADR/DOT Inspector',
+    copy: 'Workplace label against transport placard, side by side, for EU and US shipments.',
   },
   {
-    title: 'Compliance Hub',
-    description:
-      'Deep-dive guides on UN GHS, OSHA HCS, EU CLP, and SDS authoring. Country-by-country regulatory reference and standards explainers.',
-    href: '/compliance/',
-    badge: 'EDITORIAL',
-    cta: 'Browse Hub →',
+    href: '/pictograms/',
+    accent: '#0d9488',
+    tag: 'Reference',
+    title: 'Substance Database',
+    copy: '4,178 CLP Annex VI entries, searchable by name or CAS number.',
   },
+]
+
+// Short hazard tag per pictogram for the calculator pill strip.
+const pictoTag: Record<string, string> = {
+  GHS01: 'Explosive',
+  GHS02: 'Flammable',
+  GHS03: 'Oxidizing',
+  GHS04: 'Gas',
+  GHS05: 'Corrosive',
+  GHS06: 'Toxic',
+  GHS07: 'Irritant',
+  GHS08: 'Health',
+  GHS09: 'Environment',
+}
+
+// ── Compliance pillars (real routes, order as designed).
+const pillars = [
+  { href: '/compliance/un-ghs/', accent: '#f97316', n: '01', title: 'UN GHS', copy: 'The purple book, revision by revision, and what each one changed.' },
+  { href: '/compliance/osha-hcs/', accent: '#d97706', n: '02', title: 'OSHA HCS', copy: 'US workplace labelling, the 2024 alignment and the deadlines.' },
+  { href: '/compliance/clp/', accent: '#2563eb', n: '03', title: 'EU CLP', copy: 'Annex VI entries, Article 26 precedence, supplementary EUH hazards.' },
+  { href: '/compliance/sds/', accent: '#0d9488', n: '04', title: 'SDS authoring', copy: 'All 16 sections, what belongs where, common rejection reasons.' },
+  { href: '/compliance/ehs/', accent: '#7c3aed', n: '05', title: 'EHS practice', copy: 'Storage classes, segregation plans, workplace exposure records.' },
+  { href: '/compliance/reach/', accent: '#e11d48', n: '06', title: 'REACH', copy: 'Registration duties, tonnage bands, downstream user obligations.' },
+  { href: '/compliance/svhc/', accent: '#93b4e8', n: '07', title: 'SVHC', copy: 'Candidate list changes, authorisation, communication duties.' },
+]
+
+const roles = [
+  { who: 'EHS managers', copy: 'Segregation plans and storage-class decisions for the chemical store.' },
+  { who: 'Lab managers', copy: 'Fast per-substance checks before a delivery goes on the shelf.' },
+  { who: 'Chemists & formulators', copy: 'Mixture classification and the label that follows from it.' },
+  { who: 'Transport compliance', copy: 'Workplace GHS against ADR/DOT placards, side by side.' },
 ]
 ---
 
@@ -102,1112 +209,1680 @@ const tools = [
     />
     <meta name="twitter:image" content="https://ghspictograms.com/og-default.png" />
 
-    <style>
+    <style is:global>
+      /* ── Design tokens (mockup 2026-07-28). Ladders, not single colours. ── */
       :root {
-        --nav: #062a78;
-        --nav-dark: #0a3a8c;
-        --accent: #0077b6;
-        --body: #ffffff;
-        --card: #f8fafc;
-        --card-border: #e2e8f0;
-        --text: #1e293b;
-        --muted: #64748b;
         --font-heading: 'Space Grotesk', system-ui, sans-serif;
-        --font-body: 'Inter', system-ui, sans-serif;
+        --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+        --font-mono: ui-monospace, Menlo, monospace;
+        /* navy family */
+        --navy: #062a78;
+        --navy-panel: #051f5c;
+        --hero-1: #274cb0;
+        --hero-2: #1e3a8a;
+        --hero-3: #172554;
+        --hero-4: #101c40;
+        /* light-blue ink ladder on dark (4 steps — keep distinct) */
+        --ink-dark-1: #dbe6fb;
+        --ink-dark-2: #cddcf5;
+        --ink-dark-3: #a8c1ea;
+        --ink-dark-4: #93b4e8;
+        /* teal ladder */
+        --teal-50: #f0fdfa;
+        --teal-200: #99f6e4;
+        --teal-300: #5eead4;
+        --teal-500: #14b8a6;
+        --teal-600: #0d9488;
+        --teal-700: #0f766e;
+        /* slate ink on light */
+        --ink: #0f1729;
+        --ink-2: #475569;
+        --ink-3: #64748b;
+        --line: #e2e8f0;
+        --line-2: #cbd5e1;
+        /* navy-tinted section backgrounds (5 close steps — do not collapse) */
+        --bg-a: #eef2f9;
+        --bg-b: #e8eef7;
+        --bg-c: #dfe7f3;
+        --line-b: #cfdaea;
+        --line-r: #dbe3ee;
       }
-
-      *,
-      *::before,
-      *::after {
-        box-sizing: border-box;
+      html,
+      body {
         margin: 0;
         padding: 0;
       }
-
-      html {
-        scroll-behavior: smooth;
-      }
-
       body {
+        background: #ffffff;
         font-family: var(--font-body);
-        font-size: 16px;
-        line-height: 1.6;
-        color: var(--text);
-        background: var(--body);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
       }
-
-      a {
-        color: inherit;
+      .hp * {
+        box-sizing: border-box;
+      }
+      .hp a {
+        color: #1e3a8a;
         text-decoration: none;
       }
-
-      .font-heading {
+      .hp p {
+        margin: 0;
+      }
+      .hp h1,
+      .hp h2,
+      .hp h3,
+      .hp h4 {
+        margin: 0;
         font-family: var(--font-heading);
-      }
-
-      /* ——— Hero ——— */
-      .hero {
-        position: relative;
-        overflow: hidden;
-        background:
-          radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1.4px) 0 0 / 22px 22px,
-          linear-gradient(135deg, #123a8f 0%, #0d2c72 55%, #0a2360 100%);
-        color: #fff;
-        padding: 3.5rem 1.5rem 4rem;
-      }
-      .hero::after {
-        content: '';
-        position: absolute;
-        top: -120px;
-        right: -80px;
-        width: 420px;
-        height: 420px;
-        border-radius: 50%;
-        background: radial-gradient(circle, rgba(86, 179, 255, 0.2), transparent 65%);
-        pointer-events: none;
-      }
-      .hero-inner {
-        position: relative;
-        z-index: 1;
-        max-width: 1120px;
-        margin: 0 auto;
-      }
-
-      .hero-eyebrow {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        font-size: 0.75rem;
-        font-weight: 600;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.75);
-        margin-bottom: 1.25rem;
-      }
-
-      .hero-eyebrow::before {
-        content: '';
-        width: 32px;
-        height: 1px;
-        background: rgba(255, 255, 255, 0.45);
-      }
-
-      .hero h1 {
-        font-family: var(--font-heading);
-        font-size: clamp(2.25rem, 5vw, 3.25rem);
-        font-weight: 700;
-        line-height: 1.15;
-        letter-spacing: -0.02em;
-        margin-bottom: 1rem;
-      }
-
-      .hero h1 .hero-accent {
-        color: var(--accent);
-      }
-
-      .hero-sub {
-        font-size: 1.125rem;
-        color: rgba(255, 255, 255, 0.85);
-        max-width: 36rem;
-        margin-bottom: 1.75rem;
-        line-height: 1.65;
-      }
-
-      .hero-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-        margin-bottom: 2.5rem;
-      }
-
-      .btn-primary-hero {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: var(--accent);
-        color: #fff;
-        font-weight: 600;
-        font-size: 0.9375rem;
-        padding: 0.75rem 1.35rem;
-        border-radius: 8px;
-        border: none;
-        cursor: pointer;
-        transition: filter 0.15s;
-      }
-
-      .btn-primary-hero:hover {
-        filter: brightness(1.06);
-      }
-
-      .btn-outline-hero {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        color: #fff;
-        font-weight: 600;
-        font-size: 0.9375rem;
-        padding: 0.75rem 1.35rem;
-        border-radius: 8px;
-        border: 2px solid rgba(255, 255, 255, 0.85);
-        background: transparent;
-        transition:
-          background 0.15s,
-          border-color 0.15s;
-      }
-
-      .btn-outline-hero:hover {
-        background: rgba(255, 255, 255, 0.1);
-        border-color: #fff;
-      }
-
-      /* Compliance Hub button — отдельный стиль с emerald accent чтобы выделить новый раздел */
-      .btn-compliance-hero {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        color: #fff;
-        font-weight: 600;
-        font-size: 0.9375rem;
-        padding: 0.75rem 1.35rem;
-        border-radius: 8px;
-        border: 2px solid rgba(16, 185, 129, 0.7);
-        background: rgba(16, 185, 129, 0.15);
-        transition:
-          background 0.15s,
-          border-color 0.15s;
-      }
-
-      .btn-compliance-hero:hover {
-        background: rgba(16, 185, 129, 0.28);
-        border-color: rgba(16, 185, 129, 1);
-      }
-
-      .btn-compliance-hero .btn-icon {
-        margin-right: 0.45rem;
-        font-size: 1rem;
-        line-height: 1;
-      }
-
-      /* ——— Stats ——— */
-      .stats-bar {
-        background: #fff;
-        border-bottom: 1px solid var(--card-border);
-      }
-
-      .stats-inner {
-        max-width: 1120px;
-        margin: 0 auto;
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        padding: 0 1.5rem;
-      }
-
-      .stat-cell {
-        text-align: center;
-        padding: 1.75rem 1rem;
-        border-right: 1px solid var(--card-border);
-      }
-
-      .stat-cell:last-child {
-        border-right: none;
-      }
-
-      .stat-value {
-        font-family: var(--font-heading);
-        font-size: 1.75rem;
-        font-weight: 700;
-        color: var(--accent);
-        letter-spacing: 0.02em;
-      }
-
-      .stat-label {
-        font-size: 0.8125rem;
-        color: var(--muted);
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin-top: 0.25rem;
-      }
-
-      /* ——— Sections ——— */
-      .section {
-        padding: 3.5rem 1.5rem;
-        max-width: 1120px;
-        margin: 0 auto;
-      }
-
-      .section-label {
-        font-size: 0.6875rem;
-        font-weight: 600;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--muted);
-        margin-bottom: 1.25rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-
-      .section-label::before {
-        content: '';
-        width: 20px;
-        height: 1px;
-        background: var(--card-border);
-      }
-
-      .section-title {
-        font-family: var(--font-heading);
-        font-size: 1.75rem;
-        font-weight: 700;
-        color: var(--text);
-        margin-bottom: 1.75rem;
         letter-spacing: -0.02em;
       }
-
-      /* Pictogram grid */
-      .p-grid {
-        display: grid;
-        grid-template-columns: repeat(9, minmax(0, 1fr));
-        gap: 0.75rem;
+      .wrap {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding-left: 24px;
+        padding-right: 24px;
       }
-
-      .p-card {
-        display: block;
-        background: var(--card);
-        border: 1px solid var(--card-border);
-        border-radius: 8px;
-        padding: 1rem 0.5rem;
-        text-align: center;
-        box-shadow: 0 1px 2px rgba(16, 32, 64, 0.03);
-        transition:
-          border-color 0.2s,
-          transform 0.2s,
-          box-shadow 0.2s;
-        min-width: 0;
-        cursor: pointer;
-      }
-
-      .p-card:hover {
-        border-color: #0077b6;
-        transform: translateY(-3px);
-        box-shadow: 0 12px 26px -16px rgba(16, 32, 64, 0.35);
-      }
-
-      .p-card-svg {
-        width: 100%;
-        max-width: 72px;
-        height: 72px;
-        margin: 0 auto 0.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .p-card-svg :global(svg) {
-        max-width: 100%;
-        max-height: 100%;
-      }
-
-      .p-card-svg img {
-        max-width: 100%;
-        max-height: 100%;
-        object-fit: contain;
-      }
-
-      .p-code {
-        font-size: 0.6875rem;
-        font-weight: 600;
-        color: var(--muted);
-        font-family: ui-monospace, monospace;
-      }
-
-      .p-name {
-        display: block;
-        font-size: 0.6875rem;
-        color: var(--text);
-        margin-top: 0.2rem;
-        line-height: 1.3;
-      }
-
-      /* Featured tool card (replaces the old substance search) */
-      .featured-tool {
-        position: relative;
-        overflow: hidden;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 2rem;
-        align-items: center;
-        background:
-          radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1.4px) 0 0 / 20px 20px,
-          linear-gradient(135deg, #123a8f 0%, #0d2c72 60%, #0a2360 100%);
-        border: 1px solid rgba(86, 179, 255, 0.25);
-        border-radius: 16px;
-        padding: 2.25rem;
-        box-shadow:
-          0 1px 2px rgba(16, 32, 64, 0.04),
-          0 24px 50px -28px rgba(10, 35, 96, 0.55);
-        transition:
-          transform 0.2s,
-          box-shadow 0.2s;
-      }
-      .featured-tool:hover {
-        transform: translateY(-3px);
-        box-shadow:
-          0 1px 2px rgba(16, 32, 64, 0.04),
-          0 30px 60px -26px rgba(10, 35, 96, 0.6);
-      }
-      .featured-glow {
-        position: absolute;
-        top: -100px;
-        right: -60px;
-        width: 360px;
-        height: 360px;
-        border-radius: 50%;
-        background: radial-gradient(circle, rgba(86, 179, 255, 0.22), transparent 65%);
-        pointer-events: none;
-      }
-      .featured-content {
-        position: relative;
-        z-index: 1;
-        max-width: 40rem;
-      }
-      .featured-badge {
-        display: inline-block;
-        font-size: 0.6875rem;
-        font-weight: 700;
+      .mono {
+        font-family: var(--font-mono);
         letter-spacing: 0.1em;
         text-transform: uppercase;
-        color: #bfe0ff;
-        border: 1px solid rgba(111, 180, 255, 0.4);
-        background: rgba(86, 179, 255, 0.12);
-        padding: 0.25rem 0.6rem;
-        border-radius: 5px;
-        margin-bottom: 0.9rem;
+        font-weight: 600;
       }
-      .featured-title {
-        font-family: var(--font-heading);
-        font-size: clamp(1.6rem, 3.5vw, 2.1rem);
-        font-weight: 700;
-        color: #fff;
-        letter-spacing: -0.02em;
-        margin-bottom: 0.6rem;
+      @keyframes drift {
+        0%,
+        100% {
+          transform: translateY(-10px);
+        }
+        50% {
+          transform: translateY(10px);
+        }
       }
-      .featured-desc {
-        font-size: 0.95rem;
-        line-height: 1.65;
-        color: rgba(255, 255, 255, 0.82);
-        margin-bottom: 1.25rem;
+      @keyframes dotDrift {
+        0%,
+        100% {
+          transform: translate3d(0, 0, 0);
+        }
+        50% {
+          transform: translate3d(7px, -7px, 0);
+        }
       }
-      .featured-cta {
-        display: inline-flex;
-        align-items: center;
-        background: #ef915d;
-        color: #fff;
-        font-weight: 700;
-        font-size: 0.9rem;
-        padding: 0.7rem 1.3rem;
-        border-radius: 8px;
-        transition: background 0.15s;
+      @keyframes dotDriftB {
+        0%,
+        100% {
+          transform: translate3d(0, 0, 0);
+        }
+        50% {
+          transform: translate3d(-9px, 6px, 0);
+        }
       }
-      .featured-tool:hover .featured-cta {
-        background: #e87f45;
+      @keyframes dotPulse {
+        0%,
+        100% {
+          opacity: 0.55;
+        }
+        42% {
+          opacity: 1;
+        }
       }
-      .featured-pictos {
-        position: relative;
-        z-index: 1;
-        display: flex;
-        gap: 0.75rem;
+      @keyframes sheen {
+        0%,
+        100% {
+          opacity: 0.12;
+          transform: translateX(-6%);
+        }
+        50% {
+          opacity: 0.4;
+          transform: translateX(6%);
+        }
       }
-      .featured-pictos .fp {
-        width: 76px;
-        height: 76px;
-        background: #fff;
-        border-radius: 12px;
-        padding: 10px;
-        box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.4);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .featured-pictos .fp :global(svg) {
-        width: 100%;
-        height: 100%;
-        display: block;
-      }
-      .featured-pictos .fp img {
-        max-width: 100%;
-        max-height: 100%;
-        object-fit: contain;
-      }
-      /* SDS library banner — /sds/ family identity (navy→teal + teal dots) */
-      .featured-tool--sds {
-        background:
-          radial-gradient(rgba(94, 234, 212, 0.5) 1px, transparent 1.4px) 0 0 / 22px 22px,
-          linear-gradient(135deg, #0f172a 0%, #062a78 48%, #134e4a 100%);
-        border-color: rgba(94, 234, 212, 0.28);
-      }
-      .featured-tool--sds .featured-glow {
-        background: radial-gradient(circle, rgba(45, 212, 191, 0.25), transparent 65%);
-      }
-      .featured-tool--sds .featured-badge {
-        color: #99f6e4;
-        border-color: rgba(94, 234, 212, 0.4);
-        background: rgba(45, 212, 191, 0.12);
-      }
-      .featured-tool--sds .featured-cta {
-        background: #0d9488;
-      }
-      .featured-tool--sds:hover .featured-cta {
-        background: #0f766e;
-      }
-      .sds-chips {
-        position: relative;
-        z-index: 1;
-        display: flex;
-        flex-direction: column;
-        gap: 0.6rem;
-      }
-      .sds-chips .sc {
-        font-family: 'JetBrains Mono', ui-monospace, monospace;
-        font-size: 0.72rem;
-        letter-spacing: 0.07em;
-        color: #ccfbf1;
-        background: rgba(255, 255, 255, 0.07);
-        border: 1px solid rgba(94, 234, 212, 0.3);
-        border-radius: 999px;
-        padding: 0.45rem 0.9rem;
-        white-space: nowrap;
+      @media (prefers-reduced-motion: reduce) {
+        .hp * {
+          animation: none !important;
+        }
       }
 
-      /* Label Constructor banner — sample label card (decorative) */
-      .label-mock {
-        position: relative;
-        z-index: 1;
-        width: 226px;
-        background: #fff;
-        border-radius: 10px;
-        padding: 14px;
-        box-shadow: 0 14px 30px -10px rgba(0, 0, 0, 0.5);
+      /* ── Header ── */
+      .hp-header {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        background: rgba(6, 42, 120, 0.97);
+        backdrop-filter: blur(12px);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
       }
-      .label-mock-picts {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 11px;
-      }
-      .lm-pict {
-        width: 38px;
-        height: 38px;
+      .hp-header-row {
+        height: 64px;
         display: flex;
         align-items: center;
-        justify-content: center;
+        gap: 28px;
       }
-      .lm-pict :global(svg) {
-        width: 100%;
-        height: 100%;
+      .hp-logo {
+        display: flex;
+        align-items: baseline;
+        color: #ffffff !important;
+        font-family: var(--font-heading);
+        font-weight: 700;
+        font-size: 17px;
+        letter-spacing: -0.02em;
+        flex: 0 0 auto;
+      }
+      .hp-logo .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--teal-300);
+        box-shadow: 0 0 10px rgba(94, 234, 212, 0.8);
+        margin-right: 8px;
+        align-self: center;
+      }
+      .hp-logo .tld {
+        color: var(--ink-dark-4);
+      }
+      .hp-nav {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .hp-nav a,
+      .hp-nav button {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: transparent;
+        border: 0;
+        color: var(--ink-dark-1);
+        font-family: var(--font-body);
+        font-size: 14px;
+        font-weight: 500;
+        padding: 9px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 300ms ease-out;
+        white-space: nowrap;
+      }
+      .hp-nav a:hover,
+      .hp-nav button:hover {
+        background: rgba(255, 255, 255, 0.09);
+        color: #ffffff;
+      }
+      .hp-nav .caret {
+        font-size: 9px;
+        opacity: 0.7;
+      }
+      .hp-cta {
+        background: linear-gradient(180deg, #fb923c 0%, #f97316 100%);
+        color: #ffffff !important;
+        font-size: 14px;
+        font-weight: 600;
+        padding: 10px 16px;
+        border-radius: 8px;
+        box-shadow: 0 8px 18px rgba(249, 115, 22, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+        transition: all 300ms ease-out;
+        white-space: nowrap;
+        flex: 0 0 auto;
+      }
+      .hp-cta:hover {
+        background: linear-gradient(180deg, #fdba74 0%, #ea580c 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 12px 24px rgba(249, 115, 22, 0.5);
+      }
+      .hp-burger {
+        display: none;
+        margin-left: auto;
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        color: #ffffff;
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-family: var(--font-body);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .hp-panel {
+        display: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+        background: var(--navy-panel);
+      }
+      .hp-panel.open {
         display: block;
       }
-      .lm-pict img {
-        max-width: 100%;
-        max-height: 100%;
-        object-fit: contain;
+      .hp-panel-grid {
+        padding-top: 24px;
+        padding-bottom: 24px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 20px 32px;
       }
-      .lm-bar {
-        height: 7px;
-        border-radius: 3px;
-        background: #e4e4e4;
-        margin-bottom: 6px;
+      .hp-panel-col {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
       }
-      .lm-bar.lm-title {
-        width: 62%;
-        height: 9px;
-        background: #cdd2da;
-        margin-bottom: 9px;
+      .hp-panel-col .head {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink-dark-4);
       }
-      .lm-bar.w92 {
-        width: 92%;
+      .hp-panel-col .head.teal {
+        color: var(--teal-300);
       }
-      .lm-bar.w80 {
-        width: 80%;
-        margin-bottom: 12px;
+      .hp-panel-col a {
+        color: var(--ink-dark-1);
+        font-size: 14px;
       }
-      .lm-danger {
-        font-size: 12px;
+      .hp-panel-col a.primary {
+        color: #ffffff;
+        font-size: 14.5px;
+        font-weight: 600;
+      }
+      .hp-mobile {
+        display: none;
+        background: var(--navy-panel);
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+        padding: 16px 24px 22px;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .hp-mobile.open {
+        display: flex;
+      }
+      .hp-mobile a {
+        color: #ffffff;
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .hp-mobile a.hp-cta {
+        text-align: center;
+        margin-top: 4px;
+        padding: 12px;
+      }
+      @media (max-width: 1059px) {
+        .hp-nav,
+        .hp-header-row > .hp-cta {
+          display: none;
+        }
+        .hp-burger {
+          display: block;
+        }
+      }
+
+      /* ── Hero ── */
+      .hp-hero {
+        position: relative;
+        background: radial-gradient(120% 130% at 12% 0%, var(--hero-1) 0%, var(--hero-2) 38%, var(--hero-3) 72%, var(--hero-4) 100%);
+        overflow: hidden;
+      }
+      .hp-hero .dots-a {
+        position: absolute;
+        inset: -20px;
+        background-image: radial-gradient(rgba(255, 255, 255, 0.34) 1.4px, transparent 1.4px);
+        background-size: 22px 22px;
+        animation: dotDrift 16s ease-in-out infinite, dotPulse 9s ease-in-out infinite;
+        mask-image: linear-gradient(160deg, #000 0%, transparent 78%);
+        -webkit-mask-image: linear-gradient(160deg, #000 0%, transparent 78%);
+      }
+      .hp-hero .dots-b {
+        position: absolute;
+        inset: -20px;
+        background-image: radial-gradient(rgba(94, 234, 212, 0.5) 1.6px, transparent 1.6px);
+        background-size: 66px 66px;
+        background-position: 12px 8px;
+        animation: dotDriftB 23s ease-in-out infinite, dotPulse 13s ease-in-out infinite;
+        mask-image: radial-gradient(90% 90% at 70% 20%, #000 0%, transparent 75%);
+        -webkit-mask-image: radial-gradient(90% 90% at 70% 20%, #000 0%, transparent 75%);
+      }
+      .hp-hero .sheen {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(112deg, transparent 32%, rgba(94, 234, 212, 0.22) 50%, transparent 68%);
+        animation: sheen 14s ease-in-out infinite;
+      }
+      .hp-hero .glow {
+        position: absolute;
+        left: -140px;
+        bottom: -180px;
+        width: 520px;
+        height: 520px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(13, 148, 136, 0.45) 0%, transparent 70%);
+      }
+      .hp-hero .float-picto {
+        position: absolute;
+        right: -40px;
+        bottom: -60px;
+        width: 320px;
+        opacity: 0.13;
+        animation: drift 15s ease-in-out infinite;
+      }
+      .hp-hero .float-picto svg {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+      .hp-hero-inner {
+        position: relative;
+        padding-top: clamp(48px, 7vw, 96px);
+        padding-bottom: clamp(40px, 6vw, 80px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .hp-hero-eyebrow {
+        margin-bottom: 20px;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        font-weight: 500;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--teal-300);
+      }
+      .hp-hero h1 {
+        max-width: 880px;
         font-weight: 700;
-        color: #e2231a;
-        letter-spacing: 0.04em;
-        margin-bottom: 10px;
+        font-size: clamp(40px, 7vw, 84px);
+        line-height: 1.02;
+        letter-spacing: -0.035em;
+        color: #ffffff;
+        text-wrap: pretty;
       }
-      .lm-foot {
-        border-top: 1px solid #ececec;
-        padding-top: 10px;
+      .hp-hero-sub {
+        margin: 22px auto 0;
+        max-width: 640px;
+        font-size: clamp(16px, 1.3vw, 18px);
+        line-height: 1.6;
+        color: var(--ink-dark-2);
+        text-wrap: pretty;
+      }
+      .hp-hero-ctas {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 12px;
+        margin-top: 32px;
+      }
+      .btn-orange {
+        background: linear-gradient(180deg, #fb923c 0%, #f97316 100%);
+        color: #ffffff !important;
+        font-size: 15px;
+        font-weight: 600;
+        padding: 14px 22px;
+        border-radius: 8px;
+        box-shadow: 0 12px 26px rgba(249, 115, 22, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+        transition: all 300ms ease-out;
+        white-space: nowrap;
+        display: inline-block;
+      }
+      .btn-orange:hover {
+        background: linear-gradient(180deg, #fb923c 0%, #ea580c 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 18px 34px rgba(249, 115, 22, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.32);
+      }
+      .btn-ghost {
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        color: #ffffff !important;
+        font-size: 15px;
+        font-weight: 600;
+        padding: 14px 22px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.06);
+        box-shadow: 0 10px 24px rgba(3, 14, 44, 0.35);
+        transition: all 300ms ease-out;
+        white-space: nowrap;
+        display: inline-block;
+      }
+      .btn-ghost:hover {
+        background: rgba(255, 255, 255, 0.14);
+        transform: translateY(-2px);
+        box-shadow: 0 16px 30px rgba(3, 14, 44, 0.45);
+      }
+      .hp-statband {
+        position: relative;
+        border-top: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(5, 31, 92, 0.6);
+      }
+      .hp-statband-grid {
+        padding-top: 22px;
+        padding-bottom: 22px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 20px;
+      }
+      .hp-stat-num {
+        font-family: var(--font-heading);
+        font-size: 26px;
+        font-weight: 700;
+        color: #ffffff;
+      }
+      .hp-stat-num.teal {
+        color: var(--teal-300);
+      }
+      .hp-stat-label {
+        margin-top: 2px;
+        font-size: 13px;
+        color: var(--ink-dark-3);
+      }
+
+      /* ── Provenance strip ── */
+      .hp-provenance {
+        background: #f1f5f9;
+        border-bottom: 1px solid var(--line);
+      }
+      .hp-provenance-row {
+        padding-top: 14px;
+        padding-bottom: 14px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+      }
+      .hp-provenance .tag {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--teal-600);
+      }
+      .hp-provenance p {
+        font-size: 13.5px;
+        line-height: 1.5;
+        color: var(--ink-2);
+      }
+
+      /* ── Sections ── */
+      .hp-eyebrow {
+        margin-bottom: 12px;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--teal-600);
+      }
+      .hp-eyebrow.navy {
+        color: #1e3a8a;
+      }
+      .hp-eyebrow.on-dark {
+        color: var(--teal-300);
+      }
+      .hp-h2 {
+        max-width: 720px;
+        font-weight: 700;
+        font-size: clamp(26px, 3.4vw, 38px);
+        line-height: 1.12;
+        letter-spacing: -0.03em;
+        color: var(--ink);
+      }
+      .hp-h2.on-dark {
+        color: #ffffff;
+      }
+      .hp-sub {
+        margin-top: 14px;
+        max-width: 660px;
+        font-size: 16.5px;
+        line-height: 1.6;
+        color: var(--ink-2);
+      }
+      .hp-sub.on-dark {
+        color: var(--ink-dark-2);
+      }
+
+      .hp-tools {
+        padding: clamp(56px, 8vw, 104px) 0;
+        background: linear-gradient(180deg, var(--bg-a) 0%, #f8fafc 55%, #f1f5f9 100%);
+      }
+      .hp-flagships {
+        margin-top: 40px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 20px;
+      }
+      .hp-card-storage {
+        border: 1px solid var(--teal-200);
+        border-radius: 16px;
+        background: linear-gradient(180deg, var(--teal-50) 0%, #ffffff 60%);
+        padding: 26px;
+        transition: all 400ms ease-out;
+      }
+      .hp-card-storage:hover {
+        transform: translateY(-4px);
+        border-color: var(--teal-600);
+      }
+      .hp-badge-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .hp-badge {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        background: var(--teal-600);
+        color: #ffffff;
+        padding: 4px 8px;
+        border-radius: 4px;
+      }
+      .hp-badge-note {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--teal-700);
+      }
+      .hp-card-title {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .hp-card-copy {
+        margin: 10px 0 20px;
+        font-size: 15px;
+        line-height: 1.6;
+        color: var(--ink-2);
+      }
+      .hp-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      .hp-chip {
+        border: 1px solid var(--line-2);
+        background: #ffffff;
+        color: #334155;
+        font-family: var(--font-body);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 12px;
+        border-radius: 999px;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(15, 23, 41, 0.1);
+        transition: all 300ms ease-out;
+        white-space: nowrap;
+      }
+      .hp-chip:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(13, 148, 136, 0.28);
+      }
+      .hp-chip.active {
+        border-color: var(--teal-600);
+        background: var(--teal-600);
+        color: #ffffff;
+      }
+      .hp-verdict-table {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+        background: #ffffff;
+      }
+      .hp-verdict-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        border-bottom: 1px solid #f1f5f9;
+      }
+      .hp-verdict-row:last-child {
+        border-bottom: 0;
+      }
+      .hp-verdict-row p {
+        font-size: 14px;
+        color: var(--ink);
+      }
+      .hp-verdict-pill {
+        flex: 0 0 auto;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        padding: 5px 8px;
+        border-radius: 4px;
+      }
+      .hp-card-footnote {
+        margin-top: 12px;
+        font-size: 12px;
+        color: var(--ink-3);
+      }
+      .hp-card-link {
+        display: inline-block;
+        margin-top: 18px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--teal-700);
+      }
+      .hp-card-link.navy {
+        color: #1e3a8a;
+      }
+      .hp-card-ate {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #ffffff;
+        padding: 26px;
+        box-shadow: 0 2px 6px rgba(15, 23, 41, 0.05);
+        transition: all 400ms ease-out;
+        height: 100%;
+      }
+      .hp-card-ate:hover {
+        transform: translateY(-4px);
+        border-color: var(--teal-600);
+        box-shadow: 0 18px 34px rgba(15, 23, 41, 0.12);
+      }
+      .hp-ate-table {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .hp-ate-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 14px;
+        background: #f1f5f9;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-2);
+      }
+      .hp-ate-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        border-bottom: 1px solid #f1f5f9;
+      }
+      .hp-ate-row:last-child {
+        border-bottom: 0;
+      }
+      .hp-ate-row .route {
+        font-size: 14px;
+        color: var(--ink);
+      }
+      .hp-ate-row .val {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        color: var(--ink-2);
+      }
+      .hp-ate-cat {
+        flex: 0 0 auto;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        padding: 5px 8px;
+        border-radius: 4px;
+        background: #fff1f2;
+        color: #9f1239;
+      }
+
+      /* ── Other tools band ── */
+      .hp-others {
+        background: linear-gradient(180deg, #f1f5f9 0%, var(--bg-b) 100%);
+        padding: 0 0 clamp(48px, 6vw, 88px);
+      }
+      .hp-others-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .hp-others-head h3 {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .hp-link-mono {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #1e3a8a;
+      }
+      .hp-others-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 14px;
+      }
+      .hp-tool-card {
+        display: block;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 20px;
+        background: #ffffff;
+        box-shadow: 0 2px 6px rgba(15, 23, 41, 0.06);
+        transition: all 400ms ease-out;
+      }
+      .hp-tool-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 18px 34px rgba(15, 23, 41, 0.14);
+        border-color: var(--line-2);
+      }
+      .hp-tool-card .tag {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      .hp-tool-card h4 {
+        margin: 10px 0 6px;
+        font-size: 17px;
+        font-weight: 600;
+        letter-spacing: -0.015em;
+        color: var(--ink);
+      }
+      .hp-tool-card p.copy {
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--ink-2);
+      }
+      .hp-calcs {
+        margin-top: 16px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+        padding: 20px;
+        box-shadow: 0 2px 6px rgba(15, 23, 41, 0.05);
+      }
+      .hp-calcs-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .hp-calcs-head .t {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      .hp-calcs-head .d {
+        font-size: 13.5px;
+        color: var(--ink-2);
+      }
+      .hp-calcs-strip {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+      }
+      .hp-calc-pill {
+        flex: 0 0 auto;
         display: flex;
         align-items: center;
         gap: 9px;
+        background: #ffffff;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 7px 15px 7px 8px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink) !important;
+        white-space: nowrap;
+        box-shadow: 0 2px 6px rgba(15, 23, 41, 0.07);
+        transition: all 300ms ease-out;
       }
-      .lm-logo {
+      .hp-calc-pill:hover {
+        border-color: #1e3a8a;
+        transform: translateY(-2px);
+        box-shadow: 0 12px 22px rgba(15, 23, 41, 0.14);
+      }
+      .hp-calc-pill svg {
         width: 24px;
         height: 24px;
-        border-radius: 4px;
-        background: #eef0f2;
-        flex-shrink: 0;
+        display: block;
       }
-      .lm-foot-lines {
-        flex: 1;
-      }
-      .lm-fl1 {
-        width: 70%;
-        height: 6px;
-        border-radius: 3px;
-        background: #e4e4e4;
-        margin-bottom: 5px;
-      }
-      .lm-fl2 {
-        width: 50%;
-        height: 6px;
-        border-radius: 3px;
-        background: #e4e4e4;
+      .hp-calc-pill .sub {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--ink-3);
       }
 
-      /* Tools */
-      .tools-section {
-        background: var(--card);
-        padding: 3.5rem 1.5rem;
+      /* ── SDS section ── */
+      .hp-sds {
+        padding: clamp(56px, 8vw, 104px) 0;
+        background: #f8fafc;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
       }
-
-      .tools-inner {
-        max-width: 1120px;
-        margin: 0 auto;
-      }
-
-      /* 3-column grid на больших экранах (Label Constructor вынесен в баннер) */
-      .tools-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 1.25rem;
-      }
-
-      .tool-card {
-        background: #fff;
-        border: 1px solid var(--card-border);
-        border-radius: 12px;
-        padding: 1.5rem;
+      .hp-sds-head {
         display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-        height: 100%;
-        box-shadow:
-          0 1px 2px rgba(16, 32, 64, 0.04),
-          0 14px 32px -24px rgba(16, 32, 64, 0.5);
-        transition:
-          transform 0.15s,
-          border-color 0.15s,
-          box-shadow 0.15s;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 20px;
       }
-
-      .tool-card:hover {
-        border-color: var(--accent);
+      .btn-teal {
+        background: linear-gradient(180deg, var(--teal-500) 0%, var(--teal-600) 100%);
+        color: #ffffff !important;
+        font-size: 15px;
+        font-weight: 600;
+        padding: 13px 20px;
+        border-radius: 8px;
+        box-shadow: 0 12px 26px rgba(13, 148, 136, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+        transition: all 300ms ease-out;
+        white-space: nowrap;
+        display: inline-block;
+      }
+      .btn-teal:hover {
+        background: var(--teal-700);
         transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+        box-shadow: 0 18px 32px rgba(13, 148, 136, 0.45);
+      }
+      .hp-sds-table {
+        margin-top: 36px;
+        background: #ffffff;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        overflow-x: auto;
+      }
+      .hp-sds-grid {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr 1.6fr 1.4fr 1fr;
+        gap: 16px;
+        padding: 16px 20px;
+        border-bottom: 1px solid #f1f5f9;
+        align-items: center;
+        min-width: 720px;
+      }
+      .hp-sds-grid.head {
+        padding: 14px 20px;
+        background: #f1f5f9;
+        border-bottom: 1px solid var(--line);
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-2);
+      }
+      .hp-sds-grid:last-child {
+        border-bottom: 0;
+      }
+      .hp-sds-grid .name {
+        font-size: 14.5px;
+        font-weight: 600;
+        color: var(--ink);
+      }
+      .hp-sds-grid .cas,
+      .hp-sds-grid .adr {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        color: var(--ink-2);
+      }
+      .hp-sds-grid .cls {
+        font-size: 13.5px;
+        color: var(--ink-2);
+      }
+      .hp-sds-grid .verdict {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: #9f1239;
+      }
+      .hp-sds-cards {
+        margin-top: 20px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+      }
+      .hp-sds-card {
+        background: #ffffff;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px;
+      }
+      .hp-sds-card .s {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--teal-600);
+      }
+      .hp-sds-card .s.muted {
+        color: var(--ink-3);
+      }
+      .hp-sds-card p.d {
+        margin-top: 6px;
+        font-size: 14px;
+        color: var(--ink-2);
       }
 
-      .tool-badge {
-        font-size: 0.625rem;
-        font-weight: 700;
+      /* ── Compliance ── */
+      .hp-compliance {
+        padding: clamp(56px, 8vw, 104px) 0;
+        background: var(--navy);
+        position: relative;
+        overflow: hidden;
+      }
+      .hp-compliance .dots {
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+        background-size: 26px 26px;
+        mask-image: linear-gradient(200deg, #000 0%, transparent 60%);
+        -webkit-mask-image: linear-gradient(200deg, #000 0%, transparent 60%);
+      }
+      .hp-compliance .wrap {
+        position: relative;
+      }
+      .hp-pillars {
+        margin-top: 36px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 14px;
+      }
+      .hp-pillar {
+        display: block;
+        background: rgba(255, 255, 255, 0.06);
+        border-radius: 0 0 12px 12px;
+        padding: 20px;
+        transition: all 400ms ease-out;
+        border-top: 2px solid transparent;
+      }
+      .hp-pillar:hover {
+        background: rgba(255, 255, 255, 0.12);
+        transform: translateY(-4px);
+      }
+      .hp-pillar .n {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        color: var(--ink-dark-4);
+      }
+      .hp-pillar h3 {
+        margin: 8px 0 6px;
+        font-size: 18px;
+        font-weight: 600;
+        color: #ffffff;
+      }
+      .hp-pillar p.c {
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--ink-dark-2);
+      }
+
+      /* ── Roles ── */
+      .hp-roles {
+        background: #f1f5f9;
+        border-top: 1px solid var(--line-r);
+        padding: clamp(40px, 5vw, 64px) 0;
+      }
+      .hp-roles .t {
+        margin-bottom: 24px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
         letter-spacing: 0.1em;
         text-transform: uppercase;
-        color: var(--accent);
-        border: 1px solid rgba(0, 119, 182, 0.35);
-        padding: 0.2rem 0.5rem;
-        border-radius: 4px;
-        width: fit-content;
+        color: var(--ink-3);
       }
-
-      .tool-badge--new {
-        color: #15803d;
-        border-color: rgba(22, 163, 74, 0.45);
-        background: rgba(22, 163, 74, 0.1);
+      .hp-roles-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 24px;
       }
-
-      /* EDITORIAL badge — фиолетовый акцент для нового compliance hub */
-      .tool-badge--editorial {
-        color: #6d28d9;
-        border-color: rgba(124, 58, 237, 0.4);
-        background: rgba(124, 58, 237, 0.1);
-      }
-
-      .tool-title {
-        font-family: var(--font-heading);
-        font-size: 1.25rem;
-        font-weight: 700;
-        color: var(--text);
-      }
-
-      .tool-desc {
-        font-size: 0.875rem;
-        color: var(--muted);
-        line-height: 1.6;
-        flex: 1;
-      }
-
-      .tool-cta {
-        font-size: 0.875rem;
+      .hp-role .who {
+        font-size: 15px;
         font-weight: 600;
-        color: var(--accent);
+        color: var(--ink);
+      }
+      .hp-role .c {
+        margin-top: 6px;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--ink-2);
       }
 
-      .tool-cta:hover {
-        text-decoration: underline;
+      /* ── Pictogram reference ── */
+      .hp-pictos {
+        padding: clamp(56px, 8vw, 104px) 0;
+        background: linear-gradient(180deg, #ffffff 0%, var(--bg-a) 100%);
       }
-
-      /* Sister */
-      .sister {
-        background: var(--nav);
-        color: #fff;
-        padding: 2.5rem 1.5rem;
-      }
-
-      .sister-inner {
-        max-width: 1120px;
-        margin: 0 auto;
-        border-left: 4px solid var(--accent);
-        padding-left: 1.5rem;
+      .hp-pictos-head {
         display: flex;
         flex-wrap: wrap;
-        align-items: center;
+        align-items: flex-end;
         justify-content: space-between;
-        gap: 1.5rem;
+        gap: 20px;
       }
-
-      .sister h3 {
-        font-family: var(--font-heading);
-        font-size: 1.35rem;
-        font-weight: 700;
-        margin-bottom: 0.35rem;
-      }
-
-      .sister p {
-        font-size: 0.9375rem;
-        color: rgba(255, 255, 255, 0.85);
-        max-width: 36rem;
-        line-height: 1.6;
-      }
-
-      .btn-sister {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.65rem 1.25rem;
-        border: 2px solid #fff;
+      .btn-outline {
+        border: 1px solid var(--line-2);
+        color: #1e3a8a !important;
+        font-size: 15px;
+        font-weight: 600;
+        padding: 13px 20px;
         border-radius: 8px;
-        color: #fff;
-        font-weight: 600;
-        font-size: 0.875rem;
+        background: #ffffff;
+        box-shadow: 0 2px 6px rgba(15, 23, 41, 0.08);
+        transition: all 300ms ease-out;
         white-space: nowrap;
-        transition: background 0.15s;
+        display: inline-block;
       }
-
-      .btn-sister:hover {
-        background: rgba(255, 255, 255, 0.12);
+      .btn-outline:hover {
+        border-color: #1e3a8a;
+        background: #f8fafc;
+        color: var(--navy) !important;
+        transform: translateY(-2px);
+        box-shadow: 0 14px 26px rgba(15, 23, 41, 0.14);
       }
-
-      /* Footer */
-      .site-footer {
-        background: var(--nav);
-        color: rgba(255, 255, 255, 0.85);
-        padding: 2rem 1.5rem;
+      .hp-picto-grid {
+        margin-top: 36px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
       }
-
-      .footer-inner {
-        max-width: 1120px;
-        margin: 0 auto;
+      @media (min-width: 1024px) {
+        .hp-picto-grid {
+          grid-template-columns: repeat(9, minmax(0, 1fr));
+        }
+      }
+      .hp-picto-tile {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px 10px;
         display: flex;
-        flex-wrap: wrap;
+        flex-direction: column;
         align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
+        gap: 10px;
+        transition: all 400ms ease-out;
+        background: #ffffff;
+      }
+      .hp-picto-tile:hover {
+        border-color: var(--line-2);
+        transform: translateY(-4px);
+      }
+      .hp-picto-tile svg {
+        width: 100%;
+        max-width: 84px;
+        height: auto;
+        display: block;
+      }
+      .hp-picto-tile .code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        color: #1e3a8a;
+      }
+      .hp-picto-tile .nm {
+        font-size: 13px;
+        color: var(--ink-2);
+        text-align: center;
       }
 
-      .footer-logo {
+      /* ── Footer ── */
+      .hp-footer {
+        background: var(--navy);
+        color: var(--ink-dark-2);
+      }
+      .hp-footer-bar {
+        height: 3px;
+        background: linear-gradient(90deg, var(--teal-600) 0%, #1e3a8a 50%, #f97316 100%);
+      }
+      .hp-footer-grid {
+        padding-top: clamp(40px, 5vw, 64px);
+        padding-bottom: 28px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 32px;
+      }
+      .hp-footer-logo {
+        display: flex;
+        align-items: baseline;
+        color: #ffffff;
         font-family: var(--font-heading);
-        font-size: 0.9375rem;
-      }
-
-      .footer-logo .logo-ghs {
-        font-weight: 500;
-        color: #fff;
-      }
-
-      .footer-logo .logo-pictograms {
         font-weight: 700;
-        color: #fff;
+        font-size: 16px;
       }
-
-      .footer-logo .logo-com {
-        font-weight: 400;
-        color: rgba(255, 255, 255, 0.6);
+      .hp-footer-logo .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--teal-300);
+        margin-right: 8px;
+        align-self: center;
       }
-
-      .footer-links {
+      .hp-footer-logo .tld {
+        color: var(--ink-dark-4);
+      }
+      .hp-footer-tagline {
+        margin-top: 14px;
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: var(--ink-dark-3);
+        max-width: 260px;
+      }
+      .hp-footer-col {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .hp-footer-col .head {
+        margin-bottom: 4px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--teal-300);
+      }
+      .hp-footer-col a {
+        color: var(--ink-dark-2);
+        font-size: 14px;
+      }
+      .hp-footer-col a:hover {
+        color: #ffffff;
+      }
+      .hp-footer-bottom {
+        border-top: 1px solid rgba(255, 255, 255, 0.14);
+      }
+      .hp-footer-bottom-row {
+        padding-top: 20px;
+        padding-bottom: 20px;
         display: flex;
         flex-wrap: wrap;
-        gap: 1.25rem;
-        list-style: none;
+        gap: 12px 28px;
+        justify-content: space-between;
       }
-
-      .footer-links a {
-        font-size: 0.8125rem;
-        color: rgba(255, 255, 255, 0.8);
+      .hp-footer-bottom p.legal {
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--ink-dark-3);
+        max-width: 760px;
       }
-
-      .footer-links a:hover {
-        color: #fff;
-      }
-
-      .footer-copy {
-        font-size: 0.75rem;
-        color: rgba(255, 255, 255, 0.55);
-        width: 100%;
-        flex-basis: 100%;
-      }
-
-      @media (max-width: 1024px) {
-        .p-grid {
-          grid-template-columns: repeat(5, minmax(0, 1fr));
-        }
-
-        /* На планшетах tools идут 2 в ряд */
-        .tools-grid {
-          grid-template-columns: repeat(2, 1fr);
-        }
-
-        .featured-tool {
-          grid-template-columns: 1fr;
-        }
-
-        .featured-pictos,
-        .label-mock {
-          display: none;
-        }
-      }
-
-      @media (max-width: 768px) {
-        .stats-inner {
-          grid-template-columns: repeat(2, 1fr);
-        }
-
-        .stat-cell:nth-child(2) {
-          border-right: none;
-        }
-
-        .stat-cell:nth-child(1),
-        .stat-cell:nth-child(2) {
-          border-bottom: 1px solid var(--card-border);
-        }
-
-        .p-grid {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-        }
-
-        .tools-grid {
-          grid-template-columns: 1fr;
-        }
-
-        .sister-inner {
-          flex-direction: column;
-          align-items: flex-start;
-        }
+      .hp-footer-bottom p.copy {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--ink-dark-4);
       }
     </style>
   </head>
-  <body>
-    <header style="background:#062A78;position:sticky;top:0;z-index:50;">
-      <nav style="max-width:1120px;margin:0 auto;padding:0 1.5rem;height:64px;display:flex;align-items:center;justify-content:space-between;">
-        <a href="/" style="color:white;font-weight:700;font-size:1.1rem;font-family:var(--font-heading);">GHSPICTOGRAMS.COM</a>
-        <ul id="desktop-nav" style="display:flex;align-items:center;gap:1rem;list-style:none;margin:0;padding:0;">
-          <li><a href="/pictograms/" style="color:rgba(255,255,255,0.8);font-size:0.875rem;font-weight:500;">Substance Database</a></li>
-          <li><a href="/inspector/" style="color:rgba(255,255,255,0.8);font-size:0.875rem;font-weight:500;">Inspector</a></li>
-          <li><a href="/pictogram-selector/" style="color:rgba(255,255,255,0.8);font-size:0.875rem;font-weight:500;">Pictogram Selector</a></li>
-          <li><a href="/compliance/" style="color:rgba(255,255,255,0.8);font-size:0.875rem;font-weight:500;">Compliance</a></li>
-          <li><a href="/blog/" style="color:rgba(255,255,255,0.8);font-size:0.875rem;font-weight:500;">Blog</a></li>
-          <li><a href="/faq/" style="color:rgba(255,255,255,0.8);font-size:0.875rem;font-weight:500;">FAQ</a></li>
-          <li><a href="/label-constructor/" style="background:white;color:#062A78;font-weight:700;padding:0.5rem 1rem;border-radius:0.5rem;font-size:0.875rem;">Build Label →</a></li>
-        </ul>
-        <button id="idx-burger" aria-label="Open menu" style="display:none;background:none;border:none;cursor:pointer;padding:0.5rem;">
-          <svg width="28" height="28" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
-          </svg>
-        </button>
-      </nav>
-      <div id="idx-mobile-menu" style="display:none;background:#062A78;border-top:1px solid rgba(255,255,255,0.2);padding:1rem 1.5rem;">
-        <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0.5rem;">
-          <li><a href="/pictograms/" style="color:rgba(255,255,255,0.8);display:block;padding:0.75rem 0.5rem;font-size:0.875rem;">Substance Database</a></li>
-          <li><a href="/inspector/" style="color:rgba(255,255,255,0.8);display:block;padding:0.75rem 0.5rem;font-size:0.875rem;">Inspector</a></li>
-          <li><a href="/pictogram-selector/" style="color:rgba(255,255,255,0.8);display:block;padding:0.75rem 0.5rem;font-size:0.875rem;">Pictogram Selector</a></li>
-          <li><a href="/compliance/" style="color:rgba(255,255,255,0.8);display:block;padding:0.75rem 0.5rem;font-size:0.875rem;">Compliance</a></li>
-          <li><a href="/blog/" style="color:rgba(255,255,255,0.8);display:block;padding:0.75rem 0.5rem;font-size:0.875rem;">Blog</a></li>
-          <li><a href="/faq/" style="color:rgba(255,255,255,0.8);display:block;padding:0.75rem 0.5rem;font-size:0.875rem;">FAQ</a></li>
-          <li style="margin-top:0.5rem;"><a href="/label-constructor/" style="background:white;color:#062A78;font-weight:700;padding:0.5rem 1rem;border-radius:0.5rem;font-size:0.875rem;display:inline-block;">Build Label →</a></li>
-        </ul>
+
+  <body class="hp">
+    <header class="hp-header">
+      <div class="wrap hp-header-row">
+        <a href="/" class="hp-logo"><span class="dot"></span>ghspictograms<span class="tld">.com</span></a>
+
+        <nav class="hp-nav" aria-label="Main">
+          <button type="button" id="nav-tools-btn" aria-expanded="false">Tools<span class="caret">▼</span></button>
+          <button type="button" id="nav-data-btn" aria-expanded="false">Substance data<span class="caret">▼</span></button>
+          <a href="/compliance/">Compliance</a>
+          <a href="#pictograms">Pictograms</a>
+        </nav>
+        <a href="/label-constructor/" class="hp-cta">Build a label</a>
+
+        <button type="button" class="hp-burger" id="nav-mobile-btn" aria-expanded="false">Menu</button>
+      </div>
+
+      <div class="hp-panel" id="nav-tools-panel">
+        <div class="wrap hp-panel-grid">
+          <div class="hp-panel-col">
+            <p class="head teal">Flagship</p>
+            <a href="/tools/chemical-storage-compatibility/" class="primary">Storage Compatibility Matrix</a>
+            <a href="/tools/ate-mixture-calculator/" class="primary">ATE Mixture Calculator</a>
+          </div>
+          <div class="hp-panel-col">
+            <p class="head">Labelling</p>
+            <a href="/label-constructor/">GHS Label Maker</a>
+            <a href="/pictogram-selector/">Pictogram Selector</a>
+            <a href="/tools/">9 per-pictogram calculators</a>
+          </div>
+          <div class="hp-panel-col">
+            <p class="head">Transport</p>
+            <a href="/inspector/">GHS vs ADR/DOT Inspector</a>
+            <a href="/tools/">All 14 free tools →</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="hp-panel" id="nav-data-panel">
+        <div class="wrap hp-panel-grid">
+          <div class="hp-panel-col">
+            <p class="head teal">Reports</p>
+            <a href="/sds/" class="primary">SDS Library — {sdsLabel} substances</a>
+            <a href="/tools/chemical-storage-compatibility/">Storage verdicts</a>
+          </div>
+          <div class="hp-panel-col">
+            <p class="head">Classification</p>
+            <a href="/pictograms/">Substance database — 4,178 entries</a>
+            <a href="/pictograms/">CLP Annex VI lookup</a>
+          </div>
+          <div class="hp-panel-col">
+            <p class="head">Reference</p>
+            <a href="#pictograms">GHS01–GHS09 pictograms + SVGs</a>
+            <a href="/storage-compatibility/">Storage class pages</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="hp-mobile" id="nav-mobile-panel">
+        <a href="/tools/">Tools — 14 free</a>
+        <a href="/sds/">SDS Library — {sdsLabel} substances</a>
+        <a href="/compliance/">Compliance Hub</a>
+        <a href="/pictograms/">Pictograms &amp; substance data</a>
+        <a href="/label-constructor/" class="hp-cta">Build a label</a>
       </div>
     </header>
 
-    <script is:inline>
-      (function() {
-        function handleResize() {
-          var burger = document.getElementById('idx-burger');
-          var desktopNav = document.getElementById('desktop-nav');
-          if (window.innerWidth < 768) {
-            burger.style.display = 'block';
-            desktopNav.style.display = 'none';
-          } else {
-            burger.style.display = 'none';
-            desktopNav.style.display = 'flex';
-            document.getElementById('idx-mobile-menu').style.display = 'none';
-          }
-        }
-        handleResize();
-        window.addEventListener('resize', handleResize);
-        document.getElementById('idx-burger').addEventListener('click', function() {
-          var menu = document.getElementById('idx-mobile-menu');
-          menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-        });
-      })();
-    </script>
+    <section class="hp-hero">
+      <div class="dots-a" aria-hidden="true"></div>
+      <div class="dots-b" aria-hidden="true"></div>
+      <div class="sheen" aria-hidden="true"></div>
+      <div class="glow" aria-hidden="true"></div>
+      {
+        ghs02?.svg_content && (
+          <div class="float-picto" aria-hidden="true">
+            <Fragment set:html={ghs02.svg_content} />
+          </div>
+        )
+      }
 
-    <section class="hero">
-      <div class="hero-inner">
-        <p class="hero-eyebrow">GHS / CLP Compliant Tools</p>
-        <h1 class="font-heading">GHS Hazard Pictograms — Free SVG Downloads</h1>
-        <p class="hero-sub">
-          GHS pictogram library, label builder and ADR/DOT inspector for 4,178 classified substances.
+      <div class="wrap hp-hero-inner">
+        <p class="hp-hero-eyebrow">Chemical safety reference · EU CLP + US OSHA</p>
+        <h1>Chemical safety reference data — and the free tools that use it.</h1>
+        <p class="hp-hero-sub">
+          {sdsLabel} substance safety reports with computed storage-compatibility verdicts, GHS/CLP
+          classification tools and the full pictogram library. Cited sources, no registration.
         </p>
-        <div class="hero-actions">
-          <a href="/label-constructor/" class="btn-primary-hero">Build a Label — Free</a>
-          <a href="/pictograms/" class="btn-outline-hero">Browse Substances →</a>
-          <a href="/inspector/" class="btn-outline-hero">ADR Inspector →</a>
-          <a href="/tools/" class="btn-outline-hero">All Free Tools →</a>
-          <a href="/compliance/" class="btn-compliance-hero">
-            <span class="btn-icon" aria-hidden="true">📚</span>
-            Compliance Hub →
-          </a>
+        <div class="hp-hero-ctas">
+          <a href="/tools/chemical-storage-compatibility/" class="btn-orange">Check storage compatibility →</a>
+          <a href="/sds/" class="btn-ghost">Browse {sdsLabel} SDS reports</a>
+        </div>
+      </div>
+
+      <div class="hp-statband">
+        <div class="wrap hp-statband-grid">
+          <div><p class="hp-stat-num">14</p><p class="hp-stat-label">Free tools</p></div>
+          <div><p class="hp-stat-num teal">{sdsLabel}</p><p class="hp-stat-label">SDS substance reports</p></div>
+          <div><p class="hp-stat-num">4,178</p><p class="hp-stat-label">Substances, CLP Annex VI</p></div>
+          <div><p class="hp-stat-num">9</p><p class="hp-stat-label">Pictograms, free SVG</p></div>
+          <div><p class="hp-stat-num">7</p><p class="hp-stat-label">Compliance pillars</p></div>
         </div>
       </div>
     </section>
 
-    <div class="stats-bar">
-      <div class="stats-inner">
-        {
-          stats.map((s) => (
-            <div class="stat-cell">
-              <div class="stat-value">{s.value}</div>
-              {s.label ? <div class="stat-label">{s.label}</div> : null}
-            </div>
-          ))
-        }
+    <div class="hp-provenance">
+      <div class="wrap hp-provenance-row">
+        <span class="tag">Provenance</span>
+        <p>Reference data from EU CLP Annex VI and published regulations — verify against your supplier's SDS before use.</p>
       </div>
     </div>
 
-    <section class="section">
-      <p class="section-label">Reference</p>
-      <h2 class="section-title">GHS Hazard Pictograms — GHS01 to GHS09</h2>
-      <div class="p-grid">
-        {
-          pictogramsRows.map((p) => (
-            <a href={`/ghs/${p.code.toLowerCase()}/`} class="p-card">
-              <div class="p-card-svg">
-                {p.svg_content && String(p.svg_content).toLowerCase().includes('<svg') ? (
-                  <Fragment set:html={p.svg_content} />
-                ) : p.svg_url ? (
-                  <img src={p.svg_url} alt="" width="64" height="64" />
-                ) : (
-                  <span class="p-code">{p.code}</span>
-                )}
+    <section class="hp-tools" id="tools">
+      <div class="wrap">
+        <p class="hp-eyebrow">01 · Tools</p>
+        <h2 class="hp-h2">Working tools, not calculators that dodge the answer.</h2>
+        <p class="hp-sub">
+          14 free tools. Two of them do work no other public tool does — a per-substance storage
+          verdict and full acute-toxicity classification of mixtures.
+        </p>
+
+        <div class="hp-flagships">
+          <div class="hp-card-storage">
+            <div class="hp-badge-row">
+              <span class="hp-badge">Signature tool</span>
+              <span class="hp-badge-note">Computed verdicts</span>
+            </div>
+            <h3 class="hp-card-title">Chemical Storage Compatibility Matrix</h3>
+            <p class="hp-card-copy">
+              Pick a substance and read the verdict per hazard group: never store together, keep
+              separate, or compatible — with the reaction risk named.
+            </p>
+
+            <div class="hp-chips" id="sw-chips">
+              {
+                storageDemo.map((s, i) => (
+                  <button type="button" class={i === 0 ? 'hp-chip active' : 'hp-chip'} data-sub={s.key}>
+                    {s.label}
+                  </button>
+                ))
+              }
+            </div>
+
+            {
+              storageDemo.map((s, i) => (
+                <div
+                  class="hp-verdict-table"
+                  id={`sw-${s.key}`}
+                  style={i === 0 ? undefined : 'display:none'}
+                >
+                  {s.rows.map((r) => (
+                    <div class="hp-verdict-row">
+                      <p>{r.group}</p>
+                      <span
+                        class="hp-verdict-pill"
+                        style={`background:${verdictStyle[r.v].bg};color:${verdictStyle[r.v].ink}`}
+                      >
+                        {verdictStyle[r.v].label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ))
+            }
+            <p class="hp-card-footnote">
+              Extract from the live matrix — verdicts computed from CLP Annex VI and CAMEO
+              reactivity data.
+            </p>
+            <a href="/tools/chemical-storage-compatibility/" class="hp-card-link">Open the matrix →</a>
+          </div>
+
+          <div class="hp-card-ate">
+            <span class="hp-badge-note" style="color:#0d9488">Classification</span>
+            <h3 class="hp-card-title" style="margin-top:10px; font-size:21px">ATE Mixture Calculator</h3>
+            <p class="hp-card-copy" style="margin-bottom:16px">
+              Acute toxicity estimate for a formulation across oral, dermal and inhalation routes
+              under GHS/CLP — with category, H-statements, pictogram and a printable report.
+            </p>
+            <div style="flex:1 1 auto; display:flex; flex-direction:column; justify-content:flex-end">
+              <div class="hp-ate-table">
+                <div class="hp-ate-head"><span>Route</span><span>ATE mix</span><span>Category</span></div>
+                {
+                  ateDemo.map((r) => (
+                    <div class="hp-ate-row">
+                      <p class="route">{r.route}</p>
+                      <p class="val">{r.ate}</p>
+                      <span class="hp-ate-cat">{r.cat}</span>
+                    </div>
+                  ))
+                }
               </div>
-              <span class="p-code">{p.code}</span>
-              <span class="p-name">{p.name_en}</span>
-            </a>
-          ))
-        }
+              <p class="hp-card-footnote">
+                Worked example: methanol 40 % w/w in water — CLP additivity formula, converted
+                point estimates from H301 · H311 · H331. Result: Danger, GHS06.
+              </p>
+            </div>
+            <a href="/tools/ate-mixture-calculator/?mix=67-56-1:40&form=vapour" class="hp-card-link navy">Open the calculator →</a>
+          </div>
+        </div>
       </div>
     </section>
 
-    <section class="section">
-      <a href="/pictogram-selector/" class="featured-tool">
-        <span class="featured-glow" aria-hidden="true"></span>
-        <div class="featured-content">
-          <span class="featured-badge">New · Interactive tool</span>
-          <h2 class="featured-title">GHS Pictogram Selector</h2>
-          <p class="featured-desc">
-            Pick the hazard classes and categories that apply to your substance or mixture, choose a jurisdiction
-            (UN GHS · EU CLP · GB CLP · OSHA HazCom), and get the correct label pictograms, signal word and
-            H-statements — with the CLP Article&nbsp;26 precedence rules applied and explained.
-          </p>
-          <span class="featured-cta">Open the Selector →</span>
+    <section class="hp-others">
+      <div class="wrap">
+        <div class="hp-others-head">
+          <h3>The other twelve — labelling, transport and reference</h3>
+          <a href="/tools/" class="hp-link-mono">All 14 tools →</a>
         </div>
-        <div class="featured-pictos" aria-hidden="true">
+        <div class="hp-others-grid">
           {
-            featuredPictos.map((p) => (
-              <span class="fp">
-                {p.svg_content && String(p.svg_content).toLowerCase().includes('<svg') ? (
-                  <Fragment set:html={p.svg_content} />
-                ) : p.svg_url ? (
-                  <img src={p.svg_url} alt="" width="56" height="56" />
-                ) : (
-                  <span class="p-code">{p.code}</span>
-                )}
-              </span>
+            otherTools.map((t) => (
+              <a href={t.href} class="hp-tool-card" style={`border-top:3px solid ${t.accent}`}>
+                <p class="tag" style={`color:${t.accent}`}>{t.tag}</p>
+                <h4>{t.title}</h4>
+                <p class="copy">{t.copy}</p>
+              </a>
             ))
           }
         </div>
-      </a>
-    </section>
 
-    <section class="section">
-      <a href="/label-constructor/" class="featured-tool">
-        <span class="featured-glow" aria-hidden="true"></span>
-        <div class="featured-content">
-          <span class="featured-badge">Beta · Interactive tool</span>
-          <h2 class="featured-title">GHS Label Maker</h2>
-          <p class="featured-desc">
-            Build print-ready GHS labels sized to your actual container — set the capacity and
-            label size, add your product, supplier details and your own company logo, then export
-            a real PDF or SVG at true physical size.
-          </p>
-          <span class="featured-cta">Build a Label →</span>
-        </div>
-        <div class="label-mock" aria-hidden="true">
-          <div class="label-mock-picts">
+        <div class="hp-calcs">
+          <div class="hp-calcs-head">
+            <p class="t">9 per-pictogram calculators</p>
+            <p class="d">One per hazard class — enter your data, get the category and label elements.</p>
+          </div>
+          <div class="hp-calcs-strip">
             {
-              labelPictos.map((p) => (
-                <span class="lm-pict">
-                  {p.svg_content && String(p.svg_content).toLowerCase().includes('<svg') ? (
-                    <Fragment set:html={p.svg_content} />
-                  ) : p.svg_url ? (
-                    <img src={p.svg_url} alt="" width="38" height="38" />
-                  ) : (
-                    <span>{p.code}</span>
-                  )}
-                </span>
+              pictogramsRows.map((p) => (
+                <a href={`/ghs/${p.code.toLowerCase()}/`} class="hp-calc-pill">
+                  <Fragment set:html={p.svg_content} />
+                  {p.code}
+                  <span class="sub">{pictoTag[p.code] ?? ''}</span>
+                </a>
               ))
             }
           </div>
-          <div class="lm-bar lm-title"></div>
-          <div class="lm-danger">DANGER</div>
-          <div class="lm-bar"></div>
-          <div class="lm-bar w92"></div>
-          <div class="lm-bar w80"></div>
-          <div class="lm-foot">
-            <div class="lm-logo"></div>
-            <div class="lm-foot-lines">
-              <div class="lm-fl1"></div>
-              <div class="lm-fl2"></div>
-            </div>
-          </div>
         </div>
-      </a>
-    </section>
-    <section class="section">
-      <a href="/tools/chemical-storage-compatibility/" class="featured-tool">
-        <span class="featured-glow" aria-hidden="true"></span>
-        <div class="featured-content">
-          <span class="featured-badge">New · Interactive tool</span>
-          <h2 class="featured-title">Chemical Storage Compatibility</h2>
-          <p class="featured-desc">
-            Check which chemicals can be safely stored together. Enter a substance or pick hazard
-            classes to get GHS segregation verdicts — never-store, keep-separate and compatible —
-            backed by ADR transport data, predicted reaction gases and 13 storage-class reference pages.
-          </p>
-          <span class="featured-cta">Check Compatibility →</span>
-        </div>
-        <div class="featured-pictos" aria-hidden="true">
-          <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="8"  y="8"  width="48" height="48" rx="8" fill="#0d9488"/>
-            <rect x="64" y="8"  width="48" height="48" rx="8" fill="#5eead4"/>
-            <rect x="8"  y="64" width="48" height="48" rx="8" fill="#5eead4"/>
-            <rect x="64" y="64" width="48" height="48" rx="8" fill="#0d9488"/>
-          </svg>
-        </div>
-      </a>
+      </div>
     </section>
 
-    <section class="section">
-      <a href="/sds/" class="featured-tool featured-tool--sds">
-        <span class="featured-glow" aria-hidden="true"></span>
-        <div class="featured-content">
-          <span class="featured-badge">New · Reference library</span>
-          <h2 class="featured-title">SDS Library{sdsCount ? ` — ${sdsCount} Substances` : ''}</h2>
-          <p class="featured-desc">
-            Safety data sheet reference pages for the most-requested industrial chemicals: harmonised
-            CLP Annex VI classification, a computed storage verdict you won't find in a PDF, ADR
-            transport data with hazard plates, and honest links to official supplier SDS documents.
-          </p>
-          <span class="featured-cta">Browse the SDS Library →</span>
+    <section class="hp-sds" id="sds">
+      <div class="wrap">
+        <div class="hp-sds-head">
+          <div style="max-width:720px">
+            <p class="hp-eyebrow">02 · SDS Library</p>
+            <h2 class="hp-h2">{sdsLabel} substance reports, each with a storage verdict you won't find in a PDF.</h2>
+            <p class="hp-sub">
+              Harmonised CLP Annex VI classification with cited sources, EU supplementary hazards,
+              ADR transport data — and an honest hand-off to the supplier's official SDS.
+            </p>
+          </div>
+          <a href="/sds/" class="btn-teal">Browse the library →</a>
         </div>
-        <div class="sds-chips" aria-hidden="true">
-          <span class="sc">§ 02 · Hazards</span>
-          <span class="sc">§ 07 · Storage verdict</span>
-          <span class="sc">§ 14 · Transport</span>
-        </div>
-      </a>
-    </section>
-    <div class="tools-section">
-      <div class="tools-inner">
-        <p class="section-label">Tools</p>
-        <div class="tools-grid" style="margin-top: 1.5rem;">
+
+        <div class="hp-sds-table">
+          <div class="hp-sds-grid head">
+            <span>Substance</span><span>CAS</span><span>Classification</span><span>Storage verdict</span><span>ADR</span>
+          </div>
           {
-            tools.map((t) => (
-              <div class="tool-card">
-                <span
-                  class:list={[
-                    'tool-badge',
-                    t.badge === 'NEW' && 'tool-badge--new',
-                    t.badge === 'EDITORIAL' && 'tool-badge--editorial',
-                  ]}
-                >
-                  {t.badge}
-                </span>
-                <h3 class="tool-title">{t.title}</h3>
-                <p class="tool-desc">{t.description}</p>
-                <a href={t.href} class="tool-cta">{t.cta}</a>
+            sdsRows.map((r) => (
+              <div class="hp-sds-grid">
+                <a href={r.href} class="name">{r.name}</a>
+                <span class="cas">{r.cas}</span>
+                <span class="cls">{r.cls}</span>
+                <span class="verdict">{r.verdict}</span>
+                <span class="adr">{r.adr}</span>
+              </div>
+            ))
+          }
+        </div>
+
+        <div class="hp-sds-cards">
+          <div class="hp-sds-card"><p class="s">§ 02 · Hazards</p><p class="d">Classification and label elements, per source article.</p></div>
+          <div class="hp-sds-card"><p class="s">§ 07 · Storage verdict</p><p class="d">Computed segregation, not copied boilerplate.</p></div>
+          <div class="hp-sds-card"><p class="s">§ 14 · Transport</p><p class="d">UN number, class, packing group, ADR plates.</p></div>
+          <div class="hp-sds-card"><p class="s muted">§ 16 · Limits</p><p class="d">What we don't cover, and where to get it.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="hp-compliance" id="compliance">
+      <div class="dots" aria-hidden="true"></div>
+      <div class="wrap">
+        <p class="hp-eyebrow on-dark">03 · Compliance Hub</p>
+        <h2 class="hp-h2 on-dark">Seven regulatory pillars, written for the person who has to sign off.</h2>
+        <p class="hp-sub on-dark">
+          In-depth guides on the frameworks that decide your label, your SDS and your storage plan —
+          EU and US, kept current.
+        </p>
+
+        <div class="hp-pillars">
+          {
+            pillars.map((p) => (
+              <a href={p.href} class="hp-pillar" style={`border-top-color:${p.accent}`}>
+                <p class="n">Pillar {p.n}</p>
+                <h3>{p.title}</h3>
+                <p class="c">{p.copy}</p>
+              </a>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <section class="hp-roles">
+      <div class="wrap">
+        <p class="t">Who uses this</p>
+        <div class="hp-roles-grid">
+          {
+            roles.map((r) => (
+              <div class="hp-role">
+                <p class="who">{r.who}</p>
+                <p class="c">{r.copy}</p>
               </div>
             ))
           }
         </div>
       </div>
-    </div>
+    </section>
 
-    <section class="sister">
-      <div class="sister-inner">
-        <div>
-          <h3>Need ATE &amp; H-Statement calculations?</h3>
-          <p>
-            Our free ATE Mixture Calculator classifies a formulation for acute toxicity under GHS/CLP across oral,
-            dermal and inhalation routes — with H-statements, pictogram and a printable report.
-          </p>
+    <section class="hp-pictos" id="pictograms">
+      <div class="wrap">
+        <div class="hp-pictos-head">
+          <div style="max-width:720px">
+            <p class="hp-eyebrow navy">04 · Pictogram reference</p>
+            <h2 class="hp-h2">GHS01–GHS09, free SVGs, and the substance behind each one.</h2>
+            <p class="hp-sub">
+              The original library, still here: every pictogram with its hazard classes, print notes
+              and a free SVG download — cross-linked to 4,178 classified substances.
+            </p>
+          </div>
+          <a href="/pictograms/" class="btn-outline">Search 4,178 substances →</a>
         </div>
-        <a href="/tools/ate-mixture-calculator/" class="btn-sister">Open the ATE calculator →</a>
+
+        <div class="hp-picto-grid">
+          {
+            pictogramsRows.map((p) => (
+              <a href={`/ghs/${p.code.toLowerCase()}/`} class="hp-picto-tile">
+                <Fragment set:html={p.svg_content} />
+                <span class="code">{p.code}</span>
+                <span class="nm">{p.name_en}</span>
+              </a>
+            ))
+          }
+        </div>
       </div>
     </section>
 
     <NewsletterCtaBand />
-    <footer class="site-footer">
-      <div class="footer-inner">
-        <span class="footer-logo">
-          <span class="logo-ghs">GHS</span><span class="logo-pictograms">PICTOGRAMS</span><span class="logo-com">.COM</span>
-        </span>
-        <ul class="footer-links">
-          <li><a href="/label-constructor/">Label Maker</a></li>
-          <li><a href="/tools/">All Tools</a></li>
-          <li><a href="/pictograms/">Substance Database</a></li>
-          <li><a href="/pictogram-selector/">Pictogram Selector</a></li>
-          <li><a href="/compliance/">Compliance Hub</a></li>
-          <li><a href="/affiliate-disclosure/">Affiliate disclosure</a></li>
-          <li><a href="/privacy/">Privacy</a></li>
-          <li><a href="/terms/">Terms</a></li>
-          <li><a href="#" onclick="window.openCookieSettings&&window.openCookieSettings();return false;">Cookie settings</a></li>
-          <li><a href="https://ghssymbols.com/">GHSSymbols.com</a></li>
-        </ul>
-        <span class="footer-copy">Data source: ECHA CLP Annex VI · For reference only</span>
+
+    <footer class="hp-footer">
+      <div class="hp-footer-bar"></div>
+      <div class="wrap hp-footer-grid">
+        <div>
+          <div class="hp-footer-logo"><span class="dot"></span>ghspictograms<span class="tld">.com</span></div>
+          <p class="hp-footer-tagline">
+            Chemical safety reference data and free GHS/CLP tools. Independent, sourced, free to use.
+          </p>
+        </div>
+        <div class="hp-footer-col">
+          <p class="head">Tools</p>
+          <a href="/tools/chemical-storage-compatibility/">Storage Compatibility Matrix</a>
+          <a href="/tools/ate-mixture-calculator/">ATE Mixture Calculator</a>
+          <a href="/label-constructor/">GHS Label Maker</a>
+          <a href="/pictogram-selector/">Pictogram Selector</a>
+          <a href="/inspector/">ADR/DOT Inspector</a>
+          <a href="/tools/">All 14 tools</a>
+        </div>
+        <div class="hp-footer-col">
+          <p class="head">Data</p>
+          <a href="/sds/">SDS Library</a>
+          <a href="/pictograms/">Substance database</a>
+          <a href="#pictograms">GHS01–GHS09</a>
+          <a href="/storage-compatibility/">Storage classes</a>
+        </div>
+        <div class="hp-footer-col">
+          <p class="head">Compliance</p>
+          <a href="/compliance/un-ghs/">UN GHS</a>
+          <a href="/compliance/osha-hcs/">OSHA HCS</a>
+          <a href="/compliance/clp/">EU CLP</a>
+          <a href="/compliance/reach/">REACH</a>
+          <a href="/compliance/svhc/">SVHC</a>
+        </div>
+        <div class="hp-footer-col">
+          <p class="head">Site</p>
+          <a href="/blog/">Blog</a>
+          <a href="/faq/">FAQ</a>
+          <a href="/privacy/">Privacy policy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/affiliate-disclosure/">Affiliate disclosure</a>
+          <a href="#" onclick="window.openCookieSettings&&window.openCookieSettings();return false;">Cookie settings</a>
+        </div>
+      </div>
+      <div class="hp-footer-bottom">
+        <div class="wrap hp-footer-bottom-row">
+          <p class="legal">
+            Reference data from EU CLP Annex VI and published regulations. This site is not a
+            substitute for your supplier's safety data sheet — verify before use. Pictograms are UN
+            GHS artwork, public domain by treaty.
+          </p>
+          <p class="copy">© 2026 ghspictograms.com</p>
+        </div>
       </div>
     </footer>
+
+    <script is:inline>
+      (function () {
+        // ── Header dropdowns + mobile menu ──
+        var toolsBtn = document.getElementById('nav-tools-btn')
+        var dataBtn = document.getElementById('nav-data-btn')
+        var toolsPanel = document.getElementById('nav-tools-panel')
+        var dataPanel = document.getElementById('nav-data-panel')
+        var mobileBtn = document.getElementById('nav-mobile-btn')
+        var mobilePanel = document.getElementById('nav-mobile-panel')
+
+        function closePanels() {
+          toolsPanel.classList.remove('open')
+          dataPanel.classList.remove('open')
+          toolsBtn.setAttribute('aria-expanded', 'false')
+          dataBtn.setAttribute('aria-expanded', 'false')
+        }
+        function toggle(btn, panel, otherBtn) {
+          var isOpen = panel.classList.contains('open')
+          closePanels()
+          if (!isOpen) {
+            panel.classList.add('open')
+            btn.setAttribute('aria-expanded', 'true')
+          }
+        }
+        toolsBtn.addEventListener('click', function (e) {
+          e.stopPropagation()
+          toggle(toolsBtn, toolsPanel, dataBtn)
+        })
+        dataBtn.addEventListener('click', function (e) {
+          e.stopPropagation()
+          toggle(dataBtn, dataPanel, toolsBtn)
+        })
+        document.addEventListener('click', function (e) {
+          if (!toolsPanel.contains(e.target) && !dataPanel.contains(e.target)) closePanels()
+        })
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape') closePanels()
+        })
+        mobileBtn.addEventListener('click', function () {
+          var open = mobilePanel.classList.toggle('open')
+          mobileBtn.setAttribute('aria-expanded', open ? 'true' : 'false')
+        })
+
+        // ── Storage widget: chip switching (static, pre-rendered tables) ──
+        var chips = document.querySelectorAll('#sw-chips .hp-chip')
+        chips.forEach(function (chip) {
+          chip.addEventListener('click', function () {
+            chips.forEach(function (c) {
+              c.classList.remove('active')
+            })
+            chip.classList.add('active')
+            var key = chip.getAttribute('data-sub')
+            document.querySelectorAll('.hp-verdict-table').forEach(function (t) {
+              t.style.display = t.id === 'sw-' + key ? '' : 'none'
+            })
+          })
+        })
+      })()
+    </script>
   </body>
 </html>
