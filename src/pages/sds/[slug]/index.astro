@@ -14,6 +14,16 @@
 //   -> compliance hub + primary sources.
 // Sections mirror the 16-section SDS convention (chemists search "sds section 9").
 // Sections render only when data exists — imports light them up with no code change:
+//   §4/§5/§6      -> ✅ imported session 16 (substance_response, 99 substances, from
+//                    cameo.sqlite 3.1.0). Every string is US-federal public domain:
+//                    ERG 2024 (PHMSA) · NIOSH Pocket Guide (CDC) · CHRIS (USCG 1999) ·
+//                    NTP 1992 · EPA 1998. Stored VERBATIM; the citation CAMEO appends
+//                    inline was lifted into *_src so the page can attribute explicitly.
+//                    These three sections render for variant B/C pages too — a substance
+//                    with no Annex VI entry still has published response data.
+//                    prot_clothing IS imported but deliberately NOT rendered: 9 of the
+//                    USCG texts name a glove material, which the concept keeps out of
+//                    scope. It waits for §8, where PPE belongs (Sergej, session 16).
 //   §8 OEL        -> Step-3 import (substance_oel table; IOELV + OSHA PEL + NIOSH REL, never ACGIH)
 //   §9 fire trio  -> Step-1 import (LEL/UEL + autoignition columns; flash_point already live)
 //   §12 ecology   -> eco import (lc50_fish / ec50_daphnia / ec50_algae — live-wired below, > 0 guard)
@@ -30,10 +40,11 @@ import { supabase } from '../../../lib/supabase'
 const SITE = 'https://ghspictograms.com'
 const TOOL = '/tools/chemical-storage-compatibility/'
 
-// v1.5 flip: set to true after the ERG 2024 import lands (UN -> guide map).
-// Never ship a dead emergency button on a safety page — that's why this gates
-// the whole hero button, not just its href. Button copy TBD (concept §3.2 #4).
-const EMERGENCY_ENABLED = false
+// v1.5 flip: TRUE since session 16 — the response import (substance_response)
+// landed, so first aid / fire / spill all have real text. Never ship a dead
+// emergency button on a safety page: the flag gates the whole hero button, and
+// on top of it the button only renders when THIS substance actually has data.
+const EMERGENCY_ENABLED = true
 
 export async function getStaticPaths() {
   const { data: pages } = await supabase
@@ -46,6 +57,19 @@ export async function getStaticPaths() {
   const liveMap: Record<string, string> = {}
   for (const p of pages) if (p.cas_number) liveMap[p.cas_number] = p.slug
 
+  // §4/§5/§6 response text — one query for the whole build, indexed by CAS.
+  // Keyed on sds_pages.cas_number (the REAL cas, incl. the 5 recovered multi-CAS
+  // rows), not substances.cas_number, which is truncated for those five.
+  // prot_clothing / health_haz / description / air_water_reactions are in the
+  // table but deliberately not selected — nothing renders them yet.
+  const { data: responses } = await supabase
+    .from('substance_response')
+    .select(
+      'cas_number, first_aid, first_aid_src, fire_haz, fire_haz_src, fire_fight, fire_fight_src, non_fire_resp, non_fire_resp_src, isolation, isolation_src, erg_guide_no, erg_guide_title',
+    )
+  const respMap: Record<string, any> = {}
+  for (const r of responses ?? []) respMap[r.cas_number] = r
+
   return await Promise.all(
     pages.map(async (page) => {
       let substance: any = null
@@ -56,6 +80,7 @@ export async function getStaticPaths() {
       let pRows: any[] = []
       let similar: any[] = []
       let dgRows: any[] = []
+      const response = page.cas_number ? (respMap[page.cas_number] ?? null) : null
 
       if (page.substance_id) {
         const { data: s } = await supabase
@@ -139,13 +164,14 @@ export async function getStaticPaths() {
       }
       return {
         params: { slug: page.slug },
-        props: { page, substance, verdict, pictos, hRows, euhRows, pRows, similar, dgRows, liveMap },
+        props: { page, substance, verdict, pictos, hRows, euhRows, pRows, similar, dgRows, liveMap, response },
       }
     }),
   )
 }
 
-const { page, substance, verdict, pictos, hRows, euhRows, pRows, similar, dgRows, liveMap } = Astro.props as any
+const { page, substance, verdict, pictos, hRows, euhRows, pRows, similar, dgRows, liveMap, response } =
+  Astro.props as any
 
 // --- CLP hazard class + category labels (fixed CLP assignments, not curation) ---
 const CLP_CLASS: Record<string, string> = {
@@ -326,6 +352,93 @@ if (substance?.lc50_fish > 0) ecoCards.push({ label: 'Fish · LC50 96 h', value:
 if (substance?.ec50_daphnia > 0) ecoCards.push({ label: 'Daphnia · EC50 48 h', value: `${substance.ec50_daphnia} mg/L` })
 if (substance?.ec50_algae > 0) ecoCards.push({ label: 'Algae · EC50 72 h', value: `${substance.ec50_algae} mg/L` })
 
+// --- §4 / §5 / §6 response text (substance_response, session 16) -------------
+// The CAMEO strings are stored verbatim. Two shapes exist and both are handled:
+//   (a) route-structured first aid ("EYES: …\n\nSKIN: …") — 61 of 99 substances
+//   (b) flat prose with no route headings — the remaining 38
+// Paragraphs whose first token is an ALL-CAPS label ("SMALL FIRE:", "LARGE
+// SPILL:") get that label lifted into a chip; the sentence itself is untouched.
+const ROUTE_ORDER = ['EYES', 'SKIN', 'SKIN AND EYES', 'INHALATION', 'INGESTION', 'ASPIRATION', 'OTHER']
+const LABEL_RE = /^([A-Z][A-Z0-9 ,()/'\-.]{2,70}):\s*/
+
+function rParas(t?: string | null): string[] {
+  return (t ?? '').split('\n\n').map((p) => p.trim()).filter(Boolean)
+}
+function rSplit(p: string): { label: string | null; body: string } {
+  const m = p.match(LABEL_RE)
+  if (!m) return { label: null, body: p }
+  const body = p.slice(m[0].length).trim()
+  if (!body) return { label: null, body: p }
+  return { label: m[1].trim(), body }
+}
+function rEsc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+// CAMEO leaves two cross-references dangling because it assumes you are on its
+// own site. Both are re-pointed at the primary source rather than reworded —
+// "General First Aid" is the ERG preamble (11 substances), and the UN/NA
+// datasheet holds the ERG Table 1 isolation distances (4 TIH substances).
+function rLink(s: string): string {
+  const cls = 'font-semibold text-teal-700 hover:underline'
+  return rEsc(s)
+    .replace(
+      /Refer to the &quot;General First Aid&quot; section/g,
+      `<a href="https://www.phmsa.dot.gov/hazmat/erg/emergency-response-guidebook-erg" target="_blank" rel="noopener" class="${cls}">Refer to the ERG &quot;General First Aid&quot; instructions</a>`,
+    )
+    .replace(
+      /UN\/NA (\d{4}) datasheet/g,
+      `<a href="https://cameochemicals.noaa.gov/unna/$1" target="_blank" rel="noopener" class="${cls}">UN/NA $1 datasheet</a>`,
+    )
+}
+/** Paragraph HTML for the light (page) theme. */
+function rBlock(t?: string | null): string {
+  const P = 'mt-2.5 text-[13.5px] text-gray-700 leading-relaxed'
+  const CHIP =
+    'mr-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-600'
+  return rParas(t)
+    .map((p) => {
+      const { label, body } = rSplit(p)
+      return label
+        ? `<p class="${P}"><span class="${CHIP}" style="${mono}">${rEsc(label)}</span>${rLink(body)}</p>`
+        : `<p class="${P}">${rLink(p)}</p>`
+    })
+    .join('')
+}
+/** Same paragraphs, inverted for the blacked-out emergency overlay. */
+function rBlockDark(t?: string | null): string {
+  const P = 'mt-2.5 text-[13.5px] leading-relaxed text-slate-200'
+  const CHIP =
+    'mr-1.5 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-white'
+  return rParas(t)
+    .map((p) => {
+      const { label, body } = rSplit(p)
+      return label
+        ? `<p class="${P}"><span class="${CHIP}" style="${mono}">${rEsc(label)}</span>${rEsc(body)}</p>`
+        : `<p class="${P}">${rEsc(p)}</p>`
+    })
+    .join('')
+}
+function rRoutes(t?: string | null): { route: string; text: string }[] {
+  const out: { route: string; text: string }[] = []
+  for (const p of rParas(t)) {
+    const { label, body } = rSplit(p)
+    if (label && ROUTE_ORDER.includes(label)) out.push({ route: label, text: body })
+    else if (out.length) out[out.length - 1].text += '\n\n' + p
+    else return []
+  }
+  return out
+}
+function rSrc(src?: string | null): string {
+  return `Source: ${src ?? 'CAMEO Chemicals'} — via CAMEO Chemicals (NOAA), public domain.`
+}
+const faRoutes = rRoutes(response?.first_aid)
+const hasFirstAid = Boolean(response?.first_aid)
+const hasFireSec = Boolean(response?.fire_haz || response?.fire_fight)
+const hasSpillSec = Boolean(response?.non_fire_resp || response?.isolation)
+// The hero emergency button only lights up when the overlay would have all
+// three answers a responder needs. Two out of three is not an emergency mode.
+const emergencyOn = EMERGENCY_ENABLED && hasFirstAid && hasFireSec && hasSpillSec
+
 // §8 OEL — Step-3 import (substance_oel: EU IOELV · OSHA PEL · NIOSH REL — the
 // mockup's ACGIH TLV row is DROPPED: private body, copyrighted values).
 // §15 regulatory — Step-4 import (substance_regulatory_status: SVHC, Seveso
@@ -363,7 +476,11 @@ if (substance?.reach_reg_number) identity.push({ label: 'REACH reg. no.', value:
 
 // §-numbered sticky nav — only sections that actually render (hybrid nav, D3)
 const navItems = [
-  ...(substance ? [{ id: 's2', label: '§2 Hazards' }, { id: 's7', label: '§7 Storage' }] : []),
+  ...(substance ? [{ id: 's2', label: '§2 Hazards' }] : []),
+  ...(hasFirstAid ? [{ id: 's4', label: '§4 First aid' }] : []),
+  ...(hasFireSec ? [{ id: 's5', label: '§5 Fire' }] : []),
+  ...(hasSpillSec ? [{ id: 's6', label: '§6 Spill' }] : []),
+  ...(substance ? [{ id: 's7', label: '§7 Storage' }] : []),
   ...(oelRows.length ? [{ id: 's8', label: '§8 OEL' }] : []),
   ...(substance ? [{ id: 's9', label: '§9 Properties' }] : []),
   ...(substance && (reactiveGroups.length || nIncompat + nCaution > 0) ? [{ id: 's10', label: '§10 Reactivity' }] : []),
@@ -516,16 +633,18 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
 
       <!-- Hero side column: Emergency (gated, v1.5) + supplier PDF hand-off -->
       <div class="flex flex-col gap-3.5">
-        {EMERGENCY_ENABLED && (
-          <a
-            href="#emergency"
-            class="block w-full rounded-xl border border-rose-400 p-5 text-left shadow-[0_0_0_1px_rgba(220,38,38,0.4),0_12px_34px_rgba(220,38,38,0.35)] transition hover:brightness-110"
+        {emergencyOn && (
+          <label
+            for="emg-toggle"
+            role="button"
+            tabindex="0"
+            class="block w-full cursor-pointer rounded-xl border border-rose-400 p-5 text-left shadow-[0_0_0_1px_rgba(220,38,38,0.4),0_12px_34px_rgba(220,38,38,0.35)] transition hover:brightness-110"
             style="background:linear-gradient(135deg,#dc2626 0%,#991b1b 100%);"
           >
             <span class="block text-[10.5px] uppercase tracking-[0.12em] text-rose-200" style={mono}>Incident in progress</span>
             <span class="mt-1.5 block text-[22px] font-bold tracking-tight" style={grotesk}>Emergency mode →</span>
             <span class="mt-1 block text-[12.5px] text-white/80">First aid · fire · spill, full screen</span>
-          </a>
+          </label>
         )}
 
         {suppliers.length > 0 && (
@@ -585,7 +704,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
         </section>
       )}
 
-      {substance ? (
+      {substance && (
         <>
           <!-- §2 HAZARDS -->
           <section id="s2" class={sectionCls}>
@@ -670,7 +789,137 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
               )}
             </div>
           </section>
+        </>
+      )}
 
+      <!-- VARIANT B / C — honest fallback. Moved out of the §2…§15 branch in
+           session 16: §4/§5/§6 render for these pages too, so the "no harmonised
+           classification" note has to sit ABOVE them, not instead of them. -->
+      {!substance && (
+        <section class="rounded-xl border border-gray-200 bg-white p-6">
+          {page.template_variant === 'C' ? (
+            <>
+              <h2 class="text-xl font-bold text-gray-900" style={grotesk}>This is a product, not a single substance</h2>
+              <p class="mt-2 text-sm text-gray-700 leading-relaxed">
+                {cap} is a formulated product / mixture. Its hazard profile depends on the exact formulation,
+                so there is no single harmonised classification we could honestly show here — the authoritative
+                document is the SDS issued by the manufacturer of the specific product you purchased. Use the
+                supplier links above to obtain it.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 class="text-xl font-bold text-gray-900" style={grotesk}>No harmonised EU classification</h2>
+              <p class="mt-2 text-sm text-gray-700 leading-relaxed">
+                {cap} has no entry in CLP Annex VI — there is no harmonised EU-wide classification for it.
+                <strong> That is not evidence of safety.</strong> Suppliers remain obliged to self-classify it
+                under CLP, and workplace hazards (dust, asphyxiation, thermal) can exist without a harmonised
+                entry. Always obtain the supplier's SDS for the product you actually use.
+              </p>
+            </>
+          )}
+          {hasFirstAid && (
+            <p class="mt-3 border-t border-gray-100 pt-3 text-[13px] text-gray-600 leading-relaxed">
+              Published emergency-response data does exist for {name} and is reproduced below — first aid,
+              fire fighting and spill response come from US federal sources, not from a harmonised
+              classification.
+            </p>
+          )}
+        </section>
+      )}
+
+      <!-- §4 FIRST AID — substance_response (session 16). Renders for every
+           template variant: response data does not depend on Annex VI. -->
+      {hasFirstAid && (
+        <section id="s4" class={sectionCls}>
+          <p class={secLabelCls} style={mono}>§ 04 · First-aid measures</p>
+          <h2 class={h2Cls} style={grotesk}>First aid</h2>
+          <div class="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+            <p class="text-[13px] leading-relaxed text-rose-900">
+              <strong>Call your national emergency number first.</strong> These are published first-aid
+              measures, not medical advice, and they do not replace emergency services, a poison control
+              centre or the supplier's safety data sheet.
+            </p>
+          </div>
+          {faRoutes.length > 0 ? (
+            <div class="mt-5 grid gap-2.5 sm:grid-cols-2">
+              {faRoutes.map((r: any) => (
+                <div class="rounded-xl border border-gray-200 bg-white px-4 py-4">
+                  <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-rose-700" style={mono}>{r.route}</p>
+                  <div set:html={rBlock(r.text)} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div class="mt-5 rounded-xl border border-gray-200 bg-white px-5 py-4" set:html={rBlock(response.first_aid)} />
+          )}
+          <p class="mt-2 text-[10.5px] text-gray-400" style={mono}>{rSrc(response.first_aid_src)}</p>
+        </section>
+      )}
+
+      <!-- §5 FIRE-FIGHTING -->
+      {hasFireSec && (
+        <section id="s5" class={sectionCls}>
+          <p class={secLabelCls} style={mono}>§ 05 · Fire-fighting measures</p>
+          <h2 class={h2Cls} style={grotesk}>Fire fighting</h2>
+          {response.erg_guide_no && (
+            <>
+              <a
+                href="https://www.phmsa.dot.gov/hazmat/erg/emergency-response-guidebook-erg"
+                target="_blank"
+                rel="noopener"
+                class="mt-3 inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-[11.5px] font-semibold text-amber-900 transition-colors hover:bg-amber-100"
+                style={mono}
+              >
+                ERG 2024 · GUIDE {response.erg_guide_no}
+                <span class="font-normal text-amber-800">{response.erg_guide_title}</span>
+              </a>
+              <p class="mt-2 max-w-2xl text-[11.5px] leading-relaxed text-gray-500">
+                ERG guidance is written per response guide, not per substance — Guide {response.erg_guide_no}
+                covers every material assigned to it, so a few sentences reference other UN numbers in the
+                same group.
+              </p>
+            </>
+          )}
+          {response.fire_haz && (
+            <div class="mt-5 rounded-xl border border-rose-200 px-5 py-4" style="background:linear-gradient(135deg,#fef2f2 0%,#fff 70%);">
+              <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-rose-700" style={mono}>Fire and explosion hazard</p>
+              <div set:html={rBlock(response.fire_haz)} />
+            </div>
+          )}
+          {response.fire_fight && (
+            <div class="mt-2.5 rounded-xl border border-gray-200 bg-white px-5 py-4">
+              <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-gray-500" style={mono}>Extinguishing media and tactics</p>
+              <div set:html={rBlock(response.fire_fight)} />
+            </div>
+          )}
+          <p class="mt-2 text-[10.5px] text-gray-400" style={mono}>{rSrc(response.fire_fight_src ?? response.fire_haz_src)}</p>
+        </section>
+      )}
+
+      <!-- §6 ACCIDENTAL RELEASE -->
+      {hasSpillSec && (
+        <section id="s6" class={sectionCls}>
+          <p class={secLabelCls} style={mono}>§ 06 · Accidental release measures</p>
+          <h2 class={h2Cls} style={grotesk}>Spill and leak response</h2>
+          {response.non_fire_resp && (
+            <div class="mt-5 rounded-xl border border-gray-200 bg-white px-5 py-4">
+              <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-gray-500" style={mono}>Containment and clean-up</p>
+              <div set:html={rBlock(response.non_fire_resp)} />
+            </div>
+          )}
+          {response.isolation && (
+            <div class="mt-2.5 rounded-xl border border-amber-300 px-5 py-4" style="background:linear-gradient(135deg,#fffbeb 0%,#fff 70%);">
+              <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-amber-800" style={mono}>Initial isolation and evacuation</p>
+              <div set:html={rBlock(response.isolation)} />
+            </div>
+          )}
+          <p class="mt-2 text-[10.5px] text-gray-400" style={mono}>{rSrc(response.non_fire_resp_src ?? response.isolation_src)}</p>
+        </section>
+      )}
+
+      {substance && (
+        <>
           <!-- §7 HANDLING & STORAGE (the computed differentiator) -->
           <section id="s7" class={sectionCls}>
             <p class={secLabelCls} style={mono}>§ 07 · Handling and storage</p>
@@ -991,31 +1240,6 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
             </section>
           )}
         </>
-      ) : (
-        <!-- VARIANT B / C — honest fallback -->
-        <section class="rounded-xl border border-gray-200 bg-white p-6">
-          {page.template_variant === 'C' ? (
-            <>
-              <h2 class="text-xl font-bold text-gray-900" style={grotesk}>This is a product, not a single substance</h2>
-              <p class="mt-2 text-sm text-gray-700 leading-relaxed">
-                {cap} is a formulated product / mixture. Its hazard profile depends on the exact formulation,
-                so there is no single harmonised classification we could honestly show here — the authoritative
-                document is the SDS issued by the manufacturer of the specific product you purchased. Use the
-                supplier links above to obtain it.
-              </p>
-            </>
-          ) : (
-            <>
-              <h2 class="text-xl font-bold text-gray-900" style={grotesk}>No harmonised EU classification</h2>
-              <p class="mt-2 text-sm text-gray-700 leading-relaxed">
-                {cap} has no entry in CLP Annex VI — there is no harmonised EU-wide classification for it.
-                <strong> That is not evidence of safety.</strong> Suppliers remain obliged to self-classify it
-                under CLP, and workplace hazards (dust, asphyxiation, thermal) can exist without a harmonised
-                entry. Always obtain the supplier's SDS for the product you actually use.
-              </p>
-            </>
-          )}
-        </section>
       )}
 
       <!-- MSDS vs SDS -->
@@ -1093,6 +1317,13 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
           <li>
             Physical properties: CAMEO Chemicals (NOAA, public domain) — per-value source references stored in the database
           </li>
+          {(hasFirstAid || hasFireSec || hasSpillSec) && (
+            <li>
+              Emergency response (§4–§6): <a href="https://www.phmsa.dot.gov/hazmat/erg/emergency-response-guidebook-erg" target="_blank" rel="noopener" class="text-teal-700 hover:underline">ERG 2024 (PHMSA)</a> ·{' '}
+              <a href="https://www.cdc.gov/niosh/npg/" target="_blank" rel="noopener" class="text-teal-700 hover:underline">NIOSH Pocket Guide (CDC)</a> · CHRIS (USCG) · NTP · EPA — via{' '}
+              <a href="https://cameochemicals.noaa.gov/" target="_blank" rel="noopener" class="text-teal-700 hover:underline">CAMEO Chemicals</a> (NOAA), all US federal public domain, reproduced verbatim
+            </li>
+          )}
           {cas && (
             <li>
               Substance data: <a href={`https://pubchem.ncbi.nlm.nih.gov/#query=${cas}`} target="_blank" rel="noopener" class="text-teal-700 hover:underline">PubChem</a> ·{' '}
@@ -1126,7 +1357,229 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
     </div>
   </div>
 
+  <!-- ══ EMERGENCY MODE ══════════════════════════════════════════════════════
+       "The lights go out and only the safety data stays lit" (Sergej, s16).
+       Opened by a visually-hidden checkbox, NOT by a #hash: the hash version
+       navigated instead of opening inside a preview frame, and it would also
+       push a history entry on the live page. The checkbox leaves the URL alone.
+       CSS does the whole thing — a page someone opens during an incident must
+       not depend on a hydrated island. Same three answers as §4/§5/§6, inverted.
+       The input sits directly before the overlay so the sibling combinator is
+       enough on its own; the :has() rule is the belt to that braces.
+       ═══════════════════════════════════════════════════════════════════════ -->
+  {emergencyOn && (
+    <input type="checkbox" id="emg-toggle" class="emg-toggle" aria-label={`Open emergency mode for ${name}`} />
+  )}
+  {emergencyOn && (
+    <div id="emergency" class="emg">
+      <div class="emg-lamp" aria-hidden="true"></div>
+      <div class="emg-vignette" aria-hidden="true"></div>
+      <div class="emg-scroll">
+        <div class="mx-auto w-full max-w-4xl px-4 pb-16 sm:px-6">
+          <header class="emg-bar">
+            <div class="flex min-w-0 items-center gap-2.5">
+              <span class="emg-dot" aria-hidden="true"></span>
+              <span class="truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-rose-300" style={mono}>Emergency mode</span>
+              <span class="truncate text-[13.5px] font-semibold text-white" style={grotesk}>{cap}</span>
+              {response.erg_guide_no && (
+                <span class="hidden rounded border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10.5px] font-semibold text-amber-200 sm:inline" style={mono}>
+                  ERG 2024 · GUIDE {response.erg_guide_no}
+                </span>
+              )}
+            </div>
+            <label for="emg-toggle" role="button" tabindex="0" class="emg-close" style={mono}>Close ✕</label>
+          </header>
+
+          <div class="emg-call">
+            <p class="text-[15px] font-bold tracking-tight text-white" style={grotesk}>Call emergency services first</p>
+            <p class="mt-1 text-[13px] leading-relaxed text-rose-100/90">
+              112 in the EU · 911 in the US. This screen is published response information, not medical
+              advice, and it does not replace emergency services, a poison centre or the supplier's safety
+              data sheet.
+            </p>
+          </div>
+
+          <section class="emg-sec">
+            <p class="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-rose-300" style={mono}>01 · First aid</p>
+            <h2 class="mt-1 text-[26px] font-bold tracking-tight text-white" style={grotesk}>What to do for the person</h2>
+            {faRoutes.length > 0 ? (
+              <div class="mt-3 grid gap-2.5 sm:grid-cols-2">
+                {faRoutes.map((r: any) => (
+                  <div class="rounded-xl border border-white/10 bg-white/[0.045] px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]">
+                    <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-rose-300" style={mono}>{r.route}</p>
+                    <div set:html={rBlockDark(r.text)} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div class="mt-3 rounded-xl border border-white/10 bg-white/[0.045] px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]" set:html={rBlockDark(response.first_aid)} />
+            )}
+          </section>
+
+          <section class="emg-sec">
+            <p class="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-amber-300" style={mono}>02 · Fire</p>
+            <h2 class="mt-1 text-[26px] font-bold tracking-tight text-white" style={grotesk}>Extinguishing and tactics</h2>
+            {response.fire_haz && (
+              <div class="mt-3 rounded-xl border border-white/10 bg-white/[0.045] px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]">
+                <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-amber-300" style={mono}>Fire and explosion hazard</p>
+                <div set:html={rBlockDark(response.fire_haz)} />
+              </div>
+            )}
+            {response.fire_fight && (
+              <div class="mt-3 rounded-xl border border-white/10 bg-white/[0.045] px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]">
+                <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-amber-300" style={mono}>Extinguishing media and tactics</p>
+                <div set:html={rBlockDark(response.fire_fight)} />
+              </div>
+            )}
+          </section>
+
+          <section class="emg-sec">
+            <p class="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-teal-300" style={mono}>03 · Spill</p>
+            <h2 class="mt-1 text-[26px] font-bold tracking-tight text-white" style={grotesk}>Containment, isolation, evacuation</h2>
+            {response.non_fire_resp && (
+              <div class="mt-3 rounded-xl border border-white/10 bg-white/[0.045] px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]">
+                <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-teal-300" style={mono}>Containment and clean-up</p>
+                <div set:html={rBlockDark(response.non_fire_resp)} />
+              </div>
+            )}
+            {response.isolation && (
+              <div class="mt-3 rounded-xl border border-white/10 bg-white/[0.045] px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]">
+                <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-teal-300" style={mono}>Initial isolation and evacuation</p>
+                <div set:html={rBlockDark(response.isolation)} />
+              </div>
+            )}
+          </section>
+
+          <p class="mt-8 text-[10.5px] leading-relaxed text-slate-500" style={mono}>
+            Sources: ERG 2024 (PHMSA) · NIOSH Pocket Guide (CDC) · CHRIS (USCG) · NTP · EPA — via CAMEO
+            Chemicals (NOAA), public domain. Text reproduced verbatim.
+          </p>
+        </div>
+      </div>
+    </div>
+  )}
+
+  <!-- Keyboard only. The overlay opens and closes with CSS alone; this adds
+       Enter/Space on the two labels and Esc to close. If it never runs, the
+       emergency screen still works with mouse and touch. -->
+  <script is:inline>
+    (function () {
+      var t = document.getElementById('emg-toggle')
+      if (!t) return
+      document.querySelectorAll('label[for="emg-toggle"]').forEach(function (l) {
+        l.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            t.checked = !t.checked
+          }
+        })
+      })
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && t.checked) t.checked = false
+      })
+    })()
+  </script>
+
   {jsonLd.map((block) => (
     <script type="application/ld+json" set:html={JSON.stringify(block)} />
   ))}
 </Layout>
+
+<style is:global>
+  /* Emergency overlay. is:global because the open state is expressed on <body>
+     (scroll lock + :has fallback), which Astro's scoping cannot reach. Every
+     selector below is namespaced to #emergency / .emg-* and exists on no other
+     page, so nothing leaks. */
+  .emg-toggle {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  #emergency { display: none; }
+  .emg-toggle:checked ~ #emergency,
+  body:has(.emg-toggle:checked) #emergency { display: block; }
+  body:has(.emg-toggle:checked) { overflow: hidden; }
+  .emg-close, label[for='emg-toggle'] { cursor: pointer; }
+  .emg-close:focus-visible,
+  label[for='emg-toggle']:focus-visible { outline: 2px solid #fda4af; outline-offset: 3px; }
+  .emg {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: #04060c;
+    animation: emg-in 0.26s ease-out both;
+  }
+  @keyframes emg-in { from { opacity: 0; } to { opacity: 1; } }
+  /* the lamp: one red source above the fold, warming up as the screen opens */
+  .emg-lamp {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(900px 420px at 50% -8%, rgba(220, 38, 38, 0.3), transparent 62%),
+      radial-gradient(1400px 900px at 50% 12%, rgba(30, 58, 138, 0.22), transparent 70%);
+    animation: emg-lamp 0.5s ease-out both;
+  }
+  @keyframes emg-lamp { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: none; } }
+  /* everything outside the lit column falls away */
+  .emg-vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(closest-side at 50% 38%, transparent 55%, rgba(0, 0, 0, 0.72) 100%);
+  }
+  .emg-scroll { position: relative; height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+  .emg-bar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 0 -1rem;
+    padding: 0.85rem 1rem;
+    background: rgba(4, 6, 12, 0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .emg-dot {
+    height: 9px;
+    width: 9px;
+    border-radius: 999px;
+    background: #f43f5e;
+    box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.18), 0 0 14px rgba(244, 63, 94, 0.9);
+    animation: emg-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes emg-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .emg-close {
+    flex: none;
+    border-radius: 0.55rem;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    padding: 0.35rem 0.8rem;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #e2e8f0;
+    transition: background-color 0.15s, border-color 0.15s;
+  }
+  .emg-close:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.45); }
+  .emg-call {
+    margin-top: 1.4rem;
+    border-radius: 0.85rem;
+    border: 1px solid rgba(244, 63, 94, 0.45);
+    background: rgba(136, 19, 55, 0.32);
+    padding: 1rem 1.15rem;
+    box-shadow: 0 0 42px rgba(244, 63, 94, 0.2);
+  }
+  .emg-sec { margin-top: 2.1rem; }
+  @media (prefers-reduced-motion: reduce) {
+    .emg, .emg-lamp, .emg-dot { animation: none; }
+  }
+</style>
