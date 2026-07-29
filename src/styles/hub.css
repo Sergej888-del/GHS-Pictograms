@@ -5,10 +5,16 @@
    colour ladders live in design-tokens.css. Keyframes are hub-prefixed to avoid
    collisions with the homepage's scoped keyframes. */
 
-/* ── Animated hero (full homepage treatment — Sergej's call, session 12) ── */
+/* ── Animated hero (session 12) — geometry retuned in session 13 ──
+   Sergej's call: every page except the homepage uses the SDS substance-page
+   geometry — 135°, near-black top-left → navy → the hub's own colour at the
+   bottom-right. Dark top-left is what makes the drifting dots read. The colour
+   is the ONLY per-hub difference: set --hub-tint via one class (see the tint
+   block at the end of this file). No class = dark navy. */
 .hub-hero {
   position: relative;
-  background: radial-gradient(120% 130% at 12% 0%, var(--hero-1) 0%, var(--hero-2) 38%, var(--hero-3) 72%, var(--hero-4) 100%);
+  --hub-tint: #101c40;
+  background: linear-gradient(135deg, #0f172a 0%, #062a78 48%, var(--hub-tint) 100%);
   overflow: hidden;
 }
 .hub-hero .dots-a {
@@ -36,15 +42,8 @@
   background: linear-gradient(112deg, transparent 32%, rgba(94, 234, 212, 0.22) 50%, transparent 68%);
   animation: hubSheen 14s ease-in-out infinite;
 }
-.hub-hero .glow {
-  position: absolute;
-  left: -140px;
-  bottom: -180px;
-  width: 520px;
-  height: 520px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(13, 148, 136, 0.45) 0%, transparent 70%);
-}
+/* (session 13: the corner glow was dropped from hub heroes — the 135° tint now
+   carries the colour. The homepage keeps its own `.hp-hero .glow`, untouched.) */
 @keyframes hubDotDrift {
   0%, 100% { transform: translate3d(0, 0, 0); }
   50% { transform: translate3d(7px, -7px, 0); }
@@ -324,3 +323,147 @@
   text-underline-offset: 2px;
 }
 .hub-close-panel a:hover { color: #fdba74; }
+
+/* ── Hero search field (SDS library, session 13) ── */
+.hub-hero-search {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  margin: 28px auto 0;
+}
+.hub-hero-search input {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 13px 16px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: #ffffff;
+  backdrop-filter: blur(4px);
+  outline: none;
+  transition: border-color 200ms ease, background 200ms ease, box-shadow 200ms ease;
+}
+.hub-hero-search input::placeholder { color: var(--ink-dark-3); }
+.hub-hero-search input:focus {
+  border-color: var(--teal-300);
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.25);
+}
+
+/* ── A–Z index (dense substance/article lists) ── */
+.hub-meta {
+  margin: 14px 0 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.hub-letter-group { margin-top: 30px; }
+.hub-letter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--teal-700);
+}
+.hub-letter::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--line-2);
+}
+.hub-index {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: 10px;
+}
+.hub-index-card {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 12px 14px;
+  box-shadow: 0 1px 3px rgba(15, 23, 41, 0.05);
+  transition: all 260ms ease-out;
+}
+.hub-index-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--teal-200);
+  background: var(--teal-50);
+  box-shadow: 0 12px 24px rgba(15, 23, 41, 0.1);
+}
+.hub-index-card .txt { min-width: 0; }
+.hub-index-card .name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.hub-index-card .cas {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.hub-index-card .formula {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: #f1f5f9;
+  border-radius: 5px;
+  padding: 3px 6px;
+}
+
+/* ── Light inline note (empty states, asides) ── */
+.hub-note {
+  margin-top: 24px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 14px 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.hub-note a { color: var(--teal-700); font-weight: 600; }
+.hub-note a:hover { text-decoration: underline; }
+
+/* Non-clickable variant of .hub-card (explanatory, not navigational) */
+.hub-card.static:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--acc-line, var(--line));
+}
+
+/* Utility: JS-driven visibility (independent of Tailwind's scanner) */
+.hub-hide { display: none !important; }
+
+/* ── Hub tints (Sergej's call, session 13) ────────────────────────────────
+   The hero base is identical everywhere; only the third gradient stop changes,
+   so the hubs read as one family. Adding a hub = one line here + one class on
+   the page. Use the DARK end of that hub's accent ladder (roughly the 800/900
+   step), never the bright one — the corner must stay dark enough for the dots:
+     teal   → #134e4a   (matches the SDS substance pages)
+     orange → #7c2d12
+     sky    → #0c4a6e
+     blue   → #1e3a8a                                                        */
+.hub-hero.tint-teal { --hub-tint: #134e4a; }

@@ -2,9 +2,11 @@
 // SDS library hub — /sds/
 // Lists every live page from the `sds_pages` registry. Grows automatically as
 // registry rows are flipped to status='live' — no code change per substance.
-// rev2 (session 8): restyled to the v2.1 substance-page identity (navy hero +
-// teal dots + JetBrains Mono labels) + client-side search over name / CAS /
-// formula / synonyms_search (brands included, search-only — never displayed).
+// rev3 (session 13, Фаза 3): rebuilt on the v2 hub vocabulary (src/styles/hub.css) —
+// animated navy hero, A–Z letter groups, explanatory card row, navy closing panel.
+// Client-side search over name / CAS / formula / synonyms_search (brands included,
+// search-only — never displayed) is preserved and now also hides empty letter groups.
+// JetBrains Mono link dropped (Sergej's call): mono is --font-mono site-wide.
 import Layout from '../../layouts/Layout.astro'
 import { supabase } from '../../lib/supabase'
 
@@ -26,6 +28,55 @@ const searchBlob = (p: any) =>
     .join(' | ')
     .toLowerCase()
 
+// A–Z grouping: anything not starting with a latin letter lands in "0–9".
+const groups: [string, any[]][] = (() => {
+  const map = new Map<string, any[]>()
+  for (const p of pages) {
+    const first = (p.display_name ?? '').trim().charAt(0).toUpperCase()
+    const letter = /[A-Z]/.test(first) ? first : '0–9'
+    const bucket = map.get(letter)
+    if (bucket) bucket.push(p)
+    else map.set(letter, [p])
+  }
+  return Array.from(map.entries()).sort((a, b) => {
+    if (a[0] === b[0]) return 0
+    if (a[0] === '0–9') return -1
+    if (b[0] === '0–9') return 1
+    return a[0].localeCompare(b[0])
+  })
+})()
+
+// Explanatory row — what every substance page actually contains.
+const sections = [
+  {
+    tag: 'Classification',
+    name: 'Harmonised GHS classification',
+    acc: '#1d4ed8',
+    line: '#bfdbfe',
+    soft: '#eff6ff',
+    ink: '#1d4ed8',
+    desc: "Hazard classes, categories, H- and P-statements and label pictograms taken straight from CLP Annex VI — the legally harmonised EU entry, not a supplier's interpretation of it.",
+  },
+  {
+    tag: 'Segregation',
+    name: 'Computed storage verdict',
+    acc: '#0d9488',
+    line: '#99f6e4',
+    soft: '#f0fdfa',
+    ink: '#0f766e',
+    desc: "Which chemicals must never share a store with this one, which need separation, and which are safe together — computed from GHS segregation rules across 3,600+ substances. You won't find this section in any supplier PDF.",
+  },
+  {
+    tag: 'Transport',
+    name: 'ADR transport data & the real SDS',
+    acc: '#0ea5e9',
+    line: '#bae6fd',
+    soft: '#f0f9ff',
+    ink: '#0284c7',
+    desc: "UN number, ADR class and packing group where the substance is regulated for transport — plus honest links to the official supplier safety data sheets. We reference them, we don't pretend to replace them.",
+  },
+]
+
 const title = 'SDS library: safety data sheets by substance'
 const description =
   'Safety data sheet reference pages for common industrial chemicals: GHS classification from CLP Annex VI, computed storage compatibility verdicts, ADR transport data, and links to official supplier SDS PDFs.'
@@ -39,113 +90,122 @@ const jsonLd = {
   url: canonical,
   numberOfItems: pages.length,
 }
-
-const mono = "font-family:'JetBrains Mono',ui-monospace,monospace;"
-const grotesk = "font-family:'Space Grotesk',sans-serif;"
 ---
 
 <Layout title={title} description={description} canonical={canonical}>
-  <link
-    slot="head"
-    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&display=swap"
-    rel="stylesheet"
-  />
+  <!-- Animated navy hero (v2), gradient leaning teal — the /sds/ hub colour -->
+  <section class="hub-hero tint-teal">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
 
-  <!-- HERO — same identity as the substance pages (navy gradient, teal dots) -->
-  <section class="relative overflow-hidden text-white" style="background:linear-gradient(135deg,#0f172a 0%,#062A78 48%,#134e4a 100%);">
-    <div class="absolute inset-0 opacity-35" style="background-image:radial-gradient(rgba(94,234,212,0.55) 1px, transparent 1px);background-size:22px 22px;" aria-hidden="true"></div>
-    <div class="absolute inset-0" style="background:linear-gradient(90deg,rgba(15,23,42,0.75) 0%,rgba(15,23,42,0) 65%);" aria-hidden="true"></div>
-    <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <p class="text-[11px] font-medium uppercase tracking-[0.11em] text-teal-300" style={mono}>
-        Reference · SDS library
-      </p>
-      <h1 class="mt-2 text-4xl sm:text-[52px] font-bold tracking-tight leading-[1.05]" style={grotesk}>
-        SDS library
-      </h1>
-      <p class="mt-4 text-[15px] text-slate-300 max-w-3xl leading-relaxed">
+    <div class="hub-wrap hub-hero-inner">
+      <p class="hub-hero-eyebrow">Reference · SDS library</p>
+      <h1>SDS library</h1>
+      <p class="hub-hero-sub">
         Safety data sheet reference by substance: harmonised GHS classification, a computed storage
         verdict you won't find in a PDF, transport data, and honest links to official supplier SDS documents.
       </p>
-
-      <div class="mt-5 flex flex-wrap gap-2.5">
-        <span class="inline-flex items-center gap-2 rounded-full border border-white/30 bg-slate-200/20 backdrop-blur-sm px-3.5 py-1.5 text-[11.5px] tracking-[0.05em] text-slate-200" style={mono}>
-          <span class="h-[7px] w-[7px] rounded-full bg-teal-400" aria-hidden="true"></span>
-          {pages.length} substances
-        </span>
-        <span class="inline-flex items-center gap-2 rounded-full border border-white/30 bg-slate-200/20 backdrop-blur-sm px-3.5 py-1.5 text-[11.5px] tracking-[0.05em] text-slate-200" style={mono}>
-          CLP Annex VI · computed storage verdicts
-        </span>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">{pages.length} substances</span>
+        <span class="hub-hero-chip">CLP Annex VI · computed storage verdicts</span>
       </div>
 
-      <div class="mt-7 max-w-xl">
+      <div class="hub-hero-search">
         <label for="sds-search" class="sr-only">Search substances by name, CAS number, formula, or synonym</label>
         <input
           id="sds-search"
           type="search"
           placeholder="Search name, CAS, formula, or synonym…"
           autocomplete="off"
-          class="w-full rounded-xl border border-white/25 bg-white/10 px-4 py-3 text-[15px] text-white placeholder-slate-400 backdrop-blur-sm focus:border-teal-300 focus:bg-white/15 focus:ring-2 focus:ring-teal-400/30 outline-none transition-colors"
         />
       </div>
     </div>
   </section>
 
-  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-    <p class="text-[11px] font-medium uppercase tracking-[0.11em] text-gray-400" style={mono}>
-      <span id="sds-count">{pages.length}</span> substances · A–Z
-    </p>
-
-    {pages.length > 0 ? (
-      <ul id="sds-grid" class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {pages.map((p) => (
-          <li data-search={searchBlob(p)}>
-            <a
-              href={`/sds/${p.slug}/`}
-              class="flex items-baseline justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 hover:border-teal-300 hover:bg-teal-50/50 hover:shadow-sm transition-all"
-            >
-              <span class="min-w-0">
-                <span class="block text-sm font-semibold text-gray-900 truncate">
-                  {cap(p.display_name)} SDS
-                </span>
-                {p.cas_number && (
-                  <span class="block text-xs text-gray-500" style={mono}>CAS {p.cas_number}</span>
-                )}
-              </span>
-              {p.formula_display && (
-                <span class="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-semibold text-gray-700" style={mono}>
-                  {p.formula_display}
-                </span>
-              )}
-            </a>
-          </li>
+  <!-- What every substance page contains -->
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">01 · What's on every page</p>
+      <h2 class="hub-h2">Three things a supplier PDF won't give you together</h2>
+      <div class="hub-cards">
+        {sections.map((s) => (
+          <div class="hub-card static" style={`--acc:${s.acc};--acc-line:${s.line};--acc-soft:${s.soft};--acc-ink:${s.ink}`}>
+            <p class="tag">{s.tag}</p>
+            <h3>{s.name}</h3>
+            <p class="copy">{s.desc}</p>
+          </div>
         ))}
-      </ul>
-    ) : (
-      <p class="mt-4 text-sm text-gray-500">Pages are being prepared — check back shortly.</p>
-    )}
+      </div>
+    </div>
+  </section>
 
-    <p id="sds-empty" class="mt-6 hidden rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-      Nothing matches that search here yet. The
-      <a href="/tools/chemical-storage-compatibility/" class="font-semibold text-teal-700 hover:underline">storage compatibility tool</a>
-      covers 3,600+ substances by CAS number — try it there.
-    </p>
+  <!-- A–Z library -->
+  <section class="hub-sec-b">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">02 · Library</p>
+      <h2 class="hub-h2">All substances, A–Z</h2>
+      <p class="hub-meta"><span id="sds-count">{pages.length}</span> substances · A–Z</p>
 
-    <p class="mt-8 text-sm text-gray-500">
-      More substances are added in waves. Missing one you need? The
-      <a href="/tools/chemical-storage-compatibility/" class="font-semibold text-teal-700 hover:underline">storage compatibility tool</a>
-      already covers 3,600+ substances by CAS number.
-    </p>
-  </div>
+      {pages.length > 0 ? (
+        <div id="sds-grid">
+          {groups.map(([letter, items]) => (
+            <section class="hub-letter-group" data-letter={letter}>
+              <h3 class="hub-letter">{letter}</h3>
+              <ul class="hub-index">
+                {items.map((p) => (
+                  <li data-search={searchBlob(p)}>
+                    <a href={`/sds/${p.slug}/`} class="hub-index-card">
+                      <span class="txt">
+                        <span class="name">{cap(p.display_name)} SDS</span>
+                        {p.cas_number && <span class="cas">CAS {p.cas_number}</span>}
+                      </span>
+                      {p.formula_display && <span class="formula">{p.formula_display}</span>}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <p class="hub-note">Pages are being prepared — check back shortly.</p>
+      )}
+
+      <p id="sds-empty" class="hub-note hub-hide">
+        Nothing matches that search here yet. The
+        <a href="/tools/chemical-storage-compatibility/">storage compatibility tool</a>
+        covers 3,600+ substances by CAS number — try it there.
+      </p>
+    </div>
+  </section>
+
+  <!-- Closing / storage-tool bridge -->
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <div class="hub-close-panel">
+        <div class="dots" aria-hidden="true"></div>
+        <h2>Missing one you need?</h2>
+        <p>
+          More substances are added in waves. The
+          <a href="/tools/chemical-storage-compatibility/">storage compatibility tool</a>
+          already covers 3,600+ substances by CAS number.
+        </p>
+      </div>
+    </div>
+  </section>
 
   <script>
     // Client-side filter: every query token must match the card's search blob
     // (name + CAS + formula + synonyms_search, brands included search-only).
+    // Letter groups collapse when none of their cards survive the filter.
     const input = document.getElementById('sds-search') as HTMLInputElement | null
     const grid = document.getElementById('sds-grid')
     const countEl = document.getElementById('sds-count')
     const emptyEl = document.getElementById('sds-empty')
     if (input && grid) {
       const cards = Array.from(grid.querySelectorAll<HTMLLIElement>('li[data-search]'))
+      const letterGroups = Array.from(grid.querySelectorAll<HTMLElement>('.hub-letter-group'))
       const norm = (s: string) => s.toLowerCase().replace(/sulph/g, 'sulf').replace(/\s+/g, ' ').trim()
       const blobs = cards.map((c) => norm(c.dataset.search ?? ''))
       input.addEventListener('input', () => {
@@ -153,11 +213,15 @@ const grotesk = "font-family:'Space Grotesk',sans-serif;"
         let visible = 0
         cards.forEach((card, i) => {
           const show = tokens.every((t) => blobs[i].includes(t))
-          card.classList.toggle('hidden', !show)
+          card.classList.toggle('hub-hide', !show)
           if (show) visible++
         })
+        letterGroups.forEach((g) => {
+          const anyVisible = g.querySelector('li[data-search]:not(.hub-hide)')
+          g.classList.toggle('hub-hide', !anyVisible)
+        })
         if (countEl) countEl.textContent = String(visible)
-        if (emptyEl) emptyEl.classList.toggle('hidden', visible > 0)
+        if (emptyEl) emptyEl.classList.toggle('hub-hide', visible > 0)
       })
     }
   </script>
