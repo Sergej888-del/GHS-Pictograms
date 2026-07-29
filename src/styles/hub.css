@@ -555,6 +555,16 @@
   transition: background 200ms ease, transform 200ms ease;
 }
 .hub-hero-cta:hover { background: var(--teal-600); transform: translateY(-2px); }
+/* Ghost variant — for a secondary hero action (tool page: "browse by class") */
+.hub-hero-cta.ghost {
+  background: rgba(255, 255, 255, .1);
+  border: 1px solid rgba(255, 255, 255, .25);
+  box-shadow: none;
+}
+.hub-hero-cta.ghost:hover { background: rgba(255, 255, 255, .18); }
+
+/* Interactive island wrapper — tighter than a normal section, the tool has its own padding */
+.hub-sec-tool { padding: 32px 0 40px; background: #ffffff; }
 
 /* Darker section — the frame that makes white cards read as objects */
 .hub-sec-deep {
