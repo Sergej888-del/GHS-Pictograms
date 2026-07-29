@@ -2,8 +2,8 @@
 // Storage-class category page — /storage-compatibility/<slug>/
 // One page per storage class (getStaticPaths over STORAGE_CLASSES). Data-driven:
 //   * hero + count            (get_class_substances total)
-//   * compatibility-at-a-glance: never / keep separate / compatible pills,
-//     each -> the other class's page (interlink graph)
+//   * compatibility-at-a-glance: never / keep separate / compatible cards,
+//     each row -> the other class's page (interlink graph)
 //   * substances in this class: ALL baked into HTML, first 50 shown + the rest
 //     behind a "Show all N" toggle; each -> the tool's ?substance= deep-link
 //   * optional editorial prose + FAQ from the `storage-classes` content collection
@@ -11,8 +11,11 @@
 // Prose is OPTIONAL (P4). Without an entry the page renders data-only; such
 // pages should not be linked/sitemapped until prose lands (publication control
 // handled outside this file — see P2 notes).
+// rev2 (session 14, Фаза 3): rebuilt on the v2 hub vocabulary (src/styles/hub.css),
+// sharing its components with the hub — same data cards, badges, mini-tables.
+// Hero colour untouched (HERO_BG, §0.2); only the frame changed.
 import Layout from '../../../layouts/Layout.astro'
-import { STORAGE_CLASSES, shortForCode, urlForCode, familyStyleForCode, HERO_BG, HERO_DOTS } from '../../../lib/storageClasses'
+import { STORAGE_CLASSES, shortForCode, urlForCode, familyStyleForCode, HERO_BG } from '../../../lib/storageClasses'
 import { supabase } from '../../../lib/supabase'
 import { getCollection, render } from 'astro:content'
 
@@ -54,6 +57,7 @@ const Content = entry ? (await render(entry)).Content : null
 const never = compat.filter((c) => c.status === 'prohibited')
 const separate = compat.filter((c) => c.status === 'separate')
 const compatible = compat.filter((c) => c.status === 'compatible')
+const others = compat.length // the 12 other storage classes
 
 const total = subs.total ?? 0
 const items = subs.items ?? []
@@ -100,142 +104,182 @@ if (entry?.data.faq?.length) {
   })
 }
 
-const pillBase = 'inline-flex items-center rounded-full border px-3 py-1 text-sm transition-all hover:shadow-sm'
 const fam = familyStyleForCode(cls.code)
+const lower = cls.short.toLowerCase()
+
+// The three verdict cards — same component as the hub deck.
+const deck = [
+  {
+    badge: 'Never store',
+    note: 'hard stop',
+    title: 'Never store with',
+    n: never.length,
+    acc: '#e11d48',
+    ink: '#9f1239',
+    line: '#fecdd3',
+    soft: '#fff1f2',
+    copy: `Direct reaction with ${lower} — ignition, pressure build-up or a toxic gas release.`,
+    head: 'Separate cabinet, bund or room',
+    empty: `No storage class is prohibited outright with ${lower}.`,
+    items: never,
+  },
+  {
+    badge: 'Keep separate',
+    note: 'distance control',
+    title: 'Keep separate from',
+    n: separate.length,
+    acc: '#d97706',
+    ink: '#92400e',
+    line: '#fde68a',
+    soft: '#fffbeb',
+    copy: 'No direct reaction, but a spill or fire involving either class makes the other markedly worse.',
+    head: 'Distance, bund or separate tray',
+    empty: `No storage class needs distance separation from ${lower}.`,
+    items: separate,
+  },
+  {
+    badge: 'Compatible',
+    note: 'verify per substance',
+    title: 'Generally compatible with',
+    n: compatible.length,
+    acc: '#0d9488',
+    ink: '#0f766e',
+    line: '#99f6e4',
+    soft: '#f0fdfa',
+    copy:
+      'No class-level restriction. The individual substance still governs — check SDS sections 7 and 10.',
+    head: 'Shared storage normally acceptable',
+    empty: `No storage class shares a store with ${lower} without conditions.`,
+    items: compatible,
+  },
+]
+
+// Section numbers depend on which optional sections exist on this page.
+let sn = 0
+const pad = () => String(++sn).padStart(2, '0')
+const nSeg = pad()
+const nProse = Content ? pad() : null
+const nSubs = pad()
+const nFaq = entry?.data.faq?.length ? pad() : null
 ---
 
 <Layout title={title} description={description} canonical={canonical}>
   <!-- Data-only pages (no prose entry) stay out of the index until P4 prose lands -->
   {!entry && <meta name="robots" content="noindex,follow" slot="head" />}
 
-  <!-- HERO: textured gradient + dot overlay (shared with hub) -->
-  <section class="relative overflow-hidden text-white hero-dots" style={`background:${HERO_BG};`}>
-    <div class="absolute inset-0 opacity-40" style={`background-image:${HERO_DOTS};background-size:22px 22px;`} aria-hidden="true"></div>
-    <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
-      <nav class="text-sm text-slate-300 mb-6" aria-label="Breadcrumb">
-        <a href="/storage-compatibility/" class="hover:text-white transition-colors">Storage compatibility</a>
-        <span class="mx-1 text-slate-500">/</span>
-        <span class="text-slate-200">{cls.short}</span>
+  <!-- HERO — v2 frame, original storage colour (HERO_BG) kept via inline style -->
+  <section class="hub-hero" style={`background:${HERO_BG};`}>
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+
+    <div class="hub-wrap hub-hero-left">
+      <nav class="hub-crumb" aria-label="Breadcrumb">
+        <a href="/storage-compatibility/">Storage compatibility</a><span class="sep">/</span>{cls.short}
       </nav>
-      <div class="flex items-start gap-4">
-        <div class="hidden sm:flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-teal-500 shadow-lg shadow-teal-900/40">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
-            <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
-            <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
-            <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
-          </svg>
-        </div>
-        <div>
-          <p class="text-xs font-bold uppercase tracking-[0.2em] text-teal-300">{fam.label} · storage class</p>
-          <h1 class="mt-1.5 text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.05]" style="font-family:'Space Grotesk',sans-serif;">
-            {title}
-          </h1>
-          <p class="mt-4 text-lg text-slate-200 max-w-3xl leading-relaxed">
-            {entry?.data.intro ??
-              `Storage segregation, incompatibilities, and the ${total} substances in this class in our database.`}
-          </p>
-        </div>
+      <p class="hub-hero-eyebrow">{fam.label} · storage class</p>
+      <h1>{title}</h1>
+      <p class="hub-hero-sub">
+        {entry?.data.intro ??
+          `Storage segregation, incompatibilities, and the ${total} substances in this class in our database.`}
+      </p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">{total} {total === 1 ? 'substance' : 'substances'}</span>
+        <span class="hub-hero-chip"><i class="d rose"></i>{never.length} never store</span>
+        <span class="hub-hero-chip"><i class="d amber"></i>{separate.length} keep separate</span>
+        <span class="hub-hero-chip"><i class="d teal"></i>{compatible.length} compatible</span>
+      </div>
+      <a href={TOOL} class="hub-hero-cta">Check a specific substance →</a>
+    </div>
+  </section>
+
+  <!-- SEGREGATION — the three verdicts against the other classes -->
+  <section class="hub-sec-deep">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">{nSeg} · Segregation</p>
+      <h2 class="hub-h2">What {lower} can be stored with</h2>
+      <p class="hub-sub">
+        Class-level segregation against the {others} other storage classes. Open any class for its own guidance
+        and substance list.
+      </p>
+
+      <div class="hub-deck">
+        {deck.map((d) => (
+          <div
+            class={d.n > 0 ? 'hub-deck-card' : 'hub-deck-card muted'}
+            style={d.n > 0 ? `--c-acc:${d.acc};--c-ink:${d.ink};--c-line:${d.line};--c-soft:${d.soft}` : undefined}
+          >
+            <div class="hub-deck-badges">
+              <span class="hub-deck-badge">{d.badge}</span>
+              <span class="hub-deck-note">{d.note}</span>
+            </div>
+            <h3>{d.title}</h3>
+            <div class="hub-deck-stat">
+              <span class="num">{d.n}</span>
+              <span class="of">of the {others} other classes</span>
+            </div>
+            <div class="hub-deck-bar"><span style={`width:${Math.round((d.n / Math.max(others, 1)) * 100)}%`}></span></div>
+            {d.n > 0 && <p class="copy">{d.copy}</p>}
+            {d.n > 0 ? (
+              <div class="hub-pairs">
+                <div class="hub-pairs-head"><span>{d.head}</span><span>{d.n}</span></div>
+                {d.items.map((c) => (
+                  <a href={urlForCode(c.class)} class="hub-pair">
+                    <span class="a">{shortForCode(c.class)}</span>
+                    <span class="v arrow" aria-hidden="true">→</span>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p class="hub-deck-empty">{d.empty}</p>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   </section>
 
-  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
-    <!-- COMPATIBILITY AT A GLANCE -->
-    <section>
-      <h2 class="text-xl font-bold text-gray-900" style="font-family:'Space Grotesk',sans-serif;">
-        What {cls.short.toLowerCase()} can be stored with
-      </h2>
-      <p class="mt-1 text-sm text-gray-500">
-        Class-level segregation. Tap a class to see its own guidance.
-      </p>
-
-      {never.length > 0 && (
-        <div class="mt-4">
-          <h3 class="flex items-center gap-1.5 text-sm font-semibold text-rose-700">
-            <span aria-hidden="true">⛔</span> Never store with
-          </h3>
-          <div class="mt-2 flex flex-wrap gap-2">
-            {never.map((c) => (
-              <a href={urlForCode(c.class)} class={`${pillBase} border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100`}>
-                {shortForCode(c.class)}
-              </a>
-            ))}
-          </div>
+  <!-- EDITORIAL PROSE (optional, P4) -->
+  {Content && (
+    <section class="hub-sec-white">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nProse} · Guidance</p>
+        <div class="storage-prose hub-prose">
+          <Content />
         </div>
-      )}
-
-      {separate.length > 0 && (
-        <div class="mt-4">
-          <h3 class="flex items-center gap-1.5 text-sm font-semibold text-amber-700">
-            <span aria-hidden="true">↔</span> Keep separate
-          </h3>
-          <div class="mt-2 flex flex-wrap gap-2">
-            {separate.map((c) => (
-              <a href={urlForCode(c.class)} class={`${pillBase} border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100`}>
-                {shortForCode(c.class)}
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {compatible.length > 0 && (
-        <div class="mt-4">
-          <h3 class="flex items-center gap-1.5 text-sm font-semibold text-green-700">
-            <span aria-hidden="true">✓</span> Generally compatible
-          </h3>
-          <div class="mt-2 flex flex-wrap gap-2">
-            {compatible.map((c) => (
-              <a href={urlForCode(c.class)} class={`${pillBase} border-green-200 bg-green-50 text-green-700 hover:bg-green-100`}>
-                {shortForCode(c.class)}
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
+      </div>
     </section>
+  )}
 
-    <!-- EDITORIAL PROSE (optional, P4) -->
-    {Content && (
-      <section class="storage-prose">
-        <Content />
-      </section>
-    )}
-
-    <!-- SUBSTANCES IN THIS CLASS -->
-    <section>
-      <h2 class="text-xl font-bold text-gray-900" style="font-family:'Space Grotesk',sans-serif;">
-        {cls.short} in our database
-      </h2>
-      <p class="mt-1 text-sm text-gray-500">
+  <!-- SUBSTANCES IN THIS CLASS -->
+  <section class="hub-sec-b">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">{nSubs} · Substances</p>
+      <h2 class="hub-h2">{cls.short} in our database</h2>
+      <p class="hub-sub">
         {total === 0
-          ? 'No substances currently classified into this class.'
-          : `${total} substance${total === 1 ? '' : 's'}. Open any for its full storage verdict.`}
+          ? 'No substances are currently classified into this class.'
+          : 'Every substance classified into this class. Open one to get its own verdict against any other chemical in the matrix.'}
       </p>
 
       {items.length > 0 && (
-        <ul id="ss-list" class="ss-list ss-collapsed mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <p class="hub-meta">
+          {total} {total === 1 ? 'substance' : 'substances'}
+          {total > COLLAPSE_AT ? ` · first ${COLLAPSE_AT} shown` : ''}
+        </p>
+      )}
+
+      {items.length > 0 && (
+        <ul id="ss-list" class="hub-index wide ss-collapsed" style="margin-top:22px">
           {items.map((s, i) => (
             <li class={i >= COLLAPSE_AT ? 'ss-extra' : undefined}>
-              <a
-                href={`${TOOL}?substance=${encodeURIComponent(s.cas)}`}
-                class="flex items-baseline justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2.5 hover:border-teal-300 hover:bg-teal-50/50 hover:shadow-sm transition-all"
-              >
-                <span class="min-w-0">
-                  <span class="block text-sm font-medium text-gray-900 truncate">{s.name}</span>
-                  <span class="block text-xs text-gray-500 font-mono">{s.cas}</span>
+              <a href={`${TOOL}?substance=${encodeURIComponent(s.cas)}`} class="hub-index-card">
+                <span class="txt">
+                  <span class="name">{s.name}</span>
+                  <span class="cas">CAS {s.cas}</span>
                 </span>
                 {s.signal_word && (
-                  <span
-                    class={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
-                      s.signal_word === 'Danger'
-                        ? 'bg-rose-50 text-rose-700'
-                        : 'bg-amber-50 text-amber-800'
-                    }`}
-                  >
-                    {s.signal_word}
-                  </span>
+                  <span class={`sig ${s.signal_word === 'Danger' ? 'danger' : 'warning'}`}>{s.signal_word}</span>
                 )}
               </a>
             </li>
@@ -244,46 +288,47 @@ const fam = familyStyleForCode(cls.code)
       )}
 
       {total > COLLAPSE_AT && (
-        <button
-          id="ss-toggle"
-          type="button"
-          data-all={`Show all ${total} substances ↓`}
-          class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-teal-700 hover:underline"
-        >
+        <button id="ss-toggle" type="button" data-all={`Show all ${total} substances ↓`} class="hub-toggle">
           Show all {total} substances ↓
         </button>
       )}
-    </section>
+    </div>
+  </section>
 
-    <!-- FAQ (optional, P4) -->
-    {entry?.data.faq && entry.data.faq.length > 0 && (
-      <section>
-        <h2 class="text-xl font-bold text-gray-900" style="font-family:'Space Grotesk',sans-serif;">
-          Frequently asked questions
-        </h2>
-        <div class="mt-4 space-y-4">
-          {entry.data.faq.map((f) => (
-            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <p class="text-sm font-semibold text-gray-900">{f.q}</p>
-              <p class="mt-1 text-sm text-gray-600">{f.a}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-    )}
+  <!-- FAQ (optional, P4) + closing bridge -->
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      {entry?.data.faq && entry.data.faq.length > 0 && (
+        <>
+          <p class="hub-eyebrow">{nFaq} · FAQ</p>
+          <h2 class="hub-h2">Frequently asked questions</h2>
+          <div class="hub-faq">
+            {entry.data.faq.map((f) => (
+              <div class="hub-faq-item">
+                <p class="q">{f.q}</p>
+                <p class="a">{f.a}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
-    <!-- DISCLAIMER + BACK TO TOOL -->
-    <section class="rounded-xl border border-gray-200 bg-gray-50 p-6">
-      <p class="text-sm text-gray-600">
-        Need the verdict for a specific substance? Search it in the
-        <a href={TOOL} class="font-semibold text-teal-700 hover:underline">storage compatibility matrix</a>.
-      </p>
-      <p class="mt-3 text-xs text-gray-400 leading-relaxed">
+      <div class="hub-close-panel" style="margin-top:36px">
+        <div class="dots" aria-hidden="true"></div>
+        <h2>Need the verdict for one specific substance?</h2>
+        <p>
+          Search it in the <a href={TOOL}>storage compatibility matrix</a> — 3,600+ substances by CAS number,
+          with reaction-gas prediction and ADR transport data. Substance reference pages live in the
+          <a href="/sds/">SDS library</a>.
+        </p>
+      </div>
+
+      <p class="hub-fine">
         Reference aid only — class-level segregation is a starting point, not a substitute for a substance's Safety
         Data Sheet or professional judgment. Always verify storage against SDS sections 7 and 10 and local regulations.
       </p>
-    </section>
-  </div>
+    </div>
+  </section>
 
   {jsonLd.map((block) => (
     <script type="application/ld+json" set:html={JSON.stringify(block)} />

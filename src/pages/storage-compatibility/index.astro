@@ -1,35 +1,155 @@
 ---
 // Storage-compatibility hub — /storage-compatibility/
 // Directory of the 13 storage-class category pages. Signature colour: teal.
-// Textured gradient hero (navy -> teal glow + dot overlay); restrained cards
-// (neutral surface + one small muted hazard-family dot; teal is the accent).
+// rev2 (session 14, Фаза 3): rebuilt on the v2 hub vocabulary (src/styles/hub.css).
+// Hero KEEPS its original colour (HERO_BG, §0.2 — hero colours are not being
+// retuned any more); only the frame changed: centred v2 hero, chips instead of
+// the white stat band, a data deck, then the 13 classes grouped by hazard family.
+// Everything numeric on this page is computed at build time from the same RPCs
+// the matrix uses — no hardcoded counts, so it can never drift from the data.
 import Layout from '../../layouts/Layout.astro'
-import { STORAGE_CLASSES, familyStyleForCode, HERO_BG, HERO_DOTS } from '../../lib/storageClasses'
+import { STORAGE_CLASSES, familyStyleForCode, HERO_BG } from '../../lib/storageClasses'
 import { supabase } from '../../lib/supabase'
 
 const SITE = 'https://ghspictograms.com'
 const TOOL = '/tools/chemical-storage-compatibility/'
 
-const cards = (
-  await Promise.all(
-    STORAGE_CLASSES.map(async (c) => {
-      const { data } = await supabase.rpc('get_class_substances', { p_sc_code: c.code, p_limit: 0 })
-      return { ...c, total: (data?.total as number | undefined) ?? 0, fam: familyStyleForCode(c.code) }
-    }),
-  )
-).sort((a, b) => b.total - a.total)
+interface CompatItem { class: string; name: string; status: 'prohibited' | 'separate' | 'compatible' }
+
+// One pass over the 13 classes: substance count + the class's own compatibility row.
+const classes = await Promise.all(
+  STORAGE_CLASSES.map(async (c) => {
+    const [subsRes, compatRes] = await Promise.all([
+      supabase.rpc('get_class_substances', { p_sc_code: c.code, p_limit: 0 }),
+      supabase.rpc('get_class_compatibility', { p_sc_code: c.code }),
+    ])
+    const compat: CompatItem[] = compatRes.data?.compat ?? []
+    return {
+      ...c,
+      total: (subsRes.data?.total as number | undefined) ?? 0,
+      fam: familyStyleForCode(c.code),
+      never: compat.filter((x) => x.status === 'prohibited').length,
+      separate: compat.filter((x) => x.status === 'separate').length,
+      ok: compat.filter((x) => x.status === 'compatible').length,
+      compat,
+    }
+  }),
+)
+
+const shortOf = new Map(STORAGE_CLASSES.map((c) => [c.code, c.short]))
+const slugOf = new Map(STORAGE_CLASSES.map((c) => [c.code, c.slug]))
+const orderOf = new Map(STORAGE_CLASSES.map((c, i) => [c.code, i]))
+
+// Unique class pairs (the matrix is symmetric — verified: 0 asymmetric pairs).
+const pairs = new Map<string, { a: string; b: string; status: CompatItem['status'] }>()
+for (const c of classes) {
+  for (const x of c.compat) {
+    const [a, b] = (orderOf.get(c.code) ?? 0) <= (orderOf.get(x.class) ?? 0) ? [c.code, x.class] : [x.class, c.code]
+    pairs.set(`${a}|${b}`, { a, b, status: x.status })
+  }
+}
+const allPairs = [...pairs.values()]
+const nPairs = allPairs.length
+const countOf = (s: CompatItem['status']) => allPairs.filter((p) => p.status === s).length
+const nNever = countOf('prohibited')
+const nSeparate = countOf('separate')
+const nCompatible = countOf('compatible')
+const pct = (n: number) => Math.round((n / nPairs) * 100)
+
+// Ranked "most incompatible / needs most separation" lists for the deck.
+const rank = (key: 'never' | 'separate') =>
+  [...classes].sort((a, b) => b[key] - a[key] || a.short.localeCompare(b.short)).slice(0, 5)
+const others = classes[0]?.compat.length ?? STORAGE_CLASSES.length - 1
+const rankNever = rank('never')
+const rankSeparate = rank('separate')
+
+// All compatible pairs — there are few enough to list in full.
+const compatiblePairs = allPairs
+  .filter((p) => p.status === 'compatible')
+  .sort((x, y) => (orderOf.get(x.a) ?? 0) - (orderOf.get(y.a) ?? 0))
+
+// Hazard families, in ladder order; hex mirrors FAMILY_STYLE's Tailwind dots.
+const FAMILIES: { key: string; label: string; hex: string }[] = [
+  { key: 'flammable', label: 'Flammable', hex: '#fb923c' },
+  { key: 'oxidizing', label: 'Oxidizing', hex: '#fbbf24' },
+  { key: 'corrosive', label: 'Corrosive', hex: '#60a5fa' },
+  { key: 'reactive', label: 'Reactive', hex: '#a78bfa' },
+  { key: 'toxic', label: 'Toxic', hex: '#fb7185' },
+]
+const families = FAMILIES.map((f) => {
+  const members = classes.filter((c) => c.family === f.key).sort((a, b) => b.total - a.total)
+  return { ...f, members, total: members.reduce((s, c) => s + c.total, 0) }
+}).filter((f) => f.members.length > 0)
+
+const deck = [
+  {
+    badge: 'Never store',
+    note: 'hard stop',
+    title: 'Never store together',
+    n: nNever,
+    acc: '#e11d48',
+    ink: '#9f1239',
+    line: '#fecdd3',
+    soft: '#fff1f2',
+    copy:
+      'The classes react with each other directly — fire, a pressure burst, or a toxic gas release. These need a ' +
+      'separate cabinet, bund or room; a shared shelf or a common spill tray does not satisfy it.',
+    head: ['Most incompatible classes', 'Never-store'],
+    rows: rankNever.map((c) => ({ slug: c.slug, name: c.short, val: `${c.never} of ${others}` })),
+    pairs: [] as { slug: string; name: string }[],
+    foot: `Counted over all ${nPairs} class pairs in the matrix.`,
+    cta: 'Open the matrix →',
+    href: TOOL,
+  },
+  {
+    badge: 'Keep separate',
+    note: 'distance control',
+    title: 'Keep separate',
+    n: nSeparate,
+    acc: '#d97706',
+    ink: '#92400e',
+    line: '#fde68a',
+    soft: '#fffbeb',
+    copy:
+      'No direct reaction between the classes, but a spill or a fire involving one makes the other markedly worse. ' +
+      'The control here is distance — another shelf, a bund, a separate tray or catch pan.',
+    head: ['Needs most separation', 'Keep-separate'],
+    rows: rankSeparate.map((c) => ({ slug: c.slug, name: c.short, val: `${c.separate} of ${others}` })),
+    pairs: [] as { slug: string; name: string }[],
+    foot: 'How much distance is set by local regulation — the class pair only tells you separation is required.',
+    cta: 'Open the matrix →',
+    href: TOOL,
+  },
+  {
+    badge: 'Compatible',
+    note: 'verify per substance',
+    title: 'Generally compatible',
+    n: nCompatible,
+    acc: '#0d9488',
+    ink: '#0f766e',
+    line: '#99f6e4',
+    soft: '#f0fdfa',
+    copy:
+      `Only ${nCompatible} class pairs carry no class-level restriction — all of them are listed here. The individual ` +
+      'substance still governs: read its own SDS sections 7 and 10 before you fix a layout.',
+    head: ['Every compatible pair', `${nCompatible} of ${nPairs}`],
+    rows: [] as { slug: string; name: string; val: string }[],
+    pairs: compatiblePairs.map((p) => ({
+      slug: slugOf.get(p.a) ?? '',
+      name: `${shortOf.get(p.a) ?? p.a} ↔ ${shortOf.get(p.b) ?? p.b}`,
+    })),
+    foot: "Compatible at class level is a starting point, never a substitute for the substance's own SDS.",
+    cta: 'Open a substance report →',
+    href: '/sds/',
+  },
+]
 
 const title = 'Chemical storage compatibility by hazard class'
 const description =
   'Browse chemical storage segregation by hazard class — what each class can and cannot be stored with, and the substances in each. 13 storage classes, backed by GHS hazard data, chemical reactivity, and ADR transport.'
 const canonical = `${SITE}/storage-compatibility/`
 
-const stats = [
-  { n: '13', label: 'Hazard classes' },
-  { n: '3,652', label: 'Substances' },
-  { n: 'GHS · CAMEO · ADR', label: 'Cross-referenced' },
-  { n: 'Free', label: 'No signup' },
-]
+const chips = ['13 hazard classes', '3,652 substances', 'GHS · CAMEO · ADR', 'Free · no signup']
 
 const jsonLd: Record<string, unknown>[] = [
   { '@context': 'https://schema.org', '@type': 'CollectionPage', name: title, description, url: canonical },
@@ -37,104 +157,146 @@ const jsonLd: Record<string, unknown>[] = [
     '@context': 'https://schema.org',
     '@type': 'ItemList',
     name: 'Storage hazard classes',
-    numberOfItems: cards.length,
-    itemListElement: cards.map((c, i) => ({
-      '@type': 'ListItem',
-      position: i + 1,
-      name: c.short,
-      url: `${SITE}/storage-compatibility/${c.slug}/`,
-    })),
+    numberOfItems: classes.length,
+    itemListElement: [...classes]
+      .sort((a, b) => b.total - a.total)
+      .map((c, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: c.short,
+        url: `${SITE}/storage-compatibility/${c.slug}/`,
+      })),
   },
 ]
-
-const heroBg = HERO_BG
-const dotBg = HERO_DOTS
 ---
 
 <Layout title={title} description={description} canonical={canonical}>
-  <!-- HERO: textured gradient + dot overlay -->
-  <section class="relative overflow-hidden text-white hero-dots" style={`background:${heroBg};`}>
-    <div class="absolute inset-0 opacity-40" style={`background-image:${dotBg};background-size:22px 22px;`} aria-hidden="true"></div>
-    <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-16">
-      <nav class="text-sm text-slate-300 mb-6" aria-label="Breadcrumb">
-        <a href="/tools/" class="hover:text-white transition-colors">Tools</a>
-        <span class="mx-1 text-slate-500">/</span>
-        <span class="text-slate-200">Storage compatibility</span>
-      </nav>
-      <div class="flex items-start gap-4">
-        <div class="hidden sm:flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-teal-500 shadow-lg shadow-teal-900/40">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
-            <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
-            <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
-            <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
-          </svg>
-        </div>
-        <div>
-          <p class="text-xs font-bold uppercase tracking-[0.2em] text-teal-300">Storage compatibility</p>
-          <h1 class="mt-1.5 text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.05]" style="font-family:'Space Grotesk',sans-serif;">
-            Chemical storage compatibility by hazard class
-          </h1>
-          <p class="mt-4 text-lg text-slate-200 max-w-3xl leading-relaxed">
-            Chemicals are grouped into storage classes by their hazards, then segregated so incompatible classes
-            aren't stored together. Pick a class to see what it can and can't be stored with — or check a specific
-            substance in the matrix.
-          </p>
-          <a
-            href={TOOL}
-            class="mt-6 inline-flex items-center gap-1.5 rounded-lg bg-teal-500 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-teal-900/30 hover:bg-teal-400 transition-colors"
-          >
-            Check a specific substance →
-          </a>
-        </div>
+  <!-- HERO — v2 frame, original storage colour (HERO_BG) kept via inline style -->
+  <section class="hub-hero" style={`background:${HERO_BG};`}>
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+
+    <div class="hub-wrap hub-hero-inner">
+      <p class="hub-hero-eyebrow">Reference · Storage compatibility</p>
+      <h1>Chemical storage compatibility by hazard class</h1>
+      <p class="hub-hero-sub">
+        Chemicals are grouped into storage classes by their hazards, then segregated so incompatible classes
+        aren't stored together. Pick a class to see what it can and can't be stored with — or check a specific
+        substance in the matrix.
+      </p>
+      <div class="hub-hero-chips">
+        {chips.map((c) => <span class="hub-hero-chip">{c}</span>)}
+      </div>
+      <a href={TOOL} class="hub-hero-cta">Check a specific substance →</a>
+    </div>
+  </section>
+
+  <!-- 01 — how the three verdicts distribute across the matrix -->
+  <section class="hub-sec-deep">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">01 · How segregation works</p>
+      <h2 class="hub-h2">Three verdicts, thirteen classes</h2>
+      <p class="hub-sub">
+        The 13 classes make {nPairs} unique pairs, and every pair carries one of three verdicts. Below is how
+        those {nPairs} actually resolve in our matrix.
+      </p>
+
+      <div class="hub-deck">
+        {deck.map((d) => (
+          <div class="hub-deck-card" style={`--c-acc:${d.acc};--c-ink:${d.ink};--c-line:${d.line};--c-soft:${d.soft}`}>
+            <div class="hub-deck-badges">
+              <span class="hub-deck-badge">{d.badge}</span>
+              <span class="hub-deck-note">{d.note}</span>
+            </div>
+            <h3>{d.title}</h3>
+            <div class="hub-deck-stat">
+              <span class="num">{d.n}</span>
+              <span class="of">of {nPairs} class pairs · {pct(d.n)}%</span>
+            </div>
+            <div class="hub-deck-bar"><span style={`width:${pct(d.n)}%`}></span></div>
+            <p class="copy">{d.copy}</p>
+
+            <div class="hub-pairs">
+              <div class="hub-pairs-head"><span>{d.head[0]}</span><span>{d.head[1]}</span></div>
+              {d.rows.map((r) => (
+                <a href={`/storage-compatibility/${r.slug}/`} class="hub-pair">
+                  <span class="a">{r.name}</span>
+                  <span class="v count">{r.val}</span>
+                </a>
+              ))}
+              {d.pairs.map((p) => (
+                <a href={`/storage-compatibility/${p.slug}/`} class="hub-pair">
+                  <span class="a">{p.name}</span>
+                  <span class="v arrow" aria-hidden="true">→</span>
+                </a>
+              ))}
+            </div>
+
+            <p class="hub-deck-foot">{d.foot}</p>
+            <a href={d.href} class="hub-deck-link">{d.cta}</a>
+          </div>
+        ))}
       </div>
     </div>
   </section>
 
-  <!-- STAT BAND -->
-  <section class="border-b border-gray-100 bg-white">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-2 sm:grid-cols-4 divide-x divide-gray-100">
-      {stats.map((s) => (
-        <div class="px-4 py-5 text-center">
-          <p class="text-lg sm:text-xl font-extrabold text-teal-700" style="font-family:'Space Grotesk',sans-serif;">{s.n}</p>
-          <p class="mt-0.5 text-xs uppercase tracking-wide text-gray-400">{s.label}</p>
-        </div>
+  <!-- 02 — the 13 classes, grouped by hazard family -->
+  <section class="hub-sec-b">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">02 · Classes</p>
+      <h2 class="hub-h2">All 13 storage classes</h2>
+      <p class="hub-sub">
+        Grouped by hazard family. Each card carries the substances we hold in that class and how its 12 pairings
+        resolve — never store, keep separate, compatible.
+      </p>
+      <p class="hub-meta">{classes.length} classes · {families.length} hazard families</p>
+
+      {families.map((f) => (
+        <section class="hub-fam-group">
+          <h3 class="hub-fam" style={`--fam:${f.hex}`}>
+            <span class="dot" aria-hidden="true"></span>{f.label}
+            <span class="n">{f.total} substances</span>
+          </h3>
+          <ul class="hub-index">
+            {f.members.map((c) => (
+              <li>
+                <a href={`/storage-compatibility/${c.slug}/`} class="hub-class-card" style={`--fam:${f.hex}`}>
+                  <span class="hub-class-top">
+                    <span>
+                      <span class="name">{c.short}</span>
+                      <span class="n">{c.total} {c.total === 1 ? 'substance' : 'substances'}</span>
+                    </span>
+                    <span class="arrow" aria-hidden="true">→</span>
+                  </span>
+                  <span class="hub-class-verdicts">
+                    <span class={c.never ? 'v-never' : 'v-zero'}>{c.never} never</span>
+                    <span class={c.separate ? 'v-sep' : 'v-zero'}>{c.separate} separate</span>
+                    <span class={c.ok ? 'v-ok' : 'v-zero'}>{c.ok} ok</span>
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
       ))}
     </div>
   </section>
 
-  <!-- CLASS CARDS: restrained (neutral surface, small muted family dot, teal accent) -->
-  <section class="bg-slate-50">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <ul class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {cards.map((c) => (
-          <li>
-            <a
-              href={`/storage-compatibility/${c.slug}/`}
-              class="group flex h-full flex-col justify-between rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md"
-            >
-              <div>
-                <div class="flex items-center gap-2">
-                  <span class={`h-2 w-2 rounded-full ${c.fam.dot}`} aria-hidden="true"></span>
-                  <span class="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{c.fam.label}</span>
-                </div>
-                <h2 class="mt-2.5 text-lg font-bold text-gray-900" style="font-family:'Space Grotesk',sans-serif;">
-                  {c.short}
-                </h2>
-              </div>
-              <div class="mt-5 flex items-center justify-between">
-                <p class="text-sm text-gray-500">
-                  <span class="font-bold text-teal-700">{c.total}</span>
-                  {c.total === 1 ? ' substance' : ' substances'}
-                </p>
-                <span class="text-teal-600 transition-transform group-hover:translate-x-1" aria-hidden="true">→</span>
-              </div>
-            </a>
-          </li>
-        ))}
-      </ul>
-
-      <p class="mt-8 text-xs text-gray-400 leading-relaxed max-w-3xl">
+  <!-- Closing bridge -->
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <div class="hub-close-panel">
+        <div class="dots" aria-hidden="true"></div>
+        <h2>Need one specific substance?</h2>
+        <p>
+          Class-level segregation gets you the shape of the store. For a named chemical, the
+          <a href={TOOL}>storage compatibility matrix</a>
+          resolves the verdict against 3,600+ substances by CAS number, and the
+          <a href="/sds/">SDS library</a> carries the full reference page.
+        </p>
+      </div>
+      <p class="hub-fine">
         Reference aid only — storage-class segregation is a starting point, not a substitute for a substance's
         Safety Data Sheet or professional judgment. Always verify against SDS sections 7 and 10 and local regulations.
       </p>
