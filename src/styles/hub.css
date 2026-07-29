@@ -865,3 +865,362 @@
   line-height: 1.65;
   color: var(--ink-3);
 }
+
+/* ── Storage tool widget (session 15) ───────────────────────────────────────
+   The interactive island on /tools/chemical-storage-compatibility/ now speaks
+   the same vocabulary as the storage hub and its 13 category pages: white cards
+   on a light frame, colour carried by filled badges, mono eyebrows instead of
+   emoji headings, and the SAME .hub-deck / .hub-pairs components for the
+   verdicts — so the tool and the pages can never drift apart visually.
+   Verdict semantics (rose / amber / teal) are unchanged. */
+
+.tool-grid { display: grid; grid-template-columns: 1fr; gap: 24px; align-items: start; }
+@media (min-width: 1024px) { .tool-grid { grid-template-columns: 344px minmax(0, 1fr); } }
+
+.tool-panel {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 20px;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(15, 23, 41, .08);
+}
+.tool-panel + .tool-panel { margin-top: 16px; }
+@media (min-width: 1024px) { .tool-side { position: sticky; top: 20px; } }
+
+.tool-label {
+  margin: 0 0 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Hazard filter — square badges (round pills were the v1 signature) */
+.tool-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tool-chip {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 6px 9px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: all 200ms ease-out;
+}
+.tool-chip:hover { border-color: var(--teal-200); background: var(--teal-50); color: var(--teal-700); }
+.tool-chip.on { background: var(--teal-600); border-color: var(--teal-600); color: #ffffff; }
+
+.tool-search {
+  width: 100%;
+  margin-top: 16px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 11px 14px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+.tool-search::placeholder { color: #94a3b8; }
+.tool-search:focus { border-color: var(--teal-500); box-shadow: 0 0 0 3px rgba(20, 184, 166, .18); }
+
+.tool-count {
+  margin: 10px 0 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Substance list — bleeds to the panel edge, selected row marked by a teal rail */
+.tool-list {
+  margin: 10px -20px -20px;
+  padding: 0;
+  list-style: none;
+  max-height: 392px;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+}
+.tool-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid #f1f5f9;
+  border-left: 3px solid transparent;
+  background: none;
+  padding: 10px 17px;
+  cursor: pointer;
+  transition: all 200ms ease-out;
+}
+.tool-row:hover { background: var(--teal-50); border-left-color: var(--teal-200); }
+.tool-row.on { background: var(--teal-50); border-left-color: var(--teal-500); }
+.tool-row .n {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.tool-row.on .n { color: var(--teal-700); }
+.tool-row .m { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+.tool-empty { padding: 26px 16px; text-align: center; font-size: 13.5px; color: var(--ink-3); }
+
+/* ADR form picker (substances that ship in several forms) */
+.tool-form {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 9px 12px;
+  cursor: pointer;
+  transition: all 200ms ease-out;
+}
+.tool-form + .tool-form { margin-top: 6px; }
+.tool-form:hover { border-color: var(--teal-200); background: var(--teal-50); }
+.tool-form .u { font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--ink); }
+.tool-form .d { display: block; margin-top: 2px; font-size: 11.5px; line-height: 1.35; color: var(--ink-3); }
+.tool-form.on { background: var(--teal-600); border-color: var(--teal-600); }
+.tool-form.on .u { color: #ffffff; }
+.tool-form.on .d { color: #ccfbf1; }
+
+/* Verdict column — scroll target when a substance is picked from a class
+   preview or from the sticky list while the reader is scrolled down. The offset
+   clears the site's fixed header so the substance name is never under it. */
+.tool-verdict { scroll-margin-top: 96px; }
+
+/* Verdict header */
+.tool-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.tool-head h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(26px, 3vw, 34px);
+  font-weight: 700;
+  letter-spacing: -.03em;
+  line-height: 1.08;
+  color: var(--ink);
+}
+/* Long display names (Annex VI UVCB strings) step down instead of dominating */
+.tool-head h2.long { font-size: clamp(19px, 1.9vw, 23px); line-height: 1.25; letter-spacing: -.02em; }
+.tool-head .cas { font-family: var(--font-mono); font-size: 13px; color: var(--ink-3); }
+.tool-badges { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
+.tool-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  padding: 5px 9px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: #f1f5f9;
+  color: var(--ink-2);
+}
+/* Storage class — filled with its hazard-family colour (the same 5 families
+   that group the 13 classes on the hub). Colour comes from familyBadgeForCode
+   via an inline style, so adding a family is one line in storageClasses.ts. */
+.tool-badge.cls { color: #ffffff; transition: filter 200ms ease; }
+.tool-badge.cls:hover { filter: brightness(.92); }
+/* CAMEO special-hazard flag — the amber "warning" step of the ladder */
+.tool-badge.flag { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+
+.tool-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  border-radius: 10px;
+  background: var(--teal-600);
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgba(13, 148, 136, .26);
+  transition: background 200ms ease, transform 200ms ease;
+}
+.tool-cta:hover { background: var(--teal-700); transform: translateY(-2px); }
+
+/* Section frame inside the island (mono eyebrow, no emoji headings) */
+.tool-sec { margin-top: 32px; }
+.tool-eyebrow {
+  margin: 0 0 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--teal-600);
+}
+.tool-h3 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--ink);
+}
+.tool-sub { margin: 8px 0 0; max-width: 640px; font-size: 14px; line-height: 1.6; color: var(--ink-2); }
+
+/* Verdict deck — the .hub-deck component, tighter columns inside the island.
+   Rows are <button> here (they open an inline preview) rather than the <a> the
+   pages use, so the button chrome has to be reset back to .hub-pair's look. */
+.tool-deck { margin-top: 18px; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); gap: 16px; }
+.tool-deck .hub-deck-card { padding: 20px; }
+.tool-deck .hub-deck-stat .num { font-size: 30px; }
+button.hub-pair {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid #f1f5f9;
+  background: none;
+  cursor: pointer;
+}
+button.hub-pair:last-child { border-bottom: 0; }
+.hub-pair.is-open { background: var(--c-soft); }
+
+/* Note callouts (no-class / corrosive / CAMEO-unknown) */
+.tool-note {
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--n-acc, var(--line-2));
+  border-radius: 10px;
+  background: var(--n-bg, #f8fafc);
+  padding: 13px 16px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--n-ink, var(--ink-2));
+}
+.tool-note.warn { --n-acc: #f59e0b; --n-bg: #fffbeb; --n-ink: #92400e; }
+.tool-note.stop { --n-acc: #e11d48; --n-bg: #fff1f2; --n-ink: #9f1239; }
+.tool-note a { font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+
+/* Class preview — drops open directly under the row it belongs to, inside the
+   verdict card. Rendering it below the whole deck pushed it off screen whenever
+   the "never" card was tall (Sergej's call after the s15 dev pass). */
+.tool-pop {
+  border-bottom: 1px solid #f1f5f9;
+  background: var(--c-soft);
+  padding: 12px 14px 14px;
+}
+.tool-pop .t {
+  margin: 0 0 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--c-ink);
+}
+.tool-pop ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.tool-pop li button {
+  border: 0;
+  background: none;
+  padding: 3px 0;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--teal-700);
+}
+.tool-pop li button:hover { text-decoration: underline; }
+.tool-pop li .c { margin-left: 6px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+.tool-pop .e { margin: 0; font-size: 13px; color: var(--ink-3); }
+.tool-pop .tool-preview-all { margin-top: 10px; }
+/* the row's arrow turns down while its preview is open */
+.hub-pair.is-open .v.arrow { transform: rotate(90deg); }
+.tool-preview-all {
+  display: inline-block;
+  margin-top: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--teal-700);
+}
+.tool-preview-all:hover { text-decoration: underline; }
+
+/* ADR strip — transport keeps its navy (rev5 decision) */
+.tool-adr {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  border-radius: 10px;
+  background: linear-gradient(120deg, #0f2557 0%, #14306b 100%);
+  padding: 11px 18px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  color: #ffffff;
+}
+.tool-adr .sep { color: #6b8ad6; }
+.tool-adr-name { margin: 8px 0 0; font-size: 12.5px; color: var(--ink-3); }
+
+/* Gas release — square chips, one row per reactive group */
+.tool-gas-list { margin: 16px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.tool-gas-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 11px 0; border-bottom: 1px solid #f1f5f9; }
+.tool-gas-row .w { font-size: 13.5px; color: var(--ink-2); }
+.tool-gas-row .w b { font-weight: 600; color: var(--ink); }
+.tool-gas-row .ar { color: var(--line-2); }
+.tool-gas-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.tool-gas {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: #f1f5f9;
+  color: var(--ink-2);
+}
+.tool-gas.toxic { background: #fff1f2; color: #9f1239; }
+
+/* Fine print / affiliate callout */
+.tool-fine {
+  margin-top: 26px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 14px 16px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--ink-3);
+}
+.tool-sec .tool-fine { margin-top: 18px; }
+.tool-fine b { font-weight: 600; color: var(--ink-2); }
+.tool-fine a { color: var(--teal-700); font-weight: 600; text-decoration: underline; }
+.tool-fine .disc { display: block; margin-top: 6px; font-size: 11px; color: #94a3b8; }
+.tool-fine .disc a { color: inherit; font-weight: 500; }
+
+/* Empty / loading state of the verdict column */
+.tool-blank {
+  border: 1px dashed var(--line-2);
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 64px 28px;
+  text-align: center;
+}
+.tool-blank .t { margin: 0; font-family: var(--font-heading); font-size: 19px; font-weight: 700; letter-spacing: -.02em; color: var(--ink); }
+.tool-blank .s { margin: 10px auto 0; max-width: 420px; font-size: 14px; line-height: 1.6; color: var(--ink-3); }

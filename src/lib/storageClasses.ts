@@ -84,3 +84,21 @@ export const familyStyleForCode = (code: string) => {
   const fam = byCode.get(code)?.family
   return fam ? FAMILY_STYLE[fam] : { label: '', borderL: 'border-l-gray-300', dot: 'bg-gray-300', text: 'text-gray-600', tint: 'bg-gray-50' }
 }
+
+// Filled-badge colour per hazard family (session 15). The hub paints its family
+// dots with the 400 step (#fb923c …); a FILLED badge carrying white text needs
+// the 600 step, so the ladder is repeated here one shade darker. Used by the
+// storage-class badge in the tool's verdict header.
+export const FAMILY_BADGE: Record<StorageClass['family'], string> = {
+  flammable: '#ea580c',
+  oxidizing: '#d97706',
+  corrosive: '#2563eb',
+  reactive: '#7c3aed',
+  toxic: '#e11d48',
+}
+
+/** Filled badge colour for a class code; unknown codes fall back to the tool's teal. */
+export const familyBadgeForCode = (code: string): string => {
+  const fam = byCode.get(code)?.family
+  return fam ? FAMILY_BADGE[fam] : '#0d9488'
+}

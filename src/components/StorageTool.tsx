@@ -27,10 +27,22 @@
 // callout (management intent; fp_sid=gpmgmt reused per the session-9 decision)
 // + GA affiliate_click. Hazard copy in the callout is UNCHANGED — placement,
 // not pressure (CLAUDE.md §8).
-import { useEffect, useMemo, useState } from 'react'
+// rev8 (design v2, session 15): the island now speaks the hub vocabulary —
+// square mono badges instead of pills, white .tool-panel cards, mono eyebrows
+// instead of emoji headings, and the SAME .hub-deck / .hub-pairs components the
+// hub and the 13 category pages use for the verdict cards. Verdict semantics
+// (rose / amber / teal) and every existing string are unchanged; the storage
+// class badge now carries its hazard-family colour (Sergej's call). The gas
+// list collapses to 6 rows behind a "show all" toggle — 47 rows for sulfuric
+// acid was a screen of scroll. NOTE: the "Generally compatible" card the pages
+// carry is deliberately NOT here yet — get_storage_verdict lists a substance's
+// OWN class among the "other" classes for multi-class substances (162 rows
+// affected), so a compatible card would claim e.g. a cyanide is compatible with
+// cyanides. Add it together with the RPC fix (queued).
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
-import { shortForCode, urlForCode } from '../lib/storageClasses'
+import { shortForCode, urlForCode, familyBadgeForCode } from '../lib/storageClasses'
 
 // SDS Manager affiliate — the callout already tells the reader to verify against
 // the SDS; this link serves that exact moment. GA separates placements via the
@@ -107,6 +119,32 @@ const HAZARD_CHIPS: { label: string; pic: string | null }[] = [
 // Class labels (short) + category-page URLs now come from ../lib/storageClasses
 // (shortForCode / urlForCode) — single source of truth shared with the pages.
 
+// Verdict cards — the same copy the category pages carry, so the tool and
+// /storage-compatibility/<class>/ describe a verdict in identical words.
+const DECK_NEVER = {
+  badge: 'Never store',
+  note: 'hard stop',
+  title: 'Never store with',
+  head: 'Separate cabinet, bund or room',
+  acc: '#e11d48',
+  ink: '#9f1239',
+  line: '#fecdd3',
+  soft: '#fff1f2',
+}
+const DECK_SEPARATE = {
+  badge: 'Keep separate',
+  note: 'distance control',
+  title: 'Keep separate',
+  head: 'Distance, bund or separate tray',
+  acc: '#d97706',
+  ink: '#92400e',
+  line: '#fde68a',
+  soft: '#fffbeb',
+}
+
+// How many reactivity rows are visible before the "show all" toggle.
+const GAS_PREVIEW_ROWS = 6
+
 // Inline preview of a storage class's substances (P3 pill expansion).
 interface ClassPreview {
   sc_code: string
@@ -158,6 +196,23 @@ export default function StorageTool() {
   const [activeClass, setActiveClass] = useState<string | null>(null)
   const [classCache, setClassCache] = useState<Record<string, ClassPreview>>({})
   const [classLoading, setClassLoading] = useState(false)
+
+  // rev8: the reactivity list starts collapsed (47 rows for sulfuric acid).
+  const [gasOpen, setGasOpen] = useState(false)
+
+  // rev8: picking a substance from deep inside the page (a class preview, or the
+  // sticky list while scrolled down) used to leave the reader where they were,
+  // with the new substance's name off screen. Every USER-driven selection now
+  // scrolls the verdict column back into view; a ?substance= deep link does not
+  // (setSelectedCas is called directly there, so the page loads where it should).
+  const verdictRef = useRef<HTMLDivElement | null>(null)
+  function selectSubstance(cas: string) {
+    setSelectedCas(cas)
+    if (typeof window === 'undefined') return
+    requestAnimationFrame(() => {
+      verdictRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
 
   // Load all substances once (same runtime pattern as the browse tool).
   // rev6: live /sds/ pages load first (one small query) so each row can carry
@@ -274,6 +329,7 @@ export default function StorageTool() {
     setVerdictLoading(true)
     setSelectedAdrIdx(0)
     setActiveClass(null)
+    setGasOpen(false)
     supabase
       .rpc('get_storage_verdict', { p_cas: selectedCas })
       .then(({ data, error }) => {
@@ -294,6 +350,9 @@ export default function StorageTool() {
 
   const never = verdict?.segregation.filter(s => s.status === 'prohibited') ?? []
   const separate = verdict?.segregation.filter(s => s.status === 'separate') ?? []
+  // Denominator for the verdict cards: the classes this substance actually has a
+  // verdict against, so never + separate + compatible always add up to it.
+  const otherClasses = verdict?.segregation.length ?? 0
 
   // rev6: the selected row (if the selection came from the list) and the live
   // /sds/ report slug for it. Deep links (?substance=CAS) may arrive with either
@@ -303,6 +362,7 @@ export default function StorageTool() {
     [all, selectedCas],
   )
   const selectedSlug = selectedRow?.sdsSlug ?? null
+  const displayName = selectedRow?.display_name ?? verdict?.name ?? selectedCas ?? ''
 
   // De-duplicate ADR rows: identical (un, pg, name) collapse to one; genuinely
   // different forms (e.g. by packing group or shipping-name variant) stay.
@@ -319,6 +379,13 @@ export default function StorageTool() {
   }, [verdict])
   const activeAdr = adrList[selectedAdrIdx] ?? adrList[0] ?? null
 
+  // Reactivity rows that actually carry a curated gas.
+  const gasRows = useMemo(
+    () => (verdict?.reactivity ?? []).filter(r => (r.gases?.length ?? 0) > 0),
+    [verdict],
+  )
+  const gasShown = gasOpen ? gasRows : gasRows.slice(0, GAS_PREVIEW_ROWS)
+
   // Danger signals that make an unclassified substance NOT safe to call "general
   // practice": CAMEO special-hazard flags, acutely-toxic predicted gases, or a
   // high-risk ADR transport class (1 explosive, 4.1/4.2/4.3 reactive solids,
@@ -331,6 +398,14 @@ export default function StorageTool() {
   )
   const unclassifiedButRisky = !!verdict && verdict.classes.length === 0 &&
     !verdict.is_corrosive_h314 && (hasSpecialFlags || hasToxicGas || hasDangerousAdr)
+
+  // Section numbers depend on which sections this substance actually has
+  // (same pad() pattern as the category pages).
+  let sn = 0
+  const pad = () => String(++sn).padStart(2, '0')
+  const nSeg = never.length > 0 || separate.length > 0 ? pad() : null
+  const nAdr = activeAdr ? pad() : null
+  const nGas = gasRows.length > 0 ? pad() : null
 
   // P3: open/close a class preview; fetch (and cache) 6 substances on first open.
   async function togglePreview(code: string) {
@@ -347,61 +422,125 @@ export default function StorageTool() {
     }
   }
 
+  // One verdict card — the .hub-deck component the hub and category pages use.
+  function deckCard(d: typeof DECK_NEVER, items: SegItem[]) {
+    return (
+      <div
+        className="hub-deck-card"
+        style={{ ['--c-acc' as any]: d.acc, ['--c-ink' as any]: d.ink, ['--c-line' as any]: d.line, ['--c-soft' as any]: d.soft }}
+      >
+        <div className="hub-deck-badges">
+          <span className="hub-deck-badge">{d.badge}</span>
+          <span className="hub-deck-note">{d.note}</span>
+        </div>
+        <h3>{d.title}</h3>
+        <div className="hub-deck-stat">
+          <span className="num">{items.length}</span>
+          <span className="of">of the {otherClasses} other classes</span>
+        </div>
+        <div className="hub-deck-bar">
+          <span style={{ width: `${Math.round((items.length / Math.max(otherClasses, 1)) * 100)}%` }} />
+        </div>
+        <div className="hub-pairs">
+          <div className="hub-pairs-head"><span>{d.head}</span><span>{items.length}</span></div>
+          {items.map(s => {
+            const open = activeClass === s.class
+            const preview = classCache[s.class]
+            return (
+              <Fragment key={s.class}>
+                <button
+                  type="button"
+                  onClick={() => togglePreview(s.class)}
+                  className={open ? 'hub-pair is-open' : 'hub-pair'}
+                  aria-expanded={open}
+                >
+                  <span className="a">{shortForCode(s.class)}</span>
+                  <span className="v arrow" aria-hidden="true">→</span>
+                </button>
+                {/* The class preview opens right under the row it belongs to.
+                    It used to render below the whole deck, which pushed it off
+                    screen whenever the "never" card was tall (Sergej, s15). */}
+                {open && (
+                  <div className="tool-pop">
+                    {classLoading && !preview ? (
+                      <p className="e">Loading…</p>
+                    ) : preview ? (
+                      <>
+                        <p className="t">In {shortForCode(s.class)} · {preview.total} substances</p>
+                        <ul>
+                          {preview.items.map(it => (
+                            <li key={it.cas}>
+                              <button type="button" onClick={() => selectSubstance(it.cas)}>
+                                {it.name}
+                                <span className="c">{it.cas}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                        <a href={urlForCode(s.class)} className="tool-preview-all">
+                          View all {preview.total} in {shortForCode(s.class)} →
+                        </a>
+                      </>
+                    ) : (
+                      <p className="e">No preview available.</p>
+                    )}
+                  </div>
+                )}
+              </Fragment>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-6">
+    <div className="tool-grid">
       {/* LEFT — filter + search + list (+ ADR form picker) */}
-      <aside className="lg:sticky lg:top-20 self-start space-y-4">
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Filter by hazard</p>
-          <div className="mt-2.5 flex flex-wrap gap-2">
+      <aside className="tool-side">
+        <div className="tool-panel">
+          <p className="tool-label">Filter by hazard</p>
+          <div className="tool-chips">
             {HAZARD_CHIPS.map(c => (
               <button
                 key={c.label}
                 type="button"
                 onClick={() => setChip(c.label)}
-                className={`inline-flex items-center rounded-full px-3 py-1 text-sm border transition-colors ${
-                  chip === c.label
-                    ? 'bg-teal-600 text-white border-teal-600'
-                    : 'bg-white text-gray-700 border-gray-300 hover:border-teal-500'
-                }`}
+                className={chip === c.label ? 'tool-chip on' : 'tool-chip'}
               >
                 {c.label}
               </button>
             ))}
           </div>
 
-          <div className="mt-4">
-            <label htmlFor="storage-search" className="sr-only">Search by name, CAS, or EC number</label>
-            <input
-              id="storage-search"
-              type="search"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Search name, CAS, or EC number…"
-              className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none"
-            />
-          </div>
+          <label htmlFor="storage-search" className="sr-only">Search by name, CAS, or EC number</label>
+          <input
+            id="storage-search"
+            type="search"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search name, CAS, or EC number…"
+            className="tool-search"
+          />
 
-          <p className="mt-2.5 text-xs text-gray-500">
+          <p className="tool-count">
             {loading ? 'Loading substances…' : `${filtered.length} of ${all.length} substances`}
           </p>
 
           {!loading && (
-            <ul className="mt-2 max-h-96 overflow-y-auto divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white">
+            <ul className="tool-list">
               {shown.length === 0 ? (
-                <li className="px-3 py-6 text-center text-sm text-gray-400">No substances match.</li>
+                <li className="tool-empty">No substances match.</li>
               ) : (
                 shown.map(s => (
                   <li key={s.cas_number}>
                     <button
                       type="button"
-                      onClick={() => setSelectedCas(s.cas_number)}
-                      className={`w-full text-left px-3 py-2.5 transition-colors hover:bg-gray-50 ${
-                        selectedCas === s.cas_number ? 'bg-blue-50' : ''
-                      }`}
+                      onClick={() => selectSubstance(s.cas_number)}
+                      className={selectedCas === s.cas_number ? 'tool-row on' : 'tool-row'}
                     >
-                      <span className="block text-sm font-medium text-gray-900 truncate">{s.display_name}</span>
-                      <span className="block text-xs text-gray-500">
+                      <span className="n">{s.display_name}</span>
+                      <span className="m">
                         {s.display_cas}
                         {s.ec_number ? ` · EC ${s.ec_number}` : ''}
                         {s.sdsSlug ? ' · report available' : ''}
@@ -415,109 +554,94 @@ export default function StorageTool() {
         </div>
 
         {verdict?.found && adrList.length > 1 && (
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Ships in several forms — pick one</p>
-            <div className="mt-2.5 space-y-1.5">
-              {adrList.map((a, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setSelectedAdrIdx(i)}
-                  className={`w-full text-left rounded-lg border px-3 py-2 transition-colors ${
-                    selectedAdrIdx === i
-                      ? 'bg-teal-600 text-white border-teal-600'
-                      : 'bg-white text-gray-700 border-gray-300 hover:border-teal-500'
-                  }`}
-                >
-                  <span className="block text-sm font-semibold">
-                    UN {a.un}
-                    {a.pg ? ` · PG ${a.pg}` : ''}
-                  </span>
-                  {a.name && (
-                    <span className={`block text-xs truncate ${selectedAdrIdx === i ? 'text-blue-100' : 'text-gray-500'}`}>
-                      {a.name}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
+          <div className="tool-panel">
+            <p className="tool-label">Ships in several forms — pick one</p>
+            {adrList.map((a, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setSelectedAdrIdx(i)}
+                className={selectedAdrIdx === i ? 'tool-form on' : 'tool-form'}
+              >
+                <span className="u">
+                  UN {a.un}
+                  {a.pg ? ` · PG ${a.pg}` : ''}
+                </span>
+                {a.name && <span className="d">{a.name}</span>}
+              </button>
+            ))}
           </div>
         )}
       </aside>
 
       {/* RIGHT — verdict */}
-      <div>
+      <div ref={verdictRef} className="tool-verdict">
         {!selectedCas ? (
-          <div className="rounded-xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center">
-            <p className="text-base font-medium text-gray-700">Pick a substance to see its storage verdict</p>
-            <p className="mt-2 text-sm text-gray-500 max-w-md mx-auto">
+          <div className="tool-blank">
+            <p className="t">Pick a substance to see its storage verdict</p>
+            <p className="s">
               You'll see what to never store with, what to keep separate, and its ADR transport class.
             </p>
           </div>
         ) : verdictLoading ? (
-          <div className="rounded-xl border border-gray-200 bg-white px-6 py-10">
-            <p className="text-sm text-gray-500 text-center">Loading verdict…</p>
+          <div className="tool-blank">
+            <p className="s">Loading verdict…</p>
           </div>
         ) : !verdict || !verdict.found ? (
-          <div className="rounded-xl border border-gray-200 bg-white px-6 py-8">
-            <p className="text-base font-medium text-gray-700">No storage data for this CAS</p>
-            <p className="mt-1 text-sm text-gray-500">
+          <div className="tool-blank">
+            <p className="t">No storage data for this CAS</p>
+            <p className="s">
               We don't have a record for {selectedCas}. Check the number, or search by name.
             </p>
           </div>
         ) : (
-          <div className="space-y-5">
+          <div>
             {/* header */}
-            <div>
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <h2 className="text-xl font-bold text-gray-900" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                  {selectedRow?.display_name ?? verdict.name ?? selectedCas}
-                </h2>
-                <span className="text-sm font-mono text-gray-400">{selectedRow?.display_cas ?? verdict.cas}</span>
-              </div>
-              {verdict.class_names.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {verdict.class_names.map(c => (
-                    <a
-                      key={c.code}
-                      href={urlForCode(c.code)}
-                      className="inline-flex items-center rounded-md bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-200 transition-colors"
-                    >
-                      {shortForCode(c.code)}
-                    </a>
-                  ))}
-                </div>
-              )}
-              {/* CAMEO special-hazard flags (intrinsic to the substance) */}
-              {verdict.special_flags.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {verdict.special_flags.map(f => (
-                    <span key={f} className="inline-flex items-center gap-1 rounded-md border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-800">
-                      <span aria-hidden="true">⚠</span> {flagLabel(f)}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {/* rev6: hand off to the SDS-style full report when a live page exists */}
-              {selectedSlug && (
-                <a
-                  href={`/sds/${selectedSlug}/`}
-                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
-                >
-                  Full substance report
-                  <span aria-hidden="true">→</span>
-                </a>
-              )}
+            <div className="tool-head">
+              {/* Annex VI UVCB names run to hundreds of characters — step the
+                  display size down instead of letting one fill the viewport. */}
+              <h2 className={displayName.length > 60 ? 'long' : undefined}>{displayName}</h2>
+              <span className="cas">{selectedRow?.display_cas ?? verdict.cas}</span>
             </div>
+
+            {(verdict.class_names.length > 0 || verdict.special_flags.length > 0) && (
+              <div className="tool-badges">
+                {/* storage class — filled with its hazard-family colour */}
+                {verdict.class_names.map(c => (
+                  <a
+                    key={c.code}
+                    href={urlForCode(c.code)}
+                    className="tool-badge cls"
+                    style={{ background: familyBadgeForCode(c.code) }}
+                  >
+                    {shortForCode(c.code)}
+                  </a>
+                ))}
+                {/* CAMEO special-hazard flags (intrinsic to the substance) */}
+                {verdict.special_flags.map(f => (
+                  <span key={f} className="tool-badge flag">
+                    <span aria-hidden="true">⚠</span> {flagLabel(f)}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* rev6: hand off to the SDS-style full report when a live page exists */}
+            {selectedSlug && (
+              <a href={`/sds/${selectedSlug}/`} className="tool-cta">
+                Full substance report
+                <span aria-hidden="true">→</span>
+              </a>
+            )}
 
             {/* no-class / corrosive note (context-aware) */}
             {verdict.classes.length === 0 && (
               verdict.is_corrosive_h314 ? (
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                <div className="tool-note">
                   Corrosive (GHS H314) — acid vs. base could not be determined automatically. Verify against SDS section 10 before co-storage.
                 </div>
               ) : unclassifiedButRisky ? (
-                <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                <div className="tool-note stop">
                   No storage class was derived from this substance's GHS codes, but it is not inert.
                   {hasSpecialFlags && (
                     <> CAMEO flags it as <strong>{verdict.special_flags.map(flagLabel).join(', ')}</strong>.</>
@@ -528,204 +652,118 @@ export default function StorageTool() {
                   {' '}Do not treat it as safe to co-store — verify against SDS sections 7 and 10.
                 </div>
               ) : !verdict.cameo_known ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <div className="tool-note warn">
                   No storage class was derived from its GHS codes, and this substance isn't in CAMEO's reactivity
                   database — so reactive hazards can't be ruled out automatically. Before storing, look it up in{' '}
                   <a
                     href="https://cameochemicals.noaa.gov/search/simple"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-semibold underline underline-offset-2 hover:text-amber-900"
                   >
                     CAMEO Chemicals (NOAA)
                   </a>{' '}
                   (search CAS {verdict.cas}) and verify against SDS sections 7 and 10.
                 </div>
               ) : (
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                <div className="tool-note">
                   No special storage segregation class from its GHS codes. Store per general good practice and verify against SDS section 7.
                 </div>
               )
             )}
 
-            {/* never store with */}
-            {never.length > 0 && (
-              <section>
-                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-rose-700">
-                  <span aria-hidden="true">⛔</span> Never store with
-                </h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {never.map(s => (
-                    <button
-                      key={s.class}
-                      type="button"
-                      onClick={() => togglePreview(s.class)}
-                      className={`inline-flex items-center rounded-full border px-3 py-1 text-sm transition-all hover:shadow-sm ${
-                        activeClass === s.class
-                          ? 'border-rose-400 bg-rose-100 text-rose-800 ring-2 ring-rose-200'
-                          : 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
-                      }`}
-                    >
-                      {shortForCode(s.class)}
-                    </button>
-                  ))}
+            {/* SEGREGATION — the same verdict cards the category pages carry */}
+            {nSeg && (
+              <section className="tool-sec">
+                <p className="tool-eyebrow">{nSeg} · Segregation</p>
+                {/* No substance name in this heading on purpose: display names
+                    average 72 chars here (429 rows are over 70, the longest is
+                    555) — an Annex VI UVCB string would swallow the line. */}
+                <h3 className="tool-h3">What this substance can be stored with</h3>
+                <p className="tool-sub">
+                  Class-level segregation against the {otherClasses} other storage classes. Open any class for its own
+                  guidance and substance list.
+                </p>
+
+                <div className="hub-deck tool-deck">
+                  {never.length > 0 && deckCard(DECK_NEVER, never)}
+                  {separate.length > 0 && deckCard(DECK_SEPARATE, separate)}
                 </div>
               </section>
-            )}
-
-            {/* keep separate */}
-            {separate.length > 0 && (
-              <section>
-                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-amber-700">
-                  <span aria-hidden="true">↔</span> Keep separate
-                </h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {separate.map(s => (
-                    <button
-                      key={s.class}
-                      type="button"
-                      onClick={() => togglePreview(s.class)}
-                      className={`inline-flex items-center rounded-full border px-3 py-1 text-sm transition-all hover:shadow-sm ${
-                        activeClass === s.class
-                          ? 'border-amber-400 bg-amber-100 text-amber-900 ring-2 ring-amber-200'
-                          : 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
-                      }`}
-                    >
-                      {shortForCode(s.class)}
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* P3: inline class preview (opens under the segregation pills) */}
-            {activeClass && (never.length > 0 || separate.length > 0) && (
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-gray-900">
-                    In {shortForCode(activeClass)}
-                    {classCache[activeClass] ? ` (${classCache[activeClass].total})` : ''}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setActiveClass(null)}
-                    className="text-xs text-gray-400 hover:text-gray-600"
-                    aria-label="Close preview"
-                  >
-                    ✕
-                  </button>
-                </div>
-                {classLoading && !classCache[activeClass] ? (
-                  <p className="mt-2 text-sm text-gray-500">Loading…</p>
-                ) : classCache[activeClass] ? (
-                  <>
-                    <ul className="mt-2 space-y-1">
-                      {classCache[activeClass].items.map(it => (
-                        <li key={it.cas}>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedCas(it.cas)}
-                            className="text-left text-sm text-teal-700 hover:underline"
-                          >
-                            {it.name}
-                            <span className="ml-1 font-mono text-xs text-gray-400">{it.cas}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                    <a
-                      href={urlForCode(activeClass)}
-                      className="mt-2 inline-block text-sm font-semibold text-teal-700 hover:underline"
-                    >
-                      View all {classCache[activeClass].total} in {shortForCode(activeClass)} →
-                    </a>
-                  </>
-                ) : (
-                  <p className="mt-2 text-sm text-gray-500">No preview available.</p>
-                )}
-              </div>
             )}
 
             {/* ADR */}
             {activeAdr && (
-              <section>
-                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
-                  <span aria-hidden="true">🚚</span> ADR transport
-                </h3>
-                <div className="mt-2 inline-flex flex-wrap items-center gap-2 rounded-lg bg-[#0f2557] px-4 py-2.5 text-sm text-white">
-                  <span className="font-semibold">UN {activeAdr.un}</span>
+              <section className="tool-sec">
+                <p className="tool-eyebrow">{nAdr} · Transport</p>
+                <h3 className="tool-h3">ADR transport</h3>
+                <div className="tool-adr">
+                  <span>UN {activeAdr.un}</span>
                   {activeAdr.class && (
                     <>
-                      <span className="text-blue-300">·</span>
+                      <span className="sep" aria-hidden="true">·</span>
                       <span>Class {activeAdr.class}</span>
                     </>
                   )}
                   {activeAdr.pg && (
                     <>
-                      <span className="text-blue-300">·</span>
+                      <span className="sep" aria-hidden="true">·</span>
                       <span>PG {activeAdr.pg}</span>
                     </>
                   )}
                 </div>
-                {activeAdr.name && <p className="mt-1.5 text-xs text-gray-500">{activeAdr.name}</p>}
+                {activeAdr.name && <p className="tool-adr-name">{activeAdr.name}</p>}
               </section>
             )}
 
             {/* gas release on contact — attributed to the incompatible class that triggers it (CAMEO, curated) */}
-            {(verdict.reactivity ?? []).some(r => (r.gases?.length ?? 0) > 0) && (
-              <section>
-                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
-                  <span aria-hidden="true">☁️</span> Gas release on contact
-                </h3>
-                <ul className="mt-2 flex flex-col gap-2">
-                  {verdict.reactivity
-                    .filter(r => (r.gases?.length ?? 0) > 0)
-                    .map(r => (
-                      <li key={r.reacts_with} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                        <span className="text-gray-600">With <span className="font-medium text-gray-800">{r.reacts_with}</span></span>
-                        <span aria-hidden="true" className="text-gray-400">→</span>
-                        <span className="flex flex-wrap gap-1.5">
-                          {r.gases.map(g => (
-                            <span
-                              key={g.label}
-                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm border ${
-                                g.toxic
-                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                  : 'bg-gray-100 text-gray-700 border-gray-200'
-                              }`}
-                            >
-                              {g.label}
-                            </span>
-                          ))}
-                        </span>
-                      </li>
-                    ))}
-                </ul>
-                <p className="mt-2 text-xs text-gray-400">
+            {gasRows.length > 0 && (
+              <section className="tool-sec">
+                <p className="tool-eyebrow">{nGas} · Reactivity</p>
+                <h3 className="tool-h3">Gas release on contact</h3>
+                <p className="tool-sub">
                   Each gas is shown with the class that triggers it — released only on contact, never by the substance alone. Where CAMEO lists both a specific gas (HCl) and the general form (hydrogen halide), both appear.
                 </p>
-                <p className="mt-2 text-xs leading-relaxed text-gray-400">
-                  <span className="font-medium text-gray-600">Red</span> means the gas carries an acute inhalation toxicity classification — H330, H331 or H332 — in CLP Annex VI. That is a legal classification, not our judgement: it is why hydrogen chloride and ammonia are red while hydrogen iodide is not, since Annex VI classifies the first two as acutely toxic and the third only as corrosive.{' '}
-                  <span className="font-medium text-gray-600">Grey does not mean safe.</span> Hydrogen iodide and sulphuric acid mist are corrosive, carbon dioxide and nitrogen displace oxygen in a confined space, hydrogen is flammable and oxygen intensifies any fire. A few gases have no harmonised entry at all and are marked by hand, erring towards caution.
+                <ul className="tool-gas-list">
+                  {gasShown.map(r => (
+                    <li key={r.reacts_with} className="tool-gas-row">
+                      <span className="w">With <b>{r.reacts_with}</b></span>
+                      <span className="ar" aria-hidden="true">→</span>
+                      <span className="tool-gas-chips">
+                        {r.gases.map(g => (
+                          <span key={g.label} className={g.toxic ? 'tool-gas toxic' : 'tool-gas'}>
+                            {g.label}
+                          </span>
+                        ))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {gasRows.length > GAS_PREVIEW_ROWS && (
+                  <button type="button" className="hub-toggle" onClick={() => setGasOpen(o => !o)}>
+                    {gasOpen ? 'Show fewer reactive groups' : `Show all ${gasRows.length} reactive groups →`}
+                  </button>
+                )}
+                <p className="tool-fine">
+                  <b>Red</b> means the gas carries an acute inhalation toxicity classification — H330, H331 or H332 — in CLP Annex VI. That is a legal classification, not our judgement: it is why hydrogen chloride and ammonia are red while hydrogen iodide is not, since Annex VI classifies the first two as acutely toxic and the third only as corrosive.{' '}
+                  <b>Grey does not mean safe.</b> Hydrogen iodide and sulphuric acid mist are corrosive, carbon dioxide and nitrogen displace oxygen in a confined space, hydrogen is flammable and oxygen intensifies any fire. A few gases have no harmonised entry at all and are marked by hand, erring towards caution.
                 </p>
               </section>
             )}
 
-            <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs leading-relaxed text-gray-600">
-              <span className="font-semibold text-gray-800">Reference aid only.</span> Colour and class are a triage signal, not a classification — always verify storage and gas hazards against the substance&apos;s safety data sheet (sections 7 and 10) and local regulations.{' '}
+            <p className="tool-fine">
+              <b>Reference aid only.</b> Colour and class are a triage signal, not a classification — always verify storage and gas hazards against the substance&apos;s safety data sheet (sections 7 and 10) and local regulations.{' '}
               Managing SDSs for a whole inventory?{' '}
               <a
                 href={SDS_MANAGEMENT_URL}
                 target="_blank"
                 rel="sponsored nofollow noopener"
                 onClick={() => track('affiliate_click', { partner: 'sds_manager', placement: 'storage_tool' })}
-                className="font-semibold text-teal-700 underline hover:text-teal-800"
               >
                 SDS Manager keeps them current and audit-ready&nbsp;†
               </a>
-              <span className="mt-1 block text-[11px] text-gray-500">
+              <span className="disc">
                 † SDS Manager is a partner solution; we may earn a commission.{' '}
-                <a href="/affiliate-disclosure/" className="underline">See disclosure</a>.
+                <a href="/affiliate-disclosure/">See disclosure</a>.
               </span>
             </p>
           </div>
