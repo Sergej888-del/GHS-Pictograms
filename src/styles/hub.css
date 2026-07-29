@@ -462,8 +462,10 @@
    so the hubs read as one family. Adding a hub = one line here + one class on
    the page. Use the DARK end of that hub's accent ladder (roughly the 800/900
    step), never the bright one — the corner must stay dark enough for the dots:
-     teal   → #134e4a   (matches the SDS substance pages)
-     orange → #7c2d12
+     teal   → #134e4a   (/sds/ — matches the SDS substance pages)
+     orange → #5a2616   (/tools/ — muted terracotta, NOT orange-900 #7c2d12:
+                         Sergej picked the quieter step so navy stays the host)
      sky    → #0c4a6e
      blue   → #1e3a8a                                                        */
-.hub-hero.tint-teal { --hub-tint: #134e4a; }
+.hub-hero.tint-teal   { --hub-tint: #134e4a; }
+.hub-hero.tint-orange { --hub-tint: #5a2616; }
