@@ -469,3 +469,35 @@
    #5a2616) — warm-vs-navy contrast read as too loud on a live page. Default to
    no tint unless the page already has a colour identity of its own. */
 .hub-hero.tint-teal { --hub-tint: #134e4a; }
+
+/* ── Animated dot field for ANY dark hero (session 13) ─────────────────────
+   Sergej's call: the rest of the site keeps its existing hero colours, we only
+   add the movement. Put `hero-dots` on a dark <section> — nothing else changes
+   inside it. The dots are painted by ::before, which renders BEFORE the
+   section's children, so the content stays on top with no z-index work, and the
+   class supplies the position/overflow the effect needs.
+   Colours are overridable: --dot-a (fine white grid) + --dot-b (sparse teal).
+   `.mono` drops the teal layer — use it on heroes that already carry a colour
+   of their own (compliance pillars: rose / purple / emerald gradients). */
+.hero-dots {
+  position: relative;
+  overflow: hidden;
+  --dot-a: rgba(255, 255, 255, 0.30);
+  --dot-b: rgba(94, 234, 212, 0.42);
+}
+.hero-dots::before {
+  content: '';
+  position: absolute;
+  inset: -24px;
+  pointer-events: none;
+  background-image:
+    radial-gradient(var(--dot-a) 1.4px, transparent 1.4px),
+    radial-gradient(var(--dot-b) 1.6px, transparent 1.6px);
+  background-size: 22px 22px, 66px 66px;
+  background-position: 0 0, 12px 8px;
+  animation: hubDotDrift 16s ease-in-out infinite, hubDotPulse 9s ease-in-out infinite;
+}
+.hero-dots.mono { --dot-b: transparent; }
+@media (prefers-reduced-motion: reduce) {
+  .hero-dots::before { animation: none !important; }
+}
