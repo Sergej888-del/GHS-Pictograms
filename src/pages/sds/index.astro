@@ -28,6 +28,20 @@ const searchBlob = (p: any) =>
     .join(' | ')
     .toLowerCase()
 
+// Payload for the hero autocomplete (session 16). Array-of-arrays on purpose:
+// 109 rows of repeated object keys would be dead weight in the HTML.
+//   [ slug, display_name, cas, formula, synonyms_search[] ]
+// synonyms_search carries brand and trade names that are deliberately never
+// displayed on a card — the dropdown is the one place they surface, and only
+// as "matched synonym · X" on the row they explain.
+const acData = pages.map((p: any) => [
+  p.slug,
+  p.display_name,
+  p.cas_number ?? '',
+  p.formula_display ?? '',
+  p.synonyms_search ?? [],
+])
+
 // A–Z grouping: anything not starting with a latin letter lands in "0–9".
 const groups: [string, any[]][] = (() => {
   const map = new Map<string, any[]>()
@@ -112,13 +126,22 @@ const jsonLd = {
       </div>
 
       <div class="hub-hero-search">
+        <svg class="hub-search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle>
+          <path d="m20 20-3.5-3.5"></path>
+        </svg>
         <label for="sds-search" class="sr-only">Search substances by name, CAS number, formula, or synonym</label>
         <input
           id="sds-search"
           type="search"
           placeholder="Search name, CAS, formula, or synonym…"
           autocomplete="off"
+          role="combobox"
+          aria-expanded="false"
+          aria-controls="sds-ac"
+          aria-autocomplete="list"
         />
+        <div id="sds-ac" class="hub-ac" role="listbox" aria-label="Matching substances" hidden></div>
       </div>
     </div>
   </section>
@@ -195,6 +218,9 @@ const jsonLd = {
     </div>
   </section>
 
+  <!-- Autocomplete payload. Read by the script below; never rendered. -->
+  <script id="sds-ac-data" type="application/json" is:inline set:html={JSON.stringify(acData)} />
+
   <script>
     // Client-side filter: every query token must match the card's search blob
     // (name + CAS + formula + synonyms_search, brands included search-only).
@@ -223,6 +249,129 @@ const jsonLd = {
         if (countEl) countEl.textContent = String(visible)
         if (emptyEl) emptyEl.classList.toggle('hub-hide', visible > 0)
       })
+    }
+
+    // ── Hero autocomplete (session 16) ───────────────────────────────────────
+    // The A–Z filter above still runs; it is the browse path. This is the find
+    // path: the list it filters sits a screen and a half below the fold, so
+    // typing in the hero used to look like nothing happened.
+    //
+    // Ranked, not alphabetical, and never auto-navigating: "acetone" matches
+    // three substances, and two of them (methyl ethyl ketone, methyl isobutyl
+    // ketone) match only through a search-only synonym. Jumping straight to a
+    // page would land the reader on the wrong ketone; a plain list would leave
+    // them unable to see why those two are there. So each synonym hit prints
+    // the synonym that matched.
+    type AcRow = [string, string, string, string, string[]]
+    const acEl = document.getElementById('sds-ac')
+    const acRaw = document.getElementById('sds-ac-data')
+    if (input && acEl && acRaw?.textContent) {
+      const data: AcRow[] = JSON.parse(acRaw.textContent)
+      const MAX = 8
+      const norm = (s: string) => (s || '').toLowerCase().replace(/sulph/g, 'sulf').replace(/\s+/g, ' ').trim()
+      const esc = (s: string) =>
+        String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      const rxEsc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const mark = (text: string, q: string) => {
+        const i = norm(text).indexOf(q)
+        if (i < 0) return esc(text)
+        return esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + q.length)) + '</mark>' + esc(text.slice(i + q.length))
+      }
+      const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+      // Lower score wins. Name beats identifier beats synonym; within each,
+      // a prefix beats a mid-string hit.
+      const rank = (r: AcRow, q: string): { s: number; syn?: string } | null => {
+        const name = norm(r[1])
+        if (name === q) return { s: 0 }
+        if (name.indexOf(q) === 0) return { s: 1 }
+        if (new RegExp('\\b' + rxEsc(q)).test(name)) return { s: 2 }
+        if (name.indexOf(q) > -1) return { s: 3 }
+        if (r[2] && r[2].indexOf(q) === 0) return { s: 4 }
+        if (r[3] && norm(r[3]).indexOf(q) === 0) return { s: 5 }
+        let mid: string | undefined
+        for (const raw of r[4]) {
+          const sn = norm(raw)
+          if (sn.indexOf(q) === 0) return { s: 6, syn: raw }
+          if (!mid && sn.indexOf(q) > -1) mid = raw
+        }
+        return mid ? { s: 7, syn: mid } : null
+      }
+
+      // The dropdown must be position:fixed — .hub-hero is overflow:hidden
+      // site-wide (it clips the drifting dots and the sheen), so an absolutely
+      // positioned panel would be cut off at the hero's bottom edge.
+      const place = () => {
+        const r = input.getBoundingClientRect()
+        acEl.style.left = r.left + 'px'
+        acEl.style.top = r.bottom + 8 + 'px'
+        acEl.style.width = r.width + 'px'
+        return r.bottom > 0 && r.top < window.innerHeight
+      }
+      let active = -1
+      const rows = () => Array.from(acEl.querySelectorAll<HTMLAnchorElement>('.hub-ac-row'))
+      const close = () => {
+        acEl.hidden = true
+        input.setAttribute('aria-expanded', 'false')
+        active = -1
+      }
+      const render = () => {
+        const q = norm(input.value)
+        if (q.length < 2) return close()
+        const hits: { r: AcRow; s: number; syn?: string }[] = []
+        for (const r of data) {
+          const m = rank(r, q)
+          if (m) hits.push({ r, s: m.s, syn: m.syn })
+        }
+        hits.sort((a, b) => a.s - b.s || a.r[1].localeCompare(b.r[1]))
+        if (!hits.length) {
+          acEl.innerHTML =
+            '<p class="hub-ac-none">No substance matches <b>' + esc(input.value) +
+            '</b> yet. The <a href="/tools/chemical-storage-compatibility/">storage compatibility tool</a> covers 3,600+ substances by CAS number.</p>'
+        } else {
+          let html = hits.slice(0, MAX).map((h) => {
+            const sub = h.syn
+              ? '<span class="hub-ac-sub">matched synonym · <em>' + mark(h.syn, q) + '</em></span>'
+              : h.r[3] ? '<span class="hub-ac-sub">' + esc(h.r[3]) + '</span>' : ''
+            return '<a class="hub-ac-row" role="option" href="/sds/' + h.r[0] + '/">' +
+              '<span><span class="hub-ac-name">' + mark(cap(h.r[1]), q) + ' SDS</span>' + sub + '</span>' +
+              (h.r[2] ? '<span class="hub-ac-cas">CAS ' + esc(h.r[2]) + '</span>' : '') + '</a>'
+          }).join('')
+          if (hits.length > MAX)
+            html += '<span class="hub-ac-foot">' + (hits.length - MAX) + ' more below in the A–Z list</span>'
+          acEl.innerHTML = html
+        }
+        place()
+        acEl.hidden = false
+        input.setAttribute('aria-expanded', 'true')
+        active = -1
+      }
+      const move = (d: number) => {
+        const rs = rows()
+        if (!rs.length) return
+        active = (active + d + rs.length) % rs.length
+        rs.forEach((r, i) => r.classList.toggle('is-active', i === active))
+        rs[active].scrollIntoView({ block: 'nearest' })
+      }
+      input.addEventListener('input', render)
+      input.addEventListener('focus', () => { if (input.value) render() })
+      input.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); move(1) }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1) }
+        else if (e.key === 'Escape') close()
+        else if (e.key === 'Enter') {
+          const rs = rows()
+          if (!rs.length) return
+          e.preventDefault()
+          rs[active < 0 ? 0 : active].click()
+        }
+      })
+      document.addEventListener('click', (e) => {
+        const t = e.target as HTMLElement
+        if (!t.closest('.hub-hero-search')) close()
+      })
+      window.addEventListener('resize', () => { if (!acEl.hidden) place() })
+      window.addEventListener('scroll', () => { if (!acEl.hidden && !place()) close() }, { passive: true })
     }
   </script>
 
