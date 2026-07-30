@@ -282,7 +282,7 @@ export default function AteMixtureCalculator() {
     } else setPictograms([])
 
     if (roll.hCodes.length) {
-      const { data } = await supabase.from('h_statements').select('code, text_en').in('code', roll.hCodes)
+      const { data } = await supabase.from('h_statements').select('code, text_en:text_plain').in('code', roll.hCodes)
       setHStatements(((data ?? []) as HRow[]).sort((a, b) => a.code.localeCompare(b.code)))
     } else setHStatements([])
   }

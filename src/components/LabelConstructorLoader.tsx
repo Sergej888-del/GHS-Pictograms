@@ -87,7 +87,7 @@ export default function LabelConstructorLoader() {
           ? supabase.from('pictograms_signals').select('code, name_en, svg_content').in('code', picCodes)
           : Promise.resolve({ data: [] as Pictogram[] | null }),
         hCodes.length > 0
-          ? supabase.from('h_statements').select('code, text_en').in('code', hCodes)
+          ? supabase.from('h_statements').select('code, text_en:text_plain').in('code', hCodes)
           : Promise.resolve({ data: [] as HStatement[] | null }),
         pCodes.length > 0
           // text_plain — читаемая версия; text_en содержит плейсхолдеры регламента

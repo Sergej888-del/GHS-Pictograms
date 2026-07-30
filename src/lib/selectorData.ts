@@ -52,7 +52,7 @@ export async function loadSelectorData(): Promise<LoadedData> {
   // H-statement text is display-only — never let it break the tool.
   const hText: Record<string, string> = {};
   try {
-    const { data } = await supabase.from('h_statements').select('code, text_en');
+    const { data } = await supabase.from('h_statements').select('code, text_en:text_plain');
     for (const row of (data ?? []) as { code: string; text_en: string | null }[]) {
       if (row.text_en) hText[row.code] = row.text_en;
     }

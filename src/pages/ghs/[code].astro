@@ -171,7 +171,7 @@ const substances = substancesRaw ?? []
 // Загружаем H-statements для этой пиктограммы
 const { data: hStatementsData } = await supabase
   .from('h_statements')
-  .select('code, text_en')
+  .select('code, text_en:text_plain')
   .in('code', meta.hCodes)
 
 const hStatements = (hStatementsData ?? []).sort((a, b) => a.code.localeCompare(b.code))
