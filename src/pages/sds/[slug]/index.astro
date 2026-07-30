@@ -36,6 +36,7 @@ import SdsManagerCard from '../../../components/SdsManagerCard.astro'
 import SharePage from '../../../components/SharePage.astro'
 import { shortForCode, urlForCode } from '../../../lib/storageClasses'
 import { supabase } from '../../../lib/supabase'
+import { hHref } from '../../../lib/hStatementSlug'
 
 const SITE = 'https://ghspictograms.com'
 const TOOL = '/tools/chemical-storage-compatibility/'
@@ -758,7 +759,11 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
               <div class="flex flex-col gap-2">
                 {hRows.map((h: any) => (
                   <div class="flex items-baseline gap-3.5 rounded-[10px] border border-rose-200 bg-rose-50 px-3.5 py-3">
-                    <span class="min-w-[52px] shrink-0 text-sm font-bold text-rose-800" style={mono}>{h.code}</span>
+                    <a
+                      href={hHref(h.code)}
+                      class="min-w-[52px] shrink-0 text-sm font-bold text-rose-800 underline decoration-rose-300 underline-offset-2 hover:text-rose-900"
+                      style={mono}
+                    >{h.code}</a>
                     <span class="flex-1">
                       <span class="block text-[14.5px] text-slate-800">{h.text_en}</span>
                       {CLP_CLASS[h.code] && (
@@ -769,7 +774,11 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
                 ))}
                 {euhRows.map((h: any) => (
                   <div class="flex items-baseline gap-3.5 rounded-[10px] border border-amber-200 bg-amber-50 px-3.5 py-3">
-                    <span class="min-w-[52px] shrink-0 text-sm font-bold text-amber-800" style={mono}>{h.code}</span>
+                    <a
+                      href={hHref(h.code)}
+                      class="min-w-[52px] shrink-0 text-sm font-bold text-amber-800 underline decoration-amber-300 underline-offset-2 hover:text-amber-900"
+                      style={mono}
+                    >{h.code}</a>
                     <span class="flex-1">
                       <span class="block text-[14.5px] text-slate-800">{h.text_en}</span>
                       <span class="mt-0.5 block text-xs text-gray-500">EU supplementary hazard statement (CLP Annex VI)</span>

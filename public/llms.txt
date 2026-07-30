@@ -24,6 +24,11 @@
 - [REACH](https://ghspictograms.com/compliance/reach/): EU Regulation EC 1907/2006 on registration, evaluation and authorisation of chemicals
 - [SVHC](https://ghspictograms.com/compliance/svhc/): Substances of Very High Concern, the SCIP database and candidate-list obligations
 
+## Reference tables
+
+- [Hazard statements (H-codes)](https://ghspictograms.com/h-statements/): All 108 H and EUH codes with the verbatim CLP Annex III wording, the nine-edition UN GHS revision history of each code, status under EU CLP / OSHA HazCom / UN GHS Rev.11, the 12 official combined statements, and every harmonised Annex VI substance that carries each code
+- [Precautionary statements (P-codes)](https://ghspictograms.com/p-statements/): All 117 P-codes with the verbatim CLP Annex IV wording, the 27 official combined statements, jurisdiction status, and the harmonised substances that carry each code
+
 ## GHS Pictograms Reference
 
 - [GHS01 Explosive](https://ghspictograms.com/ghs/ghs01/)
