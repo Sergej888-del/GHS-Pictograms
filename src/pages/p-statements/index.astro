@@ -1,0 +1,717 @@
+---
+// Хаб precautionary statements — /p-statements/
+// Session 19: перенос с ghssymbols + апгрейд. Три вещи, которых не было:
+//   1) text_en хранит ДОСЛОВНУЮ формулировку CLP с плейсхолдерами, text_plain — читаемую;
+//   2) все 27 комбинированных кодов CLP Annex IV, Part 2, с кликабельными компонентами;
+//   3) переключатель юрисдикций: один код имеет разный статус в CLP, OSHA HazCom,
+//      HazCom 2012 (GHS Rev.3) и UN GHS Rev.11.
+// ⚠ Весь список из 117 кодов рендерится в HTML на сборке. Фильтры и переключатель
+// только прячут строки и переписывают бейджи — список, отрисованный JS-ом, для
+// краулера не существует.
+import Layout from '../../layouts/Layout.astro'
+import { supabase } from '../../lib/supabase'
+import { truncateMetaDescription } from '../../lib/metaDescription'
+import { splitClpNotation, hasClpNotation } from '../../lib/clpNotation'
+
+const SITE = 'https://ghspictograms.com'
+
+type PCode = {
+  code: string
+  category: string
+  text_en: string
+  text_plain: string | null
+  status: string
+  replaced_by: string | null
+  placeholder_hint: string | null
+}
+type Juris = {
+  id: string
+  label: string
+  sublabel: string
+  basis: string
+  source_url: string | null
+  note: string | null
+  sort_order: number
+}
+type Combo = {
+  code: string
+  components: string[]
+  category: string
+  text_en: string
+  text_plain: string | null
+  sort_order: number
+}
+
+const [codesRes, jurisRes, linkRes, comboRes, countsRes] = await Promise.all([
+  supabase
+    .from('p_statements')
+    .select('code, category, text_en, text_plain, status, replaced_by, placeholder_hint')
+    .order('code'),
+  supabase
+    .from('statement_jurisdictions')
+    .select('id, label, sublabel, basis, source_url, note, sort_order')
+    .order('sort_order'),
+  supabase.from('p_statement_jurisdiction').select('code, jurisdiction, status'),
+  supabase
+    .from('p_statement_combinations')
+    .select('code, components, category, text_en, text_plain, sort_order')
+    .order('sort_order'),
+  supabase.rpc('get_statement_counts'),
+])
+
+const codes = (codesRes.data ?? []) as PCode[]
+const juris = (jurisRes.data ?? []) as Juris[]
+const combos = (comboRes.data ?? []) as Combo[]
+
+const counts = new Map<string, number>()
+for (const row of (countsRes.data ?? []) as { code: string; kind: string; substances: number }[]) {
+  if (row.kind === 'P') counts.set(row.code, row.substances)
+}
+
+// Статус кода в каждой юрисдикции, схлопнутый в строку из одной буквы на слой:
+// 'c' current · 'w' withdrawn · 'a' absent. Порядок символов = порядок juris.
+const jurisIndex = new Map(juris.map((j, i) => [j.id, i]))
+const stMap = new Map<string, string[]>()
+for (const c of codes) stMap.set(c.code, new Array(juris.length).fill('a'))
+for (const row of (linkRes.data ?? []) as { code: string; jurisdiction: string; status: string }[]) {
+  const slot = stMap.get(row.code)
+  const i = jurisIndex.get(row.jurisdiction)
+  if (slot && i !== undefined) slot[i] = row.status.charAt(0)
+}
+const stOf = (code: string) => (stMap.get(code) ?? []).join('')
+
+const plainOf = (c: PCode) => c.text_plain || c.text_en
+const numOf = (c: PCode) => counts.get(c.code) ?? 0
+
+const CAT_META: { id: string; label: string; blurb: string }[] = [
+  {
+    id: 'general',
+    label: 'General',
+    blurb:
+      'Statements that belong on almost every consumer-facing label: keep it away from children, keep the label with the product.',
+  },
+  {
+    id: 'prevention',
+    label: 'Prevention',
+    blurb:
+      'What to do so the harm never happens — engineering controls, protective equipment, handling and hygiene rules.',
+  },
+  {
+    id: 'response',
+    label: 'Response',
+    blurb:
+      'What to do once something has gone wrong: first aid by exposure route, firefighting, spill control. The largest group by far.',
+  },
+  {
+    id: 'storage',
+    label: 'Storage',
+    blurb: 'Conditions the container must be kept in — ventilation, temperature, light, segregation.',
+  },
+  {
+    id: 'disposal',
+    label: 'Disposal',
+    blurb: 'What happens to the leftover product and to the empty container.',
+  },
+]
+
+const sections = CAT_META.map((meta) => {
+  const rows = codes.filter((c) => c.category === meta.id)
+  const used = rows.filter((c) => numOf(c) > 0).length
+  const range = rows.length ? `${rows[0].code}–${rows[rows.length - 1].code}` : ''
+  return { ...meta, rows, used, range }
+}).filter((s) => s.rows.length > 0)
+
+const TOTAL = codes.length
+const USED = codes.filter((c) => numOf(c) > 0).length
+const LINKS = codes.reduce((sum, c) => sum + numOf(c), 0)
+const FIRST = codes.length ? codes[0].code : 'P101'
+const LAST = codes.length ? codes[codes.length - 1].code : 'P503'
+
+// Payload переключателя: строка на код + подписи юрисдикций. Массив массивов —
+// 117 записей с повторяющимися ключами объекта были бы мёртвым весом в HTML.
+const switchData = {
+  rows: codes.map((c) => [c.code, plainOf(c), numOf(c), stOf(c.code), c.replaced_by ?? '']),
+  juris: juris.map((j) => [j.id, j.label, j.sublabel]),
+}
+
+const FAQ: [string, string][] = [
+  [
+    'What is a precautionary statement?',
+    'A standardised phrase that tells you how to handle a chemical safely, what to do if something goes wrong, how to store it and how to dispose of it. Each one has a code — P280, P501 — so the same instruction reads identically in every language and on every label.',
+  ],
+  [
+    'What do P100, P200, P300, P400 and P500 mean?',
+    'The first digit is the type of advice: 1 general, 2 prevention, 3 response, 4 storage, 5 disposal. So P280 is a prevention statement and P501 is a disposal statement.',
+  ],
+  [
+    'Why does a label say P305+P351+P338 when this list has them separately?',
+    'Because the regulation defines combined statements as well: printing three linked instructions as one block reads better on a small label. The combined code is not a new instruction — it is exactly its components, in order. All 27 official combinations are listed below.',
+  ],
+  [
+    'What is the difference between hazard statements and precautionary statements?',
+    'A hazard statement (H-code) describes what the chemical does to you — “causes serious eye damage”. A precautionary statement (P-code) tells you what to do about it — “wear eye protection”. They always appear together on a label.',
+  ],
+  [
+    'Why is a code current in one jurisdiction and withdrawn in another?',
+    'GHS is a United Nations model text, revised every two years, and each country adopts a revision on its own timetable. EU CLP, OSHA HazCom and the latest UN GHS are at different points, so the same code can be legally current in one system and deleted in another. Use the jurisdiction switch above the list.',
+  ],
+  [
+    'Why does the number of substances differ so much between codes?',
+    'The counts come from the harmonised classifications in CLP Annex VI, which cover 4,178 substances. P280 appears on 3,171 of them; a code such as P407 appears on none, because no harmonised entry calls for it. A count of zero does not mean the code is unused in industry — only that no harmonised EU entry carries it.',
+  ],
+]
+
+const title = `GHS Precautionary Statements (P-Statements): Full List ${FIRST}–${LAST}`
+const description = truncateMetaDescription(
+  `Complete list of GHS and CLP precautionary statements: all ${TOTAL} P-codes with the verbatim regulation wording, all ${combos.length} combined codes, and their status under EU CLP, OSHA HazCom and UN GHS.`
+)
+const canonical = `${SITE}/p-statements/`
+
+const itemListJson = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  name: 'GHS precautionary statements (P-statements)',
+  numberOfItems: codes.length,
+  itemListElement: codes.map((c, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    name: c.code,
+    description: plainOf(c),
+    url: `${SITE}/p-statements/${c.code}/`,
+  })),
+})
+
+const faqJson = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: FAQ.map(([q, a]) => ({
+    '@type': 'Question',
+    name: q,
+    acceptedAnswer: { '@type': 'Answer', text: a },
+  })),
+})
+
+const CARDS = [
+  {
+    tag: 'Verbatim',
+    name: 'The regulation wording, not a paraphrase',
+    acc: '#1d4ed8',
+    line: '#bfdbfe',
+    soft: '#eff6ff',
+    ink: '#1d4ed8',
+    desc: 'CLP writes P264 as “Wash … thoroughly after handling” — the blank is for the supplier to fill in. Most reference sites quietly complete it and present the result as the official text. We show both: the readable form on top, the verbatim regulation line underneath.',
+  },
+  {
+    tag: 'Combined',
+    name: `All ${combos.length} combined codes, decomposed`,
+    acc: '#0d9488',
+    line: '#99f6e4',
+    soft: '#f0fdfa',
+    ink: '#0f766e',
+    desc: 'A label says P305+P351+P338; Annex VI lists the three parts separately. Both views are here, and every component links to its own page — so you can go either direction.',
+  },
+  {
+    tag: 'Jurisdictions',
+    name: `The same code, ${juris.length} legal systems`,
+    acc: '#0ea5e9',
+    line: '#bae6fd',
+    soft: '#f0f9ff',
+    ink: '#0284c7',
+    desc: 'P313 is current under EU CLP and deleted under UN GHS Rev.11. P281 is gone from CLP but is a normal GHS Rev.3 code, and Rev.3 is what most safety data sheets in circulation were written to. Switch the jurisdiction and every status moves with it — no code here is dead everywhere.',
+  },
+]
+---
+
+<Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
+  <script type="application/ld+json" slot="head" set:html={itemListJson} />
+  <script type="application/ld+json" slot="head" set:html={faqJson} />
+
+  <!-- Hero: без тинта — новым хабам цвет не подбираем (решение Сергея, session 15) -->
+  <section class="hub-hero">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+
+    <div class="hub-wrap hub-hero-inner">
+      <p class="hub-hero-eyebrow">Reference · Precautionary statements</p>
+      <h1>GHS precautionary statements</h1>
+      <p class="hub-hero-sub">
+        Every P-code in one place, with the wording taken verbatim from the regulation rather than
+        paraphrased — and a switch that shows whether a code is still current under EU CLP, OSHA
+        HazCom or the latest UN GHS.
+      </p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">{TOTAL} codes · {juris.length} jurisdictions</span>
+        <span class="hub-hero-chip">{combos.length} combined codes</span>
+        <span class="hub-hero-chip">{LINKS.toLocaleString('en-US')} substance links</span>
+      </div>
+
+      <div class="hub-hero-search">
+        <svg class="hub-search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle>
+          <path d="m20 20-3.5-3.5"></path>
+        </svg>
+        <label for="p-search" class="sr-only">Search precautionary statements by code or wording</label>
+        <input
+          id="p-search"
+          type="search"
+          placeholder="Search a code or its wording — P280, gloves, poison centre…"
+          autocomplete="off"
+          role="combobox"
+          aria-expanded="false"
+          aria-controls="p-ac"
+          aria-autocomplete="list"
+        />
+        <div id="p-ac" class="hub-ac" role="listbox" aria-label="Matching codes" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">01 · How to read this list</p>
+      <h2 class="hub-h2">Three things a plain code list will not tell you</h2>
+      <div class="hub-cards">
+        {CARDS.map((s) => (
+          <div class="hub-card static" style={`--acc:${s.acc};--acc-line:${s.line};--acc-soft:${s.soft};--acc-ink:${s.ink}`}>
+            <p class="tag">{s.tag}</p>
+            <h3>{s.name}</h3>
+            <p class="copy">{s.desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-b">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">02 · The list</p>
+      <h2 class="hub-h2">All {TOTAL} precautionary statements</h2>
+      <p class="hub-sub">
+        Grouped the way the regulation groups them. Substance counts always come from CLP Annex VI —
+        {' '}{USED} of the {TOTAL} codes are carried by at least one harmonised entry, the rest are
+        defined but unused and shown greyed out. Switching jurisdiction changes the legal status of
+        each code, not the counts.
+      </p>
+
+      <div class="hub-panel">
+        <div class="hub-panel-row">
+          <span class="hub-panel-label">Jurisdiction</span>
+          <div class="juris" id="juris" role="group" aria-label="Jurisdiction">
+            {juris.map((j, i) => (
+              <button type="button" data-j={j.id} aria-pressed={i === 0 ? 'true' : 'false'}>
+                {j.label}<span class="sub">{j.sublabel}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {juris.map((j, i) => (
+          <p class="juris-note" data-j={j.id} hidden={i !== 0}>
+            <b>{j.label} · {j.sublabel}.</b> {j.note}
+            {j.source_url && (
+              <> <a href={j.source_url} rel="nofollow noopener" target="_blank">Source</a>.</>
+            )}
+          </p>
+        ))}
+
+        <div class="hub-panel-row">
+          <span class="hub-panel-label">Filter</span>
+          <div class="tool-chips" id="cat-chips">
+            <button type="button" class="tool-chip on" data-cat="all">All</button>
+            {sections.map((s) => (
+              <button type="button" class="tool-chip" data-cat={s.id}>{s.label}</button>
+            ))}
+          </div>
+        </div>
+
+        <div class="hub-panel-row">
+          <label for="p-filter" class="sr-only">Filter the list by code or wording</label>
+          <input type="search" id="p-filter" class="hub-search-inline" placeholder="Filter by code or wording…" autocomplete="off" />
+          <label class="hub-check"><input type="checkbox" id="only-used" /> Only codes used in Annex VI</label>
+          <span class="hub-meta" style="margin:0"><span id="p-count">{TOTAL}</span> of {TOTAL} shown</span>
+        </div>
+
+        <p class="clp-legend">
+          <b>Reading the official wording.</b>
+          <span class="clp-blank">…</span> is a blank the supplier fills in — it is not a truncated
+          sentence.<span class="sep">·</span>
+          <span class="clp-opt">[square brackets]</span> mark a part printed only when it applies.
+          <span class="sep">·</span>
+          A slash offers a choice, as in <i>POISON CENTER/doctor</i>. Open any code for what goes in its blank.
+        </p>
+      </div>
+
+      {sections.map((s) => (
+        <section class="hub-cat" id={s.id}>
+          <div class="hub-cat-head">
+            <h3>{s.label}</h3>
+            <span class="range">{s.range} · {s.rows.length} codes · {s.used} used in Annex VI</span>
+          </div>
+          <p class="hub-cat-sub">{s.blurb}</p>
+          <div class="hub-table-wrap">
+            <table class="hub-table">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Precautionary statement</th>
+                  <th class="num">Substances</th>
+                </tr>
+              </thead>
+              <tbody>
+                {s.rows.map((c) => {
+                  const n = numOf(c)
+                  const plain = plainOf(c)
+                  const st = stOf(c.code)
+                  return (
+                    <tr
+                      class={n === 0 ? 'is-unused' : undefined}
+                      data-n={String(n)}
+                      data-cat={c.category}
+                      data-st={st}
+                      data-code={c.code}
+                      data-s={`${c.code} ${plain} ${c.text_en}`.toLowerCase()}
+                    >
+                      <td class="c-code"><a href={`/p-statements/${c.code}/`}>{c.code}</a></td>
+                      <td class="c-txt">
+                        {plain}
+                        {c.status === 'withdrawn' && <span class="st-badge withdrawn">withdrawn</span>}
+                        {c.status === 'absent' && <span class="st-badge absent">not in this system</span>}
+                        {plain !== c.text_en && (
+                          <span class="verbatim">
+                            CLP verbatim:{' '}
+                            {splitClpNotation(c.text_en).map((piece) =>
+                              piece.kind === 'blank' ? (
+                                <span class="clp-blank" title="Blank filled in by the supplier">{piece.value}</span>
+                              ) : piece.kind === 'opt' ? (
+                                <span class="clp-opt" title="Optional part">{piece.value}</span>
+                              ) : (
+                                piece.value
+                              )
+                            )}
+                          </span>
+                        )}
+                        {c.status === 'withdrawn' && (
+                          <span class="st-repl">
+                            {c.replaced_by ? (
+                              <>
+                                Not in the current CLP Annex IV. Current equivalent:{' '}
+                                {c.replaced_by.split('+').map((part, i) => (
+                                  <>
+                                    {i > 0 && '+'}
+                                    <a href={`/p-statements/${part}/`}>{part}</a>
+                                  </>
+                                ))}
+                              </>
+                            ) : (
+                              <>Not in the current CLP Annex IV; deleted without a direct replacement.</>
+                            )}
+                          </span>
+                        )}
+                        {c.status === 'absent' && (
+                          <span class="st-repl">
+                            Not part of EU CLP. Current in{' '}
+                            {juris
+                              .filter((_, i) => st.charAt(i) === 'c')
+                              .map((j) => j.label)
+                              .join(', ')}.
+                          </span>
+                        )}
+                      </td>
+                      <td class="c-n">{n > 0 ? String(n) : <span class="zero">—</span>}</td>
+                    </tr>
+                  )
+                })}
+                <tr class="hub-empty-row" hidden><td colspan="3">No code in this group matches the filter.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ))}
+    </div>
+  </section>
+
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">03 · Combined codes</p>
+      <h2 class="hub-h2">The {combos.length} official combined statements</h2>
+      <p class="hub-sub">
+        CLP Annex IV defines these as single label elements. They are not extra instructions — each
+        one is its components printed in order. Every component below links to its own page.
+      </p>
+      <div class="hub-table-wrap">
+        <table class="hub-table" id="combo-table">
+          <thead>
+            <tr><th>Code</th><th>Combined statement</th></tr>
+          </thead>
+          <tbody>
+            {combos.map((c) => {
+              const plain = c.text_plain || c.text_en
+              return (
+                <tr data-s={`${c.code} ${plain}`.toLowerCase()}>
+                  <td class="c-code">
+                    <span class="cmb">
+                      {c.components.map((part, i) => (
+                        <>
+                          {i > 0 && '+'}
+                          <a href={`/p-statements/${part}/`}>{part}</a>
+                        </>
+                      ))}
+                    </span>
+                  </td>
+                  <td class="c-txt">
+                    {plain}
+                    {plain !== c.text_en && <span class="verbatim">CLP verbatim: {c.text_en}</span>}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">04 · Questions</p>
+      <h2 class="hub-h2">Common questions</h2>
+      <div class="hub-faq">
+        {FAQ.map(([q, a]) => (
+          <div class="hub-faq-item">
+            <p class="q">{q}</p>
+            <p class="a">{a}</p>
+          </div>
+        ))}
+      </div>
+      <p class="hub-fine">
+        Counts are computed from harmonised classifications in CLP Annex VI (4,178 substances). The
+        precautionary statements on a real product also depend on the supplier's own classification
+        of the mixture — <b>always check the supplier safety data sheet</b>.
+      </p>
+    </div>
+  </section>
+
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <div class="hub-close-panel">
+        <div class="dots" aria-hidden="true"></div>
+        <h2>Looking for the hazard side?</h2>
+        <p>
+          Precautionary statements tell you what to do.
+          <a href="/h-statements/">Hazard statements (H-codes)</a> tell you why. And the
+          <a href="/tools/chemical-storage-compatibility/">storage compatibility tool</a> turns the
+          storage codes into an actual verdict for a given pair of chemicals.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <script id="p-switch-data" type="application/json" is:inline set:html={JSON.stringify(switchData)} />
+
+  <script>
+    // Фильтр списка + переключатель юрисдикций + автокомплит в hero.
+    // ⚠ Все строки уже в HTML: скрипт только прячет их и переписывает бейджи.
+    const rows = Array.from(document.querySelectorAll<HTMLTableRowElement>('.hub-cat tbody tr[data-cat]'))
+    const sections = Array.from(document.querySelectorAll<HTMLElement>('.hub-cat'))
+    const filterInput = document.getElementById('p-filter') as HTMLInputElement | null
+    const onlyUsed = document.getElementById('only-used') as HTMLInputElement | null
+    const countEl = document.getElementById('p-count')
+    const chips = Array.from(document.querySelectorAll<HTMLButtonElement>('#cat-chips .tool-chip'))
+    let cat = 'all'
+
+    const norm = (s: string) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim()
+
+    function apply() {
+      const tokens = norm(filterInput?.value ?? '').split(' ').filter(Boolean)
+      const used = !!onlyUsed?.checked
+      let visible = 0
+      rows.forEach((tr) => {
+        let ok = true
+        if (cat !== 'all' && tr.dataset.cat !== cat) ok = false
+        if (ok && used && tr.dataset.n === '0') ok = false
+        if (ok && tokens.length) {
+          const blob = tr.dataset.s ?? ''
+          ok = tokens.every((t) => blob.includes(t))
+        }
+        tr.hidden = !ok
+        if (ok) visible++
+      })
+      sections.forEach((sec) => {
+        sec.hidden = !sec.querySelector('tbody tr[data-cat]:not([hidden])')
+      })
+      if (countEl) countEl.textContent = String(visible)
+    }
+
+    filterInput?.addEventListener('input', apply)
+    onlyUsed?.addEventListener('change', apply)
+    chips.forEach((b) => {
+      b.addEventListener('click', () => {
+        chips.forEach((x) => x.classList.remove('on'))
+        b.classList.add('on')
+        cat = b.dataset.cat ?? 'all'
+        apply()
+        if (cat !== 'all') document.getElementById(cat)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    })
+
+    type SwitchRow = [string, string, number, string, string]
+    const rawEl = document.getElementById('p-switch-data')
+    const payload = rawEl?.textContent
+      ? (JSON.parse(rawEl.textContent) as { rows: SwitchRow[]; juris: [string, string, string][] })
+      : { rows: [] as SwitchRow[], juris: [] as [string, string, string][] }
+    const data = payload.rows
+    const JUR = payload.juris
+    const byCode = new Map<string, SwitchRow>(data.map((r) => [r[0], r]))
+
+    const esc = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+    // Ровно та же разметка, что рендерит сборка для колонки EU CLP.
+    function statusMarkup(code: string, idx: number): string {
+      const r = byCode.get(code)
+      if (!r) return ''
+      const st = r[3].charAt(idx)
+      if (st === 'c') return ''
+      if (st === 'w') {
+        let note: string
+        if (idx === 0 && r[4]) {
+          note =
+            'Not in the current CLP Annex IV. Current equivalent: ' +
+            r[4].split('+').map((p) => '<a href="/p-statements/' + p + '/">' + p + '</a>').join('+')
+        } else if (idx === 0) {
+          note = 'Not in the current CLP Annex IV; deleted without a direct replacement.'
+        } else {
+          note = 'Marked [Deleted] in ' + JUR[idx][1] + ' ' + JUR[idx][2] + '.'
+        }
+        return '<span class="st-badge withdrawn">withdrawn</span><span class="st-repl">' + note + '</span>'
+      }
+      const live = JUR.filter((_, i) => r[3].charAt(i) === 'c').map((j) => j[1])
+      const tail = live.length ? 'Current in ' + live.join(', ') + '.' : 'Not current in any system tracked here.'
+      return (
+        '<span class="st-badge absent">not in this system</span>' +
+        '<span class="st-repl">Not part of ' + JUR[idx][1] + '. ' + tail + '</span>'
+      )
+    }
+
+    let jIdx = 0
+    const jbox = document.getElementById('juris')
+    if (jbox) {
+      const jbtns = Array.from(jbox.querySelectorAll<HTMLButtonElement>('button'))
+      const jnotes = Array.from(document.querySelectorAll<HTMLElement>('.juris-note'))
+      jbtns.forEach((b, i) => {
+        b.addEventListener('click', () => {
+          jbtns.forEach((x) => x.setAttribute('aria-pressed', String(x === b)))
+          jIdx = i
+          const id = b.dataset.j
+          jnotes.forEach((p) => { p.hidden = p.dataset.j !== id })
+          if (id) document.body.setAttribute('data-juris', id)
+          rows.forEach((tr) => {
+            const cell = tr.querySelector('.c-txt')
+            if (!cell) return
+            cell.querySelectorAll('.st-badge, .st-repl').forEach((n) => n.remove())
+            const mk = statusMarkup(tr.dataset.code ?? '', jIdx)
+            if (mk) cell.insertAdjacentHTML('beforeend', mk)
+            tr.classList.toggle('is-foreign', (tr.dataset.st ?? '').charAt(jIdx) === 'a')
+          })
+          apply()
+        })
+      })
+    }
+
+    // ── Hero autocomplete ────────────────────────────────────────────────
+    const input = document.getElementById('p-search') as HTMLInputElement | null
+    const acEl = document.getElementById('p-ac')
+    if (input && acEl && data.length) {
+      const MAX = 8
+      let active = -1
+      const mark = (text: string, q: string) => {
+        const i = norm(text).indexOf(q)
+        if (i < 0) return esc(text)
+        return esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + q.length)) + '</mark>' + esc(text.slice(i + q.length))
+      }
+      const rank = (r: SwitchRow, q: string) => {
+        const code = norm(r[0])
+        const txt = norm(r[1])
+        if (code === q) return 0
+        if (code.indexOf(q) === 0) return 1
+        if (txt.indexOf(q) === 0) return 2
+        if (new RegExp('\\b' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(txt)) return 3
+        if (txt.indexOf(q) > -1) return 4
+        return -1
+      }
+      // ⚠ position: fixed — у .hub-hero стоит overflow: hidden (общее правило хабов),
+      // absolute-панель обрезалась бы по нижнему краю героя.
+      const place = () => {
+        const r = input.getBoundingClientRect()
+        acEl.style.left = r.left + 'px'
+        acEl.style.top = r.bottom + 8 + 'px'
+        acEl.style.width = r.width + 'px'
+        return r.bottom > 0 && r.top < window.innerHeight
+      }
+      const close = () => {
+        acEl.hidden = true
+        input.setAttribute('aria-expanded', 'false')
+        active = -1
+      }
+      const acRows = () => Array.from(acEl.querySelectorAll<HTMLAnchorElement>('.hub-ac-row'))
+      const render = () => {
+        const q = norm(input.value)
+        if (q.length < 2) return close()
+        const hits: { r: SwitchRow; s: number }[] = []
+        for (const r of data) {
+          const s = rank(r, q)
+          if (s >= 0) hits.push({ r, s })
+        }
+        hits.sort((a, b) => a.s - b.s || a.r[0].localeCompare(b.r[0]))
+        if (!hits.length) {
+          acEl.innerHTML =
+            '<p class="hub-ac-none">No precautionary statement matches <b>' + esc(input.value) +
+            '</b>. Hazard codes live on the <a href="/h-statements/">H-statements list</a>.</p>'
+        } else {
+          let html = hits.slice(0, MAX).map((h) => {
+            const sc = h.r[3].charAt(jIdx)
+            const badge =
+              sc === 'w' ? '<span class="st-badge withdrawn">withdrawn</span>'
+              : sc === 'a' ? '<span class="st-badge absent">not in this system</span>'
+              : ''
+            const n = h.r[2] ? '<span class="hub-ac-cas">' + h.r[2] + ' subst.</span>' : ''
+            return '<a class="hub-ac-row" role="option" href="/p-statements/' + h.r[0] + '/">' +
+              '<span><span class="hub-ac-name">' + mark(h.r[0], q) + badge + '</span>' +
+              '<span class="hub-ac-sub">' + mark(h.r[1], q) + '</span></span>' + n + '</a>'
+          }).join('')
+          if (hits.length > MAX) html += '<span class="hub-ac-foot">' + (hits.length - MAX) + ' more in the list below</span>'
+          acEl.innerHTML = html
+        }
+        place()
+        acEl.hidden = false
+        input.setAttribute('aria-expanded', 'true')
+        active = -1
+      }
+      const move = (d: number) => {
+        const rs = acRows()
+        if (!rs.length) return
+        active = (active + d + rs.length) % rs.length
+        rs.forEach((r, i) => r.classList.toggle('is-active', i === active))
+        rs[active].scrollIntoView({ block: 'nearest' })
+      }
+      input.addEventListener('input', render)
+      input.addEventListener('focus', () => { if (input.value) render() })
+      input.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); move(1) }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1) }
+        else if (e.key === 'Escape') close()
+        else if (e.key === 'Enter') {
+          const rs = acRows()
+          if (!rs.length) return
+          e.preventDefault()
+          rs[active < 0 ? 0 : active].click()
+        }
+      })
+      document.addEventListener('click', (e) => {
+        if (!(e.target as HTMLElement).closest('.hub-hero-search')) close()
+      })
+      window.addEventListener('resize', () => { if (!acEl.hidden) place() })
+      window.addEventListener('scroll', () => { if (!acEl.hidden && !place()) close() }, { passive: true })
+    }
+  </script>
+</Layout>

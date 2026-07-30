@@ -291,6 +291,31 @@ async function sdsSlugsWhere(pred: (r: Response | undefined) => boolean): Promis
 
 const has = (v: string | null | undefined) => typeof v === 'string' && v.trim().length > 0
 
+// ─────────────────────── P-фразы: данные из базы ───────────────────────
+
+type PStatement = { code: string; category: string; status: string }
+
+let pCache: PStatement[] | null = null
+
+/** Реестр P-кодов целиком: объединение кодов всех юрисдикций, не только CLP. */
+async function pCodes(): Promise<PStatement[]> {
+  if (pCache) return pCache
+  pCache = await selectAll<PStatement>('p_statements', 'code, category, status')
+  return pCache
+}
+
+let pCountCache: Map<string, number> | null = null
+
+/** code -> число веществ, ровно тем же вызовом, каким его берёт страница. */
+async function pCounts(): Promise<Map<string, number>> {
+  if (pCountCache) return pCountCache
+  const { data, error } = await supabase.rpc('get_statement_counts')
+  if (error) throw new Error(`get_statement_counts: ${error.message}`)
+  const rows = (data ?? []) as { code: string; kind: string; substances: number }[]
+  pCountCache = new Map(rows.filter((r) => r.kind === 'P').map((r) => [r.code, r.substances]))
+  return pCountCache
+}
+
 const CHECKS: Check[] = [
   {
     id: 'sds-pages',
@@ -545,6 +570,136 @@ const CHECKS: Check[] = [
         headline: ok ? 'ссылки совпадают с карточками во всех категориях' : 'расхождение карточек и ссылок',
         detail,
       }
+    },
+  },
+  // ─── P-фразы (session 19) ───────────────────────────────────────────────
+  {
+    id: 'p-pages',
+    group: 'P-statements',
+    title: 'Набор страниц /p-statements/ равен реестру кодов в базе',
+    run: async () => {
+      const codes = await pCodes()
+      const expected = new Set(codes.map((c) => c.code))
+      const actual = new Set(pageSlugs('p-statements'))
+      const { missing, extra } = diffSets(actual, expected)
+      const ok = missing.length === 0 && extra.length === 0
+      const detail: string[] = []
+      if (missing.length) detail.push(`нет в dist (${missing.length}): ${preview(missing)}`)
+      if (extra.length) detail.push(`лишние в dist (${extra.length}): ${preview(extra)}`)
+      if (ok) detail.push('каждому коду соответствует ровно одна страница')
+      return {
+        id: 'p-pages',
+        group: 'P-statements',
+        ok,
+        headline: `${actual.size} страниц в dist, база ожидает ${expected.size}`,
+        detail,
+      }
+    },
+  },
+  {
+    id: 'p-hub-rows',
+    group: 'P-statements',
+    title: 'Все коды присутствуют в HTML хаба на сборке, а не рисуются JS-ом',
+    run: async () => {
+      const codes = await pCodes()
+      const html = readPage('p-statements/index.html')
+      if (html === null) {
+        return { id: 'p-hub-rows', group: 'P-statements', ok: false, headline: 'нет p-statements/index.html', detail: [] }
+      }
+      const missing = codes.map((c) => c.code).filter((code) => !html.includes(`data-code="${code}"`))
+      const ok = missing.length === 0
+      return {
+        id: 'p-hub-rows',
+        group: 'P-statements',
+        ok,
+        headline: ok
+          ? `все ${codes.length} строк в разметке хаба`
+          : `в разметке хаба нет ${missing.length} из ${codes.length} кодов`,
+        detail: ok ? ['маркер: data-code="P___"'] : [preview(missing, 20)],
+      }
+    },
+  },
+  {
+    id: 'p-hub-combos',
+    group: 'P-statements',
+    title: 'Все комбинированные коды есть в HTML хаба',
+    run: async () => {
+      const combos = await selectAll<{ code: string }>('p_statement_combinations', 'code')
+      const html = readPage('p-statements/index.html')
+      if (html === null) {
+        return { id: 'p-hub-combos', group: 'P-statements', ok: false, headline: 'нет p-statements/index.html', detail: [] }
+      }
+      const missing = combos
+        .map((c) => c.code)
+        .filter((code) => !html.includes(`data-s="${code.toLowerCase()} `))
+      const ok = missing.length === 0
+      return {
+        id: 'p-hub-combos',
+        group: 'P-statements',
+        ok,
+        headline: ok ? `все ${combos.length} комбинаций на месте` : `не хватает ${missing.length} комбинаций`,
+        detail: ok ? ['маркер: data-s="p___+p___ "'] : [preview(missing, 20)],
+      }
+    },
+  },
+  {
+    id: 'p-substance-counts',
+    group: 'P-statements',
+    title: 'Число веществ на странице кода равно get_statement_counts()',
+    run: async () => {
+      const counts = await pCounts()
+      const detail: string[] = []
+      let ok = true
+      let checked = 0
+      for (const [code, n] of counts) {
+        const html = readPage(`p-statements/${code}/index.html`)
+        if (!html) continue
+        checked++
+        // ⚠ Без закрывающей кавычки: у групповых записей без CAS карточка
+        // не кликабельна и несёт class="hub-index-card no-link".
+        const cards = countOccurrences(html, 'class="hub-index-card')
+        if (cards !== n) {
+          ok = false
+          detail.push(`${code}: ${cards} карточек в dist, база ожидает ${n}`)
+        }
+      }
+      if (ok) detail.push(`сошлось на ${checked} страницах, суммарно ${[...counts.values()].reduce((a, b) => a + b, 0)} строк`)
+      return {
+        id: 'p-substance-counts',
+        group: 'P-statements',
+        ok,
+        headline: ok ? `${checked} страниц кодов согласованы с базой` : `расхождение на ${detail.length} страницах`,
+        detail: detail.slice(0, 20),
+      }
+    },
+  },
+  {
+    id: 'p-jurisdictions',
+    group: 'P-statements',
+    title: 'Переключатель юрисдикций и его payload на месте',
+    run: async () => {
+      const juris = await selectAll<{ id: string }>('statement_jurisdictions', 'id')
+      const markers = ['id="p-switch-data"', ...juris.map((j) => `data-j="${j.id}"`)]
+      return expectBehaviour('p-jurisdictions', 'P-statements', 'p-statements/index.html', markers)
+    },
+  },
+  {
+    id: 'p-withdrawn-badges',
+    group: 'P-statements',
+    title: 'Бейдж withdrawn стоит ровно на тех кодах, где база его ждёт',
+    run: async () => {
+      const rows = await selectAll<{ code: string; status: string }>(
+        'p_statement_jurisdiction',
+        'code, status',
+      )
+      const expected = new Set(rows.filter((r) => r.status === 'withdrawn').map((r) => r.code))
+      return comparePageSets(
+        'p-withdrawn-badges',
+        'P-statements',
+        'p-statements',
+        ['st-badge withdrawn'],
+        expected,
+      )
     },
   },
 ]

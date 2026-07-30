@@ -1323,3 +1323,337 @@ button.hub-pair:last-child { border-bottom: 0; }
 }
 .hub-ac-none a { color: var(--teal-700); font-weight: 600; }
 @media (max-width: 640px) { .hub-ac { max-height: 300px; } }
+
+/* ── Reference tables + jurisdiction switch (P/H statements, session 19) ─────
+   Таблица v2: тот же словарь, что у карточек хаба, но табличная сетка —
+   решение Сергея (session 19). На узком экране строка раскладывается
+   вертикально: три колонки в 360px не живут.
+   Переключатель юрисдикций: один и тот же код имеет РАЗНЫЙ статус в EU CLP,
+   OSHA HazCom и UN GHS. Данные для всех колонок в HTML на сборке —
+   переключатель только меняет класс на контейнере, ничего не догружает. */
+
+.hub-panel {
+  margin-top: 22px;
+  padding: 18px 20px 20px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(15, 23, 41, .06);
+}
+.hub-panel + .hub-panel { margin-top: 14px; }
+.hub-panel-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.hub-panel > * + .hub-panel-row { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.hub-panel-label {
+  flex: 0 0 auto;
+  min-width: 108px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Jurisdiction switch — segmented control */
+.juris {
+  display: inline-flex;
+  padding: 3px;
+  background: var(--bg-a);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  gap: 2px;
+}
+.juris button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+  transition: background 200ms ease, color 200ms ease;
+}
+.juris button:hover { color: var(--ink); }
+.juris button[aria-pressed='true'] {
+  background: #ffffff;
+  color: var(--navy);
+  box-shadow: 0 1px 3px rgba(15, 23, 41, .14);
+}
+.juris button .sub {
+  display: block;
+  margin-top: 1px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .04em;
+  color: var(--ink-3);
+}
+.juris-note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.juris-note b { color: var(--ink); font-weight: 600; }
+.juris-note a { color: var(--teal-700); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+
+/* Category chips reuse .tool-chip; this is the "used only" toggle */
+.hub-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+  user-select: none;
+}
+.hub-check input { width: 15px; height: 15px; accent-color: var(--teal-600); cursor: pointer; }
+
+.hub-search-inline {
+  flex: 1 1 240px;
+  min-width: 200px;
+  padding: 10px 14px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink);
+  background: #ffffff;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  outline: none;
+}
+.hub-search-inline::placeholder { color: #94a3b8; }
+.hub-search-inline:focus { border-color: var(--teal-500); box-shadow: 0 0 0 3px rgba(20, 184, 166, .18); }
+
+/* ── The table itself ── */
+.hub-cat { margin-top: 38px; scroll-margin-top: 84px; }
+.hub-cat-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.hub-cat-head h3 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(20px, 2.2vw, 25px);
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--ink);
+}
+.hub-cat-head .range { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink-3); }
+.hub-cat-sub { margin: 8px 0 0; max-width: 720px; font-size: 14.5px; line-height: 1.6; color: var(--ink-2); }
+
+.hub-table-wrap {
+  margin-top: 16px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(15, 23, 41, .06);
+  overflow: hidden;
+}
+.hub-table { width: 100%; border-collapse: collapse; }
+.hub-table thead th {
+  padding: 11px 16px;
+  background: var(--bg-a);
+  border-bottom: 1px solid var(--line-b);
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.hub-table thead th.num { text-align: right; }
+.hub-table td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+.hub-table tbody tr:last-child td { border-bottom: 0; }
+.hub-table tbody tr:hover { background: var(--teal-50); }
+.hub-table .c-code { width: 1%; white-space: nowrap; }
+.hub-table .c-code a {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--navy);
+  text-decoration: none;
+}
+.hub-table .c-code a:hover { color: var(--teal-700); text-decoration: underline; }
+.hub-table .c-txt { font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.hub-table .c-txt .verbatim {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+.hub-table .c-n {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.hub-table .c-n .zero { color: #cbd5e1; }
+
+/* Unused = defined in the regulation, carried by no Annex VI substance */
+.hub-table tr.is-unused .c-code a { color: #64748b; }
+.hub-table tr.is-unused .c-txt { color: var(--ink-3); }
+
+/* Status badges */
+.st-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  vertical-align: 2px;
+}
+.st-badge.withdrawn { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+.st-badge.absent    { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
+.st-badge.added     { background: #f0fdfa; color: #0f766e; border-color: #99f6e4; }
+.st-repl {
+  display: block;
+  margin-top: 5px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #92400e;
+}
+.st-repl a { color: #92400e; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+
+.hub-empty-row td {
+  padding: 26px 16px;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--ink-3);
+}
+
+@media (max-width: 720px) {
+  .hub-table thead { display: none; }
+  .hub-table, .hub-table tbody, .hub-table tr, .hub-table td { display: block; width: auto; }
+  .hub-table tr { padding: 14px 16px; border-bottom: 1px solid #f1f5f9; }
+  .hub-table tr:last-child { border-bottom: 0; }
+  .hub-table td { padding: 0; border: 0; }
+  .hub-table .c-code { margin-bottom: 4px; }
+  .hub-table .c-n { text-align: left; margin-top: 6px; }
+  .hub-table .c-n::before { content: 'substances · '; color: var(--ink-3); }
+  .hub-panel-label { min-width: 0; flex: 1 1 100%; }
+  .juris { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .juris button {
+    min-width: 0;
+    padding: 8px 6px;
+    font-size: 12px;
+    line-height: 1.25;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .juris button .sub { font-size: 9.5px; letter-spacing: 0; }
+  .hub-search-inline { flex: 1 1 100%; }
+}
+
+/* Код, которого нет в выбранной юрисдикции: остаётся в списке, но явно чужой */
+.hub-table tr.is-foreign .c-code a { color: #94a3b8; }
+.hub-table tr.is-foreign .c-txt { color: var(--ink-3); }
+
+/* Навигация по соседним кодам (страница P-кода, session 19) */
+.hub-prevnext {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+.hub-prevnext a {
+  display: block;
+  padding: 16px 18px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  text-decoration: none;
+  transition: border-color 200ms ease, transform 200ms ease, box-shadow 200ms ease;
+}
+.hub-prevnext a:hover {
+  border-color: var(--teal-200);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(15, 23, 41, .08);
+}
+.hub-prevnext a.next { text-align: right; }
+.hub-prevnext .dir {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.hub-prevnext .code {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.hub-prevnext .txt {
+  display: block;
+  margin-top: 3px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+/* ── Нотация CLP в официальных формулировках (session 19) ────────────────────
+   В тексте регламента «…» — это пропуск, который заполняет поставщик, а не
+   обрыв строки; «[ ]» — необязательная часть. Без визуальной пометки первый
+   же читатель спрашивает «а что после многоточия» (Сергей и спросил). */
+.clp-blank {
+  display: inline-block;
+  padding: 0 5px;
+  border: 1px dashed var(--teal-500);
+  border-radius: 5px;
+  background: var(--teal-50);
+  color: var(--teal-700);
+  font-family: var(--font-mono);
+  font-size: .92em;
+  line-height: 1.35;
+  vertical-align: baseline;
+}
+.clp-opt {
+  border-bottom: 1px dashed var(--line-2);
+  color: inherit;
+}
+.clp-hint {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.clp-hint b { color: var(--ink); font-weight: 600; }
+.clp-legend {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  background: var(--bg-a);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+.clp-legend b { color: var(--ink); font-weight: 600; }
+.clp-legend .sep { margin: 0 8px; color: var(--line-2); }
+
+/* Групповая запись CLP Annex VI: без CAS вести некуда, карточка не кликабельна */
+.hub-index-card.no-link {
+  cursor: default;
+  background: var(--bg-a);
+  border-style: dashed;
+}
+.hub-index-card.no-link:hover { transform: none; box-shadow: none; border-color: var(--line-2); }
+.hub-index-card.no-link .name { color: var(--ink-2); }
