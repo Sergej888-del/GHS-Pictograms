@@ -1,2 +1,29 @@
 # GHS Pictograms — redirects
 /pictograms/*  https://ghssymbols.com/hazards/:splat  301
+
+# --- H-statements: safety net for traffic arriving from ghssymbols.com ---
+# The nine CLP Annex VI suffix codes are mapped on the ghssymbols side already; these
+# rules only catch whatever slips through its wildcard and would land on a 404 here.
+# Same ordering caveat: H360FD above H360Fd.
+/h-statements/H360D /h-statements/H360D-may-damage-unborn-child/ 301
+/h-statements/H360D/ /h-statements/H360D-may-damage-unborn-child/ 301
+/h-statements/H361f /h-statements/H361f-suspected-damaging-fertility/ 301
+/h-statements/H361f/ /h-statements/H361f-suspected-damaging-fertility/ 301
+/h-statements/H361d /h-statements/H361d-suspected-damaging-unborn-child/ 301
+/h-statements/H361d/ /h-statements/H361d-suspected-damaging-unborn-child/ 301
+/h-statements/H350i /h-statements/H350i-cancer-by-inhalation/ 301
+/h-statements/H350i/ /h-statements/H350i-cancer-by-inhalation/ 301
+/h-statements/H360FD /h-statements/H360FD-fertility-and-unborn-child/ 301
+/h-statements/H360FD/ /h-statements/H360FD-fertility-and-unborn-child/ 301
+/h-statements/H360Df /h-statements/H360Df-unborn-child-and-suspected-fertility/ 301
+/h-statements/H360Df/ /h-statements/H360Df-unborn-child-and-suspected-fertility/ 301
+/h-statements/H360F /h-statements/H360F-may-damage-fertility/ 301
+/h-statements/H360F/ /h-statements/H360F-may-damage-fertility/ 301
+/h-statements/H361fd /h-statements/H361fd-suspected-fertility-and-unborn-child/ 301
+/h-statements/H361fd/ /h-statements/H361fd-suspected-fertility-and-unborn-child/ 301
+/h-statements/H360Fd /h-statements/H360Fd-fertility-and-suspected-unborn-child/ 301
+/h-statements/H360Fd/ /h-statements/H360Fd-fertility-and-suspected-unborn-child/ 301
+
+# Paginated lists from the old site collapse onto the code page.
+/h-statements/:code/page/:n /h-statements/:code/ 301
+/h-statements/:code/page/:n/ /h-statements/:code/ 301
