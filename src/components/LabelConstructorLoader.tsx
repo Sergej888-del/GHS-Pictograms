@@ -90,7 +90,9 @@ export default function LabelConstructorLoader() {
           ? supabase.from('h_statements').select('code, text_en').in('code', hCodes)
           : Promise.resolve({ data: [] as HStatement[] | null }),
         pCodes.length > 0
-          ? supabase.from('p_statements').select('code, text_en').in('code', pCodes)
+          // text_plain — читаемая версия; text_en содержит плейсхолдеры регламента
+          // («Wash … thoroughly after handling»), и на этикетке им не место.
+          ? supabase.from('p_statements').select('code, text_en:text_plain').in('code', pCodes)
           : Promise.resolve({ data: [] as PStatement[] | null }),
       ])
 

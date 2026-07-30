@@ -702,6 +702,31 @@ const CHECKS: Check[] = [
       )
     },
   },
+  {
+    id: 'p-sitemap',
+    group: 'P-statements',
+    title: 'Каждая страница P-фраз попала в sitemap.xml',
+    run: async () => {
+      // Sitemap собирается вручную из списков, и новый раздел в него легко не
+      // попасть — так и вышло с P-фразами: IndexNow отправил 162 URL вместо 280.
+      const xml = readPage('sitemap.xml')
+      if (xml === null) {
+        return { id: 'p-sitemap', group: 'P-statements', ok: false, headline: 'нет dist/sitemap.xml', detail: [] }
+      }
+      const expected = ['/p-statements/', ...pageSlugs('p-statements').map((c) => `/p-statements/${c}/`)]
+      const missing = expected.filter((u) => !xml.includes(`<loc>https://ghspictograms.com${u}</loc>`))
+      const ok = missing.length === 0
+      return {
+        id: 'p-sitemap',
+        group: 'P-statements',
+        ok,
+        headline: ok
+          ? `все ${expected.length} URL в sitemap`
+          : `в sitemap нет ${missing.length} из ${expected.length} URL`,
+        detail: ok ? ['маркер: <loc>…/p-statements/…</loc>'] : [preview(missing, 20)],
+      }
+    },
+  },
 ]
 
 // ─────────────────────────── прогон ───────────────────────────

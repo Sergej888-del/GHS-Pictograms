@@ -93,11 +93,30 @@ async function fetchSdsSitemapEntries(): Promise<
   ];
 }
 
+/** Precautionary statements: hub + every code in the registry (grows with no code change). */
+async function fetchPStatementSitemapEntries(): Promise<
+  { url: string; changefreq: string; priority: string }[]
+> {
+  const { data } = await supabase
+    .from('p_statements')
+    .select('code');
+  const codes = data ?? [];
+  return [
+    { url: '/p-statements/', changefreq: 'weekly', priority: '0.9' },
+    ...codes.map((c: { code: string }) => ({
+      url: `/p-statements/${c.code}/`,
+      changefreq: 'monthly',
+      priority: '0.7',
+    })),
+  ];
+}
+
 export const GET: APIRoute = async () => {
-  const [blogPages, compliancePages, sdsPages] = await Promise.all([
+  const [blogPages, compliancePages, sdsPages, pStatementPages] = await Promise.all([
     fetchBlogSitemapEntries(),
     fetchComplianceSitemapEntries(),
     fetchSdsSitemapEntries(),
+    fetchPStatementSitemapEntries(),
   ]);
 
   const allPages = [
@@ -106,6 +125,7 @@ export const GET: APIRoute = async () => {
     ...COMPLIANCE_PILLAR_PAGES,
     ...STORAGE_PAGES,
     ...sdsPages,
+    ...pStatementPages,
     ...compliancePages,
     ...blogPages,
   ];

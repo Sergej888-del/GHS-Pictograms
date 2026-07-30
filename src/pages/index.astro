@@ -144,6 +144,32 @@ const otherTools = [
   },
 ]
 
+// ── Reference tables (session 19). P-statements first: it is the newest and the
+// one with no equivalent anywhere — verbatim CLP wording plus jurisdiction status.
+const referenceCards = [
+  {
+    href: '/p-statements/',
+    accent: '#0d9488',
+    tag: 'Reference',
+    title: 'Precautionary statements',
+    copy: '117 P-codes with the verbatim regulation wording, all 27 combined codes, and whether each one is still current under EU CLP, OSHA HazCom or UN GHS.',
+  },
+  {
+    href: '/pictograms/',
+    accent: '#1d4ed8',
+    tag: 'Reference',
+    title: 'Substance database',
+    copy: '4,178 harmonised CLP Annex VI entries, searchable by name or CAS number, with classification and label elements.',
+  },
+  {
+    href: '/storage-compatibility/',
+    accent: '#0ea5e9',
+    tag: 'Reference',
+    title: 'Storage classes',
+    copy: '13 segregation classes and the pair-by-pair verdicts behind the compatibility matrix — never together, keep separate, or safe.',
+  },
+]
+
 // Short hazard tag per pictogram for the calculator pill strip.
 const pictoTag: Record<string, string> = {
   GHS01: 'Explosive',
@@ -1377,6 +1403,29 @@ const roles = [
           <div class="hp-sds-card"><p class="s">§ 07 · Storage verdict</p><p class="d">Computed segregation, not copied boilerplate.</p></div>
           <div class="hp-sds-card"><p class="s">§ 14 · Transport</p><p class="d">UN number, class, packing group, ADR plates.</p></div>
           <div class="hp-sds-card"><p class="s muted">§ 16 · Limits</p><p class="d">What we don't cover, and where to get it.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Reference data — added session 19 with the P-statements hub. Deliberately
+         un-numbered: the 01/02/03 eyebrows belong to Tools / SDS / Compliance,
+         and .hp-others above sets the precedent for a section without a number. -->
+    <section class="hp-others" id="reference">
+      <div class="wrap">
+        <div class="hp-others-head">
+          <h3>Reference tables — the data every calculation on this site rests on</h3>
+          <a href="/p-statements/" class="hp-link-mono">All P-codes &rarr;</a>
+        </div>
+        <div class="hp-others-grid">
+          {
+            referenceCards.map((r) => (
+              <a href={r.href} class="hp-tool-card" style={`border-top:3px solid ${r.accent}`}>
+                <p class="tag" style={`color:${r.accent}`}>{r.tag}</p>
+                <h4>{r.title}</h4>
+                <p class="copy">{r.copy}</p>
+              </a>
+            ))
+          }
         </div>
       </div>
     </section>
