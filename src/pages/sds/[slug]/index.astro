@@ -794,6 +794,16 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
                       </div>
                     ))}
                   </div>
+                  {/* Коды-заголовки (P301 «IF SWALLOWED:», P305 «IF IN EYES:» …) официально
+                      кончаются двоеточием: на этикетке они печатаются только внутри комбинаций.
+                      Без этой строки они читаются как обрубок — вопрос возник на живой странице. */}
+                  {pRows.some((p: any) => (p.text_en ?? '').trim().endsWith(':')) && (
+                    <p class="mt-2.5 text-[11.5px] leading-relaxed text-slate-500">
+                      Codes ending in a colon introduce the action that follows — on a label they are
+                      printed as combined statements, such as{' '}
+                      <a href="/p-statements/P305/" class="underline decoration-slate-300 underline-offset-2 hover:text-slate-700">P305+P351+P338</a>.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
