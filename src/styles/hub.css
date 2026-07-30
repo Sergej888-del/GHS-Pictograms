@@ -1657,3 +1657,118 @@ button.hub-pair:last-child { border-bottom: 0; }
 }
 .hub-index-card.no-link:hover { transform: none; box-shadow: none; border-color: var(--line-2); }
 .hub-index-card.no-link .name { color: var(--ink-2); }
+
+/* ── Страница H-кода: класс опасности и полоса ревизий (session 21) ──────────
+   Два блока, которых не было у P-фраз. Причина простая: у precautionary
+   statement нет ни класса опасности, ни пиктограммы, ни истории — а у hazard
+   statement есть всё три, и без них страница кода не отвечает на вопрос
+   «что мне с этим делать». */
+
+/* Класс + категория + пиктограмма + сигнальное слово (CLP Annex VI / UN GHS) */
+.hcls { display: flex; align-items: center; gap: 16px; flex: 1 1 320px; }
+.hcls img { width: 64px; height: 64px; flex: 0 0 auto; }
+.hcls-txt { min-width: 0; }
+.hcls-class {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  color: var(--ink);
+}
+.hcls-ch {
+  margin-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .04em;
+  color: var(--ink-3);
+}
+.hcls-cat { margin: 4px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--ink-2); }
+.hcls-cat b { color: var(--ink); }
+
+/* ── Полоса истории ревизий UN GHS ───────────────────────────────────────────
+   Девять изданий (Rev.3 2009 … Rev.11 2025) одной шкалой. Решение Сергея,
+   session 21: второго переключателя на странице не будет — юрисдикции прибиты
+   к ревизиям, а у 67 кодов из 86 все девять состояний совпадают дословно.
+   Ровная полоса у стабильного кода — это тоже ответ: «ничего не менялось». */
+.hrev {
+  margin-top: 14px;
+  padding: 18px 20px 20px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(15, 23, 41, .06);
+}
+.hrev-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; }
+.hrev-title { margin: 0; font-size: 14.5px; font-weight: 600; line-height: 1.5; color: var(--ink); }
+.hrev-track { position: relative; margin-top: 20px; display: grid; grid-template-columns: repeat(9, 1fr); }
+/* левый и правый отступ = половина колонки: линия начинается в центре первого узла */
+.hrev-line { position: absolute; left: 5.55%; right: 5.55%; top: 7px; height: 2px; background: var(--line-2); z-index: 0; }
+.hrev-node {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  text-align: center;
+}
+.hrev-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid var(--line-2);
+  box-shadow: 0 0 0 4px #ffffff; /* разрывает линию под узлом */
+}
+.hrev-node.is-in .hrev-dot { background: var(--teal-500); border-color: var(--teal-500); }
+.hrev-node.is-del .hrev-dot { background: #fff1f2; border-color: #e11d48; }
+.hrev-node.is-first .hrev-dot { box-shadow: 0 0 0 4px #ffffff, 0 0 0 6px var(--teal-200); }
+.hrev-node.is-gone .hrev-dot { box-shadow: 0 0 0 4px #ffffff, 0 0 0 6px #fecdd3; }
+.hrev-rev { font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; color: var(--ink-2); }
+.hrev-node.is-none .hrev-rev { color: #cbd5e1; }
+.hrev-node.is-del .hrev-rev { color: #9f1239; }
+.hrev-year { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3); }
+.hrev-node.is-none .hrev-year { color: #cbd5e1; }
+.hrev-flags { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; }
+.hrev-flag {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.hrev-flag.added { background: #f0fdfa; color: #0f766e; border-color: #99f6e4; }
+.hrev-flag.gone { background: #fff1f2; color: #9f1239; border-color: #fecdd3; }
+.hrev-flag.steady { background: var(--bg-a); color: var(--ink-3); border-color: var(--line); }
+.hrev-blurb { margin: 12px 0 0; font-size: 13.5px; line-height: 1.65; color: var(--ink-2); }
+.hrev-repl {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #9f1239;
+}
+.hrev-repl b { color: #881337; }
+.hrev-repl a { color: #9f1239; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.hrev-more { margin: 12px 0 0; font-size: 13px; line-height: 1.6; color: var(--ink-3); }
+.hrev-more a { color: var(--teal-700); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ⚠ 390px / 9 колонок = 33px на узел: «Rev.3» не влезает, год тем более.
+   Оставляем цифру ревизии, годы — только у крайних узлов. */
+@media (max-width: 640px) {
+  .hrev-track { margin-top: 18px; }
+  .hrev-rev .p { display: none; }
+  .hrev-year { display: none; }
+  .hrev-year.is-edge { display: block; font-size: 10px; }
+  .hrev-dot { width: 14px; height: 14px; }
+  .hrev-line { top: 6px; }
+}

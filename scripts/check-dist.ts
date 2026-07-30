@@ -37,6 +37,7 @@ import { resolve, join } from 'node:path'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { STORAGE_CLASSES } from '../src/lib/storageClasses'
+import { hSlug } from '../src/lib/hStatementSlug'
 
 config({ path: resolve(process.cwd(), '.env.local') })
 config()
@@ -314,6 +315,51 @@ async function pCounts(): Promise<Map<string, number>> {
   const rows = (data ?? []) as { code: string; kind: string; substances: number }[]
   pCountCache = new Map(rows.filter((r) => r.kind === 'P').map((r) => [r.code, r.substances]))
   return pCountCache
+}
+
+// ─────────────────────── H-фразы: данные из базы ───────────────────────
+
+/**
+ * ⚠ Урок session 21: у трёх таблиц H-фраз RLS был включён, а политик не было.
+ * Для anon это не ошибка, а пустая выборка — и проверка, читающая ту же таблицу
+ * тем же ключом, радостно сообщала «0 страниц в dist, база ожидает 0».
+ * Три блока страницы отсутствовали, а check:dist был зелёным.
+ * Теперь пустой ответ там, где строки обязаны быть, — это провал.
+ */
+function assertNonEmpty(id: string, table: string, rows: unknown[]): void {
+  if (rows.length === 0) {
+    throw new Error(
+      `${id}: таблица ${table} вернула НОЛЬ строк. ` +
+        'Так выглядит RLS без политики на чтение для anon — проверьте политики, ' +
+        'прежде чем считать, что данных действительно нет.',
+    )
+  }
+}
+
+type HStatement = { code: string; category: string; status: string }
+
+let hCache: HStatement[] | null = null
+
+/** Реестр H-кодов целиком: и H, и EUH, и коды, которых в EU CLP нет. */
+async function hCodes(): Promise<HStatement[]> {
+  if (hCache) return hCache
+  hCache = await selectAll<HStatement>('h_statements', 'code, category, status')
+  assertNonEmpty('h-codes', 'h_statements', hCache)
+  return hCache
+}
+
+let hCountCache: Map<string, number> | null = null
+
+/** code -> число веществ. ⚠ Счётчик отдаёт H и EUH разными видами, хаб их объединяет. */
+async function hCounts(): Promise<Map<string, number>> {
+  if (hCountCache) return hCountCache
+  const { data, error } = await supabase.rpc('get_statement_counts')
+  if (error) throw new Error(`get_statement_counts: ${error.message}`)
+  const rows = (data ?? []) as { code: string; kind: string; substances: number }[]
+  hCountCache = new Map(
+    rows.filter((r) => r.kind === 'H' || r.kind === 'EUH').map((r) => [r.code, r.substances]),
+  )
+  return hCountCache
 }
 
 const CHECKS: Check[] = [
@@ -724,6 +770,187 @@ const CHECKS: Check[] = [
           ? `все ${expected.length} URL в sitemap`
           : `в sitemap нет ${missing.length} из ${expected.length} URL`,
         detail: ok ? ['маркер: <loc>…/p-statements/…</loc>'] : [preview(missing, 20)],
+      }
+    },
+  },
+  {
+    id: 'h-pages',
+    group: 'H-statements',
+    title: 'Набор страниц /h-statements/ равен реестру кодов в базе',
+    run: async () => {
+      const codes = await hCodes()
+      // ⚠ URL девяти суффиксных кодов Annex VI — слаг, а не код: H360Fd и H360FD
+      // различаются только регистром и на NTFS пишутся в одну папку.
+      const expected = new Set(codes.map((c) => hSlug(c.code)))
+      const actual = new Set(pageSlugs('h-statements'))
+      const { missing, extra } = diffSets(actual, expected)
+      const ok = missing.length === 0 && extra.length === 0
+      const detail: string[] = []
+      if (missing.length) detail.push(`нет в dist (${missing.length}): ${preview(missing)}`)
+      if (extra.length) detail.push(`лишние в dist (${extra.length}): ${preview(extra)}`)
+      if (ok) detail.push('каждому коду соответствует ровно одна страница')
+      return {
+        id: 'h-pages',
+        group: 'H-statements',
+        ok,
+        headline: `${actual.size} страниц в dist, база ожидает ${expected.size}`,
+        detail,
+      }
+    },
+  },
+  {
+    id: 'h-hub-rows',
+    group: 'H-statements',
+    title: 'Все коды присутствуют в HTML хаба на сборке, а не рисуются JS-ом',
+    run: async () => {
+      const codes = await hCodes()
+      const html = readPage('h-statements/index.html')
+      if (html === null) {
+        return { id: 'h-hub-rows', group: 'H-statements', ok: false, headline: 'нет h-statements/index.html', detail: [] }
+      }
+      const missing = codes.map((c) => c.code).filter((code) => !html.includes(`data-code="${code}"`))
+      const ok = missing.length === 0
+      return {
+        id: 'h-hub-rows',
+        group: 'H-statements',
+        ok,
+        headline: ok
+          ? `все ${codes.length} строк в разметке хаба`
+          : `в разметке хаба нет ${missing.length} из ${codes.length} кодов`,
+        detail: ok ? ['маркер: data-code="H___"'] : [preview(missing, 20)],
+      }
+    },
+  },
+  {
+    id: 'h-hub-combos',
+    group: 'H-statements',
+    title: 'Все комбинированные коды есть в HTML хаба',
+    run: async () => {
+      const combos = await selectAll<{ code: string }>('h_statement_combinations', 'code')
+      assertNonEmpty('h-hub-combos', 'h_statement_combinations', combos)
+      const html = readPage('h-statements/index.html')
+      if (html === null) {
+        return { id: 'h-hub-combos', group: 'H-statements', ok: false, headline: 'нет h-statements/index.html', detail: [] }
+      }
+      const missing = combos
+        .map((c) => c.code)
+        .filter((code) => !html.includes(`data-s="${code.toLowerCase()} `))
+      const ok = missing.length === 0
+      return {
+        id: 'h-hub-combos',
+        group: 'H-statements',
+        ok,
+        headline: ok ? `все ${combos.length} комбинаций на месте` : `не хватает ${missing.length} комбинаций`,
+        detail: ok ? ['маркер: data-s="h___+h___ "'] : [preview(missing, 20)],
+      }
+    },
+  },
+  {
+    id: 'h-substance-counts',
+    group: 'H-statements',
+    title: 'Число веществ на странице кода равно get_statement_counts()',
+    run: async () => {
+      const counts = await hCounts()
+      const detail: string[] = []
+      let ok = true
+      let checked = 0
+      for (const [code, n] of counts) {
+        const html = readPage(`h-statements/${hSlug(code)}/index.html`)
+        if (!html) continue
+        checked++
+        // ⚠ Без закрывающей кавычки: у групповых записей без CAS карточка
+        // не кликабельна и несёт class="hub-index-card no-link".
+        const cards = countOccurrences(html, 'class="hub-index-card')
+        if (cards !== n) {
+          ok = false
+          detail.push(`${code}: ${cards} карточек в dist, база ожидает ${n}`)
+        }
+      }
+      if (ok) detail.push(`сошлось на ${checked} страницах, суммарно ${[...counts.values()].reduce((a, b) => a + b, 0)} строк`)
+      return {
+        id: 'h-substance-counts',
+        group: 'H-statements',
+        ok,
+        headline: ok ? `${checked} страниц кодов согласованы с базой` : `расхождение на ${detail.length} страницах`,
+        detail: detail.slice(0, 20),
+      }
+    },
+  },
+  {
+    id: 'h-jurisdictions',
+    group: 'H-statements',
+    title: 'Переключатель юрисдикций и его payload на месте',
+    run: async () => {
+      const juris = await selectAll<{ id: string }>('statement_jurisdictions', 'id')
+      assertNonEmpty('h-jurisdictions', 'statement_jurisdictions', juris)
+      // ⚠ Мало проверить кнопки: при RLS без политики кнопки на месте, а payload
+      // пуст. Маркер "cccc" — строка статусов хотя бы одного кода, живого везде.
+      const markers = ['id="h-switch-data"', '"cccc"', ...juris.map((j) => `data-j="${j.id}"`)]
+      return expectBehaviour('h-jurisdictions', 'H-statements', 'h-statements/index.html', markers)
+    },
+  },
+  {
+    id: 'h-withdrawn-badges',
+    group: 'H-statements',
+    title: 'Бейдж withdrawn стоит ровно на тех кодах, где база его ждёт',
+    run: async () => {
+      const rows = await selectAll<{ code: string; status: string }>(
+        'h_statement_jurisdiction',
+        'code, status',
+      )
+      assertNonEmpty('h-withdrawn-badges', 'h_statement_jurisdiction', rows)
+      const expected = new Set(
+        rows.filter((r) => r.status === 'withdrawn').map((r) => hSlug(r.code)),
+      )
+      return comparePageSets(
+        'h-withdrawn-badges',
+        'H-statements',
+        'h-statements',
+        ['st-badge withdrawn'],
+        expected,
+      )
+    },
+  },
+  {
+    id: 'h-revision-strip',
+    group: 'H-statements',
+    title: 'Полоса истории ревизий есть ровно у тех кодов, у которых есть история',
+    run: async () => {
+      // Блок новый и ни на что не влияет визуально, если исчезнет: страница
+      // останется валидной и без него. Ровно так в session 20 потерялась
+      // colon-строка на SDS — молча и мимо всех девятнадцати проверок.
+      const rows = await selectAll<{ code: string }>('h_statement_revisions', 'code')
+      assertNonEmpty('h-revision-strip', 'h_statement_revisions', rows)
+      const expected = new Set(rows.map((r) => hSlug(r.code)))
+      return comparePageSets(
+        'h-revision-strip',
+        'H-statements',
+        'h-statements',
+        ['class="hrev"'],
+        expected,
+      )
+    },
+  },
+  {
+    id: 'h-sitemap',
+    group: 'H-statements',
+    title: 'Каждая страница H-фраз попала в sitemap.xml',
+    run: async () => {
+      const xml = readPage('sitemap.xml')
+      if (xml === null) {
+        return { id: 'h-sitemap', group: 'H-statements', ok: false, headline: 'нет dist/sitemap.xml', detail: [] }
+      }
+      const expected = ['/h-statements/', ...pageSlugs('h-statements').map((c) => `/h-statements/${c}/`)]
+      const missing = expected.filter((u) => !xml.includes(`<loc>https://ghspictograms.com${u}</loc>`))
+      const ok = missing.length === 0
+      return {
+        id: 'h-sitemap',
+        group: 'H-statements',
+        ok,
+        headline: ok
+          ? `все ${expected.length} URL в sitemap`
+          : `в sitemap нет ${missing.length} из ${expected.length} URL`,
+        detail: ok ? ['маркер: <loc>…/h-statements/…</loc>'] : [preview(missing, 20)],
       }
     },
   },

@@ -1,0 +1,722 @@
+---
+// Хаб hazard statements — /h-statements/
+// Session 21: перенос с ghssymbols + апгрейд. Четыре вещи, которых там не было:
+//   1) text_en хранит ДОСЛОВНУЮ формулировку CLP с плейсхолдерами <…>, text_plain — читаемую;
+//   2) все 12 комбинированных кодов CLP Annex III с кликабельными компонентами;
+//   3) переключатель юрисдикций: один код имеет разный статус в CLP, OSHA HazCom,
+//      HazCom 2012 (GHS Rev.3) и UN GHS Rev.11;
+//   4) реестр полный — 108 кодов, включая те, которых в EU CLP нет вовсе.
+// ⚠ Весь список рендерится в HTML на сборке. Фильтры и переключатель только прячут
+// строки и переписывают бейджи — список, отрисованный JS-ом, для краулера не существует.
+import Layout from '../../layouts/Layout.astro'
+import { supabase } from '../../lib/supabase'
+import { truncateMetaDescription } from '../../lib/metaDescription'
+import { splitClpNotation } from '../../lib/clpNotation'
+import { hHref, hSlug } from '../../lib/hStatementSlug'
+
+const SITE = 'https://ghspictograms.com'
+
+type HCode = {
+  code: string
+  category: string
+  text_en: string
+  text_plain: string | null
+  status: string
+  replaced_by: string | null
+  source_ref: string | null
+  un_first_revision: number | null
+  un_deleted_revision: number | null
+}
+type Juris = {
+  id: string
+  label: string
+  sublabel: string
+  basis: string
+  source_url: string | null
+  note: string | null
+  sort_order: number
+}
+type Combo = {
+  code: string
+  components: string[]
+  text_en: string
+  text_plain: string | null
+  sort_order: number
+}
+
+const [codesRes, jurisRes, linkRes, comboRes, countsRes] = await Promise.all([
+  supabase
+    .from('h_statements')
+    .select(
+      'code, category, text_en, text_plain, status, replaced_by, source_ref, un_first_revision, un_deleted_revision'
+    )
+    .order('code'),
+  supabase
+    .from('statement_jurisdictions')
+    .select('id, label, sublabel, basis, source_url, note, sort_order')
+    .order('sort_order'),
+  supabase.from('h_statement_jurisdiction').select('code, jurisdiction, status'),
+  supabase
+    .from('h_statement_combinations')
+    .select('code, components, text_en, text_plain, sort_order')
+    .order('sort_order'),
+  supabase.rpc('get_statement_counts'),
+])
+
+const codes = (codesRes.data ?? []) as HCode[]
+const juris = (jurisRes.data ?? []) as Juris[]
+const combos = (comboRes.data ?? []) as Combo[]
+
+// ⚠ Счётчик отдаёт H и EUH разными видами — на хабе они в одном реестре.
+const counts = new Map<string, number>()
+for (const row of (countsRes.data ?? []) as { code: string; kind: string; substances: number }[]) {
+  if (row.kind === 'H' || row.kind === 'EUH') counts.set(row.code, row.substances)
+}
+
+// Статус кода в каждой юрисдикции, схлопнутый в строку из одной буквы на слой:
+// 'c' current · 'w' withdrawn · 'a' absent. Порядок символов = порядок juris.
+const jurisIndex = new Map(juris.map((j, i) => [j.id, i]))
+const stMap = new Map<string, string[]>()
+for (const c of codes) stMap.set(c.code, new Array(juris.length).fill('a'))
+for (const row of (linkRes.data ?? []) as { code: string; jurisdiction: string; status: string }[]) {
+  const slot = stMap.get(row.code)
+  const i = jurisIndex.get(row.jurisdiction)
+  if (slot && i !== undefined) slot[i] = row.status.charAt(0)
+}
+const stOf = (code: string) => (stMap.get(code) ?? []).join('')
+
+const plainOf = (c: HCode) => c.text_plain || c.text_en
+const numOf = (c: HCode) => counts.get(c.code) ?? 0
+
+const CAT_META: { id: string; label: string; blurb: string }[] = [
+  {
+    id: 'physical',
+    label: 'Physical hazards',
+    blurb:
+      'What the substance itself can do: explode, ignite, react with water, oxidise, corrode metal. Almost every code that ever moved between GHS revisions moved in this group.',
+  },
+  {
+    id: 'health',
+    label: 'Health hazards',
+    blurb:
+      'What the substance does to a person exposed to it — acute toxicity, burns and irritation, sensitisation, and the CMR block. The nine suffixed codes (H350i, H360F…) are European additions from CLP Annex VI, not UN GHS.',
+  },
+  {
+    id: 'environmental',
+    label: 'Environmental hazards',
+    blurb:
+      'Harm to the aquatic environment, short and long term, plus the ozone-layer statement that replaced EUH059 and the climate statement added by UN GHS Rev.11.',
+  },
+  {
+    id: 'eu_specific',
+    label: 'EU-specific statements (EUH)',
+    blurb:
+      'Supplementary European elements with no UN GHS equivalent. Thirteen of the thirty-one in CLP Annex III are here today; the rest arrive with a dedicated EUH section.',
+  },
+]
+
+const sections = CAT_META.map((meta) => {
+  const rows = codes.filter((c) => c.category === meta.id)
+  const used = rows.filter((c) => numOf(c) > 0).length
+  const range = rows.length ? `${rows[0].code}–${rows[rows.length - 1].code}` : ''
+  return { ...meta, rows, used, range }
+}).filter((s) => s.rows.length > 0)
+
+const TOTAL = codes.length
+const USED = codes.filter((c) => numOf(c) > 0).length
+const LINKS = codes.reduce((sum, c) => sum + numOf(c), 0)
+const MOVED = codes.filter((c) => c.un_first_revision !== null && (c.un_first_revision > 3 || c.un_deleted_revision !== null)).length
+
+// Payload переключателя: строка на код + подписи юрисдикций. Массив массивов —
+// 108 записей с повторяющимися ключами объекта были бы мёртвым весом в HTML.
+// ⚠ 6-й и 7-й элементы — слаги: у девяти суффиксных кодов слаг ≠ код, а ссылки
+// в переключателе и автокомплите строит JS. См. lib/hStatementSlug.ts.
+const switchData = {
+  rows: codes.map((c) => [
+    c.code,
+    plainOf(c),
+    numOf(c),
+    stOf(c.code),
+    c.replaced_by ?? '',
+    hSlug(c.code),
+    c.replaced_by ? hSlug(c.replaced_by) : '',
+  ]),
+  juris: juris.map((j) => [j.id, j.label, j.sublabel]),
+}
+
+const FAQ: [string, string][] = [
+  [
+    'What is a hazard statement?',
+    'A standardised phrase that describes what a chemical does — “causes serious eye damage”, “may cause cancer”. Each one has a code, H318 or H350, so the same hazard reads identically in every language and on every label. Hazard statements say what the danger is; precautionary statements (P-codes) say what to do about it.',
+  ],
+  [
+    'What do H200, H300 and H400 mean as groups?',
+    'The first digit is the kind of hazard: 2 physical, 3 health, 4 environmental. So H225 is a flammability statement, H302 an acute toxicity statement and H410 an aquatic toxicity statement. EUH codes are extra European statements with no UN equivalent.',
+  ],
+  [
+    'Why does H350 read “May cause cancer <state route of exposure…>”?',
+    'Because that is the official CLP text. The part in angle brackets is a blank the supplier fills in when — and only when — it is proven that no other route of exposure causes the hazard. Most reference sites quietly delete the blank and present the result as the regulation’s own wording. We show both.',
+  ],
+  [
+    'Why is a code current in the EU and deleted in UN GHS?',
+    'GHS is a United Nations model text revised every two years, and each jurisdiction adopts a revision on its own timetable. UN GHS Rev.9 (2021) deleted H200–H203 and H205 in favour of H209–H211; EU CLP has not followed, so those five are legally current on an EU label today. Use the jurisdiction switch above the list.',
+  ],
+  [
+    'Why does a label say H302+H312 when this list has them separately?',
+    'Because CLP Annex III also defines combined hazard statements: printing two or three linked statements as one block reads better on a small label. The combined code is not a new hazard — it is exactly its components, in order. All 12 official combinations are listed below.',
+  ],
+  [
+    'Why does the number of substances differ so much between codes?',
+    'The counts come from the harmonised classifications in CLP Annex VI, which cover 4,178 substances. H400 appears on 1,129 of them; a code such as H222 appears on none, because no harmonised entry calls for it. A count of zero does not mean the code is unused in industry — only that no harmonised EU entry carries it.',
+  ],
+]
+
+const title = `GHS Hazard Statements (H-Statements): Full List of H-Codes`
+const description = truncateMetaDescription(
+  `Complete list of GHS and CLP hazard statements: all ${TOTAL} H-codes and EUH codes with the verbatim regulation wording, all ${combos.length} combined codes, and their status under EU CLP, OSHA HazCom and UN GHS.`
+)
+const canonical = `${SITE}/h-statements/`
+
+const itemListJson = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  name: 'GHS hazard statements (H-statements)',
+  numberOfItems: codes.length,
+  itemListElement: codes.map((c, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    name: c.code,
+    description: plainOf(c),
+    url: `${SITE}${hHref(c.code)}`,
+  })),
+})
+
+const faqJson = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: FAQ.map(([q, a]) => ({
+    '@type': 'Question',
+    name: q,
+    acceptedAnswer: { '@type': 'Answer', text: a },
+  })),
+})
+
+const CARDS = [
+  {
+    tag: 'Verbatim',
+    name: 'The regulation wording, not a paraphrase',
+    acc: '#1d4ed8',
+    line: '#bfdbfe',
+    soft: '#eff6ff',
+    ink: '#1d4ed8',
+    desc: 'CLP writes H350 as “May cause cancer <state route of exposure…>” — the angle brackets are a blank for the supplier. Ten H-codes carry one. Most reference sites delete it silently; we show the readable form on top and the verbatim regulation line underneath.',
+  },
+  {
+    tag: 'History',
+    name: `${MOVED} of these codes have moved since 2009`,
+    acc: '#0d9488',
+    line: '#99f6e4',
+    soft: '#f0fdfa',
+    ink: '#0f766e',
+    desc: 'UN GHS has had nine editions. Rev.9 deleted the five oldest explosives statements; Rev.11 added H421 for global warming. Every code page carries its own nine-point history strip, so you can see at a glance whether a code is stable or contested.',
+  },
+  {
+    tag: 'Jurisdictions',
+    name: `The same code, ${juris.length} legal systems`,
+    acc: '#0ea5e9',
+    line: '#bae6fd',
+    soft: '#f0f9ff',
+    ink: '#0284c7',
+    desc: 'H200 is current under EU CLP and deleted under UN GHS Rev.11. H227 “Combustible liquid” has never existed in the EU but is a normal OSHA HazCom code. Switch the jurisdiction and every status moves with it — no code here is dead everywhere.',
+  },
+]
+---
+
+<Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
+  <script type="application/ld+json" slot="head" set:html={itemListJson} />
+  <script type="application/ld+json" slot="head" set:html={faqJson} />
+
+  <!-- Hero: без тинта — новым хабам цвет не подбираем (решение Сергея, session 15) -->
+  <section class="hub-hero">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+
+    <div class="hub-wrap hub-hero-inner">
+      <p class="hub-hero-eyebrow">Reference · Hazard statements</p>
+      <h1>GHS hazard statements</h1>
+      <p class="hub-hero-sub">
+        Every H-code in one place, with the wording taken verbatim from the regulation rather than
+        paraphrased — and a switch that shows whether a code is still current under EU CLP, OSHA
+        HazCom or the latest UN GHS.
+      </p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">{TOTAL} codes · {juris.length} jurisdictions</span>
+        <span class="hub-hero-chip">{combos.length} combined codes</span>
+        <span class="hub-hero-chip">{LINKS.toLocaleString('en-US')} substance links</span>
+      </div>
+
+      <div class="hub-hero-search">
+        <svg class="hub-search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle>
+          <path d="m20 20-3.5-3.5"></path>
+        </svg>
+        <label for="h-search" class="sr-only">Search hazard statements by code or wording</label>
+        <input
+          id="h-search"
+          type="search"
+          placeholder="Search a code or its wording — H319, cancer, flammable…"
+          autocomplete="off"
+          role="combobox"
+          aria-expanded="false"
+          aria-controls="h-ac"
+          aria-autocomplete="list"
+        />
+        <div id="h-ac" class="hub-ac" role="listbox" aria-label="Matching codes" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">01 · How to read this list</p>
+      <h2 class="hub-h2">Three things a plain code list will not tell you</h2>
+      <div class="hub-cards">
+        {CARDS.map((s) => (
+          <div class="hub-card static" style={`--acc:${s.acc};--acc-line:${s.line};--acc-soft:${s.soft};--acc-ink:${s.ink}`}>
+            <p class="tag">{s.tag}</p>
+            <h3>{s.name}</h3>
+            <p class="copy">{s.desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-b">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">02 · The list</p>
+      <h2 class="hub-h2">All {TOTAL} hazard statements</h2>
+      <p class="hub-sub">
+        Grouped the way the regulation groups them. Substance counts always come from CLP Annex VI —
+        {' '}{USED} of the {TOTAL} codes are carried by at least one harmonised entry, the rest are
+        defined but unused and shown greyed out. Switching jurisdiction changes the legal status of
+        each code, not the counts.
+      </p>
+
+      <div class="hub-panel">
+        <div class="hub-panel-row">
+          <span class="hub-panel-label">Jurisdiction</span>
+          <div class="juris" id="juris" role="group" aria-label="Jurisdiction">
+            {juris.map((j, i) => (
+              <button type="button" data-j={j.id} aria-pressed={i === 0 ? 'true' : 'false'}>
+                {j.label}<span class="sub">{j.sublabel}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {juris.map((j, i) => (
+          <p class="juris-note" data-j={j.id} hidden={i !== 0}>
+            <b>{j.label} · {j.sublabel}.</b> {j.note}
+            {j.source_url && (
+              <> <a href={j.source_url} rel="nofollow noopener" target="_blank">Source</a>.</>
+            )}
+          </p>
+        ))}
+
+        <div class="hub-panel-row">
+          <span class="hub-panel-label">Filter</span>
+          <div class="tool-chips" id="cat-chips">
+            <button type="button" class="tool-chip on" data-cat="all">All</button>
+            {sections.map((s) => (
+              <button type="button" class="tool-chip" data-cat={s.id}>{s.label}</button>
+            ))}
+          </div>
+        </div>
+
+        <div class="hub-panel-row">
+          <label for="h-filter" class="sr-only">Filter the list by code or wording</label>
+          <input type="search" id="h-filter" class="hub-search-inline" placeholder="Filter by code or wording…" autocomplete="off" />
+          <label class="hub-check"><input type="checkbox" id="only-used" /> Only codes used in Annex VI</label>
+          <span class="hub-meta" style="margin:0"><span id="h-count">{TOTAL}</span> of {TOTAL} shown</span>
+        </div>
+
+        <p class="clp-legend">
+          <b>Reading the official wording.</b>
+          <span class="clp-blank">&lt;angle brackets&gt;</span> mark a blank the supplier fills in — it
+          is not a truncated sentence.<span class="sep">·</span>
+          Ten H-codes carry one; open any of them for what goes inside.<span class="sep">·</span>
+          <a href="/p-statements/">P-codes use a different notation</a> — an ellipsis and square brackets.
+        </p>
+      </div>
+
+      {sections.map((s) => (
+        <section class="hub-cat" id={s.id}>
+          <div class="hub-cat-head">
+            <h3>{s.label}</h3>
+            <span class="range">{s.range} · {s.rows.length} codes · {s.used} used in Annex VI</span>
+          </div>
+          <p class="hub-cat-sub">{s.blurb}</p>
+          <div class="hub-table-wrap">
+            <table class="hub-table">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Hazard statement</th>
+                  <th class="num">Substances</th>
+                </tr>
+              </thead>
+              <tbody>
+                {s.rows.map((c) => {
+                  const n = numOf(c)
+                  const plain = plainOf(c)
+                  const st = stOf(c.code)
+                  return (
+                    <tr
+                      class={n === 0 ? 'is-unused' : undefined}
+                      data-n={String(n)}
+                      data-cat={c.category}
+                      data-st={st}
+                      data-code={c.code}
+                      data-s={`${c.code} ${plain} ${c.text_en}`.toLowerCase()}
+                    >
+                      <td class="c-code"><a href={hHref(c.code)}>{c.code}</a></td>
+                      <td class="c-txt">
+                        {plain}
+                        {c.status === 'withdrawn' && <span class="st-badge withdrawn">withdrawn</span>}
+                        {c.status === 'absent' && <span class="st-badge absent">not in this system</span>}
+                        {plain !== c.text_en && (
+                          <span class="verbatim">
+                            CLP verbatim:{' '}
+                            {splitClpNotation(c.text_en, 'h').map((piece) =>
+                              piece.kind === 'blank' ? (
+                                <span class="clp-blank" title="Blank filled in by the supplier">{piece.value}</span>
+                              ) : (
+                                piece.value
+                              )
+                            )}
+                          </span>
+                        )}
+                        {c.status === 'withdrawn' && (
+                          <span class="st-repl">
+                            {c.replaced_by ? (
+                              <>
+                                Not in the current CLP Annex III. Current equivalent:{' '}
+                                <a href={hHref(c.replaced_by)}>{c.replaced_by}</a>
+                              </>
+                            ) : (
+                              <>Not in the current CLP Annex III; deleted without a direct replacement.</>
+                            )}
+                          </span>
+                        )}
+                        {c.status === 'absent' && (
+                          <span class="st-repl">
+                            Not part of EU CLP. Current in{' '}
+                            {juris
+                              .filter((_, i) => st.charAt(i) === 'c')
+                              .map((j) => j.label)
+                              .join(', ')}.
+                          </span>
+                        )}
+                      </td>
+                      <td class="c-n">{n > 0 ? String(n) : <span class="zero">—</span>}</td>
+                    </tr>
+                  )
+                })}
+                <tr class="hub-empty-row" hidden><td colspan="3">No code in this group matches the filter.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ))}
+    </div>
+  </section>
+
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">03 · Combined codes</p>
+      <h2 class="hub-h2">The {combos.length} official combined statements</h2>
+      <p class="hub-sub">
+        CLP Annex III defines these as single label elements — each one is its components printed in
+        order. They have no pages of their own: a plus sign in a URL has to be encoded and breaks in
+        other people's links and in analytics. Every component below links to its own page, where the
+        combination is shown again in context.
+      </p>
+      <div class="hub-table-wrap">
+        <table class="hub-table" id="combo-table">
+          <thead>
+            <tr><th>Code</th><th>Combined statement</th></tr>
+          </thead>
+          <tbody>
+            {combos.map((c) => {
+              const plain = c.text_plain || c.text_en
+              return (
+                <tr data-s={`${c.code} ${plain}`.toLowerCase()}>
+                  <td class="c-code">
+                    <span class="cmb">
+                      {c.components.map((part, i) => (
+                        <>
+                          {i > 0 && '+'}
+                          <a href={hHref(part)}>{part}</a>
+                        </>
+                      ))}
+                    </span>
+                  </td>
+                  <td class="c-txt">
+                    {plain}
+                    {plain !== c.text_en && <span class="verbatim">CLP verbatim: {c.text_en}</span>}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">04 · Questions</p>
+      <h2 class="hub-h2">Common questions</h2>
+      <div class="hub-faq">
+        {FAQ.map(([q, a]) => (
+          <div class="hub-faq-item">
+            <p class="q">{q}</p>
+            <p class="a">{a}</p>
+          </div>
+        ))}
+      </div>
+      <p class="hub-fine">
+        Counts are computed from harmonised classifications in CLP Annex VI (4,178 substances). The
+        hazard statements on a real product also depend on the supplier's own classification of the
+        mixture — <b>always check the supplier safety data sheet</b>.
+      </p>
+    </div>
+  </section>
+
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <div class="hub-close-panel">
+        <div class="dots" aria-hidden="true"></div>
+        <h2>Now what do you do about it?</h2>
+        <p>
+          Hazard statements tell you why a chemical is dangerous.
+          <a href="/p-statements/">Precautionary statements (P-codes)</a> tell you what to do, the
+          <a href="/label-constructor/">label constructor</a> puts both on an actual label, and the
+          <a href="/tools/chemical-storage-compatibility/">storage compatibility tool</a> turns the
+          hazard classes into a verdict for a given pair of chemicals.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <script id="h-switch-data" type="application/json" is:inline set:html={JSON.stringify(switchData)} />
+
+  <script>
+    // Фильтр списка + переключатель юрисдикций + автокомплит в hero.
+    // ⚠ Все строки уже в HTML: скрипт только прячет их и переписывает бейджи.
+    const rows = Array.from(document.querySelectorAll<HTMLTableRowElement>('.hub-cat tbody tr[data-cat]'))
+    const sections = Array.from(document.querySelectorAll<HTMLElement>('.hub-cat'))
+    const filterInput = document.getElementById('h-filter') as HTMLInputElement | null
+    const onlyUsed = document.getElementById('only-used') as HTMLInputElement | null
+    const countEl = document.getElementById('h-count')
+    const chips = Array.from(document.querySelectorAll<HTMLButtonElement>('#cat-chips .tool-chip'))
+    let cat = 'all'
+
+    const norm = (s: string) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim()
+
+    function apply() {
+      const tokens = norm(filterInput?.value ?? '').split(' ').filter(Boolean)
+      const used = !!onlyUsed?.checked
+      let visible = 0
+      rows.forEach((tr) => {
+        let ok = true
+        if (cat !== 'all' && tr.dataset.cat !== cat) ok = false
+        if (ok && used && tr.dataset.n === '0') ok = false
+        if (ok && tokens.length) {
+          const blob = tr.dataset.s ?? ''
+          ok = tokens.every((t) => blob.includes(t))
+        }
+        tr.hidden = !ok
+        if (ok) visible++
+      })
+      sections.forEach((sec) => {
+        sec.hidden = !sec.querySelector('tbody tr[data-cat]:not([hidden])')
+      })
+      if (countEl) countEl.textContent = String(visible)
+    }
+
+    filterInput?.addEventListener('input', apply)
+    onlyUsed?.addEventListener('change', apply)
+    chips.forEach((b) => {
+      b.addEventListener('click', () => {
+        chips.forEach((x) => x.classList.remove('on'))
+        b.classList.add('on')
+        cat = b.dataset.cat ?? 'all'
+        apply()
+        if (cat !== 'all') document.getElementById(cat)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    })
+
+    type SwitchRow = [string, string, number, string, string, string, string]
+    const rawEl = document.getElementById('h-switch-data')
+    const payload = rawEl?.textContent
+      ? (JSON.parse(rawEl.textContent) as { rows: SwitchRow[]; juris: [string, string, string][] })
+      : { rows: [] as SwitchRow[], juris: [] as [string, string, string][] }
+    const data = payload.rows
+    const JUR = payload.juris
+    const byCode = new Map<string, SwitchRow>(data.map((r) => [r[0], r]))
+
+    const esc = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+    // Ровно та же разметка, что рендерит сборка для колонки EU CLP.
+    function statusMarkup(code: string, idx: number): string {
+      const r = byCode.get(code)
+      if (!r) return ''
+      const st = r[3].charAt(idx)
+      if (st === 'c') return ''
+      if (st === 'w') {
+        let note: string
+        if (idx === 0 && r[4]) {
+          note =
+            'Not in the current CLP Annex III. Current equivalent: ' +
+            '<a href="/h-statements/' + (r[6] || r[4]) + '/">' + r[4] + '</a>'
+        } else if (idx === 0) {
+          note = 'Not in the current CLP Annex III; deleted without a direct replacement.'
+        } else {
+          note = 'Marked [Deleted] in ' + JUR[idx][1] + ' ' + JUR[idx][2] + '.'
+        }
+        return '<span class="st-badge withdrawn">withdrawn</span><span class="st-repl">' + note + '</span>'
+      }
+      const live = JUR.filter((_, i) => r[3].charAt(i) === 'c').map((j) => j[1])
+      const tail = live.length ? 'Current in ' + live.join(', ') + '.' : 'Not current in any system tracked here.'
+      return (
+        '<span class="st-badge absent">not in this system</span>' +
+        '<span class="st-repl">Not part of ' + JUR[idx][1] + '. ' + tail + '</span>'
+      )
+    }
+
+    let jIdx = 0
+    const jbox = document.getElementById('juris')
+    if (jbox) {
+      const jbtns = Array.from(jbox.querySelectorAll<HTMLButtonElement>('button'))
+      const jnotes = Array.from(document.querySelectorAll<HTMLElement>('.juris-note'))
+      jbtns.forEach((b, i) => {
+        b.addEventListener('click', () => {
+          jbtns.forEach((x) => x.setAttribute('aria-pressed', String(x === b)))
+          jIdx = i
+          const id = b.dataset.j
+          jnotes.forEach((p) => { p.hidden = p.dataset.j !== id })
+          if (id) document.body.setAttribute('data-juris', id)
+          rows.forEach((tr) => {
+            const cell = tr.querySelector('.c-txt')
+            if (!cell) return
+            cell.querySelectorAll('.st-badge, .st-repl').forEach((n) => n.remove())
+            const mk = statusMarkup(tr.dataset.code ?? '', jIdx)
+            if (mk) cell.insertAdjacentHTML('beforeend', mk)
+            tr.classList.toggle('is-foreign', (tr.dataset.st ?? '').charAt(jIdx) === 'a')
+          })
+          apply()
+        })
+      })
+    }
+
+    // ── Hero autocomplete ────────────────────────────────────────────────
+    const input = document.getElementById('h-search') as HTMLInputElement | null
+    const acEl = document.getElementById('h-ac')
+    if (input && acEl && data.length) {
+      const MAX = 8
+      let active = -1
+      const mark = (text: string, q: string) => {
+        const i = norm(text).indexOf(q)
+        if (i < 0) return esc(text)
+        return esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + q.length)) + '</mark>' + esc(text.slice(i + q.length))
+      }
+      const rank = (r: SwitchRow, q: string) => {
+        const code = norm(r[0])
+        const txt = norm(r[1])
+        if (code === q) return 0
+        if (code.indexOf(q) === 0) return 1
+        if (txt.indexOf(q) === 0) return 2
+        if (new RegExp('\\b' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(txt)) return 3
+        if (txt.indexOf(q) > -1) return 4
+        return -1
+      }
+      // ⚠ position: fixed — у .hub-hero стоит overflow: hidden (общее правило хабов),
+      // absolute-панель обрезалась бы по нижнему краю героя.
+      const place = () => {
+        const r = input.getBoundingClientRect()
+        acEl.style.left = r.left + 'px'
+        acEl.style.top = r.bottom + 8 + 'px'
+        acEl.style.width = r.width + 'px'
+        return r.bottom > 0 && r.top < window.innerHeight
+      }
+      const close = () => {
+        acEl.hidden = true
+        input.setAttribute('aria-expanded', 'false')
+        active = -1
+      }
+      const acRows = () => Array.from(acEl.querySelectorAll<HTMLAnchorElement>('.hub-ac-row'))
+      const render = () => {
+        const q = norm(input.value)
+        if (q.length < 2) return close()
+        const hits: { r: SwitchRow; s: number }[] = []
+        for (const r of data) {
+          const s = rank(r, q)
+          if (s >= 0) hits.push({ r, s })
+        }
+        hits.sort((a, b) => a.s - b.s || a.r[0].localeCompare(b.r[0]))
+        if (!hits.length) {
+          acEl.innerHTML =
+            '<p class="hub-ac-none">No hazard statement matches <b>' + esc(input.value) +
+            '</b>. Precautionary codes live on the <a href="/p-statements/">P-statements list</a>.</p>'
+        } else {
+          let html = hits.slice(0, MAX).map((h) => {
+            const sc = h.r[3].charAt(jIdx)
+            const badge =
+              sc === 'w' ? '<span class="st-badge withdrawn">withdrawn</span>'
+              : sc === 'a' ? '<span class="st-badge absent">not in this system</span>'
+              : ''
+            const n = h.r[2] ? '<span class="hub-ac-cas">' + h.r[2] + ' subst.</span>' : ''
+            return '<a class="hub-ac-row" role="option" href="/h-statements/' + (h.r[5] || h.r[0]) + '/">' +
+              '<span><span class="hub-ac-name">' + mark(h.r[0], q) + badge + '</span>' +
+              '<span class="hub-ac-sub">' + mark(h.r[1], q) + '</span></span>' + n + '</a>'
+          }).join('')
+          if (hits.length > MAX) html += '<span class="hub-ac-foot">' + (hits.length - MAX) + ' more in the list below</span>'
+          acEl.innerHTML = html
+        }
+        place()
+        acEl.hidden = false
+        input.setAttribute('aria-expanded', 'true')
+        active = -1
+      }
+      const move = (d: number) => {
+        const rs = acRows()
+        if (!rs.length) return
+        active = (active + d + rs.length) % rs.length
+        rs.forEach((r, i) => r.classList.toggle('is-active', i === active))
+        rs[active].scrollIntoView({ block: 'nearest' })
+      }
+      input.addEventListener('input', render)
+      input.addEventListener('focus', () => { if (input.value) render() })
+      input.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); move(1) }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1) }
+        else if (e.key === 'Escape') close()
+        else if (e.key === 'Enter') {
+          const rs = acRows()
+          if (!rs.length) return
+          e.preventDefault()
+          rs[active < 0 ? 0 : active].click()
+        }
+      })
+      document.addEventListener('click', (e) => {
+        if (!(e.target as HTMLElement).closest('.hub-hero-search')) close()
+      })
+      window.addEventListener('resize', () => { if (!acEl.hidden) place() })
+      window.addEventListener('scroll', () => { if (!acEl.hidden && !place()) close() }, { passive: true })
+    }
+  </script>
+</Layout>

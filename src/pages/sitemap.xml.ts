@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { supabase } from '../lib/supabase';
+import { hSlug } from '../lib/hStatementSlug';
 
 export const prerender = true;
 
@@ -111,12 +112,31 @@ async function fetchPStatementSitemapEntries(): Promise<
   ];
 }
 
+/** Hazard statements: hub + every code in the registry (grows with no code change). */
+async function fetchHStatementSitemapEntries(): Promise<
+  { url: string; changefreq: string; priority: string }[]
+> {
+  const { data } = await supabase
+    .from('h_statements')
+    .select('code');
+  const codes = data ?? [];
+  return [
+    { url: '/h-statements/', changefreq: 'weekly', priority: '0.9' },
+    ...codes.map((c: { code: string }) => ({
+      url: `/h-statements/${hSlug(c.code)}/`,
+      changefreq: 'monthly',
+      priority: '0.7',
+    })),
+  ];
+}
+
 export const GET: APIRoute = async () => {
-  const [blogPages, compliancePages, sdsPages, pStatementPages] = await Promise.all([
+  const [blogPages, compliancePages, sdsPages, pStatementPages, hStatementPages] = await Promise.all([
     fetchBlogSitemapEntries(),
     fetchComplianceSitemapEntries(),
     fetchSdsSitemapEntries(),
     fetchPStatementSitemapEntries(),
+    fetchHStatementSitemapEntries(),
   ]);
 
   const allPages = [
@@ -126,6 +146,7 @@ export const GET: APIRoute = async () => {
     ...STORAGE_PAGES,
     ...sdsPages,
     ...pStatementPages,
+    ...hStatementPages,
     ...compliancePages,
     ...blogPages,
   ];

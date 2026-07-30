@@ -144,9 +144,17 @@ const otherTools = [
   },
 ]
 
-// ── Reference tables (session 19). P-statements first: it is the newest and the
-// one with no equivalent anywhere — verbatim CLP wording plus jurisdiction status.
+// ── Reference tables (session 19, H-statements added session 21). H first:
+// в Bing кластер H даёт примерно 207 кликов за квартал против трёх у P, и это
+// единственный справочник с историей ревизий по каждому коду.
 const referenceCards = [
+  {
+    href: '/h-statements/',
+    accent: '#1e3a8a',
+    tag: 'Reference',
+    title: 'Hazard statements',
+    copy: '108 H-codes and EUH codes with the verbatim regulation wording, the nine-edition UN GHS history of each one, and whether it is still current under EU CLP, OSHA HazCom or UN GHS.',
+  },
   {
     href: '/p-statements/',
     accent: '#0d9488',
@@ -1414,7 +1422,7 @@ const roles = [
       <div class="wrap">
         <div class="hp-others-head">
           <h3>Reference tables — the data every calculation on this site rests on</h3>
-          <a href="/p-statements/" class="hp-link-mono">All P-codes &rarr;</a>
+          <a href="/h-statements/" class="hp-link-mono">All H-codes &rarr;</a>
         </div>
         <div class="hp-others-grid">
           {
