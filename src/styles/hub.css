@@ -1772,3 +1772,249 @@ button.hub-pair:last-child { border-bottom: 0; }
   .hrev-dot { width: 14px; height: 14px; }
   .hrev-line { top: 6px; }
 }
+
+/* ── Pictogram hub (/pictograms/) — session 23 ─────────────────────────────
+   New classes only; every name checked against hub.css before writing.
+   Prefix .pict- is free in hub.css. */
+
+/* 01 — the chart: nine cards, each carrying a real SVG */
+/* Nine cards want a 3 × 3 block, not auto-fit — a 4 + 4 + 1 orphan row reads badly. */
+.pict-grid {
+  margin-top: 30px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+@media (min-width: 620px) { .pict-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 980px) { .pict-grid { grid-template-columns: repeat(3, 1fr); } }
+.pict-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 18px 20px 16px;
+  box-shadow: 0 2px 6px rgba(15, 23, 41, 0.06);
+  transition: all 300ms ease-out;
+}
+.pict-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 34px rgba(15, 23, 41, 0.14);
+  border-color: var(--line-2);
+}
+.pict-card-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.pict-card-top .pict-ico {
+  flex: 0 0 auto;
+  width: 62px;
+  height: 62px;
+  display: block;
+}
+.pict-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pict-card .code {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #1e3a8a;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  border-radius: 4px;
+  padding: 3px 7px;
+}
+.pict-card h3 {
+  margin: 6px 0 0;
+  font-family: var(--font-heading);
+  font-size: 16.5px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+.pict-card .copy {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  flex: 1 1 auto;
+}
+.pict-card .pict-stats {
+  margin: 0;
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.pict-card .pict-stats b { color: var(--ink-2); font-weight: 600; }
+.pict-card .pict-stats .sep { margin: 0 6px; opacity: 0.5; }
+
+/* Signal-word badge — Danger is rose, Warning is amber (site hazard palette) */
+.pict-sw {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+.pict-sw.danger { background: var(--verdict-never-bg); color: var(--verdict-never-ink); border: 1px solid #fecdd3; }
+.pict-sw.warning { background: var(--verdict-sep-bg); color: var(--verdict-sep-ink); border: 1px solid #fde68a; }
+.pict-sw.both { background: #f1f5f9; color: var(--ink-2); border: 1px solid var(--line-2); }
+
+/* 02 — class table: pictogram + code in one identity cell inside .hub-table.
+   ⚠ .c-n is NOT reusable here — hub.css line 1545 hard-codes its mobile label
+   to 'substances · '. Numeric columns of any other meaning need their own class. */
+.hub-table td.pict-id { width: 1%; white-space: nowrap; }
+.hub-table td.pict-id .wrap { display: flex; align-items: center; gap: 10px; }
+.hub-table td.pict-id .pict-ico-sm { width: 38px; height: 38px; display: block; flex: 0 0 auto; }
+.hub-table td.pict-id .nm { display: block; font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+.hub-table td.pict-adr {
+  width: 1%;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.hub-table td.pict-adr .none { color: #cbd5e1; }
+.pict-classes { font-size: 14px; line-height: 1.7; color: var(--ink); }
+.pict-classes .ch { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-3); }
+.pict-classes .sep { margin: 0 7px; color: var(--line-2); }
+
+/* 03 — "which one do I need": plain-language hazard → pictogram */
+.pict-need {
+  margin-top: 26px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+}
+.pict-need-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 12px 14px;
+  box-shadow: 0 1px 3px rgba(15, 23, 41, 0.05);
+  transition: all 260ms ease-out;
+}
+.pict-need-row:hover {
+  transform: translateY(-3px);
+  border-color: var(--teal-200);
+  background: var(--teal-50);
+  box-shadow: 0 12px 24px rgba(15, 23, 41, 0.1);
+}
+.pict-need-row .pict-ico-md { flex: 0 0 auto; width: 40px; height: 40px; display: block; }
+.pict-need-row .txt { min-width: 0; }
+.pict-need-row .say {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.4;
+}
+.pict-need-row .to {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+/* 04 — precedence: the regulation rule, then our own number under it */
+.pict-rules { margin-top: 26px; display: flex; flex-direction: column; gap: 12px; }
+.pict-rule {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--navy);
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 14px 16px;
+}
+.pict-rule .lbl {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+}
+.pict-rule .rule {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.pict-rule .rule b { font-weight: 600; }
+.pict-rule .ours {
+  margin: 9px 0 0;
+  padding-top: 9px;
+  border-top: 1px dashed var(--line-2);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.pict-rule .ours .n { font-family: var(--font-mono); font-weight: 600; color: var(--ink); }
+.pict-rule .ours a { color: var(--teal-700); font-weight: 600; }
+.pict-rule .ours a:hover { text-decoration: underline; }
+
+/* 05 — how many pictograms one substance carries */
+.pict-dist { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 10px; }
+.pict-dist-cell {
+  flex: 1 1 130px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 12px 14px;
+  text-align: center;
+}
+.pict-dist-cell .n {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+.pict-dist-cell .l {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+@media (max-width: 640px) {
+  .pict-card-top .pict-ico { width: 54px; height: 54px; }
+  .pict-card .pict-stats { font-size: 10.5px; }
+  .pict-need { grid-template-columns: 1fr; }
+  /* hub.css turns .hub-table into stacked blocks below 640px — label the two
+     cells that would otherwise appear as bare text with no header above them. */
+  .hub-table td.pict-id { width: auto; white-space: normal; margin-bottom: 8px; }
+  .hub-table td.pict-adr { width: auto; white-space: normal; margin-top: 8px; }
+  .hub-table td.pict-adr::before { content: 'ADR · '; color: var(--ink-3); }
+  .pict-classes { font-size: 13.5px; }
+}
+
+/* Sub-heading inside a section (04 — the distribution strip) */
+.pict-h3 {
+  margin: 38px 0 0;
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}

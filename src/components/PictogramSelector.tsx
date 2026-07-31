@@ -409,7 +409,7 @@ export default function PictogramSelector() {
           )}
 
           {/* browse cross-link */}
-          <a href="/pictograms/" className="gs-browse" style={{ ...card, boxShadow: '0 1px 2px rgba(16,32,64,.04)', display: 'block', padding: '18px 22px', textDecoration: 'none' }}>
+          <a href="/substances/" className="gs-browse" style={{ ...card, boxShadow: '0 1px 2px rgba(16,32,64,.04)', display: 'block', padding: '18px 22px', textDecoration: 'none' }}>
             <span style={{ fontSize: 14, fontWeight: 600, color: '#1f5fd0', lineHeight: 1.5 }}>Looking for a specific substance? Browse harmonized substances →</span>
           </a>
 

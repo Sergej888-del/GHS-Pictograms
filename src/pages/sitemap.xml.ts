@@ -14,7 +14,11 @@ const GHS_CODES = [
 /** Хабы и ключевые разделы (без отдельных статей блога — они из коллекции). */
 const STATIC_PAGES = [
   { url: '/', changefreq: 'weekly', priority: '1.0' },
+  // ⚠ session 23: /pictograms/ — хаб пиктограмм под головной запрос кластера,
+  // /substances/ — переехавший браузер веществ. Раньше на первом стоял браузер,
+  // и адрес отдавал 301 на ghssymbols: sitemap звал краулера на редирект.
   { url: '/pictograms/', changefreq: 'weekly', priority: '0.9' },
+  { url: '/substances/', changefreq: 'weekly', priority: '0.8' },
   { url: '/inspector/', changefreq: 'monthly', priority: '0.8' },
   { url: '/faq/', changefreq: 'monthly', priority: '0.7' },
   { url: '/blog/', changefreq: 'weekly', priority: '0.8' },

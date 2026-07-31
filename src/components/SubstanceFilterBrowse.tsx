@@ -32,6 +32,18 @@ interface Props {
 export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {}) {
   const selectMode = typeof onSelectSubstance === 'function'
   const [all, setAll] = useState<Substance[]>([])
+  /**
+   * ⚠ session 23: строка вещества вела на `/pictograms/<cas>/`. Маршрута с таким именем
+   * на этом домене НЕТ — ссылка работала только потому, что правило `/pictograms/*`
+   * уводило запрос 301 на ghssymbols.com/hazards/<cas>/. Правило снято вместе с хабом.
+   *
+   * Решение Сергея: ссылка должна остаться живой — у нас 109 SDS-страниц на 3 809 веществ,
+   * и деваться читателю больше некуда, пока не перенесены `/hazards/`.
+   * Поэтому: локальная `/sds/<slug>/` там, где страница есть (73 совпадения по CAS),
+   * и АБСОЛЮТНАЯ ссылка на ghssymbols у остальных — напрямую, без хопа через редирект.
+   * ⚠ Когда `/hazards/` переедут, менять надо здесь и в src/pages/ghs/[code].astro.
+   */
+  const [sdsSlug, setSdsSlug] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -40,7 +52,17 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
     }
     return ''
   })
-  const [picFilters, setPicFilters] = useState<string[]>([])
+  // `?pic=GHS08` — так на эту страницу ссылаются девять страниц пиктограмм («View all →»).
+  const [picFilters, setPicFilters] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return []
+    const raw = new URLSearchParams(window.location.search).get('pic')
+    if (!raw) return []
+    const codes = new Set(PICTOGRAMS.map((p) => p.code))
+    return raw
+      .split(',')
+      .map((c) => c.trim().toUpperCase())
+      .filter((c) => codes.has(c))
+  })
   const [signalFilter, setSignalFilter] = useState<string>('')
 
   // Загрузка всех веществ при монтировании
@@ -64,6 +86,23 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
       setLoading(false)
     }
     loadAll()
+  }, [])
+
+  // Реестр SDS-страниц: 109 строк, один запрос. Нужен, чтобы знать, у какого вещества
+  // есть локальная страница-деталь, а у какого её нет.
+  useEffect(() => {
+    async function loadSds() {
+      const { data } = await supabase
+        .from('sds_pages')
+        .select('slug, cas_number')
+        .eq('status', 'live')
+      const map = new Map<string, string>()
+      for (const row of (data ?? []) as { slug: string; cas_number: string | null }[]) {
+        if (row.cas_number) map.set(row.cas_number, row.slug)
+      }
+      setSdsSlug(map)
+    }
+    loadSds()
   }, [])
 
   // Fuse.js поиск
@@ -216,7 +255,10 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
           {results.map(r => {
             const name = r.common_name || r.iupac_name
             const casEnc = encodeURIComponent(r.cas_number)
-            const detailHref = `/pictograms/${casEnc}/`
+            const slug = sdsSlug.get(r.cas_number)
+            const detailHref = slug
+              ? `/sds/${slug}/`
+              : `https://ghssymbols.com/hazards/${casEnc}/`
             const labelHref = `/label-constructor/?cas=${casEnc}`
             const pics = r.ghs_pictogram_codes ?? []
             const casEcLine = `CAS ${r.cas_number}${r.ec_number ? ` · EC ${r.ec_number}` : ''}`
@@ -253,7 +295,7 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
                   </p>
                   {!selectMode && (
                     <span style={{ color: '#062A78', fontSize: '0.75rem', fontWeight: 500, flexShrink: 0 }}>
-                      Details →
+                      {slug ? 'SDS →' : 'Details →'}
                     </span>
                   )}
                 </div>
@@ -328,6 +370,7 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
                   </button>
                   <a
                     href={detailHref}
+                    rel={slug ? undefined : 'noopener'}
                     onClick={e => e.stopPropagation()}
                     style={{
                       flexShrink: 0,
@@ -341,7 +384,7 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
                       textDecoration: 'none',
                     }}
                   >
-                    Details
+                    {slug ? 'SDS' : 'Details'}
                   </a>
                 </li>
               )
@@ -351,6 +394,7 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
               <li key={r.cas_number} style={{ borderBottom: '1px solid #e2e8f0', minWidth: 0, display: 'flex', alignItems: 'stretch' }}>
                 <a
                   href={detailHref}
+                  rel={slug ? undefined : 'noopener'}
                   style={{ display: 'block', padding: '12px 16px', textDecoration: 'none', minWidth: 0, flex: 1 }}
                   onClick={(e) => {
                     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)

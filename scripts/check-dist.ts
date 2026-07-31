@@ -362,6 +362,40 @@ async function hCounts(): Promise<Map<string, number>> {
   return hCountCache
 }
 
+const PICT_CODES = ['GHS01', 'GHS02', 'GHS03', 'GHS04', 'GHS05', 'GHS06', 'GHS07', 'GHS08', 'GHS09']
+
+/**
+ * Наборы пиктограмм по веществам — ровно тем же фильтром и той же сортировкой, что
+ * страница /pictograms/ (session 23): только записи с CAS, порядок по index_number.
+ * ⚠ Без .order() постраничная выборка не гарантирует ни полноты, ни отсутствия дублей —
+ * это ровно тот способ промахнуться, что разбирался в §S19.5.
+ */
+async function pictogramSets(): Promise<string[][]> {
+  const rows = await selectAll<{ index_number: string; ghs_pictogram_codes: string[] | null }>(
+    'substances',
+    'index_number, ghs_pictogram_codes',
+    (q: any) => q.not('cas_number', 'is', null).not('ghs_pictogram_codes', 'is', null).order('index_number'),
+  )
+  assertNonEmpty('pictogram-sets', 'substances', rows)
+  const out: string[][] = []
+  for (const r of rows) {
+    const set = Array.from(new Set((r.ghs_pictogram_codes ?? []).filter((c) => PICT_CODES.includes(c))))
+    if (set.length) out.push(set)
+  }
+  return out
+}
+
+/** Разбирает маркеры вида data-<name>="ключ|значение" со страницы хаба. */
+function hubMarkers(html: string, name: string): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const m of html.matchAll(new RegExp(`data-${name}="([^"]+)"`, 'g'))) {
+    const raw = m[1].replace(/&#43;/g, '+').replace(/&amp;/g, '&')
+    const cut = raw.indexOf('|')
+    if (cut > 0) out.set(raw.slice(0, cut), raw.slice(cut + 1))
+  }
+  return out
+}
+
 const CHECKS: Check[] = [
   {
     id: 'sds-pages',
@@ -1063,6 +1097,138 @@ const CHECKS: Check[] = [
         headline: ok
           ? `таблица классов полна на всех ${expectedBy.size} страницах`
           : `расходятся ${bad} из ${expectedBy.size} страниц`,
+        detail,
+      }
+    },
+  },
+
+  {
+    id: 'pict-hub-rows',
+    group: 'Pictograms',
+    title: 'Хаб /pictograms/: классы, H-коды и вещества по каждой пиктограмме сходятся с базой',
+    run: async () => {
+      const html = readPage('pictograms/index.html')
+      if (html === null) {
+        return { id: 'pict-hub-rows', group: 'Pictograms', ok: false, headline: 'нет pictograms/index.html', detail: [] }
+      }
+
+      const mapRows = await selectAll<{
+        pictogram_code: string
+        h_statement_code: string
+        hazard_class_catalog: { name_en: string } | null
+      }>(
+        'hazard_category_mapping',
+        'pictogram_code, h_statement_code, hazard_class_catalog(name_en)',
+        (q: any) => q.not('pictogram_code', 'is', null).not('h_statement_code', 'is', null),
+      )
+      assertNonEmpty('pict-hub-rows', 'hazard_category_mapping', mapRows)
+
+      const sets = await pictogramSets()
+      const subsOf = new Map<string, number>(PICT_CODES.map((c) => [c, 0]))
+      for (const set of sets) for (const c of set) subsOf.set(c, (subsOf.get(c) ?? 0) + 1)
+
+      const want = new Map<string, string>()
+      for (const code of PICT_CODES) {
+        const mine = mapRows.filter((r) => r.pictogram_code === code)
+        const classes = new Set(mine.map((r) => r.hazard_class_catalog?.name_en).filter(Boolean)).size
+        const hcodes = new Set(mine.map((r) => r.h_statement_code)).size
+        want.set(code, `${classes}|${hcodes}|${subsOf.get(code) ?? 0}`)
+      }
+
+      const got = hubMarkers(html, 'pict-row')
+      const detail: string[] = []
+      for (const code of PICT_CODES) {
+        const w = want.get(code)!
+        const g = got.get(code)
+        if (g === undefined) detail.push(`${code}: маркера нет в dist`)
+        else if (g !== w) detail.push(`${code}: в dist «${g}», база ожидает «${w}» (классы|H-коды|вещества)`)
+      }
+      for (const k of got.keys()) if (!PICT_CODES.includes(k)) detail.push(`${k}: лишний маркер в dist`)
+
+      const ok = detail.length === 0
+      if (ok) detail.push(`маркер: data-pict-row · ${PICT_CODES.length} строк, ${mapRows.length} связок «категория ↔ код»`)
+      return {
+        id: 'pict-hub-rows',
+        group: 'Pictograms',
+        ok,
+        headline: ok ? 'все девять строк хаба сходятся с базой' : `расходится строк: ${detail.length}`,
+        detail,
+      }
+    },
+  },
+
+  {
+    id: 'pict-hub-pairs',
+    group: 'Pictograms',
+    title: 'Хаб /pictograms/: числа под правилами Article 26 посчитаны, а не написаны',
+    run: async () => {
+      const html = readPage('pictograms/index.html')
+      if (html === null) {
+        return { id: 'pict-hub-pairs', group: 'Pictograms', ok: false, headline: 'нет pictograms/index.html', detail: [] }
+      }
+
+      const sets = await pictogramSets()
+      const pairN = (a: string, b: string) => sets.filter((s) => s.includes(a) && s.includes(b)).length
+
+      const got = hubMarkers(html, 'pict-pair')
+      const detail: string[] = []
+      if (got.size === 0) detail.push('маркеров data-pict-pair в dist нет вовсе')
+      for (const [key, val] of got) {
+        const [a, b] = key.split('+')
+        if (!a || !b) {
+          detail.push(`${key}: маркер не разбирается`)
+          continue
+        }
+        const w = String(pairN(a, b))
+        if (val !== w) detail.push(`${key}: в dist ${val}, база ожидает ${w}`)
+      }
+
+      const ok = detail.length === 0
+      if (ok) detail.push(`маркер: data-pict-pair · ${got.size} пар на ${sets.length} веществах с пиктограммой`)
+      return {
+        id: 'pict-hub-pairs',
+        group: 'Pictograms',
+        ok,
+        headline: ok ? `все ${got.size} пар сходятся с базой` : `расходится пар: ${detail.length}`,
+        detail,
+      }
+    },
+  },
+
+  {
+    id: 'pict-hub-dist',
+    group: 'Pictograms',
+    title: 'Хаб /pictograms/: распределение «сколько пиктограмм на одной этикетке»',
+    run: async () => {
+      const html = readPage('pictograms/index.html')
+      if (html === null) {
+        return { id: 'pict-hub-dist', group: 'Pictograms', ok: false, headline: 'нет pictograms/index.html', detail: [] }
+      }
+
+      const sets = await pictogramSets()
+      const dist = new Map<number, number>()
+      for (const s of sets) dist.set(s.length, (dist.get(s.length) ?? 0) + 1)
+
+      const got = hubMarkers(html, 'pict-dist')
+      const detail: string[] = []
+      if (got.size === 0) detail.push('маркеров data-pict-dist в dist нет вовсе')
+      for (const [key, val] of got) {
+        const n = Number(key)
+        // Последняя ячейка — «шесть и больше»: суммируем всё от 6 вверх.
+        const w =
+          n >= 6
+            ? [...dist.entries()].filter(([k]) => k >= 6).reduce((acc, [, v]) => acc + v, 0)
+            : (dist.get(n) ?? 0)
+        if (val !== String(w)) detail.push(`${key} пиктограмм: в dist ${val}, база ожидает ${w}`)
+      }
+
+      const ok = detail.length === 0
+      if (ok) detail.push(`маркер: data-pict-dist · ${got.size} ячеек, всего ${sets.length} веществ с пиктограммой`)
+      return {
+        id: 'pict-hub-dist',
+        group: 'Pictograms',
+        ok,
+        headline: ok ? 'распределение сходится с базой' : `расходится ячеек: ${detail.length}`,
         detail,
       }
     },

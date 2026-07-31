@@ -1,0 +1,29 @@
+---
+// Браузер веществ — /substances/ (session 23).
+//
+// ⚠ Раньше лежал на /pictograms/ и НЕ ОТДАВАЛСЯ: правило `/pictograms/*` в public/_redirects
+// уводило весь префикс на ghssymbols.com/hazards, и пустой splat совпадал с самим адресом.
+// Двенадцать внутренних ссылок сайта — шапка, футер, главная, FAQ, /compliance/, шаблон блога,
+// /label-constructor/, PictogramSelector, LabelConstructorLoader и девять страниц пиктограмм —
+// вели туда же, то есть на редирект на домен, который мы сливаем.
+// /pictograms/ занял хаб пиктограмм, правило снято, все ссылки переведены сюда.
+//
+// Разметка страницы перенесена байт-в-байт, чтобы переезд не был заодно и редизайном.
+export const prerender = true
+import Layout from '../../layouts/Layout.astro'
+import SubstanceFilterBrowse from '../../components/SubstanceFilterBrowse'
+---
+
+<Layout
+  title="Find a substance — open in Label Constructor"
+  description="Search and filter harmonized substances by CAS, name, GHS pictogram, or signal word. Open any entry in the GHS Label Constructor."
+  canonical="https://ghspictograms.com/substances/"
+>
+  <section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-0">
+    <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">Find a substance — open in Label Constructor</h1>
+    <p class="mt-3 text-lg text-gray-600">
+      Search the full database with fuzzy matching, filter by pictogram or signal word, then open a substance in the label builder (up to 100 matches shown).
+    </p>
+  </section>
+  <SubstanceFilterBrowse client:load />
+</Layout>

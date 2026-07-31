@@ -26,5 +26,10 @@ pnpm-debug.log*
 # jetbrains setting folder
 .idea/
 
-# Local-only GHS pictogram SVGs for npm run dev (prod serves them elsewhere)
-public/pictograms/
+# ⚠ session 23: public/pictograms/ БОЛЬШЕ НЕ игнорируется.
+# Комментарий «prod serves them elsewhere» был неверен: два места читают эти файлы
+# именно как файлы — src/components/SubstanceFilterBrowse.tsx и
+# src/pages/h-statements/[code].astro, — и на проде картинка была битой на всех
+# 108 страницах H-фраз. Правило /pictograms/* это прятало: запрос уходил 301 на
+# ghssymbols.com/hazards/ghsNN.svg. Девять файлов (49 КБ) теперь в репозитории,
+# генерируются из pictograms_signals.svg_content.

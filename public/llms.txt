@@ -7,7 +7,7 @@
 - [Chemical Storage Compatibility](https://ghspictograms.com/tools/chemical-storage-compatibility/): Check GHS storage segregation for any substance — never-store/keep-separate verdicts across 13 hazard classes, with ADR transport data and partner-specific reaction gases
 - [ATE Mixture Calculator](https://ghspictograms.com/tools/ate-mixture-calculator/): Compute the GHS/CLP Acute Toxicity Estimate of a mixture — 5 routes (oral, dermal, inhalation as gas/vapour/dust), automatic ATE from harmonised Annex VI H-codes, the 10% unknown-ingredient rule, and the resulting label outcome (pictogram, signal word, H/P statements)
 - [GHS Label Constructor](https://ghspictograms.com/label-constructor/): Build CLP-compliant chemical labels with pictograms, signal words, H/P-statements across 5 volume tiers
-- [Substance Database](https://ghspictograms.com/pictograms/): Search 4,178 CLP Annex VI substances with full GHS classification, pictograms and signal words
+- [Substance Database](https://ghspictograms.com/substances/): Search 4,178 CLP Annex VI substances with full GHS classification, pictograms and signal words
 - [GHS vs ADR/DOT Inspector](https://ghspictograms.com/inspector/): Compare GHS hazard classification with transport (ADR/DOT) classification side by side
 
 ## SDS Library
@@ -30,6 +30,8 @@
 - [Precautionary statements (P-codes)](https://ghspictograms.com/p-statements/): All 117 P-codes with the verbatim CLP Annex IV wording, the 27 official combined statements, jurisdiction status, and the harmonised substances that carry each code
 
 ## GHS Pictograms Reference
+
+- [All 9 GHS pictograms](https://ghspictograms.com/pictograms/): The nine hazard pictograms in one chart — symbol name, signal word, every CLP hazard class that requires each one with its Annex I chapter, the CLP Article 26 precedence rules with the number of harmonised substances each rule actually affects, and the Annex I minimum label and pictogram dimensions
 
 - [GHS01 Explosive](https://ghspictograms.com/ghs/ghs01/)
 - [GHS02 Flammable](https://ghspictograms.com/ghs/ghs02/)

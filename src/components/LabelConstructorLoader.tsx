@@ -167,8 +167,8 @@ export default function LabelConstructorLoader() {
           </div>
           <p className="mt-4 text-sm text-gray-500">
             Open the catalog in a separate page:{' '}
-            <a href="/pictograms/" className="text-[#062A78] underline">
-              Pictograms database →
+            <a href="/substances/" className="text-[#062A78] underline">
+              Substance database →
             </a>
           </p>
         </div>

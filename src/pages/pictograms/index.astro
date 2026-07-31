@@ -1,19 +1,631 @@
 ---
+// Хаб пиктограмм — /pictograms/ (session 23).
+//
+// ⚠ ЧТО ЗДЕСЬ БЫЛО РАНЬШЕ И ПОЧЕМУ ЭТОГО НЕ ЖАЛКО.
+// До session 23 на этом адресе лежал браузер веществ («Find a substance — open in Label
+// Constructor»). Его никто не видел: правило `/pictograms/*` в public/_redirects уводило
+// весь префикс на ghssymbols.com/hazards, и пустой splat совпадал с самим `/pictograms/`.
+// Страница собиралась и не отдавалась. Браузер переехал на /substances/, правило снято.
+//
+// ⚠ ПОЧЕМУ ХАБ ВООБЩЕ ПОЯВИЛСЯ.
+// Головной запрос кластера — `ghs pictograms` (5 400/мес US, KD 36), `ghs symbols` 5 400,
+// `ghs hazard pictograms` 4 400. Мы по первому стоим на позиции 3.93 в Bing и берём пять
+// кликов из 820 показов, потому что приземляется он на статью блога: страницы-справочника
+// под головной интент не было. Разбор — claude/pictograms-seo-baseline.md §3.7 и
+// claude/pictograms-keyword-list.md §1.
+//
+// ⚠ ВСЁ ЧИСЛОВОЕ НА ЭТОЙ СТРАНИЦЕ СЧИТАЕТСЯ ИЗ БАЗЫ НА СБОРКЕ.
+// Ни одного зашитого числа: классы и H-коды — из hazard_category_mapping, счётчики веществ,
+// пары и распределение — из substances. Правило, выведенное из одиннадцати ошибок session 22:
+// блок из данных обязан иметь маркер и проверку; захардкоженный блок разъедется.
+// Маркеры: data-pict-row · data-pict-pair · data-pict-dist. Проверки — scripts/check-dist.ts.
 export const prerender = true
+
 import Layout from '../../layouts/Layout.astro'
-import SubstanceFilterBrowse from '../../components/SubstanceFilterBrowse'
+import { supabase } from '../../lib/supabase'
+import { truncateMetaDescription } from '../../lib/metaDescription'
+
+const SITE = 'https://ghspictograms.com'
+const CODES = ['GHS01', 'GHS02', 'GHS03', 'GHS04', 'GHS05', 'GHS06', 'GHS07', 'GHS08', 'GHS09']
+
+type Signal = {
+  code: string
+  name_en: string
+  signal_word_en: string | null
+  adr_placard_code: string | null
+}
+type MapRow = {
+  pictogram_code: string
+  category_code: string | null
+  signal_word: string | null
+  h_statement_code: string
+  hazard_class_catalog: {
+    name_en: string
+    ghs_chapter: string | null
+    display_order: number | null
+  } | null
+}
+
+// ⚠ Никогда не делать select * из pictograms_signals: svg_content весит десятки КБ на строку.
+// Здесь он и не нужен — картинки берутся файлами из public/pictograms/ (session 23).
+const [sigRes, mapRes] = await Promise.all([
+  supabase
+    .from('pictograms_signals')
+    .select('code, name_en, signal_word_en, adr_placard_code')
+    .order('code'),
+  supabase
+    .from('hazard_category_mapping')
+    .select(
+      'pictogram_code, category_code, signal_word, h_statement_code, hazard_class_catalog(name_en, ghs_chapter, display_order)'
+    )
+    .not('pictogram_code', 'is', null)
+    .not('h_statement_code', 'is', null),
+])
+
+if (sigRes.error) throw new Error(`pictograms_signals: ${sigRes.error.message}`)
+if (mapRes.error) throw new Error(`hazard_category_mapping: ${mapRes.error.message}`)
+
+const signals = (sigRes.data ?? []) as Signal[]
+const mapRows = (mapRes.data ?? []) as unknown as MapRow[]
+
+// ⚠ Урок session 21 (§S21.2): RLS без политики отдаёт ПУСТУЮ выборку без ошибки, и сборка
+// зеленеет с пустой страницей. Пустой ответ там, где строки обязаны быть, — это провал сборки.
+if (signals.length !== 9) throw new Error(`pictograms_signals отдала ${signals.length} строк, ожидалось 9`)
+if (mapRows.length === 0) throw new Error('hazard_category_mapping отдала пусто — проверь политику чтения для anon')
+
+/**
+ * Вещества: постранично по 1000.
+ * ⚠ Сортировка по index_number — он чистый и уникален у всех 4 178 строк. cas_number для
+ * пагинации не годится: он не уникален и пуст у 369 групповых записей Annex VI (§S19.5).
+ * ⚠ Фильтр `cas_number is not null` повторяет фильтр страниц /ghs/[code]/ — иначе счётчик
+ * на хабе и счётчик на странице кода разошлись бы, и оба были бы «правильные».
+ */
+const PAGE = 1000
+const picto: string[][] = []
+for (let from = 0; ; from += PAGE) {
+  const { data, error } = await supabase
+    .from('substances')
+    .select('index_number, ghs_pictogram_codes')
+    .not('cas_number', 'is', null)
+    .not('ghs_pictogram_codes', 'is', null)
+    .order('index_number')
+    .range(from, from + PAGE - 1)
+  if (error) throw new Error(`substances: ${error.message}`)
+  const rows = (data ?? []) as { index_number: string; ghs_pictogram_codes: string[] | null }[]
+  for (const r of rows) {
+    const set = Array.from(new Set((r.ghs_pictogram_codes ?? []).filter((c) => CODES.includes(c))))
+    if (set.length) picto.push(set)
+  }
+  if (rows.length < PAGE) break
+}
+if (picto.length === 0) throw new Error('substances отдала ноль строк с пиктограммами — сборка была бы пустой')
+
+// Счётчики, пары и распределение — всё из одного массива.
+const countOf = new Map<string, number>(CODES.map((c) => [c, 0] as [string, number]))
+const pairOf = new Map<string, number>()
+const distOf = new Map<number, number>()
+for (const set of picto) {
+  for (const c of set) countOf.set(c, (countOf.get(c) ?? 0) + 1)
+  for (const a of set) for (const b of set) if (a !== b) pairOf.set(`${a}+${b}`, (pairOf.get(`${a}+${b}`) ?? 0) + 1)
+  distOf.set(set.length, (distOf.get(set.length) ?? 0) + 1)
+}
+const nOf = (c: string) => countOf.get(c) ?? 0
+const pairN = (a: string, b: string) => pairOf.get(`${a}+${b}`) ?? 0
+const pct = (a: number, b: number) => (b ? Math.round((a / b) * 1000) / 10 : 0)
+const TOTAL_WITH_PICT = picto.length
+const MAX_PICT = Math.max(...distOf.keys())
+
+// Класс-и-категория по пиктограммам. Порядок — display_order каталога, как на страницах кодов.
+type Row = {
+  code: string
+  name: string
+  signalWords: string[]
+  adr: string | null
+  classes: { name: string; chapter: string | null }[]
+  hCodes: string[]
+  substances: number
+}
+const rows: Row[] = CODES.map((code) => {
+  const sig = signals.find((s) => s.code === code)
+  const mine = mapRows.filter((r) => r.pictogram_code === code)
+  const classes = Array.from(
+    new Map(
+      mine
+        .slice()
+        .sort(
+          (a, b) =>
+            (a.hazard_class_catalog?.display_order ?? 999) - (b.hazard_class_catalog?.display_order ?? 999)
+        )
+        .map((r) => [
+          `${r.hazard_class_catalog?.name_en}|${r.hazard_class_catalog?.ghs_chapter}`,
+          {
+            name: r.hazard_class_catalog?.name_en ?? '',
+            chapter: r.hazard_class_catalog?.ghs_chapter ?? null,
+          },
+        ])
+    ).values()
+  )
+  return {
+    code,
+    name: sig?.name_en ?? code,
+    signalWords: Array.from(
+      new Set(mine.map((r) => r.signal_word).filter((w): w is string => Boolean(w)))
+    ).sort(),
+    adr: sig?.adr_placard_code ?? null,
+    classes,
+    hCodes: Array.from(new Set(mine.map((r) => r.h_statement_code))).sort(),
+    substances: nOf(code),
+  }
+})
+
+const TOTAL_CLASSES = new Set(mapRows.map((r) => r.hazard_class_catalog?.name_en).filter(Boolean)).size
+const TOTAL_RULES = mapRows.length
+
+const swClass = (words: string[]) => (words.length > 1 ? 'both' : words[0] === 'Danger' ? 'danger' : 'warning')
+const swLabel = (words: string[]) => (words.length > 1 ? 'Danger or Warning' : (words[0] ?? '—'))
+
+// ── копия, привязанная к коду; смысл в одну строку на карточку ────────────────
+const BLURB: Record<string, string> = {
+  GHS01: 'Explodes, or is self-reactive or a peroxide violent enough to behave like one.',
+  GHS02: 'Catches fire easily, heats itself, ignites in air, or gives off flammable gas in water.',
+  GHS03: 'Does not have to burn itself — it supplies the oxygen that makes everything else burn harder.',
+  GHS04: 'Gas held under pressure. The container is the hazard as much as the contents.',
+  GHS05: 'Destroys skin and eyes on contact, or eats through metal. Two very different readings of one symbol.',
+  GHS06: 'A small dose can kill. Acute toxicity categories 1 to 3, by any route. Always “Danger”.',
+  GHS07: 'Harmful, irritating, sensitising or narcotic — serious, but below the lethal band. Always “Warning”.',
+  GHS08: 'Damage that shows up later: cancer, genes, fertility, organs, or lungs after swallowing.',
+  GHS09: 'Toxic to fish and the aquatic environment, immediately or over the long term.',
+}
+
+/**
+ * «Какая мне нужна» — язык опасности, а не язык категорий CLP.
+ * ⚠ Гипотеза «класс + категория → пиктограмма» по Semrush мертва
+ * (`flammable liquid category 1 pictogram` — 0/мес), а язык опасности живой:
+ * `pictogram for corrosive` 1 600, `acute toxicity pictogram` 1 300, `carcinogen pictogram` 1 000,
+ * `irritant pictogram` 720, `pictogram for gas under pressure` 590 при SD 15.
+ * Разбор — claude/pictograms-keyword-list.md §3 и §6.2.
+ */
+const NEED: { say: string; code: string; to: string }[] = [
+  { say: 'It can explode', code: 'GHS01', to: 'explosives, self-reactives type A–B, peroxides type A–B' },
+  { say: 'It catches fire', code: 'GHS02', to: 'flammable gas, liquid, solid, aerosol, pyrophoric, self-heating' },
+  { say: 'It gives off flammable gas in water', code: 'GHS02', to: 'water-reactive, chapter 2.12' },
+  { say: 'It makes other things burn', code: 'GHS03', to: 'oxidising gas, liquid or solid' },
+  { say: 'It is a gas under pressure', code: 'GHS04', to: 'compressed, liquefied, refrigerated or dissolved' },
+  { say: 'It burns skin or damages eyes', code: 'GHS05', to: 'skin corrosion 1A–1C, serious eye damage 1' },
+  { say: 'It corrodes metal', code: 'GHS05', to: 'corrosive to metals, category 1 — signal word “Warning”' },
+  { say: 'A small dose can kill', code: 'GHS06', to: 'acute toxicity 1–3, oral, dermal or inhalation' },
+  { say: 'It irritates skin or eyes', code: 'GHS07', to: 'skin irritation 2, eye irritation 2A' },
+  { say: 'It causes an allergic skin reaction', code: 'GHS07', to: 'skin sensitisation 1, 1A, 1B' },
+  {
+    say: 'It causes cancer, or damages genes or fertility',
+    code: 'GHS08',
+    to: 'carcinogenicity, mutagenicity, reproductive toxicity',
+  },
+  { say: 'Swallowing it can flood the lungs', code: 'GHS08', to: 'aspiration hazard, category 1' },
+  { say: 'Breathing it in causes asthma', code: 'GHS08', to: 'respiratory sensitisation 1, 1A, 1B' },
+  { say: 'It is toxic to fish and water life', code: 'GHS09', to: 'aquatic acute 1, aquatic chronic 1–2' },
+]
+
+/**
+ * Приоритет пиктограмм — CLP Article 26, сверено дословно по
+ * `_source-docs/CELEX_02008R1272-20260501_EN_TXT.pdf`, строки 1456–1490.
+ * ⚠ Пункт (e) внесён поправкой M2 и в большинстве справочников отсутствует, хотя срабатывает
+ * чаще всех остальных: 92% баллонных записей идут вместе с GHS02.
+ * Под каждым правилом — что оно делает с нашими данными. Числа считаются, не пишутся.
+ */
+const RULES: { ref: string; rule: string; pair: [string, string] | null; ours: string }[] = [
+  {
+    ref: 'Article 26(1)(a)',
+    rule: 'If <b>GHS01</b> applies, GHS02 and GHS03 become <b>optional</b> — unless more than one of them is compulsory.',
+    pair: ['GHS01', 'GHS02'],
+    ours: `In Annex VI only <span class="n">${pairN('GHS01', 'GHS02')}</span> of the <span class="n">${nOf('GHS01')}</span> entries carrying GHS01 also carry GHS02, and <span class="n">${pairN('GHS01', 'GHS03') || 'none'}</span> carries GHS03. The bomb almost always travels alone.`,
+  },
+  {
+    ref: 'Article 26(1)(b)',
+    rule: 'If <b>GHS06</b> applies, <b>GHS07 shall not appear</b>. No exception, no discretion.',
+    pair: ['GHS06', 'GHS07'],
+    ours: `Exactly <span class="n">${pairN('GHS06', 'GHS07')}</span> of the <span class="n">${nOf('GHS06')}</span> GHS06 entries lists GHS07 as well — DNOC, index 609-020-00-X, where the exclamation mark comes from skin irritation and sensitisation. Annex VI prints the classification; Article 26 takes GHS07 off the label. Everything else obeys the rule already.`,
+  },
+  {
+    ref: 'Article 26(1)(c)',
+    rule: 'If <b>GHS05</b> applies, GHS07 shall not appear <b>for skin or eye irritation</b> — and only for that.',
+    pair: ['GHS05', 'GHS07'],
+    ours: `<span class="n">${pairN('GHS05', 'GHS07')}</span> of <span class="n">${nOf('GHS05')}</span> GHS05 entries still carry GHS07, and that is correct: their exclamation mark comes from acute toxicity category 4, sensitisation or narcotic effects, none of which the rule touches. Read as a blanket ban, it would strip <span class="n">${pct(pairN('GHS05', 'GHS07'), nOf('GHS05'))}%</span> of these labels of a warning they are required to show.`,
+  },
+  {
+    ref: 'Article 26(1)(d)',
+    rule: 'If <b>GHS08</b> applies <b>for respiratory sensitisation</b>, GHS07 shall not appear for skin sensitisation or for skin and eye irritation.',
+    pair: ['GHS07', 'GHS08'],
+    ours: `The narrowest of the five: it fires only when the health-hazard diamond is there because of asthma, not because of cancer or organ damage. <span class="n">${pairN('GHS07', 'GHS08')}</span> entries carry GHS07 and GHS08 together; the rule reaches only the respiratory-sensitiser slice of them.`,
+  },
+  {
+    ref: 'Article 26(1)(e)',
+    rule: 'If <b>GHS02</b> or <b>GHS06</b> applies, <b>GHS04 is optional</b>. Added to CLP by amendment, and routinely missed.',
+    pair: ['GHS04', 'GHS02'],
+    ours: `This is the rule that fires constantly: <span class="n">${pairN('GHS04', 'GHS02')}</span> of the <span class="n">${nOf('GHS04')}</span> gas-cylinder entries — <span class="n">${pct(pairN('GHS04', 'GHS02'), nOf('GHS04'))}%</span> — also carry GHS02, and another <span class="n">${pairN('GHS04', 'GHS06')}</span> carry GHS06. On almost every real cylinder label the gas-cylinder diamond is a choice, not an obligation.`,
+  },
+  {
+    ref: 'Article 26(2)',
+    rule: 'Where one hazard class would produce more than one pictogram, the label shows the one for the <b>most severe category</b> in that class.',
+    pair: null,
+    ours: 'This is why acute toxicity category 4 never puts a skull next to an exclamation mark: same class, one pictogram, the worse category wins.',
+  },
+]
+
+const FAQ: [string, string][] = [
+  [
+    'How many GHS pictograms are there?',
+    'Nine. GHS01 exploding bomb, GHS02 flame, GHS03 flame over circle, GHS04 gas cylinder, GHS05 corrosion, GHS06 skull and crossbones, GHS07 exclamation mark, GHS08 health hazard, GHS09 environment. The set has not changed since GHS was first adopted, and a tenth would require a change to the UN model text.',
+  ],
+  [
+    'What is the difference between a GHS symbol and a GHS pictogram?',
+    'The symbol is the black drawing — flame, skull, exclamation mark. The pictogram is the complete label element: that symbol on a white background inside a red diamond. UN GHS names symbols; CLP Annex V publishes the pictograms. In practice the two words are used for the same nine images.',
+  ],
+  [
+    'Is the biohazard sign a GHS pictogram?',
+    'No. Neither is the radiation trefoil nor the NFPA 704 fire diamond. GHS covers chemical hazards only, and only these nine images are GHS pictograms. NFPA 704 is a US fire-service rating system with a different shape, different colours and a different meaning.',
+  ],
+  [
+    'Which pictogram means toxic?',
+    'GHS06, the skull and crossbones, for acute toxicity categories 1 to 3 — the band where a small dose can be fatal. Category 4, harmful rather than fatal, gets GHS07, the exclamation mark. Long-term toxicity such as cancer or organ damage is GHS08 and is a different question entirely.',
+  ],
+  [
+    'Can one label carry more than one pictogram?',
+    `Yes, and most do. Of the ${TOTAL_WITH_PICT.toLocaleString('en-US')} harmonised substances that carry a pictogram at all, ${(distOf.get(1) ?? 0).toLocaleString('en-US')} carry one, ${(distOf.get(2) ?? 0).toLocaleString('en-US')} carry two, ${(distOf.get(3) ?? 0).toLocaleString('en-US')} carry three, ${(distOf.get(4) ?? 0).toLocaleString('en-US')} carry four and ${(distOf.get(5) ?? 0).toLocaleString('en-US')} carry five. None carries six. Article 26 of CLP then removes some of them before printing.`,
+  ],
+  [
+    'Where can I download the GHS pictograms?',
+    'Every pictogram page here has a free SVG download — vector, so it stays sharp at any label size. The official artwork is published by UNECE, and CLP Annex V is the legal reference for the EU. Do not redraw them by hand: the proportions and the red frame are part of the requirement.',
+  ],
+  [
+    'Does the frame have to be red?',
+    'Under CLP, yes — a black symbol on a white background with a red frame wide enough to be clearly visible. The red border is not decoration; a black-bordered diamond is a transport label, not a CLP hazard pictogram.',
+  ],
+]
+
+/**
+ * ⚠ Title под головной запрос кластера, а не под коды: коды уже забраны девятью
+ * страницами /ghs/[code]/, и конкурировать с ними хабом нельзя (каннибализация).
+ * `ghs pictograms` 5 400 · `ghs symbols` 5 400 · `ghs symbols and meanings` 720 —
+ * все три помещаются в одну строку.
+ */
+const title = 'GHS Pictograms: All 9 Hazard Symbols and Their Meanings'
+const description = truncateMetaDescription(
+  `All nine GHS hazard pictograms and what they mean — exploding bomb, flame, flame over circle, gas cylinder, corrosion, skull and crossbones, exclamation mark, health hazard and environment. Signal words, the ${TOTAL_CLASSES} CLP hazard classes behind them, the Article 26 precedence rules and free SVG downloads.`
+)
+const canonical = `${SITE}/pictograms/`
+
+const itemListJson = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  name: 'GHS hazard pictograms',
+  numberOfItems: rows.length,
+  itemListElement: rows.map((r, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    name: `${r.code} — ${r.name}`,
+    description: BLURB[r.code],
+    url: `${SITE}/ghs/${r.code.toLowerCase()}/`,
+  })),
+})
+
+const faqJson = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: FAQ.map(([q, a]) => ({
+    '@type': 'Question',
+    name: q,
+    acceptedAnswer: { '@type': 'Answer', text: a },
+  })),
+})
 ---
 
-<Layout
-  title="Find a substance — open in Label Constructor"
-  description="Search and filter harmonized substances by CAS, name, GHS pictogram, or signal word. Open any entry in the GHS Label Constructor."
-  canonical="https://ghspictograms.com/pictograms/"
->
-  <section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-0">
-    <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">Find a substance — open in Label Constructor</h1>
-    <p class="mt-3 text-lg text-gray-600">
-      Search the full database with fuzzy matching, filter by pictogram or signal word, then open a substance in the label builder (up to 100 matches shown).
-    </p>
+<Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
+  <script type="application/ld+json" slot="head" set:html={itemListJson} />
+  <script type="application/ld+json" slot="head" set:html={faqJson} />
+
+  <!-- Hero: без тинта — новым хабам цвет не подбираем (решение Сергея, session 15) -->
+  <section class="hub-hero">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+    <div class="hub-wrap hub-hero-inner">
+      <p class="hub-hero-eyebrow">Reference · Hazard pictograms</p>
+      <h1>GHS pictograms: all nine hazard symbols</h1>
+      <p class="hub-hero-sub">
+        The nine pictograms in one chart — what each one means, the signal word it carries, the
+        hazard classes that require it, and how many of the substances with a harmonised
+        classification in CLP Annex VI actually get it.
+      </p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">9 pictograms · {TOTAL_CLASSES} hazard classes</span>
+        <span class="hub-hero-chip">{TOTAL_RULES} class-and-category rules</span>
+        <span class="hub-hero-chip">{TOTAL_WITH_PICT.toLocaleString('en-US')} substances classified</span>
+      </div>
+    </div>
   </section>
-  <SubstanceFilterBrowse client:load />
+
+  <!-- 01 · Чарт -->
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">01 · The chart</p>
+      <h2 class="hub-h2">All nine, at a glance</h2>
+      <p class="hub-sub">
+        A hazard pictogram is a black symbol on a white background inside a red diamond. Nine of
+        them exist and no tenth is coming without a change to the UN model regulation. Each card
+        links to the full page for that pictogram — hazard classes, H-codes, the substances that
+        carry it and a free SVG.
+      </p>
+
+      <div class="pict-grid">
+        {rows.map((r) => (
+          <a class="pict-card" href={`/ghs/${r.code.toLowerCase()}/`}>
+            <div class="pict-card-top">
+              <img class="pict-ico" src={`/pictograms/${r.code.toLowerCase()}.svg`} width="62" height="62" loading="lazy" decoding="async" alt={`${r.code} ${r.name.toLowerCase()} pictogram`} />
+              <div>
+                <span class="pict-card-head">
+                  <span class="code">{r.code}</span>
+                  <span class={`pict-sw ${swClass(r.signalWords)}`}>{swLabel(r.signalWords)}</span>
+                </span>
+                <h3>{r.name}</h3>
+              </div>
+            </div>
+            <p class="copy">{BLURB[r.code]}</p>
+            <p class="pict-stats">
+              <b>{r.classes.length}</b> {r.classes.length === 1 ? 'class' : 'classes'}<span class="sep">·</span>
+              <b>{r.hCodes.length}</b> H-codes<span class="sep">·</span>
+              <b>{r.substances.toLocaleString('en-US')}</b> substances
+            </p>
+          </a>
+        ))}
+      </div>
+
+      <p class="hub-note">
+        <b>Symbol or pictogram?</b> The <i>symbol</i> is the black drawing — a flame, a skull, an
+        exclamation mark. The <i>pictogram</i> is the finished label element: that symbol, on white,
+        inside the red diamond. UN GHS names the symbols, CLP Annex V draws the pictograms. In
+        everyday use “GHS symbol” and “GHS pictogram” mean the same nine images.
+      </p>
+    </div>
+  </section>
+
+  <!-- 02 · Классы -->
+  <section class="hub-sec-b">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">02 · The classification behind each symbol</p>
+      <h2 class="hub-h2">Every CLP hazard class, and the pictogram it triggers</h2>
+      <p class="hub-sub">
+        A pictogram is never chosen — it falls out of the classification. These are all
+        {' '}{TOTAL_CLASSES} hazard classes of CLP that carry a pictogram, sorted under the nine
+        images, with the chapter number of Annex I next to each. Read it in reverse and it answers
+        the harder question: given a pictogram on a drum, which hazard could have put it there. The
+        last column is the transport class that usually travels with it; three of the nine have no
+        transport equivalent at all.
+      </p>
+
+      <div class="hub-table-wrap">
+        <table class="hub-table">
+          <thead>
+            <tr>
+              <th>Pictogram</th>
+              <th>CLP hazard classes that require it</th>
+              <th>ADR</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr data-pict-row={`${r.code}|${r.classes.length}|${r.hCodes.length}|${r.substances}`}>
+                <td class="pict-id">
+                  <span class="wrap">
+                    <img class="pict-ico-sm" src={`/pictograms/${r.code.toLowerCase()}.svg`} width="38" height="38" loading="lazy" decoding="async" alt="" />
+                    <span>
+                      <a href={`/ghs/${r.code.toLowerCase()}/`}>{r.code}</a>
+                      <span class="nm">{r.name}</span>
+                    </span>
+                  </span>
+                </td>
+                <td class="pict-classes">
+                  {r.classes.map((c, i) => (
+                    <>
+                      {i > 0 && <span class="sep">·</span>}
+                      {c.name} <span class="ch">{c.chapter}</span>
+                    </>
+                  ))}
+                </td>
+                <td class="pict-adr">{r.adr ? `Class ${r.adr}` : <span class="none">no equivalent</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p class="hub-note">
+        <b>Why GHS07, GHS08 and GHS09 have no ADR class.</b> Transport regulations classify by the
+        hazard that matters while a package is moving — fire, pressure, acute toxicity, corrosion.
+        Irritation, cancer and long-term aquatic harm do not change how a lorry is loaded, so they
+        have no placard. A drum can legally travel with no transport label and still need three GHS
+        pictograms on the container. See <a href="/inspector/">the GHS vs ADR/DOT inspector</a>.
+      </p>
+    </div>
+  </section>
+
+  <!-- 03 · Какая нужна -->
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">03 · Choosing</p>
+      <h2 class="hub-h2">Which pictogram does my chemical need?</h2>
+      <p class="hub-sub">
+        Start from what the substance does, not from the code. Each line goes to the page that lists
+        the exact hazard classes and categories behind it — the classification decides the
+        pictogram, never the other way round.
+      </p>
+
+      <div class="pict-need">
+        {NEED.map((n) => (
+          <a class="pict-need-row" href={`/ghs/${n.code.toLowerCase()}/`}>
+            <img class="pict-ico-md" src={`/pictograms/${n.code.toLowerCase()}.svg`} width="40" height="40" loading="lazy" decoding="async" alt="" />
+            <span class="txt">
+              <span class="say">{n.say}</span>
+              <span class="to">{n.code} · {n.to}</span>
+            </span>
+          </a>
+        ))}
+      </div>
+
+      <p class="hub-note">
+        <b>And the cases with no pictogram at all.</b> A hazard class can require a signal word and
+        an H-statement and still carry no image. Aquatic chronic categories 3 and 4
+        (<a href="/h-statements/H412/">H412</a>, <a href="/h-statements/H413/">H413</a>) get a
+        statement only. So do effects on or via lactation (<a href="/h-statements/H362/">H362</a>),
+        aerosols category 3 (<a href="/h-statements/H229/">H229</a>), explosives of division 1.6,
+        and organic peroxides and self-reactives of type G. A label with no diamond on it is not
+        automatically a label with no hazard.
+      </p>
+    </div>
+  </section>
+
+  <!-- 04 · Приоритет -->
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">04 · Precedence</p>
+      <h2 class="hub-h2">When two pictograms collide, CLP removes one</h2>
+      <p class="hub-sub">
+        Article 26 of CLP sets five rules that cut the number of diamonds on a label. Most reference
+        pages quote them and stop. Under each rule below is what it actually does to the
+        {' '}{TOTAL_WITH_PICT.toLocaleString('en-US')} classified substances in our copy of Annex VI
+        — which is how you find out that one of these rules is nearly always in play and another
+        almost never is.
+      </p>
+
+      <div class="pict-rules">
+        {RULES.map((r) => (
+          <div
+            class="pict-rule"
+            data-pict-pair={r.pair ? `${r.pair[0]}+${r.pair[1]}|${pairN(r.pair[0], r.pair[1])}` : undefined}
+          >
+            <span class="lbl">{r.ref}</span>
+            <p class="rule" set:html={r.rule} />
+            <p class="ours" set:html={r.ours} />
+          </div>
+        ))}
+      </div>
+
+      <h3 class="pict-h3">How many diamonds end up on one label</h3>
+      <div class="pict-dist">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <div class="pict-dist-cell" data-pict-dist={`${n}|${distOf.get(n) ?? 0}`}>
+            <span class="n">{(distOf.get(n) ?? 0).toLocaleString('en-US')}</span>
+            <span class="l">
+              {n === 1 ? 'one pictogram' : n === 2 ? 'two' : n === 3 ? 'three' : n === 4 ? 'four' : 'five'}
+            </span>
+          </div>
+        ))}
+        <div class="pict-dist-cell" data-pict-dist={`6|${distOf.get(6) ?? 0}`}>
+          <span class="n">{(distOf.get(6) ?? 0).toLocaleString('en-US')}</span>
+          <span class="l">six or more</span>
+        </div>
+      </div>
+      <p class="hub-note">
+        Counted before Article 26 is applied, so these are upper bounds — the real label is often one
+        diamond shorter. No harmonised entry in CLP Annex VI reaches {MAX_PICT + 1}.
+        <a href="/label-constructor/">Build the label</a> and the constructor applies the precedence
+        rules for you.
+      </p>
+    </div>
+  </section>
+
+  <!-- 05 · На этикетке -->
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">05 · On the label</p>
+      <h2 class="hub-h2">Shape, colour and minimum size</h2>
+      <p class="hub-sub">
+        CLP Annex I section 1.2.1 is short and specific, and it is where most home-made labels fail.
+        A pictogram is a square set at a point — a diamond — with a black symbol on a white
+        background and a red frame wide enough to be clearly visible. An all-black frame is not a
+        CLP pictogram.
+      </p>
+
+      <div class="hub-table-wrap">
+        <table class="hub-table">
+          <thead>
+            <tr>
+              <th>Capacity of the package</th>
+              <th>Minimum label size</th>
+              <th>Minimum size of each pictogram</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="c-txt">Not exceeding 3 litres</td>
+              <td class="c-txt">If possible, at least 52 × 74 mm</td>
+              <td class="c-txt">Not smaller than 10 × 10 mm; if possible at least 16 × 16 mm</td>
+            </tr>
+            <tr>
+              <td class="c-txt">Over 3 l, up to 50 l</td>
+              <td class="c-txt">At least 74 × 105 mm</td>
+              <td class="c-txt">At least 23 × 23 mm</td>
+            </tr>
+            <tr>
+              <td class="c-txt">Over 50 l, up to 500 l</td>
+              <td class="c-txt">At least 105 × 148 mm</td>
+              <td class="c-txt">At least 32 × 32 mm</td>
+            </tr>
+            <tr>
+              <td class="c-txt">Over 500 litres</td>
+              <td class="c-txt">At least 148 × 210 mm</td>
+              <td class="c-txt">At least 46 × 46 mm</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="hub-note">
+        <b>Two rules that override the table.</b> Each pictogram must cover at least
+        <b>one fifteenth</b> of the minimum label area required by Article 17, and no pictogram may
+        ever be smaller than <b>1 cm²</b> — so on a very small bottle the 1 cm² floor, not the
+        10 × 10 mm line, is what binds. Source: Regulation (EC) No 1272/2008, Annex I, sections
+        1.2.1.1 to 1.2.1.4 and Table 1.3.
+      </p>
+    </div>
+  </section>
+
+  <!-- 06 · Вопросы -->
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">06 · Questions</p>
+      <h2 class="hub-h2">Common questions</h2>
+      <div class="hub-faq">
+        {FAQ.map(([q, a]) => (
+          <div class="hub-faq-item">
+            <p class="q">{q}</p>
+            <p class="a">{a}</p>
+          </div>
+        ))}
+      </div>
+      <p class="hub-fine">
+        Counts on this page are computed from the harmonised classifications in CLP Annex VI and
+        from our own CLP class-to-pictogram mapping, rebuilt on every deploy. The pictograms on a
+        real product also depend on the supplier's classification of the mixture —
+        <b>always check the supplier safety data sheet</b>.
+      </p>
+    </div>
+  </section>
+
+  <!-- 07 · Закрывающий блок -->
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <div class="hub-close-panel">
+        <div class="dots" aria-hidden="true"></div>
+        <h2>From the symbol to the label</h2>
+        <p>
+          The pictogram is one of six label elements. <a href="/h-statements/">Hazard statements</a>
+          say what the danger is, <a href="/p-statements/">precautionary statements</a> say what to
+          do about it, the <a href="/label-constructor/">label constructor</a> puts all of them on
+          an actual label with the precedence rules applied, and the
+          <a href="/substances/">substance database</a> looks up any harmonised entry by name or CAS.
+        </p>
+      </div>
+    </div>
+  </section>
 </Layout>

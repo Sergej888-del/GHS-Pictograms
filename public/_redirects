@@ -1,5 +1,19 @@
 # GHS Pictograms — redirects
-/pictograms/*  https://ghssymbols.com/hazards/:splat  301
+#
+# ⚠ session 23: правило `/pictograms/*  https://ghssymbols.com/hazards/:splat  301` СНЯТО.
+# Оно съедало и сам адрес `/pictograms/` — пустой splat совпадает, — поэтому собранная
+# страница на этом адресе никогда не отдавалась, а двенадцать внутренних ссылок сайта
+# (включая «Substance database» в шапке) уводили посетителя на домен, который мы сливаем.
+# Теперь `/pictograms/` — хаб пиктограмм, браузер веществ переехал на `/substances/`.
+# ⚠ И то, что это правило прятало (поймал Сергей на превью, session 23):
+#   (а) строки веществ в браузере и на страницах пиктограмм вели на `/pictograms/<cas>/`,
+#       маршрута с таким именем НЕТ — работали они только через этот 301 на ghssymbols.
+#       Теперь ведут АБСОЛЮТНО и напрямую: `/sds/<slug>/` там, где локальная страница
+#       есть (73 совпадения по CAS), и https://ghssymbols.com/hazards/<cas>/ у остальных.
+#       Решение Сергея: пока перенесены не все `/hazards/`, ссылка должна быть живой;
+#   (б) `<img src="/pictograms/ghsNN.svg">` на 108 страницах H-фраз и в браузере веществ
+#       уходил 301 на ghssymbols.com/hazards/ghsNN.svg — картинка была битой на проде.
+#       Файлы вынуты из .gitignore и лежат в репозитории.
 
 # --- H-statements: safety net for traffic arriving from ghssymbols.com ---
 # The nine CLP Annex VI suffix codes are mapped on the ghssymbols side already; these

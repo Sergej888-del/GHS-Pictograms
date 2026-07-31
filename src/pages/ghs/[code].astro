@@ -213,6 +213,26 @@ const hazardClassCount = new Set(
   mapping.map((r) => r.hazard_class_catalog?.name_en).filter(Boolean)
 ).size
 
+/**
+ * ⚠ session 23: строка вещества ниже вела на `/pictograms/<cas>/`. Маршрута с таким
+ * именем нет — она работала лишь потому, что правило `/pictograms/*` уводило запрос
+ * 301 на ghssymbols.com/hazards/<cas>/. Правило снято (там теперь хаб).
+ *
+ * Решение Сергея: ссылка остаётся живой. Локальная `/sds/<slug>/` там, где страница
+ * есть, и АБСОЛЮТНАЯ на ghssymbols у остальных — напрямую, без хопа через редирект.
+ * ⚠ Когда `/hazards/` переедут, менять надо здесь и в SubstanceFilterBrowse.tsx.
+ */
+const { data: sdsRaw } = await supabase
+  .from('sds_pages')
+  .select('slug, cas_number')
+  .eq('status', 'live')
+  .in('cas_number', substances.map((s) => s.cas_number).filter(Boolean))
+const sdsSlug = new Map<string, string>(
+  ((sdsRaw ?? []) as { slug: string; cas_number: string | null }[])
+    .filter((r) => r.cas_number)
+    .map((r) => [r.cas_number as string, r.slug])
+)
+
 // Считаем сколько веществ с этой пиктограммой всего
 const { count: totalCount } = await supabase
   .from('substances')
@@ -385,6 +405,12 @@ const ghsJsonLd = {
             href="/pictograms/"
             class="px-5 py-2.5 border border-white/40 text-white font-semibold rounded-lg hover:bg-white/10 transition-colors text-sm"
           >
+            All 9 pictograms →
+          </a>
+          <a
+            href="/substances/"
+            class="px-5 py-2.5 border border-white/40 text-white font-semibold rounded-lg hover:bg-white/10 transition-colors text-sm"
+          >
             Browse all substances
           </a>
         </div>
@@ -551,7 +577,7 @@ const ghsJsonLd = {
       </h2>
       <p class="text-gray-500 text-sm mb-6">
         Showing {substances.length} of {totalCount ?? substances.length} substances in our database with this pictogram.
-        <a href={`/pictograms/?pic=${upperCode}`} class="text-[#062A78] underline ml-1">View all →</a>
+        <a href={`/substances/?pic=${upperCode}`} class="text-[#062A78] underline ml-1">View all →</a>
       </p>
 
       <ul class="divide-y divide-gray-200 border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm">
@@ -559,25 +585,32 @@ const ghsJsonLd = {
           const name = s.common_name || s.iupac_name
           const pics = s.ghs_pictogram_codes ?? []
           const casEnc = encodeURIComponent(s.cas_number)
+          const slug = sdsSlug.get(s.cas_number)
+          const inner = (
+            <>
+              <div class="min-w-0">
+                <span class="font-semibold text-[#062A78] block truncate">{name}</span>
+                <span class="text-xs text-gray-500">CAS {s.cas_number}</span>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                {s.signal_word && (
+                  <span class={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.signal_word === 'Danger' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {s.signal_word}
+                  </span>
+                )}
+                <span class="text-xs text-gray-400 hidden sm:block">{pics.slice(0,4).join(' ')}</span>
+                <span class="text-[#062A78] text-xs font-medium">{slug ? 'SDS →' : 'Details →'}</span>
+              </div>
+            </>
+          )
           return (
             <li key={s.cas_number} class="flex items-stretch gap-0">
               <a
-                href={`/pictograms/${casEnc}/`}
+                href={slug ? `/sds/${slug}/` : `https://ghssymbols.com/hazards/${casEnc}/`}
+                rel={slug ? undefined : 'noopener'}
                 class="flex flex-1 min-w-0 items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors gap-4"
               >
-                <div class="min-w-0">
-                  <span class="font-semibold text-[#062A78] block truncate">{name}</span>
-                  <span class="text-xs text-gray-500">CAS {s.cas_number}</span>
-                </div>
-                <div class="flex items-center gap-2 shrink-0">
-                  {s.signal_word && (
-                    <span class={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.signal_word === 'Danger' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
-                      {s.signal_word}
-                    </span>
-                  )}
-                  <span class="text-xs text-gray-400 hidden sm:block">{pics.slice(0,4).join(' ')}</span>
-                  <span class="text-[#062A78] text-xs font-medium">Details →</span>
-                </div>
+                {inner}
               </a>
               <a
                 href={`/label-constructor/?cas=${casEnc}`}
