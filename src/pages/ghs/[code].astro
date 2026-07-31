@@ -24,7 +24,6 @@ const GHS_META: Record<string, {
   bgLight: string
   borderColor: string
   textColor: string
-  hCodes: string[]
   description: string
   storageNote: string
   regulatoryNote: string
@@ -37,7 +36,6 @@ const GHS_META: Record<string, {
     bgLight: '#F5F3FF',
     borderColor: '#DDD6FE',
     textColor: '#4C1D95',
-    hCodes: ['H200','H201','H202','H203','H204','H205','H240','H241','H242'],
     description: 'The exploding bomb pictogram indicates explosive substances, mixtures, and articles, including self-reactive substances and organic peroxides. These materials release energy rapidly when subjected to shock, heat, or friction.',
     storageNote: 'Store only in approved explosive magazines. Segregate from all ignition sources, heat, open flame, and friction. Access restricted to authorised personnel. Quantities must be minimised. Earthing and bonding required during transfer.',
     regulatoryNote: 'Under CLP Regulation (EC) No 1272/2008, GHS01 applies to explosive substances in Division 1.1–1.6. EU Directive 2014/28/EU governs commercial explosives. OSHA 29 CFR 1910.109 covers storage and handling in the USA.',
@@ -50,7 +48,6 @@ const GHS_META: Record<string, {
     bgLight: '#FFF7ED',
     borderColor: '#FED7AA',
     textColor: '#7C2D12',
-    hCodes: ['H220','H221','H222','H223','H224','H225','H226','H228','H229','H250','H251','H252','H260','H261'],
     description: 'The flame pictogram indicates flammable gases, aerosols, liquids, and solids, as well as pyrophoric, self-heating, and water-reactive substances. Flash point below 60 °C for liquids is a key trigger.',
     storageNote: 'Store in dedicated flammable storage cabinet away from oxidisers and ignition sources. Use explosion-proof electrical equipment. Ground and bond containers during transfer to prevent static discharge. Keep containers tightly closed.',
     regulatoryNote: 'CLP categories: Flammable Liquids Cat. 1–3 (H224/H225/H226), Flammable Gases Cat. 1–2 (H220/H221). OSHA 29 CFR 1910.106 governs flammable liquid storage. NFPA 30 provides fire protection standards.',
@@ -63,7 +60,6 @@ const GHS_META: Record<string, {
     bgLight: '#FFFBEB',
     borderColor: '#FDE68A',
     textColor: '#78350F',
-    hCodes: ['H270','H271','H272'],
     description: 'The flame over circle pictogram indicates oxidising gases, liquids, and solids. These substances can intensify fire or cause combustion in materials that normally would not burn, significantly increasing fire risk.',
     storageNote: 'Store separately from all flammable, combustible, and organic materials. Keep cool and dry. Use dedicated non-combustible storage. Never store near reducing agents or acids. Ensure adequate ventilation.',
     regulatoryNote: 'CLP categories: Oxidising Gases Cat. 1 (H270), Oxidising Liquids Cat. 1–3 (H271/H272), Oxidising Solids Cat. 1–3. OSHA 29 CFR 1910.104 covers oxygen storage. Special permits may apply for Category 1 oxidisers.',
@@ -76,7 +72,6 @@ const GHS_META: Record<string, {
     bgLight: '#F0F9FF',
     borderColor: '#BAE6FD',
     textColor: '#0C4A6E',
-    hCodes: ['H280','H281'],
     description: 'The gas cylinder pictogram indicates compressed, liquefied, refrigerated liquefied, or dissolved gases stored under pressure. These present risks of explosion if heated and asphyxiation if released in confined spaces.',
     storageNote: 'Secure cylinders upright with chains or straps at all times. Store away from heat sources, corrosives, and ignition sources. Use correct regulators and valves. Ensure adequate ventilation in storage and use areas. Cap cylinders when not in use.',
     regulatoryNote: 'EU Pressure Equipment Directive (PED) 2014/68/EU applies to gas cylinders. EN ISO 11114-1 covers material compatibility. OSHA 29 CFR 1910.101 governs compressed gas handling in the USA. Regular inspection required.',
@@ -89,7 +84,6 @@ const GHS_META: Record<string, {
     bgLight: '#FAF5FF',
     borderColor: '#E9D5FF',
     textColor: '#4C1D95',
-    hCodes: ['H290','H314','H315','H318'],
     description: 'The corrosion pictogram indicates substances that cause severe skin burns and eye damage (H314/H318) or are corrosive to metals (H290). Contact can cause permanent tissue destruction within minutes.',
     storageNote: 'Store in acid-resistant or alkali-resistant cabinets as appropriate. Do not store in metal containers for corrosive-to-metals substances. Use secondary containment (drip trays). Segregate acids from bases. Ensure eyewash stations are accessible within 10 seconds.',
     regulatoryNote: 'CLP Skin Corrosion Cat. 1A/1B/1C (H314) and Eye Damage Cat. 1 (H318). EU Directive 98/24/EC covers chemical agents at work. OSHA 29 CFR 1910.1000 sets PELs. Emergency eyewash required per ANSI Z358.1.',
@@ -102,7 +96,6 @@ const GHS_META: Record<string, {
     bgLight: '#F9FAFB',
     borderColor: '#D1D5DB',
     textColor: '#111827',
-    hCodes: ['H300','H301','H310','H311','H330','H331'],
     description: 'The skull and crossbones pictogram indicates severe acute toxicity via oral (H300/H301), dermal (H310/H311), or inhalation (H330/H331) routes. Categories 1–3 represent the highest acute toxicity levels under GHS/CLP.',
     storageNote: 'Store in locked, well-ventilated area. Access restricted to trained and authorised personnel only. Secondary containment mandatory. Biological and air monitoring may be required. Emergency procedures and antidotes must be available and documented.',
     regulatoryNote: 'CLP Acute Toxicity Cat. 1–3. Suppresses GHS07 on labels per CLP Article 26. OSHA 29 CFR 1910.1200 requires full hazcom programme. EU occupational exposure limits (OELs) under Directive 2017/164/EU may apply.',
@@ -115,7 +108,6 @@ const GHS_META: Record<string, {
     bgLight: '#FFFBEB',
     borderColor: '#FDE68A',
     textColor: '#78350F',
-    hCodes: ['H302','H312','H315','H317','H319','H332','H335','H336'],
     description: 'The exclamation mark pictogram indicates acute toxicity of lower severity (H302/H312/H332), skin and eye irritation (H315/H319), skin sensitisation (H317), and respiratory/narcotic effects (H335/H336). Suppressed when GHS06, GHS05, or GHS08 applies.',
     storageNote: 'Provide adequate ventilation in work areas. Wear appropriate PPE: gloves, eye protection, and respiratory protection if vapour concentrations may exceed OELs. Keep containers closed when not in use. Wash hands thoroughly after handling.',
     regulatoryNote: 'CLP Acute Toxicity Cat. 4 and various irritation/sensitisation categories. Suppressed on label by GHS06 (acute tox. Cat. 1–3) and GHS05 per CLP Article 26. OSHA HCS 2012 aligns with these classifications.',
@@ -128,7 +120,6 @@ const GHS_META: Record<string, {
     bgLight: '#FDF2F8',
     borderColor: '#FBCFE8',
     textColor: '#831843',
-    hCodes: ['H334','H340','H341','H350','H351','H360','H361','H362','H370','H371','H372','H373'],
     description: 'The health hazard pictogram indicates serious chronic or irreversible health effects: carcinogenicity (H350/H351), mutagenicity (H340/H341), reproductive toxicity (H360/H361/H362), respiratory sensitisation (H334), and specific target organ toxicity (H370–H373).',
     storageNote: 'Minimise exposure using engineering controls: local exhaust ventilation, closed systems, gloveboxes. Biological monitoring and medical surveillance may be legally required. Substitution should be considered for Cat. 1A/1B substances. Restrict access and maintain exposure records.',
     regulatoryNote: 'CMR substances (Cat. 1A/1B) face restrictions under REACH Annex XVII and may be SVHC candidates. EU Directive 2004/37/EC covers carcinogens at work. OSHA 29 CFR 1910.1003–.1016 lists specific carcinogens with individual standards.',
@@ -141,7 +132,6 @@ const GHS_META: Record<string, {
     bgLight: '#F0FDFA',
     borderColor: '#99F6E4',
     textColor: '#134E4A',
-    hCodes: ['H400','H401','H410','H411','H412','H413','H420'],
     description: 'The environmental hazard pictogram indicates substances that are acutely or chronically toxic to aquatic life (H400–H413) or harm the ozone layer (H420). Even small releases can cause lasting ecological damage to water systems.',
     storageNote: 'Do not allow entry to drains, waterways, or soil. Use bunded storage areas. Spill containment equipment must be available. Disposal must comply with local water authority regulations. Contact emergency services immediately for significant spills near water.',
     regulatoryNote: 'CLP Aquatic Acute Cat. 1 (H400) and Chronic Cat. 1–4 (H410–H413). EU Water Framework Directive (2000/60/EC) sets environmental quality standards. Priority substances under Annex II may face market restrictions. REACH registration requires aquatic toxicity data.',
@@ -169,13 +159,59 @@ const { data: substancesRaw } = await supabase
 
 const substances = substancesRaw ?? []
 
-// Загружаем H-statements для этой пиктограммы
-const { data: hStatementsData } = await supabase
-  .from('h_statements')
-  .select('code, text_en:text_plain')
-  .in('code', meta.hCodes)
+/**
+ * ⚠ Список H-кодов пиктограммы берётся ТОЛЬКО из базы (session 22).
+ * Раньше он лежал массивом `hCodes` прямо в этом файле и разъехался с первоисточником
+ * в одиннадцати местах: H315 стоял на GHS05 (это GHS07), H304 отсутствовал на GHS08,
+ * GHS09 нёс H401/H412/H413, у которых пиктограммы нет вообще.
+ * Разбор — `claude/pictograms-page-audit.md`. Первоисточник — UN GHS Rev.11, Annex 3.
+ * Не возвращать хардкод: `hazard_category_mapping` — единственное место правки.
+ */
+const { data: mappingRaw } = await supabase
+  .from('hazard_category_mapping')
+  .select(
+    'category_code, signal_word, h_statement_code, hazard_class_catalog(name_en, ghs_chapter, display_order), h_statements(text_plain)'
+  )
+  .eq('pictogram_code', upperCode)
+  .not('h_statement_code', 'is', null)
 
-const hStatements = (hStatementsData ?? []).sort((a, b) => a.code.localeCompare(b.code))
+type MappingRow = {
+  category_code: string | null
+  signal_word: string | null
+  h_statement_code: string
+  hazard_class_catalog: {
+    name_en: string
+    ghs_chapter: string | null
+    display_order: number | null
+  } | null
+  h_statements: { text_plain: string } | null
+}
+
+const mapping = ((mappingRaw ?? []) as unknown as MappingRow[]).sort((a, b) => {
+  const oa = a.hazard_class_catalog?.display_order ?? 999
+  const ob = b.hazard_class_catalog?.display_order ?? 999
+  if (oa !== ob) return oa - ob
+  return (a.category_code ?? '').localeCompare(b.category_code ?? '')
+})
+
+// Уникальные H-коды пиктограммы, в порядке возрастания кода
+const hStatements = Array.from(
+  new Map(
+    mapping.map((r) => [
+      r.h_statement_code,
+      { code: r.h_statement_code, text_en: r.h_statements?.text_plain ?? '' },
+    ])
+  ).values()
+).sort((a, b) => a.code.localeCompare(b.code))
+
+// Сигнальные слова: у GHS06 все категории Danger, у GHS07 все Warning, у GHS02 — обе
+const signalWords = Array.from(
+  new Set(mapping.map((r) => r.signal_word).filter((w): w is string => Boolean(w)))
+).sort()
+
+const hazardClassCount = new Set(
+  mapping.map((r) => r.hazard_class_catalog?.name_en).filter(Boolean)
+).size
 
 // Считаем сколько веществ с этой пиктограммой всего
 const { count: totalCount } = await supabase
@@ -184,8 +220,19 @@ const { count: totalCount } = await supabase
   .contains('ghs_pictogram_codes', [upperCode])
   .not('cas_number', 'is', null)
 
-const seoTitle = `${upperCode} — ${meta.name} GHS Pictogram: Meaning, Download SVG & Substance List`
-const seoDesc = `${upperCode} (${meta.name}): ${meta.description.slice(0, 120)}… Download SVG, view ${totalCount ?? substances.length}+ substances.`
+/**
+ * ⚠ Формула title выведена из данных, а не из вкуса (session 22).
+ * Разбор — `claude/pictograms-keyword-list.md` §9 и `claude/pictograms-seo-baseline.md` §3.
+ *  1. Код первым словом: он даёт нам основную массу показов (GSC: `ghs07` — 913 за 28 дней).
+ *  2. Имя вплотную к слову Pictogram: фраза «<имя> pictogram» несёт от 110 до 1 900 объёма
+ *     в США и ищется отдельно от кода (`exclamation mark pictogram` — 1 900 при SD 15).
+ *  3. Слово Meaning: подтверждено и Semrush, и нашими показами (`ghs07 meaning` — 77).
+ *  4. Убрано «Download SVG» и «Substance List»: весь download-интент — около 350/мес,
+ *     причём ищут PDF и printable, а не SVG (`ghs pictograms svg` — 10/мес).
+ * Синоним «symbol» в title не влезает — держим его в описании и в подзаголовке.
+ */
+const seoTitle = `${upperCode} — ${meta.name} Pictogram: Meaning & Hazard Classes`
+const seoDesc = `${upperCode} is the GHS/CLP ${meta.name.toLowerCase()} pictogram (hazard symbol). What it means, the ${hazardClassCount} hazard classes and categories that require it, its signal word${signalWords.length > 1 ? 's' : ''} ${signalWords.join(' and ')}, the ${hStatements.length} H-codes it carries and ${totalCount ?? substances.length} substances classified with it.`
 
 const ghsJsonLd = {
   '@context': 'https://schema.org',
@@ -316,8 +363,15 @@ const ghsJsonLd = {
       <!-- Заголовок -->
       <div>
         <p class="text-blue-200 text-sm font-semibold uppercase tracking-widest mb-2">GHS Hazard Pictogram</p>
-        <h1 class="text-4xl sm:text-5xl font-bold leading-tight">{upperCode}</h1>
-        <p class="text-2xl font-semibold text-blue-100 mt-1">{meta.name}</p>
+        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight">
+          {upperCode} — {meta.name} Pictogram
+        </h1>
+        <p class="text-lg text-blue-100 mt-2">
+          Also called the {meta.name.toLowerCase()} symbol.
+          {signalWords.length > 0 && (
+            <> Signal word: <strong class="text-white">{signalWords.join(' or ')}</strong>.</>
+          )}
+        </p>
         <p class="mt-3 text-blue-200 text-lg">{meta.hazardClass}</p>
 
         <div class="mt-6 flex flex-wrap gap-3">
@@ -349,6 +403,65 @@ const ghsJsonLd = {
       <p class="text-gray-700 leading-relaxed">{meta.description}</p>
     </div>
 
+    <!--
+      Классы и категории опасности. Данные — hazard_category_mapping × hazard_class_catalog,
+      той же выборкой, из которой берётся список H-кодов. Хардкода здесь нет и быть не должно.
+    -->
+    {mapping.length > 0 && (
+      <div>
+        <h2 class="text-xl font-bold text-gray-900 mb-2">
+          Which hazard classes require {upperCode}?
+        </h2>
+        <p class="text-gray-600 text-sm mb-4">
+          {upperCode} is assigned by {hazardClassCount} hazard {hazardClassCount === 1 ? 'class' : 'classes'}
+          across {mapping.length} {mapping.length === 1 ? 'category' : 'categories'} under CLP and UN GHS.
+          The signal word is set by the category, not by the pictogram.
+        </p>
+        <div class="overflow-x-auto border border-gray-200 rounded-2xl bg-white shadow-sm">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-700">
+              <tr>
+                <th class="text-left font-semibold px-4 py-3">Hazard class</th>
+                <th class="text-left font-semibold px-4 py-3">Ch.</th>
+                <th class="text-left font-semibold px-4 py-3">Category</th>
+                <th class="text-left font-semibold px-4 py-3">Signal word</th>
+                <th class="text-left font-semibold px-4 py-3">Hazard statement</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              {mapping.map((row) => (
+                <tr class="align-top hover:bg-gray-50" data-hclass-row={row.h_statement_code}>
+                  <td class="px-4 py-3 text-gray-900">{row.hazard_class_catalog?.name_en ?? '—'}</td>
+                  <td class="px-4 py-3 text-gray-500 whitespace-nowrap">
+                    {row.hazard_class_catalog?.ghs_chapter ?? '—'}
+                  </td>
+                  <td class="px-4 py-3 text-gray-700 whitespace-nowrap">{row.category_code ?? '—'}</td>
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    {row.signal_word === 'Danger' ? (
+                      <span class="font-bold text-rose-700">Danger</span>
+                    ) : row.signal_word === 'Warning' ? (
+                      <span class="font-semibold text-amber-700">Warning</span>
+                    ) : (
+                      <span class="text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td class="px-4 py-3">
+                    <a
+                      href={hHref(row.h_statement_code)}
+                      class="font-mono font-semibold text-[#062A78] hover:underline"
+                    >
+                      {row.h_statement_code}
+                    </a>
+                    <span class="text-gray-600"> {row.h_statements?.text_plain ?? ''}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
+
     <!-- GHS calculator: per-pictogram interactive tool (self-hides when no config) -->
     <GhsCalculator client:load code={upperCode} />
 
@@ -362,6 +475,7 @@ const ghsJsonLd = {
           {hStatements.map(h => (
             <a
               href={hHref(h.code)}
+              data-hcode={h.code}
               class="bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 flex gap-3 items-start transition hover:border-rose-400 hover:bg-rose-100"
             >
               <span class="font-mono font-bold text-rose-700 shrink-0 text-sm mt-0.5">{h.code}</span>

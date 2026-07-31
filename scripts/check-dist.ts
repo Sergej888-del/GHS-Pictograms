@@ -954,6 +954,119 @@ const CHECKS: Check[] = [
       }
     },
   },
+
+  // ─────────────────────────── Пиктограммы ───────────────────────────
+
+  /**
+   * ⚠⚠ Ради этой проверки всё и затевалось (session 22).
+   * Списки H-кодов девяти страниц лежали массивами `hCodes` прямо в `[code].astro`
+   * и разошлись с первоисточником в ОДИННАДЦАТИ местах: `H315` стоял на GHS05
+   * (раздражение кожи — это GHS07), `H304` отсутствовал на GHS08, GHS09 нёс
+   * `H401`/`H412`/`H413`, у которых пиктограммы нет вообще.
+   * Ни одна проверка этого не видела, потому что сравнивать было НЕ С ЧЕМ:
+   * страница была сама себе источником истины.
+   * Теперь источник один — `hazard_category_mapping`, и страница обязана ему равняться.
+   * Разбор — `claude/pictograms-page-audit.md`.
+   */
+  {
+    id: 'ghs-hcodes',
+    group: 'Pictograms',
+    title: 'H-коды на каждой странице пиктограммы равны hazard_category_mapping',
+    run: async () => {
+      const rows = await selectAll<{ pictogram_code: string; h_statement_code: string }>(
+        'hazard_category_mapping',
+        'pictogram_code, h_statement_code',
+        (q: any) => q.not('pictogram_code', 'is', null).not('h_statement_code', 'is', null),
+      )
+      assertNonEmpty('ghs-hcodes', 'hazard_category_mapping', rows)
+
+      const expectedBy = new Map<string, Set<string>>()
+      for (const r of rows) {
+        if (!expectedBy.has(r.pictogram_code)) expectedBy.set(r.pictogram_code, new Set())
+        expectedBy.get(r.pictogram_code)!.add(r.h_statement_code)
+      }
+
+      const detail: string[] = []
+      let bad = 0
+      for (const pic of [...expectedBy.keys()].sort()) {
+        const html = readPage(`ghs/${pic.toLowerCase()}/index.html`)
+        if (html === null) {
+          detail.push(`${pic}: нет страницы в dist`)
+          bad++
+          continue
+        }
+        const actual = new Set([...html.matchAll(/data-hcode="([^"]+)"/g)].map((m) => m[1]))
+        const { missing, extra } = diffSets(actual, expectedBy.get(pic)!)
+        if (missing.length || extra.length) {
+          bad++
+          const parts: string[] = []
+          if (missing.length) parts.push(`нет в dist: ${preview(missing)}`)
+          if (extra.length) parts.push(`лишние в dist: ${preview(extra)}`)
+          detail.push(`${pic}: ${parts.join(' · ')}`)
+        }
+      }
+
+      const ok = bad === 0
+      if (ok) detail.push(`маркер: data-hcode="H___" · в базе ${rows.length} связок «категория ↔ код»`)
+      return {
+        id: 'ghs-hcodes',
+        group: 'Pictograms',
+        ok,
+        headline: ok
+          ? `все ${expectedBy.size} страниц пиктограмм сходятся с базой`
+          : `расходятся ${bad} из ${expectedBy.size} страниц`,
+        detail,
+      }
+    },
+  },
+
+  {
+    id: 'ghs-class-rows',
+    group: 'Pictograms',
+    title: 'Таблица «класс → категория» отрисована на сборке и полна',
+    run: async () => {
+      const rows = await selectAll<{ pictogram_code: string; h_statement_code: string }>(
+        'hazard_category_mapping',
+        'pictogram_code, h_statement_code',
+        (q: any) => q.not('pictogram_code', 'is', null).not('h_statement_code', 'is', null),
+      )
+      assertNonEmpty('ghs-class-rows', 'hazard_category_mapping', rows)
+
+      const expectedBy = new Map<string, number>()
+      for (const r of rows) {
+        expectedBy.set(r.pictogram_code, (expectedBy.get(r.pictogram_code) ?? 0) + 1)
+      }
+
+      const detail: string[] = []
+      let bad = 0
+      for (const pic of [...expectedBy.keys()].sort()) {
+        const html = readPage(`ghs/${pic.toLowerCase()}/index.html`)
+        if (html === null) {
+          detail.push(`${pic}: нет страницы в dist`)
+          bad++
+          continue
+        }
+        const actual = [...html.matchAll(/data-hclass-row="/g)].length
+        const want = expectedBy.get(pic)!
+        if (actual !== want) {
+          bad++
+          detail.push(`${pic}: строк в dist ${actual}, база ожидает ${want}`)
+        }
+      }
+
+      const ok = bad === 0
+      if (ok) detail.push(`маркер: data-hclass-row · всего ${rows.length} строк на ${expectedBy.size} страницах`)
+      return {
+        id: 'ghs-class-rows',
+        group: 'Pictograms',
+        ok,
+        headline: ok
+          ? `таблица классов полна на всех ${expectedBy.size} страницах`
+          : `расходятся ${bad} из ${expectedBy.size} страниц`,
+        detail,
+      }
+    },
+  },
 ]
 
 // ─────────────────────────── прогон ───────────────────────────
