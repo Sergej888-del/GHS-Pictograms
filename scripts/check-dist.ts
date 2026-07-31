@@ -1233,6 +1233,99 @@ const CHECKS: Check[] = [
       }
     },
   },
+
+  {
+    id: 'pict-page-co',
+    group: 'Pictograms',
+    title: 'Совместная встречаемость на девяти страницах равна базе',
+    run: async () => {
+      const sets = await pictogramSets()
+      const detail: string[] = []
+      let bad = 0
+
+      for (const code of PICT_CODES) {
+        const html = readPage(`ghs/${code.toLowerCase()}/index.html`)
+        if (html === null) {
+          detail.push(`${code}: нет страницы в dist`)
+          bad++
+          continue
+        }
+        // Ожидание: среди веществ, несущих code, сколько несут заодно каждую из остальных.
+        const mine = sets.filter((s) => s.includes(code))
+        const want = new Map<string, number>()
+        for (const s of mine) for (const c of s) if (c !== code && PICT_CODES.includes(c)) {
+          want.set(c, (want.get(c) ?? 0) + 1)
+        }
+        const got = hubMarkers(html, 'pict-co')
+        const miss: string[] = []
+        for (const [c, n] of want) {
+          if (n === 0) continue
+          const g = got.get(c)
+          if (g === undefined) miss.push(`${c}: строки нет`)
+          else if (g !== String(n)) miss.push(`${c}: в dist ${g}, база ${n}`)
+        }
+        for (const c of got.keys()) if (!want.has(c)) miss.push(`${c}: лишняя строка`)
+        if (miss.length) {
+          bad++
+          detail.push(`${code}: ${preview(miss)}`)
+        }
+      }
+
+      const ok = bad === 0
+      if (ok) detail.push(`маркер: data-pict-co · ${PICT_CODES.length} страниц, ${sets.length} веществ с пиктограммой`)
+      return {
+        id: 'pict-page-co',
+        group: 'Pictograms',
+        ok,
+        headline: ok ? 'все девять страниц сходятся с базой' : `расходятся ${bad} из ${PICT_CODES.length} страниц`,
+        detail,
+      }
+    },
+  },
+
+  {
+    id: 'pict-page-answers',
+    group: 'Pictograms',
+    title: 'Блок «прямой ответ» на месте и совпадает с FAQPage',
+    run: async () => {
+      const detail: string[] = []
+      let bad = 0
+      let totalQ = 0
+
+      for (const code of PICT_CODES) {
+        const html = readPage(`ghs/${code.toLowerCase()}/index.html`)
+        if (html === null) {
+          detail.push(`${code}: нет страницы в dist`)
+          bad++
+          continue
+        }
+        const rendered = [...html.matchAll(/data-pict-faq="/g)].length
+        const faqPage = [...html.matchAll(/"@type":"FAQPage"/g)].length
+        // Вопросов в разметке должно быть столько же, сколько в JSON-LD: иначе разметка
+        // и структурированные данные разъехались, и Google увидит не то, что человек.
+        const questions = [...html.matchAll(/"@type":"Question"/g)].length
+        totalQ += rendered
+        const problems: string[] = []
+        if (rendered === 0) problems.push('блока нет')
+        if (faqPage !== 1) problems.push(`FAQPage ${faqPage}, ожидался 1`)
+        if (rendered !== questions) problems.push(`в разметке ${rendered} вопросов, в JSON-LD ${questions}`)
+        if (problems.length) {
+          bad++
+          detail.push(`${code}: ${problems.join(' · ')}`)
+        }
+      }
+
+      const ok = bad === 0
+      if (ok) detail.push(`маркеры: data-pict-faq + "@type":"FAQPage" · всего ${totalQ} вопросов на ${PICT_CODES.length} страницах`)
+      return {
+        id: 'pict-page-answers',
+        group: 'Pictograms',
+        ok,
+        headline: ok ? `все девять страниц несут блок ответов (${totalQ} вопросов)` : `проблемы на ${bad} из ${PICT_CODES.length} страниц`,
+        detail,
+      }
+    },
+  },
 ]
 
 // ─────────────────────────── прогон ───────────────────────────

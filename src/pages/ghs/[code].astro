@@ -241,6 +241,255 @@ const { count: totalCount } = await supabase
   .not('cas_number', 'is', null)
 
 /**
+ * ⚠ Совместная встречаемость пиктограмм — session 23.
+ * Считается из наших же веществ: сколько записей, несущих эту пиктограмму, несут заодно
+ * каждую из восьми остальных. Такого блока нет ни у одного конкурента, и он показывает
+ * правила вытеснения Article 26 живыми числами, а не пересказом.
+ * ⚠ Тот же фильтр `cas_number is not null` и та же сортировка по index_number, что на
+ * хабе /pictograms/ — иначе числа на двух страницах разойдутся и обе будут «правильные».
+ */
+const PAGE_SIZE = 1000
+const coSets: string[][] = []
+for (let from = 0; ; from += PAGE_SIZE) {
+  const { data, error } = await supabase
+    .from('substances')
+    .select('index_number, ghs_pictogram_codes')
+    .contains('ghs_pictogram_codes', [upperCode])
+    .not('cas_number', 'is', null)
+    .order('index_number')
+    .range(from, from + PAGE_SIZE - 1)
+  if (error) throw new Error(`substances (co-occurrence ${upperCode}): ${error.message}`)
+  const rowsCo = (data ?? []) as { index_number: string; ghs_pictogram_codes: string[] | null }[]
+  for (const r of rowsCo) coSets.push(Array.from(new Set(r.ghs_pictogram_codes ?? [])))
+  if (rowsCo.length < PAGE_SIZE) break
+}
+if (coSets.length === 0) throw new Error(`${upperCode}: ноль веществ с пиктограммой — сборка была бы пустой`)
+
+const CO_TOTAL = coSets.length
+const ALL_CODES = ['GHS01','GHS02','GHS03','GHS04','GHS05','GHS06','GHS07','GHS08','GHS09']
+const coCount = new Map<string, number>()
+for (const set of coSets) for (const c of set) if (c !== upperCode && ALL_CODES.includes(c)) {
+  coCount.set(c, (coCount.get(c) ?? 0) + 1)
+}
+const coRows = ALL_CODES
+  .filter((c) => c !== upperCode && (coCount.get(c) ?? 0) > 0)
+  .map((c) => ({
+    code: c,
+    name: GHS_META[c]?.name ?? c,
+    n: coCount.get(c) ?? 0,
+    pct: Math.round(((coCount.get(c) ?? 0) / CO_TOTAL) * 1000) / 10,
+  }))
+  .sort((a, b) => b.n - a.n)
+const coOf = (c: string) => coCount.get(c) ?? 0
+const nf = (n: number) => n.toLocaleString('en-US')
+
+/**
+ * ⚠ Приоритет пиктограмм — CLP Article 26, сверено дословно по
+ * `_source-docs/CELEX_02008R1272-20260501_EN_TXT.pdf`, строки 1456–1490.
+ * На каждой странице показываются ТОЛЬКО правила, которые её касаются: правило,
+ * не относящееся к этой пиктограмме, — это чужой текст на странице.
+ * Пункт (e) внесён поправкой M2 и в большинстве справочников отсутствует.
+ */
+type Rule = { ref: string; text: string; ours: string }
+const RULES_BY_CODE: Record<string, Rule[]> = {
+  GHS01: [{
+    ref: 'Article 26(1)(a)',
+    text: 'If <b>GHS01</b> applies, the use of GHS02 and GHS03 becomes <b>optional</b> — unless more than one of them is compulsory.',
+    ours: `The bomb almost always travels alone: only <b>${coOf('GHS02')}</b> of the <b>${nf(CO_TOTAL)}</b> harmonised entries carrying GHS01 also carry GHS02, and <b>${coOf('GHS03') || 'none'}</b> carries GHS03.`,
+  }],
+  GHS02: [{
+    ref: 'Article 26(1)(a)',
+    text: 'If GHS01 applies, the use of <b>GHS02</b> and GHS03 becomes <b>optional</b> — unless more than one of them is compulsory.',
+    ours: `Rarely in play here: <b>${coOf('GHS01')}</b> of the <b>${nf(CO_TOTAL)}</b> entries carrying the flame also carry the exploding bomb.`,
+  }, {
+    ref: 'Article 26(1)(e)',
+    text: 'If <b>GHS02</b> or GHS06 applies, the use of <b>GHS04</b> becomes <b>optional</b>.',
+    ours: `Added to CLP by amendment and routinely missed. <b>${coOf('GHS04')}</b> entries carry the flame together with the gas cylinder — on those labels the cylinder is a choice, not an obligation.`,
+  }],
+  GHS03: [{
+    ref: 'Article 26(1)(a)',
+    text: 'If GHS01 applies, the use of GHS02 and <b>GHS03</b> becomes <b>optional</b> — unless more than one of them is compulsory.',
+    ours: `Never in play in the harmonised list: <b>${coOf('GHS01') || 'not one'}</b> of the <b>${nf(CO_TOTAL)}</b> entries carrying flame over circle also carries the exploding bomb.`,
+  }],
+  GHS04: [{
+    ref: 'Article 26(1)(e)',
+    text: 'If GHS02 or GHS06 applies, the use of <b>GHS04</b> becomes <b>optional</b>.',
+    ours: `This is the rule that fires constantly, and almost nobody quotes it: <b>${coOf('GHS02')}</b> of the <b>${nf(CO_TOTAL)}</b> gas-cylinder entries also carry GHS02 and another <b>${coOf('GHS06')}</b> carry GHS06. On almost every real cylinder label the gas-cylinder diamond is optional.`,
+  }],
+  GHS05: [{
+    ref: 'Article 26(1)(c)',
+    text: 'If <b>GHS05</b> applies, GHS07 shall not appear <b>for skin or eye irritation</b> — and only for that.',
+    ours: `Read as a blanket ban this rule does damage: <b>${coOf('GHS07')}</b> of the <b>${nf(CO_TOTAL)}</b> entries carrying corrosion legitimately carry GHS07 as well, because their exclamation mark comes from acute toxicity category 4, sensitisation or narcotic effects — none of which the rule touches.`,
+  }],
+  GHS06: [{
+    ref: 'Article 26(1)(b)',
+    text: 'If <b>GHS06</b> applies, <b>GHS07 shall not appear</b>. No exception, no discretion.',
+    ours: `Exactly <b>${coOf('GHS07')}</b> of the <b>${nf(CO_TOTAL)}</b> harmonised entries carrying the skull lists GHS07 as well — DNOC, index 609-020-00-X. Annex VI prints the classification; Article 26 takes the exclamation mark off the label.`,
+  }, {
+    ref: 'Article 26(1)(e)',
+    text: 'If GHS02 or <b>GHS06</b> applies, the use of <b>GHS04</b> becomes <b>optional</b>.',
+    ours: `<b>${coOf('GHS04')}</b> entries carry the skull together with the gas cylinder — on those labels the cylinder may be dropped.`,
+  }],
+  GHS07: [{
+    ref: 'Article 26(1)(b)',
+    text: 'If GHS06 applies, <b>GHS07 shall not appear</b>.',
+    ours: `The hardest of the three: no exception at all. Only <b>${coOf('GHS06')}</b> harmonised entry carries both, and on its label the exclamation mark is removed.`,
+  }, {
+    ref: 'Article 26(1)(c)',
+    text: 'If GHS05 applies, <b>GHS07</b> shall not appear <b>for skin or eye irritation</b> — and only for that.',
+    ours: `Narrow, and widely over-applied. <b>${coOf('GHS05')}</b> entries carry both, and most keep the exclamation mark because it comes from something the rule does not cover — acute toxicity category 4, sensitisation, narcotic effects.`,
+  }, {
+    ref: 'Article 26(1)(d)',
+    text: 'If GHS08 applies <b>for respiratory sensitisation</b>, <b>GHS07</b> shall not appear for skin sensitisation or for skin and eye irritation.',
+    ours: `Narrower still: it fires only when the health-hazard diamond is there because of asthma. <b>${coOf('GHS08')}</b> entries carry both pictograms; the rule reaches only the respiratory-sensitiser slice of them.`,
+  }],
+  GHS08: [{
+    ref: 'Article 26(1)(d)',
+    text: 'If <b>GHS08</b> applies <b>for respiratory sensitisation</b>, GHS07 shall not appear for skin sensitisation or for skin and eye irritation.',
+    ours: `It fires only when the health-hazard diamond is there because the substance causes asthma — not because it causes cancer or organ damage. <b>${coOf('GHS07')}</b> harmonised entries carry GHS08 and GHS07 together; the rule reaches only the respiratory-sensitiser slice of them, and leaves the rest with both diamonds.`,
+  }],
+  GHS09: [],
+}
+const rulesHere = RULES_BY_CODE[upperCode] ?? []
+
+/**
+ * Один вывод из матрицы встречаемости на страницу. Пишется руками, но опирается на
+ * посчитанные числа — не наоборот.
+ */
+const CO_NOTE: Record<string, string> = {
+  GHS01: 'The surprise here is what is missing: the exploding bomb pairs with the health hazard and the environment far more often than with the flame. An explosive is more likely to be a carcinogen than to be classified as flammable.',
+  GHS02: 'Half of everything flammable is also a long-term health hazard. Fire safety and occupational health are the same shelf, not two.',
+  GHS03: 'An oxidiser is as likely to be corrosive as to be an environmental hazard, and it reaches the flame pictogram almost never — it does not burn, it makes other things burn.',
+  GHS04: 'The strongest pairing on the whole site: nine cylinders in ten also carry the flame, and more than eight in ten carry the health hazard. A gas under pressure is almost never only a pressure problem.',
+  GHS05: 'Corrosion travels with the exclamation mark on half of these entries — and that is exactly the pair CLP Article 26(1)(c) is most often wrongly used to break.',
+  GHS06: 'What kills a person usually kills a fish: nearly two thirds of acutely toxic entries also carry the environment pictogram. Disposal is part of the hazard, not an afterthought.',
+  GHS07: 'The exclamation mark is the most common companion pictogram on the site, and its own most frequent partner is the environment — the mild-to-a-person, harsh-to-the-water combination.',
+  GHS08: 'The pairing with GHS09 is the one to remember: a third of everything that damages a person over time also damages the aquatic environment, which is why disposal, not just handling, belongs in the risk assessment.',
+  GHS09: 'The environment pictogram rarely travels alone — it sits next to the exclamation mark on half of these entries and next to the health hazard on four in ten.',
+}
+
+/**
+ * ⚠ Блок «прямой ответ» под экзаменационный интент — session 23.
+ * Формулировки взяты дословно из запросов: ≈2 300/мес при SD 6–36, и мы уже показываемся
+ * по ним на позициях 5–9 с НУЛЁМ кликов (claude/pictograms-seo-baseline.md §3.6,
+ * claude/pictograms-keyword-list.md §5). Ответ обязан стоять первой строкой.
+ * Все числа подставляются из базы. Все регуляторные утверждения сверены по первоисточнику:
+ * CLP Table 2.1.2 (взрывчатка), 2.6.1 и 2.6.2 (горючие жидкости), 2.16 (коррозия металлов),
+ * Annex I 1.2.1 (размеры), OSHA 1910.1200 App. C Figure C.1 (восемь символов, без GHS09).
+ */
+const FAQ_BY_CODE: Record<string, [string, string][]> = {
+  GHS01: [
+    ['What does the exploding bomb pictogram indicate?',
+     `Explosives, plus the two families that behave like them: self-reactive substances of types A and B, and organic peroxides of types A and B. ${hazardClassCount} CLP hazard classes lead to this pictogram and it carries ${hStatements.length} hazard statements.`],
+    ['Do all explosives carry GHS01?',
+     'No, and this is the detail most charts get wrong. CLP Table 2.1.2 gives the pictogram to unstable explosives and to divisions 1.1, 1.2, 1.3 and 1.4. Division 1.5 — may mass explode in fire — carries the signal word Danger and H205 but no pictogram at all, and division 1.6 carries no pictogram, no signal word and no hazard statement.'],
+    ['Which signal word goes with the exploding bomb?',
+     'Danger for unstable explosives and for divisions 1.1, 1.2 and 1.3. Division 1.4, a fire or projection hazard, takes Warning. That single exception is the only reason this pictogram appears with both words.'],
+    ['Does GHS01 replace the flame pictogram?',
+     `Under Article 26(1)(a) it makes GHS02 and GHS03 optional, unless more than one of them is compulsory. In the harmonised list only ${coOf('GHS02')} of the ${nf(CO_TOTAL)} entries carrying GHS01 also carry GHS02.`],
+    ['How many chemicals carry GHS01?',
+     `${nf(CO_TOTAL)} substances with a harmonised classification in CLP Annex VI — the rarest of the nine, alongside GHS03.`],
+  ],
+  GHS02: [
+    ['What does the flame pictogram on a chemical label indicate?',
+     `That the substance can catch fire — on its own, in air, or on contact with water. ${hazardClassCount} CLP hazard classes lead to this pictogram, more than any other, and it carries ${hStatements.length} hazard statements.`],
+    ['Which hazards make up the flame pictogram?',
+     'Flammable gases, aerosols, flammable liquids, flammable solids, self-reactive substances of types B to F, pyrophoric liquids, pyrophoric solids, self-heating substances, substances that emit flammable gases in contact with water, organic peroxides of types B to F, and desensitised explosives.'],
+    ['Does the flash point decide whether a liquid gets the flame?',
+     'For liquids, yes. A flammable liquid under CLP has a flash point of 60 °C or below. Category 1 is a flash point under 23 °C with an initial boiling point of 35 °C or less; category 2 is under 23 °C with a boiling point above 35 °C; category 3 runs from 23 °C to 60 °C. Gas oils, diesel and light heating oils with a flash point between 55 °C and 75 °C may be treated as category 3.'],
+    ['Which signal word goes with the flame?',
+     'Both, by category. For flammable liquids, categories 1 and 2 take Danger and category 3 takes Warning — which is why a can of white spirit and a can of petrol carry the same picture and different words.'],
+    ['How many chemicals carry GHS02?',
+     `${nf(CO_TOTAL)} substances with a harmonised classification in CLP Annex VI.`],
+  ],
+  GHS03: [
+    ['What does the flame over circle pictogram mean?',
+     `That the substance supplies oxygen and makes other materials burn — an oxidising gas, liquid or solid. ${hazardClassCount} CLP hazard classes lead to it and it carries ${hStatements.length} hazard statements: H270, H271 and H272.`],
+    ['What is the difference between the flame and the flame over circle?',
+     'The flame burns. The flame over circle does not have to burn at all — it feeds a fire that already exists, or starts one in a material that would not otherwise ignite. That is why oxidisers and flammables must be stored apart: each makes the other worse.'],
+    ['Which signal word goes with the flame over circle?',
+     'Both. Oxidising gases category 1 and the most severe oxidising liquids and solids take Danger; the milder categories take Warning.'],
+    ['Is bleach an oxidiser under GHS?',
+     'Sodium hypochlorite carries no oxidising hazard statement in CLP Annex VI, yet it is a real oxidiser in practice. Classification follows the test criteria, not intuition — and OSHA App. B explicitly allows known experience to override a test result. Absence of GHS03 is not evidence that a substance will not feed a fire.'],
+    ['How many chemicals carry GHS03?',
+     `${nf(CO_TOTAL)} substances with a harmonised classification in CLP Annex VI — the rarest of the nine.`],
+  ],
+  GHS04: [
+    ['The gas cylinder pictogram applies to chemicals that are…',
+     `…held under pressure: compressed gases, liquefied gases, refrigerated liquefied gases and dissolved gases. One CLP hazard class leads to it — gases under pressure, chapter 2.5 — and it carries ${hStatements.length} hazard statements, H280 and H281.`],
+    ['Does the gas cylinder mean the gas is toxic or flammable?',
+     `No. It says nothing about what the gas does — only that it is stored under pressure and the container can burst or, if refrigerated, cause cryogenic burns. The other hazards arrive with other pictograms: ${coOf('GHS02')} of these ${nf(CO_TOTAL)} entries also carry the flame.`],
+    ['Which signal word goes with the gas cylinder?',
+     'Always Warning. Every category of gases under pressure takes the same word — this is one of only three pictograms that never appears with Danger.'],
+    ['Why is GHS04 so often missing from a cylinder label?',
+     `Because Article 26(1)(e) allows it. When GHS02 or GHS06 also applies, the gas cylinder becomes optional — and that covers ${coOf('GHS02') + coOf('GHS06')} of these ${nf(CO_TOTAL)} entries. A propane cylinder showing only the flame is correctly labelled.`],
+    ['How many chemicals carry GHS04?',
+     `${nf(CO_TOTAL)} substances with a harmonised classification in CLP Annex VI.`],
+  ],
+  GHS05: [
+    ['The corrosion pictogram depicts chemicals that…',
+     `…destroy what they touch. Two different things, in fact: irreversible damage to skin and eyes, and corrosion of metals. ${hazardClassCount} CLP hazard classes lead to it, carrying ${hStatements.length} hazard statements — H290, H314 and H318.`],
+    ['What characteristic does the corrosion pictogram depict?',
+     'Destruction of tissue or material on contact, not toxicity. A corrosive substance need not be poisonous at all: the harm is chemical burning at the point of contact, which is why the picture shows a hand and a surface being eaten away rather than a person.'],
+    ['What is the difference between GHS05 and GHS07 for skin?',
+     `Severity. GHS05 is skin corrosion categories 1A to 1C — irreversible damage. GHS07 is skin irritation category 2, which heals. Article 26(1)(c) removes the exclamation mark when corrosion applies, but only for irritation: ${coOf('GHS07')} of these ${nf(CO_TOTAL)} entries legitimately keep both.`],
+    ['Which signal word goes with the corrosion pictogram?',
+     'Both, and the split is unusually clean. Skin corrosion and serious eye damage take Danger. A substance that is only corrosive to metals — H290, category 1 — takes Warning, because it threatens the drum rather than the person holding it.'],
+    ['How many chemicals carry GHS05?',
+     `${nf(CO_TOTAL)} substances with a harmonised classification in CLP Annex VI.`],
+  ],
+  GHS06: [
+    ['What does the skull and crossbones pictogram indicate?',
+     `Acute toxicity in the fatal band — categories 1, 2 and 3, by swallowing, skin contact or breathing. ${hazardClassCount} CLP hazard classes lead to it, one per route, carrying ${hStatements.length} hazard statements: H300, H301, H310, H311, H330 and H331.`],
+    ['What does the skull and crossbones pictogram identify — and what does it not?',
+     'It identifies a substance where a small single dose can kill. It does not identify long-term harm: cancer, organ damage and effects on fertility carry the health hazard pictogram instead, and a chemical can be a proven carcinogen with no skull anywhere on the label.'],
+    ['What is the difference between the skull and the exclamation mark?',
+     `One category. Acute toxicity 1 to 3 gets the skull; category 4 — harmful rather than fatal — gets the exclamation mark. The boundary for the oral route sits at an ATE of 300 mg/kg. Article 26(1)(b) then forbids showing both: exactly ${coOf('GHS07')} harmonised entry lists them together.`],
+    ['Which signal word goes with the skull and crossbones?',
+     'Always Danger. Every category behind this pictogram carries the same word — there is no Warning-level skull.'],
+    ['How many chemicals carry GHS06?',
+     `${nf(CO_TOTAL)} substances with a harmonised classification in CLP Annex VI.`],
+  ],
+  GHS07: [
+    ['What does the exclamation mark pictogram indicate?',
+     `The serious-but-not-severe band: acute toxicity category 4, skin and eye irritation, skin sensitisation, and single-exposure organ effects category 3 including narcotic effects. ${hazardClassCount} CLP hazard classes lead to it, more than any pictogram except the flame, carrying ${hStatements.length} hazard statements.`],
+    ['Which pictogram is also known as the irritant pictogram?',
+     'This one. GHS07 covers skin irritation category 2 and eye irritation category 2A, so it is routinely called the irritant symbol — but irritation is only two of its eight hazard classes. The same picture also means harmful if swallowed, may cause an allergic skin reaction, and may cause drowsiness or dizziness.'],
+    ['What is the black exclamation mark pictogram?',
+     'A misunderstanding worth clearing up. The symbol itself is always black — every GHS pictogram is a black symbol on a white background inside a red diamond. There is no separate black-bordered version for CLP labelling; a black-bordered diamond is a transport label, not a hazard pictogram.'],
+    ['When is the exclamation mark removed from a label?',
+     `Three of the five precedence rules in Article 26 point at it, and they are the reason a substance can be an irritant with no exclamation mark on the label. GHS06 removes it outright; GHS05 removes it for irritation only; GHS08 removes it for sensitisation when the health hazard is there because of asthma.`],
+    ['How many chemicals carry GHS07?',
+     `${nf(CO_TOTAL)} substances with a harmonised classification in CLP Annex VI, and it is the most common companion pictogram of all — it appears next to another diamond more often than it appears alone.`],
+  ],
+  GHS08: [
+    ['What does the health hazard pictogram indicate?',
+     `Serious health effects that are not immediate poisoning: cancer, genetic damage, harm to fertility or the unborn child, damage to a specific organ, asthma caused by breathing the substance in, and lung damage from swallowing it. ${hazardClassCount} CLP hazard classes lead to this pictogram and it carries ${hStatements.length} hazard statements.`],
+    ['Is GHS08 the cancer symbol?',
+     'Carcinogenicity is one of the seven hazard classes behind it, not the only one. The same image also appears for mutagenicity, reproductive toxicity, organ toxicity, respiratory sensitisation and aspiration hazard. A drum carrying GHS08 is not necessarily carrying a carcinogen.'],
+    ['What is the difference between GHS08 and GHS06?',
+     `Timing. GHS06, the skull and crossbones, means a single dose can kill quickly — acute toxicity categories 1 to 3. GHS08 means harm that shows up later, or harm that is severe without being acutely lethal. Both appear together on ${coOf('GHS06')} substances.`],
+    ['Which signal word goes with the health hazard pictogram?',
+     'Both. Category 1 hazards — proven or presumed carcinogens, mutagens and reproductive toxicants, organ damage category 1, aspiration — take Danger. Category 2 hazards, where the evidence is suspected rather than established, take Warning. Five of the nine pictograms appear with either word; GHS06 is always Danger, and GHS04, GHS07 and GHS09 are always Warning.'],
+    ['How many chemicals carry GHS08?',
+     `${nf(CO_TOTAL)} substances with a harmonised classification in CLP Annex VI — the most common of the nine.`],
+  ],
+  GHS09: [
+    ['What does the environmental hazard pictogram indicate?',
+     `Harm to the aquatic environment: acute category 1, and long-term categories 1 and 2. ${hazardClassCount} CLP hazard classes lead to it, carrying ${hStatements.length} hazard statements — H400, H410 and H411.`],
+    ['Why do H412 and H413 have no pictogram?',
+     'Because CLP stops the picture at long-term category 2. Categories 3 and 4 — harmful to aquatic life with long lasting effects, and may cause long lasting harmful effects — carry the hazard statement and no pictogram, no signal word. A label with no dead fish on it can still describe a substance that should never reach a drain.'],
+    ['Is the environment pictogram required in the United States?',
+     'No. OSHA lists eight standard hazard symbols in Appendix C to 1910.1200, Figure C.1, and the environment is not among them — aquatic hazards fall to the EPA, not to the Hazard Communication Standard. The same substance can legally carry this diamond on an EU label and not on a US one, which is a common source of confusion when a supplier ships to both.'],
+    ['Which signal word goes with the environmental hazard pictogram?',
+     'Always Warning. Aquatic acute 1 and aquatic chronic 1 and 2 all take the same word — this pictogram never appears with Danger.'],
+    ['How many chemicals carry GHS09?',
+     `${nf(CO_TOTAL)} substances with a harmonised classification in CLP Annex VI.`],
+  ],
+}
+const faqHere = FAQ_BY_CODE[upperCode] ?? []
+
+/**
  * ⚠ Формула title выведена из данных, а не из вкуса (session 22).
  * Разбор — `claude/pictograms-keyword-list.md` §9 и `claude/pictograms-seo-baseline.md` §3.
  *  1. Код первым словом: он даёт нам основную массу показов (GSC: `ghs07` — 913 за 28 дней).
@@ -304,55 +553,28 @@ const ghsJsonLd = {
         ],
       },
     },
-    {
-      '@type': 'FAQPage',
-      mainEntity: [
-        {
-          '@type': 'Question',
-          name: `What does the ${upperCode} GHS pictogram mean?`,
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text: meta.description,
+    /**
+     * ⚠ session 23: здесь стоял ВТОРОЙ, синтетический FAQPage — вопросы вида
+     * «What does the GHS08 GHS pictogram mean?» собирались из meta.description,
+     * storageNote и adnNote. Ответы на странице были, но не в виде вопросов, а
+     * Google требует, чтобы разметка FAQPage соответствовала видимому тексту.
+     * Теперь узел строится из того же массива, который рисует блок «Straight answers»,
+     * то есть каждый вопрос из разметки физически есть на странице.
+     * Проверка pict-page-answers в scripts/check-dist.ts сверяет два числа и падает,
+     * если они разойдутся, — именно она это и поймала.
+     */
+    ...(faqHere.length > 0
+      ? [
+          {
+            '@type': 'FAQPage',
+            mainEntity: faqHere.map(([q, a]) => ({
+              '@type': 'Question',
+              name: q,
+              acceptedAnswer: { '@type': 'Answer', text: a },
+            })),
           },
-        },
-        {
-          '@type': 'Question',
-          name: `What hazard class does ${upperCode} represent?`,
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text: `${upperCode} represents the hazard class: ${meta.hazardClass}. ${meta.regulatoryNote}`,
-          },
-        },
-        {
-          '@type': 'Question',
-          name: `What are the storage requirements for ${upperCode} substances?`,
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text: meta.storageNote,
-          },
-        },
-        {
-          '@type': 'Question',
-          name: `How is ${upperCode} used in transport (ADR/DOT)?`,
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text: meta.adnNote,
-          },
-        },
-        ...(hStatements.length > 0
-          ? [
-              {
-                '@type': 'Question',
-                name: `Which H-statements are associated with ${upperCode}?`,
-                acceptedAnswer: {
-                  '@type': 'Answer',
-                  text: `The following hazard statements are associated with ${upperCode} (${meta.name}): ${hStatements.map((h) => `${h.code}: ${h.text_en}`).join('; ')}.`,
-                },
-              },
-            ]
-          : []),
-      ],
-    },
+        ]
+      : []),
   ],
 }
 ---
@@ -428,6 +650,30 @@ const ghsJsonLd = {
       </h2>
       <p class="text-gray-700 leading-relaxed">{meta.description}</p>
     </div>
+
+    <!--
+      Блок «прямой ответ» под экзаменационный интент (session 23).
+      ⚠ Ответ обязан стоять первой строкой абзаца: по этим фразам мы уже показываемся
+      на позициях 5–9 с нулём кликов, и выигрывает здесь сниппет, а не длина текста.
+      Разбор — claude/pictograms-seo-baseline.md §3.6.
+    -->
+    {faqHere.length > 0 && (
+      <div id="answers">
+        <h2 class="text-xl font-bold text-gray-900 mb-3">Straight answers</h2>
+        <div class="border border-gray-200 rounded-2xl overflow-hidden bg-white">
+          {faqHere.map(([q, a], i) => (
+            <div data-pict-faq={upperCode} class={`px-5 py-4 ${i > 0 ? 'border-t border-slate-100' : ''}`}>
+              <h3 class="text-base font-semibold text-gray-900 mb-1.5">{q}</h3>
+              <p class="text-[0.9375rem] leading-relaxed text-gray-700">{a}</p>
+            </div>
+          ))}
+        </div>
+        <p class="mt-3 text-sm text-gray-600">
+          Every number here is computed from CLP Annex VI at build time. See
+          <a href="/pictograms/" class="font-semibold text-teal-700 underline underline-offset-2 ml-1">all nine pictograms compared</a>.
+        </p>
+      </div>
+    )}
 
     <!--
       Классы и категории опасности. Данные — hazard_category_mapping × hazard_class_catalog,
@@ -526,6 +772,73 @@ const ghsJsonLd = {
       </div>
     )}
 
+    <!--
+      Совместная встречаемость — считается из веществ этой страницы (session 23).
+      Такого блока нет ни у одного конкурента: он показывает правила вытеснения
+      живыми числами. Маркер data-pict-co проверяется в scripts/check-dist.ts.
+    -->
+    {coRows.length > 0 && (
+      <div id="alongside">
+        <h2 class="text-xl font-bold text-gray-900 mb-2">Which pictograms appear next to {upperCode}</h2>
+        <p class="text-gray-600 text-sm mb-4">
+          A label rarely carries one diamond. Counted across the {nf(CO_TOTAL)} harmonised
+          substances that carry {upperCode} — before the Article 26 precedence rules remove anything.
+        </p>
+        <div class="flex flex-col gap-2">
+          {coRows.map(r => (
+            <a
+              href={`/ghs/${r.code.toLowerCase()}/`}
+              data-pict-co={`${r.code}|${r.n}`}
+              class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2.5 border border-gray-200 rounded-xl bg-white hover:border-slate-300 hover:bg-slate-50 transition-colors"
+            >
+              <img src={`/pictograms/${r.code.toLowerCase()}.svg`} width="30" height="30" loading="lazy" decoding="async" alt="" class="shrink-0 w-[30px] h-[30px]" />
+              <span class="text-sm text-gray-900 sm:basis-52 sm:shrink-0 grow sm:grow-0 min-w-0">
+                <span class="font-mono text-xs font-semibold text-blue-900 bg-blue-50 border border-blue-100 rounded px-1.5 py-0.5 mr-2">{r.code}</span>
+                {r.name}
+              </span>
+              <span class="order-last sm:order-none basis-full sm:basis-auto grow h-2 rounded-full bg-slate-100 overflow-hidden min-w-[60px]">
+                <span class="block h-full rounded-full bg-teal-600" style={`width:${r.pct}%`}></span>
+              </span>
+              <span class="shrink-0 font-mono text-xs text-slate-600 sm:w-32 sm:text-right">
+                <b class="text-gray-900">{nf(r.n)}</b> · {r.pct}%
+              </span>
+            </a>
+          ))}
+        </div>
+        <p class="mt-3 text-sm text-gray-600">{CO_NOTE[upperCode]}</p>
+      </div>
+    )}
+
+    <!--
+      Приоритет — только те правила Article 26, которые касаются ЭТОЙ пиктограммы.
+      Чужое правило на странице — это чужой текст. Числа считаются, не пишутся.
+    -->
+    {rulesHere.length > 0 && (
+      <div id="precedence">
+        <h2 class="text-xl font-bold text-gray-900 mb-2">
+          {upperCode === 'GHS07' ? `When ${upperCode} is removed from a label` : `When ${upperCode} changes what else is shown`}
+        </h2>
+        <p class="text-gray-600 text-sm mb-4">
+          Article 26 of CLP cuts the number of diamonds on a label. {rulesHere.length === 1 ? 'One of its five rules' : `${rulesHere.length} of its five rules`} {rulesHere.length === 1 ? 'touches' : 'touch'} {upperCode}.
+        </p>
+        <div class="flex flex-col gap-3">
+          {rulesHere.map(r => (
+            <div data-pict-rule={r.ref} class="border border-gray-200 border-l-[3px] border-l-[#062A78] rounded-xl bg-white px-4 py-3.5">
+              <span class="block font-mono text-[0.625rem] font-semibold uppercase tracking-[0.09em] text-slate-500 mb-1.5">{r.ref}</span>
+              <p class="text-[0.9375rem] leading-snug text-gray-900" set:html={r.text} />
+              <p class="mt-2 pt-2 border-t border-dashed border-slate-300 text-sm leading-snug text-slate-600" set:html={r.ours} />
+            </div>
+          ))}
+        </div>
+        <p class="mt-3 text-sm text-gray-600">
+          {upperCode === 'GHS09'
+            ? 'No rule in Article 26 touches this pictogram at all.'
+            : 'Nothing in Article 26 makes ' + upperCode + ' optional in the other direction unless a rule above says so.'}
+          <a href="/pictograms/" class="font-semibold text-teal-700 underline underline-offset-2 ml-1">All five precedence rules, with the number of substances each one affects</a>.
+        </p>
+      </div>
+    )}
+
     <!-- Storage note -->
     <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-2xl p-6">
       <h2 class="text-xl font-bold text-amber-900 mb-2">Storage & handling requirements</h2>
@@ -542,6 +855,30 @@ const ghsJsonLd = {
     <div class="bg-blue-50 border border-blue-200 rounded-2xl p-6">
       <h2 class="text-xl font-bold text-blue-900 mb-2">Transport marking: GHS vs ADR/DOT</h2>
       <p class="text-blue-800 leading-relaxed">{meta.adnNote}</p>
+    </div>
+
+    <!--
+      Размеры — CLP Annex I 1.2.1.1–1.2.1.4 и Table 1.3. Полная таблица на четыре размера
+      упаковки живёт на хабе; здесь только два правила, которые её перебивают, — иначе
+      одна и та же таблица размножится на девять страниц.
+    -->
+    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-2">Printing {upperCode} on a label</h2>
+      <p class="text-slate-700 leading-relaxed">
+        A square set at a point — a diamond — with the black symbol on a white background and a red
+        frame wide enough to be clearly visible. An all-black frame is a transport label, not a CLP
+        pictogram. Size is set twice over: each pictogram must cover at least <b>one fifteenth</b> of
+        the minimum label area required by Article 17, and must never be smaller than <b>1 cm²</b>.
+        On a package of 3 litres or less that works out to <b>10 × 10 mm</b> as the floor, and
+        16 × 16 mm where it fits.
+      </p>
+      <p class="mt-3 text-sm text-slate-700">
+        Source: Regulation (EC) No 1272/2008, Annex I, 1.2.1.1–1.2.1.4 and Table 1.3 —
+        <a href="/pictograms/" class="font-semibold text-teal-700 underline underline-offset-2">the full table for all four package sizes</a>.
+        Building an actual label? The
+        <a href="/label-constructor/" class="font-semibold text-teal-700 underline underline-offset-2">label constructor</a>
+        lays it out at the right proportions.
+      </p>
     </div>
 
     <!-- Download SVG -->
