@@ -415,7 +415,9 @@ const ghsJsonLd = {
         <p class="text-gray-600 text-sm mb-4">
           {upperCode} is assigned by {hazardClassCount} hazard {hazardClassCount === 1 ? 'class' : 'classes'}
           across {mapping.length} {mapping.length === 1 ? 'category' : 'categories'} under CLP and UN GHS.
-          The signal word is set by the category, not by the pictogram.
+          The signal word is set by the category, not by the pictogram — which is why the same
+          pictogram can carry both Danger and Warning. The full wording of every code is listed
+          under <a href="#h-statements" class="text-[#062A78] font-semibold hover:underline">Associated H-statements</a> below.
         </p>
         <div class="overflow-x-auto border border-gray-200 rounded-2xl bg-white shadow-sm">
           <table class="w-full text-sm">
@@ -425,7 +427,7 @@ const ghsJsonLd = {
                 <th class="text-left font-semibold px-4 py-3">Ch.</th>
                 <th class="text-left font-semibold px-4 py-3">Category</th>
                 <th class="text-left font-semibold px-4 py-3">Signal word</th>
-                <th class="text-left font-semibold px-4 py-3">Hazard statement</th>
+                <th class="text-left font-semibold px-4 py-3">H-code</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
@@ -445,14 +447,20 @@ const ghsJsonLd = {
                       <span class="text-gray-400">—</span>
                     )}
                   </td>
-                  <td class="px-4 py-3">
+                  {/*
+                    ⚠ Текст фразы здесь НЕ печатаем. Он живёт один раз — в карточках
+                    «Associated H-statements» ниже. Таблица отвечает на вопрос «почему
+                    пиктограмма назначена» (класс, категория, сигнальное слово), карточки —
+                    «какие коды она несёт». Дублировать формулировку в обоих блоках
+                    незачем: на GHS02 это 29 повторов на одной странице.
+                  */}
+                  <td class="px-4 py-3 whitespace-nowrap">
                     <a
                       href={hHref(row.h_statement_code)}
                       class="font-mono font-semibold text-[#062A78] hover:underline"
                     >
                       {row.h_statement_code}
                     </a>
-                    <span class="text-gray-600"> {row.h_statements?.text_plain ?? ''}</span>
                   </td>
                 </tr>
               ))}
@@ -467,7 +475,7 @@ const ghsJsonLd = {
 
     <!-- H-statements карточки -->
     {hStatements.length > 0 && (
-      <div>
+      <div id="h-statements">
         <h2 class="text-xl font-bold text-gray-900 mb-4">
           Associated H-statements ({hStatements.length})
         </h2>
