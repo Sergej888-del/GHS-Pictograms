@@ -292,6 +292,31 @@ async function sdsSlugsWhere(pred: (r: Response | undefined) => boolean): Promis
 
 const has = (v: string | null | undefined) => typeof v === 'string' && v.trim().length > 0
 
+// ─────────────────── §3 structure: данные из базы (session 26) ───────────────────
+
+type StructRow = {
+  slug: string
+  structure_kind: string | null
+  svg_file: string | null
+  pubchem_cid: number | null
+  hybridization: Record<string, string> | null
+}
+
+let structCache: StructRow[] | null = null
+
+/** Ровно тот же срез, что берёт getStaticPaths: только строки с PubChem CID. */
+async function structureData(): Promise<StructRow[]> {
+  if (structCache) return structCache
+  // ⚠ S19.5/S23.9: selectAll пагинирует без порядка — сортировку задаём явно.
+  const rows = await selectAll<StructRow>(
+    'substance_structure',
+    'slug, structure_kind, svg_file, pubchem_cid, hybridization',
+    (q) => q.order('slug'),
+  )
+  structCache = rows.filter((r) => r.pubchem_cid != null)
+  return structCache
+}
+
 // ─────────────────────── P-фразы: данные из базы ───────────────────────
 
 type PStatement = { code: string; category: string; status: string }
@@ -530,6 +555,80 @@ const CHECKS: Check[] = [
         detail,
       }
     },
+  },
+  {
+    id: 'sds-structure',
+    group: 'SDS',
+    title: 'Section 3 — блок структуры там, где в базе есть PubChem CID',
+    run: async () =>
+      comparePageSets(
+        'sds-structure',
+        'SDS',
+        'sds',
+        // ⚠ Правило 3: маркер только ASCII. Метка секции в HTML идёт как
+        // "§ 03 · Composition and identifiers" — берём её ASCII-хвост.
+        ['id="structure"', 'Composition and identifiers'],
+        new Set((await structureData()).map((r) => r.slug)),
+      ),
+  },
+  {
+    id: 'sds-structure-svg',
+    group: 'SDS',
+    title: 'Картинка структуры на странице там, где в базе есть svg_file',
+    run: async () =>
+      comparePageSets(
+        'sds-structure-svg',
+        'SDS',
+        'sds',
+        ['src="/structures/'],
+        new Set((await structureData()).filter((r) => r.svg_file).map((r) => r.slug)),
+      ),
+  },
+  {
+    id: 'sds-structure-files',
+    group: 'SDS',
+    title: 'Каждый svg_file из базы физически лежит в dist/structures/',
+    run: async () => {
+      // ⚠ Урок S23.3: на файл, на который ссылается код, легко сослаться и не
+      // положить его — и картинка молча битая. Считаем файлы, а не разметку.
+      const rows = (await structureData()).filter((r) => r.svg_file)
+      const missing = rows
+        .filter((r) => !existsSync(join(DIST, 'structures', String(r.svg_file))))
+        .map((r) => `${r.slug} -> ${r.svg_file}`)
+      const dir = join(DIST, 'structures')
+      const onDisk = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.svg')) : []
+      const expected = new Set(rows.map((r) => String(r.svg_file)))
+      const extra = onDisk.filter((f) => !expected.has(f))
+      const detail: string[] = []
+      if (missing.length) detail.push(`база ссылается, файла нет (${missing.length}): ${preview(missing)}`)
+      if (extra.length) detail.push(`файл есть, база не ссылается (${extra.length}): ${preview(extra)}`)
+      return {
+        id: 'sds-structure-files',
+        group: 'SDS',
+        ok: !missing.length && !extra.length,
+        headline: `${onDisk.length} SVG в dist/structures/, база ожидает ${expected.size}`,
+        detail,
+      }
+    },
+  },
+  {
+    id: 'sds-structure-molecular-only',
+    group: 'SDS',
+    title: 'Гибридизация и электроны — только на молекулярных страницах',
+    run: async () =>
+      comparePageSets(
+        'sds-structure-molecular-only',
+        'SDS',
+        'sds',
+        ['Hybridisation'],
+        // ⚠ Для ионного вещества RDKit считал гибридизацию по ОДНОМУ иону, а не
+        // по соединению. Значения в базе есть, но на странице их быть не должно.
+        new Set(
+          (await structureData())
+            .filter((r) => r.structure_kind === 'molecular' && r.hybridization && Object.keys(r.hybridization).length)
+            .map((r) => r.slug),
+        ),
+      ),
   },
   {
     id: 'storage-classes',
