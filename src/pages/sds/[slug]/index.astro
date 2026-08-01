@@ -475,7 +475,23 @@ const identity: { label: string; value: string }[] = []
 if (cas) identity.push({ label: 'CAS number', value: cas })
 if (substance?.ec_number) identity.push({ label: 'EC number', value: substance.ec_number })
 if (substance?.index_number) identity.push({ label: 'CLP Annex VI index', value: substance.index_number })
-if (substance?.molecular_formula) identity.push({ label: 'Molecular formula', value: substance.molecular_formula })
+// Formula rows (session 25). Two columns hold two DIFFERENT notations, both legitimate:
+//   substances.molecular_formula — Hill/alphabetical form as printed in Annex VI
+//                                  ("C3H6O", "H2O4S", "ClNaO"). Correct, but nobody
+//                                  writes sulfuric acid as H2O4S and nobody searches it.
+//   sds_pages.formula_display    — readable structural form ("CH3COCH3", "H2SO4",
+//                                  "NaOCl"), filled session 25 on 100 of 109 pages.
+// Where Annex VI has no entry (42 pages — gases, inorganics, minerals) formula_display
+// IS the molecular formula, so it takes the primary label instead of a second row.
+// Identical values never produce two rows.
+if (substance?.molecular_formula) {
+  identity.push({ label: 'Molecular formula', value: substance.molecular_formula })
+  if (formula && formula !== substance.molecular_formula) {
+    identity.push({ label: 'Structural formula', value: formula })
+  }
+} else if (formula) {
+  identity.push({ label: 'Molecular formula', value: formula })
+}
 if (substance?.molecular_weight != null) identity.push({ label: 'Molar mass', value: `${substance.molecular_weight} g/mol` })
 if (substance?.reach_reg_number) identity.push({ label: 'REACH reg. no.', value: substance.reach_reg_number })
 
