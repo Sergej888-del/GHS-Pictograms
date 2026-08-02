@@ -8,6 +8,7 @@
 // unchanged (HERO_BG, §0.2). The island itself is untouched in this pass.
 export const prerender = true
 import Layout from '../../layouts/Layout.astro'
+import SdsManagerCard from '../../components/SdsManagerCard.astro'
 import StorageTool from '../../components/StorageTool'
 import { HERO_BG } from '../../lib/storageClasses'
 
@@ -103,6 +104,12 @@ const method = [
         <br />
         Data sources: GHS/CLP hazard classifications, CAMEO Chemicals (NOAA), ADR 2025 (UNECE).
       </p>
+
+      <SdsManagerCard
+        service="management"
+        body="This tool gives you the verdict; the sheet gives you the authority for it. Every verdict above still has to be checked against SDS sections 7 and 10 for the exact product on your shelf — which means having the current revision of each supplier's sheet, not the one filed three years ago. For keeping that library central, version-controlled and QR-accessible at the store, the solution we recommend is SDS Manager. It also offers SDS authoring and a broader EHS suite."
+        href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=sttool"
+      />
     </div>
   </section>
 </Layout>

@@ -8,6 +8,11 @@
 //   <SdsManagerCard service="ehs" href="https://ehs.sdsmanager.com/?fpr=ghs3&fp_sid=ehsrisk" />
 //   // Optional per-placement override of the copy (title/body/cta) without adding a new service variant:
 //   <SdsManagerCard service="ehs" body="..." href="https://ehs.sdsmanager.com/?fpr=ghs3&fp_sid=ehsrisk" />
+//   // coupons={false} suppresses the discount-code block (it is off by default on service="ehs").
+//
+// Tracking coupons (session 28): GHS5 and GHS10 are volume-tiered and product-specific.
+// They are printed WITH their scope on purpose — a bare "10% off" would be untrue for
+// the small-library reader, who is most of the audience.
 //
 // Marking is mandatory and wired here ONCE: dagger + rel="sponsored nofollow noopener"
 // + target="_blank" + an inline, plain-language disclosure linking to /affiliate-disclosure/.
@@ -18,8 +23,20 @@ interface Props {
   title?: string;
   body?: string;
   cta?: string;
+  /** Show the two tracking coupons. Default: everywhere EXCEPT the EHS suite —
+   *  the partner granted the codes for SDS Manager Premium/Pro and ExactSDS
+   *  Standard annual plans only, so advertising them next to the EHS suite
+   *  would promise a discount that does not exist. */
+  coupons?: boolean;
 }
-const { service = 'general', href, title: titleProp, body: bodyProp, cta: ctaProp } = Astro.props;
+const {
+  service = 'general',
+  href,
+  title: titleProp,
+  body: bodyProp,
+  cta: ctaProp,
+  coupons: couponsProp,
+} = Astro.props;
 const COPY: Record<'general' | 'authoring' | 'management' | 'ehs', { title?: string; body: string; cta: string }> = {
   general: {
     body:
@@ -47,6 +64,22 @@ const base = COPY[service] ?? COPY.general;
 const title = titleProp ?? base.title;
 const body = bodyProp ?? base.body;
 const cta = ctaProp ?? base.cta;
+const showCoupons = couponsProp ?? service !== 'ehs';
+// Tracking coupons issued to us by SDS Manager. They are volume-tiered, and the
+// tiers differ between the two products — printing a bare "10% off" would be
+// false for most readers, so each code carries its exact scope.
+const COUPONS = [
+  {
+    code: 'GHS5',
+    off: '5% off annual plans',
+    scope: 'SDS Manager Premium/Pro 200–400 SDSs · ExactSDS Standard 50–70 SDSs',
+  },
+  {
+    code: 'GHS10',
+    off: '10% off annual plans',
+    scope: 'SDS Manager Premium/Pro 500+ SDSs · ExactSDS Standard 100+ SDSs',
+  },
+];
 ---
 <aside class="smc" aria-label="Recommended solution">
   <div class="smc__accent" aria-hidden="true"></div>
@@ -57,9 +90,24 @@ const cta = ctaProp ?? base.cta;
     <a class="smc__cta" href={href} target="_blank" rel="sponsored nofollow noopener">
       {cta} <span aria-hidden="true">&dagger;</span>
     </a>
+    {showCoupons && (
+      <div class="smc__coupons">
+        <p class="smc__coupons-label">Reader discount codes</p>
+        <ul class="smc__coupons-list">
+          {COUPONS.map((c) => (
+            <li>
+              <code class="smc__code">{c.code}</code>
+              <span class="smc__coupon-off">{c.off}</span>
+              <span class="smc__coupon-scope">{c.scope}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
     <p class="smc__disclosure">
       <span aria-hidden="true">&dagger;</span> SDS Manager is a partner solution. We may earn a
-      commission if you subscribe through our link, at no extra cost to you. See our
+      commission if you subscribe through our link{showCoupons ? ' or with one of the codes above' : ''},
+      at no extra cost to you. See our
       <a href="/affiliate-disclosure/">affiliate disclosure</a>.
     </p>
   </div>
@@ -126,6 +174,59 @@ const cta = ctaProp ?? base.cta;
   .smc__cta:focus-visible {
     outline: 2px solid #062a78;
     outline-offset: 2px;
+  }
+  .smc__coupons {
+    margin-top: 1rem;
+    padding: 0.75rem 0.875rem;
+    border: 1px dashed #a7f3d0; /* emerald-200 */
+    border-radius: 0.5rem;
+    background: #f0fdf4; /* emerald-50 */
+  }
+  .smc__coupons-label {
+    margin: 0 0 0.5rem;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #047857; /* emerald-700 */
+  }
+  .smc__coupons-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .smc__coupons-list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.375rem 0.5rem;
+    margin: 0;
+  }
+  .smc__code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #064e3b; /* emerald-900 */
+    background: #ffffff;
+    border: 1px solid #6ee7b7; /* emerald-300 */
+    border-radius: 0.25rem;
+    padding: 0.125rem 0.4375rem;
+  }
+  .smc__coupon-off {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #065f46; /* emerald-800 */
+  }
+  .smc__coupon-scope {
+    flex-basis: 100%;
+    font-size: 0.75rem;
+    line-height: 1.45;
+    color: #6b7280; /* gray-500 */
   }
   .smc__disclosure {
     margin: 0.75rem 0 0;

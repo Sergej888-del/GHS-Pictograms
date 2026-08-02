@@ -15,6 +15,7 @@
 // sharing its components with the hub — same data cards, badges, mini-tables.
 // Hero colour untouched (HERO_BG, §0.2); only the frame changed.
 import Layout from '../../../layouts/Layout.astro'
+import SdsManagerCard from '../../../components/SdsManagerCard.astro'
 import { STORAGE_CLASSES, shortForCode, urlForCode, familyStyleForCode, HERO_BG } from '../../../lib/storageClasses'
 import { supabase } from '../../../lib/supabase'
 import { getCollection, render } from 'astro:content'
@@ -322,6 +323,12 @@ const nFaq = entry?.data.faq?.length ? pad() : null
           <a href="/sds/">SDS library</a>.
         </p>
       </div>
+
+      <SdsManagerCard
+        service="management"
+        body={`Class-level segregation is only as current as the sheets behind it: what actually decides where ${lower} go is SDS sections 7 and 10 for each product on the shelf, and those change whenever a supplier reissues. For keeping that library central, version-controlled and reachable by QR code at the store, the solution we recommend is SDS Manager. It also offers SDS authoring and a broader EHS suite.`}
+        href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=stclass"
+      />
 
       <p class="hub-fine">
         Reference aid only — class-level segregation is a starting point, not a substitute for a substance's Safety

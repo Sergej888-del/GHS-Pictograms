@@ -1,0 +1,241 @@
+---
+title: "SDS Authoring Software: What It Does and What It Costs"
+description: "What SDS authoring software does, how vendors price it, and the published per-sheet and annual costs — plus why most vendors quote only on request."
+slug: "sds-authoring-software"
+pubDate: 2026-08-02
+updatedDate: 2026-08-02
+category: "compliance"
+pillar: "sds"
+type: "comparison"
+draft: false
+language: "en-US"
+author: "GHS Pictograms Editorial"
+schemaType: "Article"
+keywords:
+  - "sds authoring software"
+  - "safety data sheet authoring software"
+  - "sds authoring services"
+  - "sds software pricing"
+  - "sds creation software"
+  - "create safety data sheet"
+relatedPages:
+  - "/compliance/sds/"
+  - "/compliance/sds/sds-authoring/"
+  - "/compliance/sds/sds-format-16-sections-explained/"
+  - "/compliance/sds/sds-management/"
+crossDomainLinks:
+  - "https://ghssymbols.com/hazards/"
+faq:
+  - q: "How much does SDS authoring software cost?"
+    a: >-
+      Very few vendors publish a price. Of the seven authoring products we
+      checked on 2 August 2026, only SDS Manager publishes a full list — 199 USD
+      for a single sheet on a pay-as-you-go basis, or annual plans from 1,499 USD
+      for 15 sheets up to 9,299 USD for 300. That works out at roughly 100 USD per
+      sheet at the smallest annual plan and about 31 USD per sheet at the largest.
+      Every other vendor we checked — UL Solutions, Lisam, TotalSDS, EcoOnline and
+      VelocityEHS — routes you to a demo or a quote form instead of a price.
+  - q: "Is it cheaper to buy authoring software or to outsource the sheets?"
+    a: >-
+      It depends entirely on how many sheets you have. Industry figures submitted
+      to OSHA during the Hazard Communication rulemaking put outsourced authoring
+      at 400 to 800 USD to produce an SDS and label for one product, with one
+      distributor estimating 750 USD per sheet plus another 250 USD of internal
+      staff time. Against those numbers, software becomes cheaper somewhere in the
+      low tens of sheets — but only if you have someone competent to operate it,
+      because the classification decisions stay yours either way.
+  - q: "Can one SDS cover the US, the EU and Great Britain?"
+    a: >-
+      No. The three are separate documents built from the same underlying data.
+      OSHA requires the sheet in English and does not enforce the content of
+      sections 12 to 15. The EU requires an official language of every member state
+      where the product is sold, plus a UFI in subsection 1.1 for hazardous mixtures
+      and endocrine-disruptor information in 2.3 and 11.2. Great Britain runs its
+      own assimilated version of REACH Annex II that was never updated to the EU's
+      2020/878 format and carries no UFI requirement, while Northern Ireland
+      continues to follow EU CLP. Handling that split is the main reason multi-market
+      suppliers buy authoring software at all.
+  - q: "Does authoring software make my SDS legally compliant?"
+    a: >-
+      No software transfers the legal duty. In the US, the chemical manufacturer or
+      importer preparing the sheet is responsible for ensuring the information
+      accurately reflects the scientific evidence used to classify the chemical. In
+      the EU, REACH Annex II goes further and requires the sheet to be prepared by a
+      competent person whose employer must provide appropriate training, including
+      refresher training. Software applies your classification consistently across
+      16 sections; it does not decide the classification for you, and it is not a
+      defense if the classification is wrong.
+  - q: "What is the difference between authoring software and SDS management software?"
+    a: >-
+      Authoring software creates sheets for products you place on the market.
+      Management software stores, indexes and distributes the sheets you receive
+      from your own suppliers, and keeps them current as those suppliers issue
+      revisions. A manufacturer typically needs both; a workshop or laboratory that
+      buys chemicals but sells none needs only the second.
+---
+
+import SdsManagerCard from '../../../components/SdsManagerCard.astro'
+
+Ask what SDS authoring software costs and you will mostly get a demo booking form. Of seven authoring products we checked on 2 August 2026, five publish no price at all — the page ends in "Schedule a demo," "Book demo," or a phone number. That is unusual for business software in 2026, and it makes the buying decision harder than it needs to be, because the honest comparison is not between one tool and another. It is between buying a tool, outsourcing the sheets, and writing them by hand.
+
+This page sets out what authoring software actually does, what the published prices are where prices exist, what outsourcing the same work costs according to figures the chemical distribution industry filed with OSHA, and the specific jurisdictional split that makes the whole category worth paying for. If you are deciding whether your company needs a tool at all, start with [how an SDS is authored](/compliance/sds/sds-authoring/) — this page assumes you already know what goes on the sheet and are pricing the machinery.
+
+## At a glance
+
+- **What it is:** software that turns a product recipe plus classification decisions into a complete 16-section safety data sheet, formatted per jurisdiction and rendered in the required languages.
+- **Who buys it:** manufacturers, importers, formulators and own-brand suppliers — anyone who *places* a chemical on the market and therefore has to produce the sheet rather than just hold it.
+- **Published pricing:** 1 of 7 vendors publishes a full price list; 1 more publishes a per-sheet service price. The remaining 5 quote on request.
+- **Cheapest published entry point:** 199 USD for a single sheet, pay as you go.
+- **Outsourced alternative:** 400–800 USD per SDS and label, per figures the Alliance for Chemical Distribution put to OSHA.
+- **Why one sheet is not enough:** the US, the EU and Great Britain need three different documents from the same data — and the EU version multiplies by language.
+- **What it does not do:** transfer legal responsibility. The manufacturer or importer still owns the classification.
+
+## What SDS authoring software actually does
+
+The name undersells it. The hard part of a safety data sheet is not filling in 16 boxes — it is keeping every box consistent with the hazard classification, and keeping that consistency across every product, every revision and every market. Authoring software exists to hold that consistency for you.
+
+A capable tool does four things:
+
+1. **Applies classification logic to a mixture.** You enter components and concentrations; the tool applies the additivity and cut-off rules to derive the mixture classification, including acute toxicity estimates. Our own [ATE Calculator](/tools/ate-mixture-calculator/) does this one step in isolation and for free, which is a reasonable way to sanity-check what a tool tells you.
+2. **Propagates that classification through all 16 sections.** Hazard statements in Section 2, precautionary statements throughout, label elements, PPE advice, disposal notes — all derived once, so Section 2 and Section 3 cannot silently disagree. Inconsistency between those two sections is the single most common audit finding.
+3. **Renders per jurisdiction.** The same source record produces a US sheet under OSHA HCS Appendix D, an EU sheet under REACH Annex II, a GB sheet, and so on — each with the right section content and the right regulatory references in Section 15.
+4. **Versions and reissues.** When a classification changes, every affected sheet is regenerated with a new Section 16 revision entry, and you have a list of who received the old one.
+
+That fourth point is where the money is. Under OSHA, a manufacturer who becomes newly aware of significant information about a hazard has to add it to the sheet within three months. Under EU REACH, Article 31(9) requires an update without delay and re-supply to every recipient of the previous twelve months. Doing that by hand across a catalog is not a document task; it is a records problem.
+
+### Authoring is not management
+
+The two are routinely confused, and vendors sell both, so it is worth stating plainly:
+
+| | SDS authoring | SDS management |
+|---|---|---|
+| Purpose | Create sheets for products **you** sell | Store and distribute sheets **you receive** |
+| Who needs it | Manufacturers, importers, formulators, own-brand | Every employer with hazardous chemicals on site |
+| Trigger to act | You reformulate, or the rules change | A supplier issues a revision |
+| Regulatory driver | OSHA 1910.1200(g)(1)–(g)(5), REACH Art. 31 + Annex II | OSHA 1910.1200(g)(8), employer duty to keep sheets accessible |
+
+A manufacturer normally needs both. A workshop, laboratory or warehouse that buys chemicals and sells none needs only the second — covered separately in [SDS Management](/compliance/sds/sds-management/).
+
+## What it costs
+
+Here is the state of published pricing in this category, checked on 2 August 2026.
+
+| Vendor | Product | Price published? | What the page offers instead |
+|---|---|---|---|
+| SDS Manager | ExactSDS | **Yes** — full list, per sheet and per annual tier | — |
+| Chemwatch | SDS authoring (done-for-you service) | **Yes** — per sheet, in AUD | — |
+| UL Solutions | ULTRUS / WERCS Studio | No | "Schedule a demo" |
+| Lisam | ExESS | No | "annual subscription-based options scaled to your needs" |
+| TotalSDS | SDS Authoring | No | "Schedule a Demo" |
+| EcoOnline | ALMEGO | No | "priced based on usage" |
+| VelocityEHS / MSDSonline | SDS authoring | No | Quote form and a phone number |
+
+> **Disclosure.** SDS Manager is our affiliate partner and we may earn a commission if you subscribe through our link — see our [affiliate disclosure](/affiliate-disclosure/). We have no commercial relationship with any other vendor named on this page. The prices below are the vendors' own published list prices as of 2 August 2026, reproduced so you can compare; they are not quotes from us and they change.
+
+### Published software prices
+
+SDS Manager's ExactSDS is the only authoring product in the group with an open price list. US list prices:
+
+| Plan | Sheets included | Price | Effective cost per sheet |
+|---|---|---|---|
+| Pay as you go | 1 | 199 USD | 199 USD |
+| Standard | 15 | 1,499 USD / year | ~100 USD |
+| Standard | 30 | 2,299 USD / year | ~77 USD |
+| Standard | 50 | 3,299 USD / year | ~66 USD |
+| Standard | 70 | 4,299 USD / year | ~61 USD |
+| Standard | 100 | 5,699 USD / year | ~57 USD |
+| Standard | 200 | 7,899 USD / year | ~40 USD |
+| Standard | 300 | 9,299 USD / year | ~31 USD |
+| Enterprise | 300+ | Custom | — |
+
+The per-sheet column is ours, not the vendor's — list price divided by sheets included. It is the number worth carrying into a comparison, because it is what an outsourced sheet has to beat.
+
+Regional list prices differ: 179 EUR and 159 GBP per sheet on the EU and UK price pages respectively, with the equivalent entry-level annual plans at 1,349 EUR and 1,199 GBP. The product claims 39+ languages.
+
+### The one published service price
+
+Chemwatch sells authoring as a service rather than a subscription — their chemists write the sheet — and publishes a flat rate: **469.46 AUD per SDS including GST**, with a stated lead time of 48 hours for one to three sheets and one week for four to ten. At August 2026 exchange rates that is roughly 300 USD per sheet, which sits between the pay-as-you-go software price and the outsourcing figures below. It is a useful anchor precisely because it is public.
+
+### What outsourcing costs
+
+The most credible public numbers for outsourced authoring come from the chemical distribution industry itself. In materials submitted to OSHA during the Hazard Communication rulemaking (RIN 1218-AC93), the Alliance for Chemical Distribution reported that authoring firms:
+
+> "typically charge between $400 and $800 to produce an SDS and label for one product. If a company has 150 SDSs to update, which is conservative for many chemical distributors, the cost would be $60,000 to $120,000."
+
+The same submission records one member paying a discounted flat rate of 450 USD per sheet during the 2012 HCS transition and estimating **750 USD per sheet** at current rates, plus **250 USD per sheet** of internal staff and management time on top — because someone in-house still has to review what the vendor produced.
+
+Put those side by side and the arithmetic is unsubtle. At 750 USD per outsourced sheet, a 15-sheet annual software plan at 1,499 USD costs less than two outsourced sheets. That is not an argument that software is always right — it is an argument that the crossover point arrives far earlier than most small suppliers assume, somewhere in the low tens of sheets rather than the hundreds.
+
+The countervailing cost is competence. Outsourcing buys a classification decision from someone who does this for a living. Software assumes you can make that decision yourself, and applies it faithfully whether it is right or wrong.
+
+## One recipe, three formats
+
+The strongest case for authoring software has nothing to do with typing speed. It is that a single product sold into the US, the EU and Great Britain needs three genuinely different sheets, and the differences are structural rather than cosmetic.
+
+| | United States | European Union | Great Britain |
+|---|---|---|---|
+| Legal basis | OSHA HCS, 29 CFR 1910.1200, Appendix D | REACH Annex II as amended by Regulation (EU) 2020/878 | Assimilated REACH Annex II (GB) |
+| Language | English | Official language(s) of every member state where sold | English |
+| UFI in subsection 1.1 | Not required | Required for hazardous mixtures | **Not required** — never adopted |
+| Endocrine disruptors in 2.3 / 11.2 | Not required | Required | Not required |
+| Sections 12–15 | Headings required; content not enforced by OSHA | Fully required, incl. 15.2 chemical safety assessment | Fully required |
+| Author qualification | No formal requirement | Competent person, with training including refresher training | Competent person |
+
+Three points deserve emphasis, because they are the ones that catch exporters out.
+
+**The GB sheet is not the EU sheet.** Great Britain's assimilated version of REACH Annex II was never brought into line with Regulation (EU) 2020/878. It retains the structure of the earlier format and contains no UFI requirement anywhere in subsection 1.1, and Great Britain has no mandatory poison-centre notification scheme of its own — HSE describes the current data-collection arrangement as voluntary. Great Britain has amended its Annex II since Brexit, most recently on 21 May 2026 when subsection 3.2.1 was rewritten to reference the GB mandatory classification and labelling list, but none of those amendments imported the EU's 2020/878 format.
+
+**Northern Ireland follows the EU, not Great Britain.** Under the Northern Ireland Protocol and the Windsor Framework, chemicals placed on the market in Northern Ireland are regulated by EU CLP. In practice that means a supplier serving the whole United Kingdom needs the GB sheet *and* the EU sheet.
+
+**The US sheet is smaller than it looks.** OSHA's Appendix D states plainly that sections 12 through 15 "may be included in the SDS, but are not mandatory," and the standard adds that OSHA will not enforce those sections because they fall outside its jurisdiction. The headings must still be present for GHS consistency. Most commercial US sheets complete them anyway, for shipping and for downstream users — but the enforcement asymmetry is real, and it is why a US sheet cannot simply be relabeled for Europe.
+
+## Buying checklist
+
+Ten questions worth putting to any vendor before a demo turns into a subscription:
+
+1. **Which jurisdictions does the tool render natively?** US, EU, GB and Northern Ireland are four answers, not one.
+2. **How many languages, and are the translations of regulated phrases the official ones?** H- and P-statement wording is prescribed text, not free translation.
+3. **Where does the substance data come from, and how often is it refreshed?** A classification engine is only as current as its underlying hazard data.
+4. **Does the tool handle the UFI?** Required for EU hazardous mixtures; absent in GB.
+5. **What happens on a regulatory change?** Ask specifically how the last CLP adaptation and the HCS 2024 update propagated to existing sheets.
+6. **Is there a revision history per sheet, and can you export who received which version?** This is what REACH Article 31(9) actually requires you to demonstrate.
+7. **Can you get your data out?** Recipes and classifications should leave in a structured format if you change vendors.
+8. **What is the price at your actual sheet count — and at three times that?** Per-sheet cost falls steeply with volume in this category.
+9. **Does the price include label output?** Sheet and label should come from the same classification, or they will drift.
+10. **Who is the competent person?** If you are supplying into the EU, someone identifiable has to hold that role, and their employer has to be able to evidence their training.
+
+## What software does not do
+
+It does not move the legal duty. In the US, the manufacturer or importer preparing the sheet must ensure the information provided accurately reflects the scientific evidence used in making the hazard classification — a duty that sits with the company, not the tool. In the EU, REACH Annex II requires the sheet to be prepared by a competent person, and requires the supplier to ensure that person has received appropriate training, including refresher training.
+
+Nor does it decide anything genuinely uncertain. Where a substance has patchy toxicological data, or a mixture sits near a category cut-off, the tool applies whatever rule you point it at. Authoring software makes a correct classification cheap to express consistently and a wrong classification cheap to replicate 300 times. The judgment stays where the law puts it.
+
+<SdsManagerCard service="authoring" body="If the arithmetic above points to software rather than outsourcing, SDS Manager (ExactSDS) is the product we recommend and the only one in this comparison that publishes its full price list — AI-assisted classification, all 16 sections generated from one source, per-jurisdiction output and 39+ languages. It also offers SDS management and a broader EHS suite." href="https://sdsmanager.com/us/sds-authoring?fpr=ghs3&fp_sid=gpauthsw" />
+
+## Key takeaways
+
+- **Pricing in this category is deliberately opaque.** Five of seven vendors publish no figure; the two that do set the only public benchmarks — 199 USD per sheet for software, 469.46 AUD per sheet for a written-for-you service.
+- **The crossover against outsourcing comes early.** At the 400–800 USD per sheet the industry reported to OSHA, an annual software plan pays for itself in the low tens of sheets.
+- **Multi-market supply is the real driver.** One recipe becomes a US sheet, an EU sheet in several languages, and a separate GB sheet that has no UFI — which is exactly the work software removes.
+- **Consistency is the feature, not formatting.** Classification applied once and propagated through 16 sections is what prevents the Section 2 / Section 3 mismatch that audits find first.
+- **Responsibility does not move.** OSHA holds the manufacturer or importer to the accuracy of the classification; REACH additionally requires a trained competent person to prepare the sheet.
+
+## Related articles in this hub
+
+- [SDS Authoring: How to Write a Safety Data Sheet](/compliance/sds/sds-authoring/) — the process the software automates, step by step.
+- [Safety Data Sheet Format: 16 Sections Explained](/compliance/sds/sds-format-16-sections-explained/) — what belongs in each section the tool fills.
+- [SDS Management](/compliance/sds/sds-management/) — the other half: keeping the sheets you receive current and accessible.
+- [Who Needs an SDS?](/compliance/sds/who-needs-an-sds/) — whether you are the party that has to produce one at all.
+- [OSHA HCS 2024 Changes](/compliance/osha-hcs/osha-hcs-2024-changes/) — the compliance dates that force a reissue.
+
+## Sources
+
+1. **OSHA**, Hazard Communication Standard, 29 CFR 1910.1200 — paragraph (g) safety data sheets, including (g)(2) English-language requirement, (g)(5) three-month update duty, and Note 2 to paragraph (g)(2) on sections 12–15. Available at: https://www.ecfr.gov/current/title-29/subtitle-B/chapter-XVII/part-1910/subpart-Z/section-1910.1200
+2. **OSHA**, Appendix D to §1910.1200 — Safety Data Sheets, "Sections 12-15 may be included in the SDS, but are not mandatory." Available at: https://www.osha.gov/laws-regs/regulations/standardnumber/1910/1910.1200AppD
+3. **Commission Regulation (EU) 2020/878** of 18 June 2020 amending Annex II to REACH — UFI in subsection 1.1, endocrine-disruptor information in 2.3 and 11.2, and the requirement in 0.2.3 that the sheet be prepared by a competent person with training including refresher training. Available at: https://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=CELEX%3A32020R0878
+4. **REACH**, Regulation (EC) No 1907/2006, Article 31 — duty to supply, language requirement, and the Article 31(9) update and re-supply obligation.
+5. **legislation.gov.uk**, assimilated REACH Annex II, Part A (Great Britain) — current GB text, with no UFI requirement in subsection 1.1. Available at: https://www.legislation.gov.uk/eur/2006/1907/annex/II/part/A
+6. **HSE**, CLP in Great Britain or Northern Ireland — Northern Ireland remains subject to EU CLP under the Northern Ireland Protocol and Windsor Framework. Available at: https://www.hse.gov.uk/chemical-classification/brexit.htm
+7. **HSE**, National Poisons Information Service submissions — "The current scheme of data collection from the chemical industry is voluntary." Available at: https://www.hse.gov.uk/chemical-classification/classification/poison-centres.htm
+8. **Alliance for Chemical Distribution**, submission on the OSHA Hazard Communication Standard rulemaking (RIN 1218-AC93) — outsourced authoring cost figures. Available at: https://www.reginfo.gov/public/do/eoDownloadDocument?eodoc=true&documentID=256994
+9. **Vendor price pages, checked 2 August 2026:** SDS Manager / ExactSDS (<a href="https://sdsmanager.com/us/sds-authoring/" rel="nofollow noopener" target="_blank">sdsmanager.com/us/sds-authoring/</a> — cited as a source; this is not our affiliate link, and the affiliate link on this page is marked separately), Chemwatch SDS Only (https://chemwatch.net/products/sds-authoring/sds-only/), UL Solutions ULTRUS, Lisam ExESS, TotalSDS, EcoOnline ALMEGO, VelocityEHS / MSDSonline.

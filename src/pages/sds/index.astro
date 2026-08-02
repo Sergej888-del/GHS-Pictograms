@@ -8,6 +8,7 @@
 // search-only — never displayed) is preserved and now also hides empty letter groups.
 // JetBrains Mono link dropped (Sergej's call): mono is --font-mono site-wide.
 import Layout from '../../layouts/Layout.astro'
+import SdsManagerCard from '../../components/SdsManagerCard.astro'
 import { supabase } from '../../lib/supabase'
 
 const SITE = 'https://ghspictograms.com'
@@ -215,6 +216,12 @@ const jsonLd = {
           already covers 3,600+ substances by CAS number.
         </p>
       </div>
+
+      <SdsManagerCard
+        service="management"
+        body="These reference pages cover the substance. The document your inspector asks for is the supplier's own safety data sheet for the product you actually bought — and it has to be the current revision, on file, and reachable from the floor. For keeping that library central, version-controlled and QR-accessible, the solution we recommend is SDS Manager. It also offers SDS authoring and a broader EHS suite."
+        href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=sdshub"
+      />
     </div>
   </section>
 

@@ -19,12 +19,13 @@ keywords:
   - "sds sections"
   - "msds vs sds"
 relatedPages:
+  - "/compliance/sds/sds-authoring-software/"
   - "/compliance/un-ghs/un-ghs-implementation-by-country/"
   - "/compliance/osha-hcs/osha-hcs-2024-changes/"
   - "/compliance/clp/clp-atp-22-changes/"
   - "/compliance/un-ghs/un-ghs-rev-11-changes/"
 crossDomainLinks:
-  - "https://ghssymbols.com/ate-calculator/"
+  - "/tools/ate-mixture-calculator/"
   - "https://ghspictograms.com/label-constructor/"
 faq:
   - q: "What are the 16 sections of an SDS?"
@@ -92,6 +93,8 @@ faq:
       exempt, though suppliers often provide SDS voluntarily.
 ---
 
+import SdsManagerCard from '../../../components/SdsManagerCard.astro'
+
 A safety data sheet (SDS) follows the same 16-section structure whether it travels from a German chemical manufacturer to a Swiss reseller, gets written by a US chemical importer, or lands on the desk of an Indian downstream user. The format is set by Annex 4 of the UN Globally Harmonized System (GHS) and then adopted into law by OSHA's Hazard Communication Standard at 29 CFR 1910.1200 Appendix D and by the EU REACH Regulation in Annex II as amended by Regulation (EU) 2020/878. Despite small regional differences in mandatory content, the 16 headings and their numbering are identical worldwide.
 
 This article walks every SDS section, what each must contain, where the EU and US diverge, and the most common errors that get safety data sheets rejected during compliance audits. If you author or review safety data sheets — as a regulatory affairs specialist, EHS manager, downstream user assessing supplier documents, or compliance professional preparing for export — keep this as a working reference next to your draft.
@@ -106,7 +109,7 @@ This article walks every SDS section, what each must contain, where the EU and U
 - **Mandatory sections:** sections 1–11 and 16 in the US; all 16 sections in the EU
 - **Length:** typically 8–15 pages; nanoform substances and REACH extended SDS often run longer
 - **Language:** English in the US; the official language of each Member State where the product is placed on the EU market
-- **Related tools on this site:** [GHS Label Maker](/label-constructor/), [ATE Calculator on ghssymbols.com](https://ghssymbols.com/ate-calculator/)
+- **Related tools on this site:** [GHS Label Maker](/label-constructor/), [ATE Calculator](/tools/ate-mixture-calculator/)
 
 ---
 
@@ -180,7 +183,7 @@ Section 3 lists what is actually in the product.
 
 **EU specifics under 2020/878:** Section 3 must now also include, where applicable, the Specific Concentration Limit, M-factor, Acute Toxicity Estimate, and particle characteristics for each listed ingredient. Concentration thresholds for when an ingredient must be listed have been tightened.
 
-**Practical tip:** the ATE values you put here are what your downstream user will plug into mixture classification software. The [ATE Calculator on ghssymbols.com](https://ghssymbols.com/ate-calculator/) shows how those numbers flow into final mixture classification.
+**Practical tip:** the ATE values you put here are what your downstream user will plug into mixture classification software. The [ATE Calculator](/tools/ate-mixture-calculator/) shows how those numbers flow into final mixture classification.
 
 ### Section 4 — First-Aid Measures
 
@@ -274,7 +277,7 @@ Section 11 documents health hazards in technical detail.
 
 **Sub-section 11.2 (NEW under EU 2020/878):** information on other hazards, primarily endocrine-disrupting properties for human health.
 
-**Practical tip:** the LD50 and LC50 numbers here flow into mixture classification calculations. For mixtures, the ATE values from supplier SDS power downstream classification — see how on the [ATE Calculator](https://ghssymbols.com/ate-calculator/). For substances, the toxicology entry on ghssymbols.com `/hazards/[cas]/` mirrors the data the supplier should report.
+**Practical tip:** the LD50 and LC50 numbers here flow into mixture classification calculations. For mixtures, the ATE values from supplier SDS power downstream classification — see how on the [ATE Calculator](/tools/ate-mixture-calculator/). For substances, the toxicology entry at [ghssymbols.com/hazards/](https://ghssymbols.com/hazards/) mirrors the data the supplier should report.
 
 ### Section 12 — Ecological Information
 
@@ -422,6 +425,8 @@ Compliance audits and regulatory inspections surface the same recurring errors:
 
 ---
 
+<SdsManagerCard service="authoring" body="Most of the errors above are consistency errors between sections — and that is the specific thing authoring software removes: the classification is applied once and propagated through all 16 sections, Section 16 carries a real revision history, and the same source renders per jurisdiction. The solution we recommend is SDS Manager (ExactSDS). It also offers SDS management and a broader EHS suite." href="https://sdsmanager.com/us/sds-authoring?fpr=ghs3&fp_sid=gp16sec" />
+
 ## Key takeaways
 
 - **Same 16 headings worldwide, different mandatory content** — UN GHS Annex 4 fixes the section count and titles; OSHA HCS, REACH Annex II, and national rules layer their own sub-section requirements on top.
@@ -438,6 +443,7 @@ Compliance audits and regulatory inspections surface the same recurring errors:
 - [OSHA HCS 2024 Changes](/compliance/osha-hcs/osha-hcs-2024-changes/) — what HCS 2024 added to Section 2 and the 2026–2028 transition timeline
 - [UN GHS Rev 11 Changes](/compliance/un-ghs/un-ghs-rev-11-changes/) — Annex 11 simple-asphyxiant guidance and other Section 2 updates
 - [CLP ATP 22 Changes: Annex VI Updates May 2026](/compliance/clp/clp-atp-22-changes/) — new harmonised classifications affecting Section 15
+- [SDS Authoring Software: What It Does and What It Costs](/compliance/sds/sds-authoring-software/) — published prices, and how software compares with outsourcing the sheets.
 - [SDS library](/sds/) — see the 16-section structure applied to real substances: harmonised classification, storage verdicts, and transport data for 100+ chemicals
 
 ---

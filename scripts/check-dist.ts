@@ -128,6 +128,30 @@ function assetFiles(): { name: string; text: string }[] {
   return assetCache
 }
 
+/**
+ * Все HTML-страницы dist рекурсивно: путь относительно dist + текст.
+ * Нужна проверкам, которые обходят ВЕСЬ сайт, а не заранее известный набор
+ * страниц (session 28: партнёрская ссылка может появиться где угодно).
+ */
+let pagesCache: { rel: string; html: string }[] | null = null
+function allPages(): { rel: string; html: string }[] {
+  if (pagesCache) return pagesCache
+  const out: { rel: string; html: string }[] = []
+  const walk = (dir: string, prefix: string): void => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) {
+        if (e.name === '_astro') continue
+        walk(join(dir, e.name), `${prefix}${e.name}/`)
+      } else if (e.name.endsWith('.html')) {
+        out.push({ rel: `${prefix}${e.name}`, html: readFileSync(join(dir, e.name), 'utf8') })
+      }
+    }
+  }
+  walk(DIST, '')
+  pagesCache = out
+  return out
+}
+
 // ─────────────────────────── маркеры ───────────────────────────
 
 const ASCII_PRINTABLE = /^[\x20-\x7E]+$/
@@ -1451,6 +1475,122 @@ const CHECKS: Check[] = [
       }
     },
   },
+  // ─── Партнёрские ссылки (session 28) ────────────────────────────────────
+  // ИНВАРИАНТЫ, а не числа: скрипт не знает, сколько карточек должно быть, он
+  // проверяет, что у каждой НАЙДЕННОЙ ссылки всё на месте. Ровно это ловит
+  // ссылку, вписанную руками мимо компонента SdsManagerCard.
+  //
+  // ⚠ Ссылка на партнёра бывает ДВУХ видов, и требования у них разные:
+  //   * партнёрская   — в href есть fpr=; обязаны быть fp_sid и rel="sponsored
+  //                     nofollow noopener", а на странице — дисклоуз;
+  //   * ссылка-источник — fpr= нет (например, цитата прайса в Sources); обязана
+  //                     быть nofollow. Проходная ссылка на партнёра со страницы,
+  //                     где стоит и партнёрская, — это то, что политика Google
+  //                     по ссылочному спаму и разбирает.
+  {
+    id: 'affiliate-marking',
+    group: 'Affiliate',
+    title: 'Каждая ссылка на партнёра размечена по своему виду',
+    run: async () => {
+      const HOST = 'sdsmanager.com'
+      const REL = 'rel="sponsored nofollow noopener"'
+      const DISCLOSURE = 'href="/affiliate-disclosure/"'
+      assertAscii('affiliate-marking', [HOST, REL, DISCLOSURE])
+
+      // Целиком открывающий тег <a ...> со ссылкой на партнёра.
+      const ANCHOR = /<a\b[^>]*href="[^"]*sdsmanager\.com[^"]*"[^>]*>/gi
+      const detail: string[] = []
+      let pages = 0
+      let affiliate = 0
+      let citations = 0
+
+      for (const { rel, html } of allPages()) {
+        const tags = html.match(ANCHOR) ?? []
+        if (tags.length === 0) continue
+        pages++
+        let hasAffiliate = false
+        for (const tag of tags) {
+          const isAffiliate = tag.includes('fpr=')
+          if (isAffiliate) {
+            affiliate++
+            hasAffiliate = true
+            if (!tag.includes(REL)) detail.push(`${rel}: партнёрская ссылка без ${REL} -> ${tag.slice(0, 140)}`)
+          } else {
+            citations++
+            if (!/rel="[^"]*nofollow[^"]*"/i.test(tag)) {
+              detail.push(`${rel}: ссылка-источник на партнёра без nofollow -> ${tag.slice(0, 140)}`)
+            }
+          }
+        }
+        if (hasAffiliate && !html.includes(DISCLOSURE)) {
+          detail.push(`${rel}: есть партнёрская ссылка, но нет ссылки на /affiliate-disclosure/`)
+        }
+      }
+
+      const ok = detail.length === 0
+      if (ok) {
+        detail.push(`${affiliate} партнёрских и ${citations} ссылок-источников на ${pages} страницах`)
+        detail.push('ссылки внутри React-островов лежат в dist/_astro/*.js и сюда не попадают — их держит affiliate-subid')
+      }
+      return {
+        id: 'affiliate-marking',
+        group: 'Affiliate',
+        ok,
+        headline: ok ? `${pages} страниц размечены правильно` : `нарушений: ${detail.length}`,
+        detail,
+      }
+    },
+  },
+  {
+    id: 'affiliate-subid',
+    group: 'Affiliate',
+    title: 'У каждой партнёрской ссылки есть fpr и fp_sid',
+    run: async () => {
+      // Без fp_sid клик доедет до партнёра, но в отчёте будет безымянным,
+      // и вопрос «какая страница приносит клики» останется без ответа.
+      // Ищем и в HTML, и в бандлах: ссылки React-инструментов живут в _astro/*.js.
+      const RE = /https:\/\/[a-z.]*sdsmanager\.com[^"'`\s<>\\)]*/g
+      const detail: string[] = []
+      const sids = new Map<string, number>()
+      let affiliate = 0
+      let citations = 0
+      const sources: { rel: string; text: string }[] = [
+        ...allPages().map((pg) => ({ rel: pg.rel, text: pg.html })),
+        ...assetFiles().map((a) => ({ rel: a.name, text: a.text })),
+      ]
+      for (const { rel, text } of sources) {
+        for (const url of text.match(RE) ?? []) {
+          // ⚠ Astro пишет разделитель параметров как &#38;, а НЕ как &amp;.
+          // Первая версия проверки декодировала только &amp; и объявила 141
+          // здоровую ссылку сломанной. Декодируем все три формы амперсанда.
+          const clean = url.replace(/&(?:amp|#0*38|#[xX]0*26);/g, '&')
+          if (!clean.includes('fpr=')) {
+            citations++
+            continue
+          }
+          affiliate++
+          if (!clean.includes('fpr=ghs3')) detail.push(`${rel}: чужой токен fpr -> ${clean}`)
+          const sid = clean.match(/[?&]fp_sid=([A-Za-z0-9_-]+)/)
+          if (!sid) detail.push(`${rel}: нет fp_sid -> ${clean}`)
+          else sids.set(sid[1], (sids.get(sid[1]) ?? 0) + 1)
+        }
+      }
+      const ok = detail.length === 0 && affiliate > 0
+      if (affiliate === 0) detail.push('в dist нет ни одной партнёрской ссылки — это тоже расхождение')
+      if (ok) {
+        detail.push(`${affiliate} партнёрских ссылок (${citations} упоминаний без fpr), ${sids.size} различных fp_sid`)
+        for (const [sid, n] of [...sids].sort((a, b) => b[1] - a[1])) detail.push(`  ${sid}: ${n}`)
+      }
+      return {
+        id: 'affiliate-subid',
+        group: 'Affiliate',
+        ok,
+        headline: ok ? `${affiliate} партнёрских ссылок, все с fpr=ghs3 и fp_sid` : `проблем: ${detail.length}`,
+        detail,
+      }
+    },
+  }
+
 ]
 
 // ─────────────────────────── прогон ───────────────────────────

@@ -8,6 +8,7 @@
 // Everything numeric on this page is computed at build time from the same RPCs
 // the matrix uses — no hardcoded counts, so it can never drift from the data.
 import Layout from '../../layouts/Layout.astro'
+import SdsManagerCard from '../../components/SdsManagerCard.astro'
 import { STORAGE_CLASSES, familyStyleForCode, HERO_BG } from '../../lib/storageClasses'
 import { supabase } from '../../lib/supabase'
 
@@ -296,6 +297,13 @@ const jsonLd: Record<string, unknown>[] = [
           <a href="/sds/">SDS library</a> carries the full reference page.
         </p>
       </div>
+
+      <SdsManagerCard
+        service="management"
+        body="Class-level segregation only holds if the sheet behind every drum is the current one — SDS sections 7 and 10 are what a segregation plan is actually built on, and they change when a supplier reissues. For keeping that library current, version-controlled and reachable by QR code on the store-room door, the solution we recommend is SDS Manager. It also offers SDS authoring and a broader EHS suite."
+        href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=sthub"
+      />
+
       <p class="hub-fine">
         Reference aid only — storage-class segregation is a starting point, not a substitute for a substance's
         Safety Data Sheet or professional judgment. Always verify against SDS sections 7 and 10 and local regulations.
