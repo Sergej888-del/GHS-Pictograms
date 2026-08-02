@@ -267,6 +267,8 @@ type Response = {
   fire_haz: string | null
   fire_fight: string | null
   non_fire_resp: string | null
+  idlh_value: number | null
+  niosh_pgd_file: string | null
 }
 
 let sdsCache: { pages: SdsPage[]; byCas: Map<string, Response> } | null = null
@@ -277,7 +279,7 @@ async function sdsData() {
   const pages = await selectAll<SdsPage>('sds_pages', 'slug, cas_number', (q) => q.eq('status', 'live'))
   const resp = await selectAll<Response>(
     'substance_response',
-    'cas_number, first_aid, fire_haz, fire_fight, non_fire_resp',
+    'cas_number, first_aid, fire_haz, fire_fight, non_fire_resp, idlh_value, niosh_pgd_file',
   )
   const byCas = new Map(resp.map((r) => [r.cas_number, r]))
   sdsCache = { pages, byCas }
@@ -469,6 +471,30 @@ const CHECKS: Check[] = [
     title: 'Section 6 — Spill and leak response',
     run: async () =>
       comparePageSets('sds-s6', 'SDS', 'sds', ['id="s6"'], await sdsSlugsWhere((r) => has(r?.non_fire_resp))),
+  },
+  {
+    // §8 (session 27). Секция рендерится там, где у вещества есть запись в NIOSH
+    // Pocket Guide — 76 страниц. IDLH при этом заполнен только у 63.
+    id: 'sds-s8',
+    group: 'SDS',
+    title: 'Section 8 — Exposure limits (NIOSH entry)',
+    run: async () =>
+      comparePageSets('sds-s8', 'SDS', 'sds', ['id="s8"'], await sdsSlugsWhere((r) => has(r?.niosh_pgd_file))),
+  },
+  {
+    // ⚠ Карточка со значением — строго подмножество: 63 из 76. Маркер только
+    // ASCII (§S26.7: assertAscii роняет проверку на не-ASCII строке).
+    id: 'sds-s8-idlh-value',
+    group: 'SDS',
+    title: 'Section 8 — IDLH value card',
+    run: async () =>
+      comparePageSets(
+        'sds-s8-idlh-value',
+        'SDS',
+        'sds',
+        ['Immediately Dangerous to Life or Health'],
+        await sdsSlugsWhere((r) => r?.idlh_value != null),
+      ),
   },
   {
     id: 'sds-emergency',

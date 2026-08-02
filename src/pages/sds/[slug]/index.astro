@@ -66,7 +66,7 @@ export async function getStaticPaths() {
   const { data: responses } = await supabase
     .from('substance_response')
     .select(
-      'cas_number, first_aid, first_aid_src, fire_haz, fire_haz_src, fire_fight, fire_fight_src, non_fire_resp, non_fire_resp_src, isolation, isolation_src, erg_guide_no, erg_guide_title',
+      'cas_number, first_aid, first_aid_src, fire_haz, fire_haz_src, fire_fight, fire_fight_src, non_fire_resp, non_fire_resp_src, isolation, isolation_src, erg_guide_no, erg_guide_title, idlh_value, idlh_unit, idlh_note, niosh_pgd_file',
     )
   const respMap: Record<string, any> = {}
   for (const r of responses ?? []) respMap[r.cas_number] = r
@@ -461,13 +461,39 @@ const hasSpillSec = Boolean(response?.non_fire_resp || response?.isolation)
 // three answers a responder needs. Two out of three is not an emergency mode.
 const emergencyOn = EMERGENCY_ENABLED && hasFirstAid && hasFireSec && hasSpillSec
 
-// §8 OEL — Step-3 import (substance_oel: EU IOELV · OSHA PEL · NIOSH REL — the
-// mockup's ACGIH TLV row is DROPPED: private body, copyrighted values).
+// --- §8 exposure limits (session 27) ---------------------------------------
+// Data: substance_response.idlh_* + niosh_pgd_file, imported session 16 from
+// cameo.sqlite and sitting unrendered ever since. IDLH is a NIOSH figure and
+// U.S. public domain.
+// ⚠ IDLH is NOT an occupational exposure limit. A PEL/REL is an 8-hour shift
+// average; IDLH is the acute concentration a worker could escape from within
+// 30 minutes without irreversible harm. OSHA PEL / NIOSH REL / EU IOELV are
+// still missing and will be added to this same section from PubChem LCSS.
+// ⚠ Eight of the ten units are "as the metal" (mg Cr(VI)/m3, mg Ni/m3 …):
+// the limit counts the metal, not the compound. Never reformat the unit.
+const idlhValue: number | null = response?.idlh_value != null ? Number(response.idlh_value) : null
+const idlhUnit: string | null = response?.idlh_unit ?? null
+const nioshFile: string | null = response?.niosh_pgd_file ?? null
+const nioshHref = nioshFile ? `https://www.cdc.gov/niosh/npg/${nioshFile}` : null
+// The note column carries up to three different statements at once, so each is
+// detected separately rather than printed raw:
+//   "A potential occupational carcinogen."          -> NIOSH carcinogen flag
+//   "Based on 10% of the lower explosive limit."    -> flammability-derived, not toxicity
+//   "[From NPG: o-Xylene]"                          -> value published for another entry
+const idlhNote: string = response?.idlh_note ?? ''
+const idlhCarcinogen = /carcinogen/i.test(idlhNote)
+const idlhFromLel = /lower explosive limit/i.test(idlhNote)
+const idlhFromOther = (idlhNote.match(/\[From NPG:\s*([^\]]+)\]/i)?.[1] ?? '').trim() || null
+// Unit written "mg Cr(VI)/m3" means the limit is expressed as that element.
+const idlhAsElement = (idlhUnit?.match(/^mg\s+(.+?)\/m3$/i)?.[1] ?? '').trim() || null
+// The section renders wherever NIOSH has an entry — 76 pages. On the 13 without
+// a value it is a single honest line plus the link to the source, which is worth
+// more than hiding the fact that NIOSH looked and set no IDLH.
+const showOel = Boolean(nioshHref)
+
 // §15 regulatory — Step-4 import (substance_regulatory_status: SVHC, Seveso
 // derived from H-codes, TSCA/DSL, precursor flags EU 2019/1148 + EC 273/2004).
-// Both sections auto-appear once their queries return rows; until then they are
-// hidden — no skeletons on the public page.
-const oelRows: any[] = []
+// Auto-appears once the query returns rows; until then hidden — no skeletons.
 const regRows: any[] = []
 
 // SEO (D11)
@@ -593,7 +619,7 @@ const navItems = [
   ...(hasFireSec ? [{ id: 's5', label: '§5 Fire' }] : []),
   ...(hasSpillSec ? [{ id: 's6', label: '§6 Spill' }] : []),
   ...(substance ? [{ id: 's7', label: '§7 Storage' }] : []),
-  ...(oelRows.length ? [{ id: 's8', label: '§8 OEL' }] : []),
+  ...(showOel ? [{ id: 's8', label: '§8 Exposure' }] : []),
   ...(substance ? [{ id: 's9', label: '§9 Properties' }] : []),
   ...(substance && (reactiveGroups.length || nIncompat + nCaution > 0) ? [{ id: 's10', label: '§10 Reactivity' }] : []),
   ...(ateReal.length ? [{ id: 's11', label: '§11 Toxicology' }] : []),
@@ -825,7 +851,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
           <!-- §2 HAZARDS -->
           <section id="s2" class={sectionCls}>
             <p class={secLabelCls} style={mono}>§ 02 · Hazards identification</p>
-            <h2 class={h2Cls} style={grotesk}>Harmonised EU classification</h2>
+            <h2 class={h2Cls} style={grotesk}>{cap} harmonised EU classification</h2>
             <p class="mt-2 text-sm text-gray-500 max-w-2xl leading-relaxed">
               CLP Annex VI{substance.index_number && ` · Index ${substance.index_number}`}. A supplier SDS may add
               self-classified hazards — this is the legal minimum.
@@ -1049,7 +1075,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
       {hasFirstAid && (
         <section id="s4" class={sectionCls}>
           <p class={secLabelCls} style={mono}>§ 04 · First-aid measures</p>
-          <h2 class={h2Cls} style={grotesk}>First aid</h2>
+          <h2 class={h2Cls} style={grotesk}>{cap} first aid measures</h2>
           <div class="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
             <p class="text-[13px] leading-relaxed text-rose-900">
               <strong>Call your national emergency number first.</strong> These are published first-aid
@@ -1077,7 +1103,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
       {hasFireSec && (
         <section id="s5" class={sectionCls}>
           <p class={secLabelCls} style={mono}>§ 05 · Fire-fighting measures</p>
-          <h2 class={h2Cls} style={grotesk}>Fire fighting</h2>
+          <h2 class={h2Cls} style={grotesk}>{cap} fire fighting measures</h2>
           {response.erg_guide_no && (
             <>
               <a
@@ -1117,7 +1143,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
       {hasSpillSec && (
         <section id="s6" class={sectionCls}>
           <p class={secLabelCls} style={mono}>§ 06 · Accidental release measures</p>
-          <h2 class={h2Cls} style={grotesk}>Spill and leak response</h2>
+          <h2 class={h2Cls} style={grotesk}>{cap} spill and leak response</h2>
           {response.non_fire_resp && (
             <div class="mt-5 rounded-xl border border-gray-200 bg-white px-5 py-4">
               <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-gray-500" style={mono}>Containment and clean-up</p>
@@ -1139,7 +1165,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
           <!-- §7 HANDLING & STORAGE (the computed differentiator) -->
           <section id="s7" class={sectionCls}>
             <p class={secLabelCls} style={mono}>§ 07 · Handling and storage</p>
-            <h2 class={h2Cls} style={grotesk}>Computed storage verdict</h2>
+            <h2 class={h2Cls} style={grotesk}>{cap} computed storage compatibility</h2>
 
             <div class="mt-5 overflow-hidden rounded-[14px] border border-teal-200 bg-white">
               <!-- dark verdict header -->
@@ -1202,21 +1228,100 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
               </div>
             </div>
           </section>
+        </>
+      )}
 
-          <!-- §8 EXPOSURE CONTROLS — hidden until Step-3 import (substance_oel).
-               Ships EU IOELV + OSHA PEL + NIOSH REL. NEVER ACGIH TLV (© private body). -->
-          {oelRows.length > 0 && (
-            <section id="s8" class={sectionCls}>
-              <p class={secLabelCls} style={mono}>§ 08 · Exposure controls</p>
-              <h2 class={h2Cls} style={grotesk}>Occupational exposure limits</h2>
-            </section>
+      <!-- §8 EXPOSURE CONTROLS — IDLH from NIOSH (session 27).
+           ⚠⚠ Deliberately OUTSIDE the {substance && …} branch. IDLH is a NIOSH
+           figure and has nothing to do with CLP Annex VI: 16 of the 76 pages
+           that have a Pocket Guide entry (urea, gasoline, kerosene, glycerin,
+           ethylene glycol …) hold no row in `substances` at all. Inside the
+           branch this section silently rendered on 60 pages instead of 76 —
+           the same reasoning that moved §4/§5/§6 out of it in session 16.
+           OSHA PEL / NIOSH REL / EU IOELV still to come from PubChem LCSS.
+           NEVER ACGIH TLV (© private body) — see D11 drop list. -->
+      {showOel && (
+        <section id="s8" class={sectionCls}>
+          <p class={secLabelCls} style={mono}>§ 08 · Exposure controls</p>
+          <h2 class={h2Cls} style={grotesk}>{cap} exposure limits (IDLH)</h2>
+          {idlhValue != null ? (
+            <div
+              class="mt-5 flex flex-col gap-2 rounded-xl border border-rose-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+              style="background:linear-gradient(135deg,#fef2f2 0%,#fff 70%);"
+            >
+              <div>
+                <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-rose-700" style={mono}>IDLH</p>
+                <p class="mt-1 text-[12.5px] text-gray-600">Immediately Dangerous to Life or Health</p>
+              </div>
+              <p class="whitespace-nowrap text-[27px] font-bold text-gray-900 sm:text-[29px]" style={mono}>
+                {idlhValue.toLocaleString('en-US')}
+                <span class="ml-1.5 text-[14px] font-semibold text-gray-500">{idlhUnit}</span>
+              </p>
+            </div>
+          ) : (
+            <div class="mt-5 rounded-xl border border-gray-200 bg-gray-50 px-5 py-4">
+              <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-gray-500" style={mono}>IDLH</p>
+              <p class="mt-1.5 text-[13.5px] text-gray-700">
+                NIOSH lists {name} in the Pocket Guide but has not established an IDLH value for it.
+              </p>
+            </div>
           )}
+          {idlhAsElement && (
+            <p class="mt-2.5 max-w-2xl text-[12.5px] leading-relaxed text-gray-600">
+              The limit is expressed as {idlhAsElement}, not as the mass of {name} itself.
+            </p>
+          )}
+          {idlhFromOther && (
+            <div class="mt-2.5 rounded-xl border border-amber-300 px-5 py-3.5" style="background:linear-gradient(135deg,#fffbeb 0%,#fff 70%);">
+              <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-amber-800" style={mono}>Published for another entry</p>
+              <p class="mt-1.5 text-[13px] leading-relaxed text-gray-700">
+                NIOSH published this value for <strong>{idlhFromOther}</strong>, not for {name} under its own name.
+              </p>
+            </div>
+          )}
+          {idlhFromLel && (
+            <div class="mt-2.5 rounded-xl border border-gray-200 bg-white px-5 py-3.5">
+              <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-gray-500" style={mono}>Flammability-based</p>
+              <p class="mt-1.5 text-[13px] leading-relaxed text-gray-700">
+                Set at 10% of the lower explosive limit. It marks where the atmosphere becomes a fire
+                hazard, not where {name} becomes acutely toxic.
+              </p>
+            </div>
+          )}
+          {idlhCarcinogen && (
+            <div class="mt-2.5 rounded-xl border border-orange-300 px-5 py-3.5" style="background:linear-gradient(135deg,#fff7ed 0%,#fff 70%);">
+              <p class="text-[10px] font-semibold uppercase tracking-[0.09em] text-orange-800" style={mono}>Carcinogen</p>
+              <p class="mt-1.5 text-[13px] leading-relaxed text-gray-700">
+                NIOSH lists {name} as a potential occupational carcinogen — exposure should be kept as low
+                as achievable regardless of the IDLH figure.
+              </p>
+            </div>
+          )}
+          <p class="mt-3.5">
+            <a
+              href={nioshHref}
+              target="_blank"
+              rel="noopener"
+              class="inline-flex items-center gap-2 rounded-lg border border-teal-300 bg-teal-50 px-3 py-1.5 text-[11.5px] font-semibold text-teal-900 transition-colors hover:bg-teal-100"
+              style={mono}
+            >
+              NIOSH Pocket Guide — {cap} →
+            </a>
+          </p>
+          <p class="mt-2.5 max-w-3xl text-[10.5px] leading-relaxed text-gray-400" style={mono}>
+            IDLH from the NIOSH Pocket Guide to Chemical Hazards (CDC, U.S. public domain), via CAMEO Chemicals.
+            Occupational exposure limits — OSHA PEL, NIOSH REL and EU IOELV — are not published on this page yet.
+          </p>
+        </section>
+      )}
 
+      {substance && (
+        <>
           <!-- §9 PHYSICAL & CHEMICAL PROPERTIES — fire values first -->
           {(hasFire || physRows.length > 0) ? (
             <section id="s9" class={sectionCls}>
               <p class={secLabelCls} style={mono}>§ 09 · Physical and chemical properties</p>
-              <h2 class={h2Cls} style={grotesk}>Measured properties</h2>
+              <h2 class={h2Cls} style={grotesk}>{cap} physical properties</h2>
               {hasFire && (
                 <p class="mt-2 text-sm text-gray-500 max-w-2xl leading-relaxed">
                   Fire-relevant values first — flash point and explosion limits decide the storage and
@@ -1265,7 +1370,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
           ) : (
             <section id="s9" class={sectionCls}>
               <p class={secLabelCls} style={mono}>§ 09 · Physical and chemical properties</p>
-              <h2 class={h2Cls} style={grotesk}>Measured properties</h2>
+              <h2 class={h2Cls} style={grotesk}>{cap} physical properties</h2>
               <p class="mt-2 text-sm text-gray-500 max-w-2xl">
                 The full physical-property table (melting/boiling point, flash point, explosion limits, vapour
                 pressure, density) is being populated for this substance from ECHA registration data and will
@@ -1314,7 +1419,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
           {ateReal.length > 0 && (
             <section id="s11" class={sectionCls}>
               <p class={secLabelCls} style={mono}>§ 11 · Toxicological information</p>
-              <h2 class={h2Cls} style={grotesk}>Acute toxicity estimates</h2>
+              <h2 class={h2Cls} style={grotesk}>{cap} acute toxicity estimates</h2>
 
               <div class="mt-5 overflow-hidden rounded-xl border border-gray-200 bg-white">
                 <div class="flex flex-wrap items-center gap-3 border-b border-teal-100 bg-teal-50/60 px-4 py-3">
@@ -1356,7 +1461,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
           {ecoCards.length > 0 && (
             <section id="s12" class={sectionCls}>
               <p class={secLabelCls} style={mono}>§ 12 · Ecological information</p>
-              <h2 class={h2Cls} style={grotesk}>Aquatic toxicity</h2>
+              <h2 class={h2Cls} style={grotesk}>{cap} aquatic toxicity</h2>
               <div class="mt-5 grid gap-2.5 sm:grid-cols-3">
                 {ecoCards.map((c) => (
                   <div class="rounded-xl border border-gray-200 bg-white px-4 py-4">
@@ -1383,7 +1488,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
           {transportRows.length > 0 && (
             <section id="s14" class={sectionCls}>
               <p class={secLabelCls} style={mono}>§ 14 · Transport information</p>
-              <h2 class={h2Cls} style={grotesk}>Road transport — ADR {adrVersion}</h2>
+              <h2 class={h2Cls} style={grotesk}>{cap} road transport — ADR {adrVersion}</h2>
 
               <div class="mt-5 space-y-5">
                 {transportRows.map((t: any) => (
@@ -1452,7 +1557,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
           {regRows.length > 0 && (
             <section id="s15" class={sectionCls}>
               <p class={secLabelCls} style={mono}>§ 15 · Regulatory information</p>
-              <h2 class={h2Cls} style={grotesk}>Regulatory status</h2>
+              <h2 class={h2Cls} style={grotesk}>{cap} regulatory status</h2>
             </section>
           )}
         </>
@@ -1461,7 +1566,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
       <!-- MSDS vs SDS -->
       <section id="msds" class={sectionCls}>
         <p class={secLabelCls} style={mono}>MSDS vs SDS</p>
-        <h2 class={h2Cls} style={grotesk}>MSDS vs SDS: is there a difference?</h2>
+        <h2 class={h2Cls} style={grotesk}>{cap} MSDS vs SDS: is there a difference?</h2>
         <p class="mt-2 text-sm text-gray-700 leading-relaxed max-w-3xl">
           MSDS (Material Safety Data Sheet) is the older name for the same document. In the US, OSHA's Hazard
           Communication Standard (2012) adopted the GHS-standardised 16-section Safety Data Sheet; in the EU the
@@ -1560,7 +1665,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
 
       <!-- FAQ -->
       <section id="faq" class={sectionCls}>
-        <h2 class={h2Cls} style={grotesk}>Frequently asked questions</h2>
+        <h2 class={h2Cls} style={grotesk}>Frequently asked questions about {name}</h2>
         <div class="mt-4 space-y-4">
           {faq.map((f) => (
             <div class="rounded-lg border border-gray-200 bg-white p-4">
