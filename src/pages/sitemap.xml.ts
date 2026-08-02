@@ -18,6 +18,10 @@ const STATIC_PAGES = [
   // /substances/ — переехавший браузер веществ. Раньше на первом стоял браузер,
   // и адрес отдавал 301 на ghssymbols: sitemap звал краулера на редирект.
   { url: '/pictograms/', changefreq: 'weekly', priority: '0.9' },
+  // ⚠ session 29: /hazard-classes/ — верхний этаж иерархии (класс → категория →
+  // пиктограмма/H/P). Волна 4 Semrush: `hazard classes` 1300, `ghs classification` 1300,
+  // `how many hazard classes are there` 1000 при KD 26. Раздаёт вес на 225 страниц H/P-кодов.
+  { url: '/hazard-classes/', changefreq: 'weekly', priority: '0.9' },
   { url: '/substances/', changefreq: 'weekly', priority: '0.8' },
   { url: '/inspector/', changefreq: 'monthly', priority: '0.8' },
   { url: '/faq/', changefreq: 'monthly', priority: '0.7' },

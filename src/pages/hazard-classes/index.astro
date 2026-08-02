@@ -1,0 +1,585 @@
+---
+// Хаб классов и категорий опасности — /hazard-classes/
+// Session 29. Причина существования страницы: волна 4 Semrush показала, что спрос
+// сидит на зонтичных формулировках, а не на конкретных категориях. `eye irritation
+// category 2` Semrush не знает вовсе (пустая выдача), зато `hazard classes` — 1300,
+// `ghs classification` — 1300, `how many hazard classes are there` — 1000 при KD 26.
+// Поэтому одна сильная страница вместо 107 отдельных.
+//
+// ⚠ Вёрстка целиком на дизайн-системе v2 (hub.css + design-tokens.css). Своих стилей
+// на странице нет намеренно: первая версия была написана с собственным <style> и
+// выпадала из сайта — Сергей это отловил на предпросмотре, session 29.
+//
+// ⚠ ВСЕ счётчики считаются из базы на сборке, а не пишутся руками. Цифра в первом
+// абзаце — заявка на featured snippet, ошибиться в ней нельзя.
+//
+// ⚠ Весь список рендерится в HTML на сборке. Раскрытие критериев — <details>, а не JS:
+// список, отрисованный JS-ом, для краулера не существует (правило из h-statements/index.astro).
+//
+// ⚠ Слова «hazmat», «DOT», «ADR» и «9 classes» в тексте не употребляются намеренно:
+// рядом в выдаче сидят транспортные системы, где классов девять, и смешение увело бы
+// страницу по интенту. Блог-статья про ADR ссылается сюда, а не наоборот.
+import Layout from '../../layouts/Layout.astro'
+import { supabase } from '../../lib/supabase'
+import { truncateMetaDescription } from '../../lib/metaDescription'
+import { hHref } from '../../lib/hStatementSlug'
+
+export const prerender = true
+
+const SITE = 'https://ghspictograms.com'
+const PAGE = 5000
+
+type CatalogRow = {
+  id: string
+  class_code: string
+  group_type: string
+  name_en: string
+  ghs_chapter: string | null
+  display_order: number | null
+}
+type MappingRow = {
+  hazard_class_id: string
+  category_code: string
+  pictogram_code: string | null
+  signal_word: string | null
+  h_statement_code: string | null
+  clp_status: string | null
+}
+type CriteriaRow = {
+  class_code: string
+  category_code: string
+  mapping_category_code: string | null
+  criteria_en: string | null
+  label_clp_en: string | null
+  label_status: string | null
+  footnote: string | null
+  note: string | null
+}
+type MatrixRow = {
+  class_code: string
+  category_code: string
+  p_code: string
+}
+
+const [catalogRes, mappingRes, criteriaRes, matrixRes] = await Promise.all([
+  supabase
+    .from('hazard_class_catalog')
+    .select('id, class_code, group_type, name_en, ghs_chapter, display_order')
+    .order('display_order'),
+  supabase
+    .from('hazard_category_mapping')
+    .select('hazard_class_id, category_code, pictogram_code, signal_word, h_statement_code, clp_status'),
+  supabase
+    .from('clp_category_criteria')
+    .select('class_code, category_code, mapping_category_code, criteria_en, label_clp_en, label_status, footnote, note'),
+  supabase.from('clp_matrix_full').select('class_code, category_code, p_code').range(0, PAGE - 1),
+])
+
+const catalog = (catalogRes.data ?? []) as CatalogRow[]
+const mapping = (mappingRes.data ?? []) as MappingRow[]
+const criteria = (criteriaRes.data ?? []) as CriteriaRow[]
+const matrix = (matrixRes.data ?? []) as MatrixRow[]
+
+// ⚠ Тихая обрезка выборки — самый неприятный класс ошибок: страница соберётся
+// и будет выглядеть правильной, просто части данных в ней не будет.
+if (matrix.length >= PAGE) {
+  throw new Error(
+    `[hazard-classes] clp_matrix_full вернул ${matrix.length} строк при лимите ${PAGE}. ` +
+      'Выборка обрезана — поднимите PAGE, иначе часть P-кодов молча потеряется.'
+  )
+}
+if (!catalog.length || !mapping.length || !criteria.length) {
+  throw new Error('[hazard-classes] пустая выборка из базы — сборка остановлена, чтобы не выпустить пустую страницу.')
+}
+
+const classById = new Map(catalog.map(c => [c.id, c]))
+
+/** Критерии: ключ «класс|категория». mapping_category_code — мост к реестру категорий. */
+const criteriaByKey = new Map<string, CriteriaRow[]>()
+for (const row of criteria) {
+  const key = `${row.class_code}|${row.mapping_category_code ?? row.category_code}`
+  const list = criteriaByKey.get(key)
+  if (list) list.push(row)
+  else criteriaByKey.set(key, [row])
+}
+
+/** P-коды по «класс|категория», уникальные и отсортированные. */
+const pCodesByKey = new Map<string, Set<string>>()
+for (const row of matrix) {
+  if (!row.p_code) continue
+  const key = `${row.class_code}|${row.category_code}`
+  const set = pCodesByKey.get(key)
+  if (set) set.add(row.p_code)
+  else pCodesByKey.set(key, new Set([row.p_code]))
+}
+
+type Category = {
+  categoryCode: string
+  pictograms: string[]
+  signalWord: string | null
+  hCode: string | null
+  inClp: boolean
+  criteria: CriteriaRow[]
+  pCodes: string[]
+  hasLabelElements: boolean
+}
+type HazardClass = CatalogRow & { categories: Category[] }
+
+const byClass = new Map<string, HazardClass>()
+for (const cls of catalog) byClass.set(cls.class_code, { ...cls, categories: [] })
+
+for (const row of mapping) {
+  const cls = classById.get(row.hazard_class_id)
+  if (!cls) continue
+  const bucket = byClass.get(cls.class_code)
+  if (!bucket) continue
+
+  const key = `${cls.class_code}|${row.category_code}`
+  const crits = criteriaByKey.get(key) ?? []
+  // Категория без элементов этикетки — факт регламента, а не пропуск в данных:
+  // Explosives 1.6, Self-reactive Type G и Organic peroxide Type G существуют в CLP,
+  // но пиктограммы, сигнального слова и H-фразы не несут.
+  const hasLabelElements = crits.some(c => c.label_status === 'ok')
+
+  bucket.categories.push({
+    categoryCode: row.category_code,
+    pictograms: (row.pictogram_code ?? '').split(/[,+\s]+/).map(s => s.trim()).filter(Boolean),
+    signalWord: row.signal_word,
+    hCode: row.h_statement_code,
+    inClp: row.clp_status !== 'not_in_clp',
+    criteria: crits,
+    pCodes: [...(pCodesByKey.get(key) ?? [])].sort(),
+    hasLabelElements,
+  })
+}
+
+const collator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' })
+for (const cls of byClass.values()) {
+  cls.categories.sort((a, b) => collator.compare(a.categoryCode, b.categoryCode))
+}
+
+const GROUPS = [
+  {
+    key: 'PHYSICAL',
+    title: 'Physical hazards',
+    lead:
+      'Physical hazard classes describe how a substance behaves on its own — whether it burns, explodes, ' +
+      'reacts with water, releases oxygen or attacks metal. Classification rests on measured physical tests ' +
+      'rather than on toxicological studies, which is why the criteria read as thresholds and test outcomes.',
+  },
+  {
+    key: 'HEALTH',
+    title: 'Health hazards',
+    lead:
+      'Health hazard classes describe what a substance does to the human body, from a single exposure causing ' +
+      'immediate harm to repeated exposure causing damage over years. Several split into sub-categories that ' +
+      'differ only in the strength of the evidence behind them.',
+  },
+  {
+    key: 'ENVIRONMENTAL',
+    title: 'Environmental hazards',
+    lead:
+      'Environmental hazard classes cover harm to the aquatic environment and damage to the ozone layer. ' +
+      'They are the smallest group by count, but they drive labelling for a large share of everyday ' +
+      'industrial chemicals.',
+  },
+] as const
+
+const grouped = GROUPS.map(g => ({
+  ...g,
+  classes: catalog
+    .filter(c => c.group_type === g.key)
+    .map(c => byClass.get(c.class_code))
+    .filter((c): c is HazardClass => Boolean(c)),
+}))
+
+// ── Счётчики: только из базы ──────────────────────────────────────────────────
+const allCategories = [...byClass.values()].flatMap(c => c.categories)
+const totalClasses = catalog.length
+const clpCategories = allCategories.filter(c => c.inClp)
+const nonClpCategories = allCategories.filter(c => !c.inClp)
+const noLabelCategories = clpCategories.filter(c => !c.hasLabelElements)
+const pictogramCount = new Set(allCategories.flatMap(c => c.pictograms)).size
+const signalWordCount = new Set(allCategories.map(c => c.signalWord).filter(Boolean)).size
+const groupCounts = Object.fromEntries(grouped.map(g => [g.key, g.classes.length])) as Record<string, number>
+
+const nonClpByClass = new Map<string, Category[]>()
+for (const cls of byClass.values()) {
+  const list = cls.categories.filter(c => !c.inClp)
+  if (list.length) nonClpByClass.set(cls.name_en, list)
+}
+
+const title = 'GHS Hazard Classes and Categories: Complete GHS Classification List'
+const description = truncateMetaDescription(
+  `All ${totalClasses} GHS hazard classes and ${clpCategories.length} CLP categories in one table — ` +
+    'pictogram, signal word, H-statement and the official classification criteria for each.'
+)
+const canonical = `${SITE}/hazard-classes/`
+
+const CARDS = [
+  {
+    tag: 'Class vs category',
+    name: 'The class names the hazard, the category grades it',
+    acc: '#1d4ed8',
+    line: '#bfdbfe',
+    soft: '#eff6ff',
+    ink: '#1d4ed8',
+    desc:
+      '“Skin corrosion/irritation” is a class. Categories 1A, 1B, 1C and 2 sit inside it, running from severe ' +
+      'corrosion to mild irritation. The class tells you which hazard you are dealing with; the category decides ' +
+      'what reaches the label, because two categories of the same class can carry different pictograms and ' +
+      'different signal words.',
+  },
+  {
+    tag: 'Not every category labels',
+    name: `${noLabelCategories.length} categories carry no label elements at all`,
+    acc: '#0d9488',
+    line: '#99f6e4',
+    soft: '#f0fdfa',
+    ink: '#0f766e',
+    desc:
+      'These sit inside CLP yet carry no pictogram, no signal word and no hazard statement. That is the regulation ' +
+      'working as intended: the substance is still classified into the class, but the hazard was judged not to ' +
+      'warrant label communication. An empty label row for them is the correct result, not a data gap.',
+  },
+  {
+    tag: 'GHS ≠ CLP',
+    name: `${nonClpCategories.length} UN GHS categories the EU never adopted`,
+    acc: '#b45309',
+    line: '#fde68a',
+    soft: '#fffbeb',
+    ink: '#92400e',
+    desc:
+      'GHS is a set of building blocks, and a jurisdiction may take a class while leaving out some of its ' +
+      'categories. A substance meeting only these criteria is not classified for that hazard in Europe — which ' +
+      'is exactly why the same product can ship with different labels in different regions.',
+  },
+]
+
+// ── FAQ: вопросы из живой семантики, ответы — из данных этой же страницы ──
+const faq: { q: string; a: string }[] = [
+  {
+    q: 'How many hazard classes are there?',
+    a:
+      `There are ${totalClasses} hazard classes under the Globally Harmonized System: ${groupCounts.PHYSICAL} physical, ` +
+      `${groupCounts.HEALTH} health and ${groupCounts.ENVIRONMENTAL} environmental. Each class divides into categories ` +
+      `that grade severity, and ${clpCategories.length} of those categories are recognised in EU CLP. The number of ` +
+      'classes is fixed by the regulation and does not vary by country, although which categories a jurisdiction ' +
+      'adopts very much does.',
+  },
+  {
+    q: 'What is GHS classification?',
+    a:
+      'GHS classification is the process of deciding, from test data or other reliable evidence, which hazard classes ' +
+      'a substance or mixture falls into and how severe the hazard is within each class. The outcome is a set of ' +
+      'assignments such as “Flammable liquid, Category 2”. Those assignments then determine the label mechanically: ' +
+      'each category carries a fixed pictogram, signal word, hazard statement and set of precautionary statements. ' +
+      'Classification is the judgement step; labelling is the lookup that follows from it.',
+  },
+  {
+    q: 'What is the difference between a hazard class and a hazard category?',
+    a:
+      'A hazard class is the nature of the hazard — what kind of harm it is. A category is the degree of that hazard ' +
+      'within the class. Skin corrosion/irritation is a class; Categories 1A, 1B, 1C and 2 are the categories inside ' +
+      'it. The distinction matters because duties downstream are usually written in terms of categories, not classes: ' +
+      'the same class can be trivial in one category and label-critical in another.',
+  },
+  {
+    q: 'How many GHS pictograms are there?',
+    a:
+      `There are ${pictogramCount} GHS pictograms, each a red diamond with a black symbol on white. A single category ` +
+      'may require more than one, and one pictogram serves many classes — the exclamation mark appears for skin ' +
+      'irritation, eye irritation, acute toxicity Category 4 and several others. This is why a pictogram alone never ' +
+      'tells you the classification: you need the class and category behind it.',
+  },
+  {
+    q: 'Are GHS and CLP the same thing?',
+    a:
+      'No. GHS is a United Nations model — a recommendation that countries adapt. CLP, Regulation (EC) No 1272/2008, ' +
+      'is the European law implementing that model, and it is legally binding in the EU. Because GHS is a model rather ' +
+      `than a treaty, each jurisdiction picks which building blocks to adopt, which is why ${nonClpCategories.length} ` +
+      'categories in this list exist in UN GHS but carry no legal force in Europe.',
+  },
+  {
+    q: 'What are hazard categories used for?',
+    a:
+      'Categories drive three practical things. First the label: pictogram, signal word and hazard statement follow ' +
+      'directly from the category. Second the safety data sheet, where section 2 states the classification verbatim. ' +
+      'Third the downstream duties — storage segregation, transport classification, workplace exposure controls — ' +
+      'which are frequently written per category rather than per class. Getting the category wrong therefore ' +
+      'propagates well beyond the label.',
+  },
+  {
+    q: 'Which hazard categories carry no label elements at all?',
+    a:
+      noLabelCategories.length
+        ? `${noLabelCategories.length} categories sit inside CLP but carry no pictogram, no signal word and no hazard ` +
+          `statement: ${noLabelCategories.map(c => c.categoryCode).join(', ')}. This is not an omission. They exist so ` +
+          'that a substance can be formally classified and assigned to the class, while the regulator concluded the ' +
+          'hazard does not warrant communication on the label itself.'
+        : 'Every category in the current dataset carries at least one label element.',
+  },
+  {
+    q: 'Why do some GHS categories not appear in CLP?',
+    a:
+      `${nonClpCategories.length} categories in this list exist in the UN GHS model but were not adopted into EU CLP. ` +
+      'GHS is deliberately modular: a jurisdiction may take a class and leave out some of its categories. The EU chose ' +
+      'not to adopt certain lower-severity ones, so a substance meeting only those criteria is not classified for that ' +
+      'hazard in Europe, even though the same data would trigger a classification elsewhere. They are listed here ' +
+      'because a product shipped between regions can legitimately carry two different labels.',
+  },
+  {
+    q: 'What do the signal words Danger and Warning mean?',
+    a:
+      `There are only ${signalWordCount} signal words in the system. “Danger” marks the more severe categories, ` +
+      '“Warning” the less severe, and a label carries at most one of them. If a classification produces both, only ' +
+      '“Danger” is shown and every “Warning” is dropped. Some categories carry no signal word at all. The signal word ' +
+      'is never a judgement made by the label author — it is fixed by the category, which is why it can be looked up ' +
+      'rather than decided.',
+  },
+  {
+    q: 'How do hazard classes relate to H-statements and P-statements?',
+    a:
+      'The chain runs one way and is fully deterministic once classification is done. Class and category give you the ' +
+      'hazard statement — the H-code and its exact wording. The same category, combined with the conditions of use, ' +
+      'gives the precautionary statements: the P-codes covering prevention, response, storage and disposal. Every ' +
+      'category row in the tables above links to its H-statement and lists the P-codes attached to it, so the label ' +
+      'can be assembled by following links rather than by interpretation.',
+  },
+]
+
+const faqJson = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faq.map(f => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  })),
+})
+const breadcrumbJson = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE}/` },
+    { '@type': 'ListItem', position: 2, name: 'Hazard classes', item: canonical },
+  ],
+})
+---
+
+<Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
+  <script type="application/ld+json" slot="head" set:html={faqJson} />
+  <script type="application/ld+json" slot="head" set:html={breadcrumbJson} />
+
+  <section class="hub-hero">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+
+    <div class="hub-wrap hub-hero-inner">
+      <p class="hub-crumb"><a href="/">Home</a><span class="sep">›</span>Hazard classes</p>
+      <p class="hub-hero-eyebrow">Reference · Classification</p>
+      <h1>GHS hazard classes and categories</h1>
+      <p class="hub-hero-sub">
+        There are {totalClasses} hazard classes under GHS — {groupCounts.PHYSICAL} physical,
+        {groupCounts.HEALTH} health and {groupCounts.ENVIRONMENTAL} environmental. Inside them sit
+        {clpCategories.length} categories recognised by EU CLP, each carrying a fixed set of label elements.
+        Every one of them is below, with its pictogram, signal word, hazard statement and the official criteria.
+      </p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">{totalClasses} classes · {clpCategories.length} CLP categories</span>
+        <span class="hub-hero-chip">{pictogramCount} pictograms · {signalWordCount} signal words</span>
+        <span class="hub-hero-chip">{nonClpCategories.length} not adopted in CLP</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">01 · How to read this list</p>
+      <h2 class="hub-h2">Three things a plain class list will not tell you</h2>
+      <div class="hub-cards">
+        {CARDS.map(s => (
+          <div class="hub-card static" style={`--acc:${s.acc};--acc-line:${s.line};--acc-soft:${s.soft};--acc-ink:${s.ink}`}>
+            <p class="tag">{s.tag}</p>
+            <h3>{s.name}</h3>
+            <p class="copy">{s.desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-b">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">02 · The list</p>
+      <h2 class="hub-h2">All {totalClasses} hazard classes, grouped as the regulation groups them</h2>
+      <p class="hub-sub">
+        Order follows the regulation, not the alphabet. Each row links its hazard statement and precautionary
+        statements to their own pages, so a label can be assembled by following the links.
+      </p>
+
+      {grouped.map(group => (
+        <div class="hub-cat" id={group.key.toLowerCase()}>
+          <div class="hub-cat-head">
+            <h3>{group.title}</h3>
+            <span class="range">{group.classes.length} classes</span>
+          </div>
+          <p class="hub-cat-sub">{group.lead}</p>
+
+          {group.classes.map(cls => (
+            <div class="hub-cat" id={cls.class_code.toLowerCase()}>
+              <div class="hub-cat-head">
+                <h3>{cls.name_en}</h3>
+                {cls.ghs_chapter && <span class="range">GHS {cls.ghs_chapter}</span>}
+              </div>
+
+              <div class="hub-table-wrap">
+                <table class="hub-table">
+                  <thead>
+                    <tr>
+                      <th>Category</th>
+                      <th>Pictogram</th>
+                      <th>Signal word</th>
+                      <th>Hazard statement</th>
+                      <th>Precautionary</th>
+                      <th>Criteria</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cls.categories.filter(c => c.inClp).map(cat => (
+                      <tr data-cat={cat.categoryCode}>
+                        <td class="c-code">{cat.categoryCode}</td>
+                        <td>
+                          {cat.pictograms.length
+                            ? cat.pictograms.map(p => <a href={`/ghs/${p.toLowerCase()}/`}>{p} </a>)
+                            : <span class="clp-hint">none</span>}
+                        </td>
+                        <td>{cat.signalWord ?? <span class="clp-hint">none</span>}</td>
+                        <td class="c-code">
+                          {cat.hCode ? <a href={hHref(cat.hCode)}>{cat.hCode}</a> : <span class="clp-hint">none</span>}
+                        </td>
+                        <td>
+                          {cat.pCodes.length ? (
+                            <details>
+                              <summary>{cat.pCodes.length} P-codes</summary>
+                              {cat.pCodes.map(p => <a href={`/p-statements/${p}/`}>{p} </a>)}
+                            </details>
+                          ) : (
+                            <span class="clp-hint">none</span>
+                          )}
+                        </td>
+                        <td class="c-txt">
+                          {cat.criteria.length ? (
+                            <details>
+                              <summary>Show</summary>
+                              {cat.criteria.map(cr => (
+                                <p>
+                                  {cr.criteria_en}
+                                  {cr.label_clp_en && <span class="clp-hint"> — {cr.label_clp_en}</span>}
+                                  {cr.footnote && <span class="clp-hint"> {cr.footnote}</span>}
+                                </p>
+                              ))}
+                            </details>
+                          ) : (
+                            <span class="clp-hint">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  </section>
+
+  {(noLabelCategories.length > 0 || nonClpCategories.length > 0) && (
+    <section class="hub-sec-white">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">03 · The awkward cases</p>
+        <h2 class="hub-h2">Where the register does not line up with the label</h2>
+
+        {noLabelCategories.length > 0 && (
+          <div class="hub-cat">
+            <div class="hub-cat-head">
+              <h3>In CLP, but no label elements</h3>
+              <span class="range">{noLabelCategories.length} categories</span>
+            </div>
+            <p class="hub-cat-sub">
+              These are part of CLP yet carry no pictogram, no signal word and no hazard statement. The substance is
+              still formally classified into the class; the regulator simply concluded that this hazard does not
+              warrant communication on the label. An empty label row here is the correct result.
+            </p>
+            <div class="hub-table-wrap">
+              <table class="hub-table">
+                <thead><tr><th>Category</th><th>Why it carries nothing</th></tr></thead>
+                <tbody>
+                  {noLabelCategories.map(c => (
+                    <tr>
+                      <td class="c-code">{c.categoryCode}</td>
+                      <td class="c-txt">Classified in CLP, no label elements assigned by the regulation.</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {nonClpCategories.length > 0 && (
+          <div class="hub-cat">
+            <div class="hub-cat-head">
+              <h3>In UN GHS, not adopted by the EU</h3>
+              <span class="range">{nonClpCategories.length} categories</span>
+            </div>
+            <p class="hub-cat-sub">
+              GHS is built as a set of building blocks, and a jurisdiction may adopt a class while leaving out some of
+              its categories. A substance meeting only these criteria is not classified for that hazard in Europe —
+              which is precisely why the same product can legitimately ship with different labels in different regions.
+            </p>
+            <div class="hub-table-wrap">
+              <table class="hub-table">
+                <thead><tr><th>Hazard class</th><th>Categories outside CLP</th></tr></thead>
+                <tbody>
+                  {[...nonClpByClass.entries()].map(([className, cats]) => (
+                    <tr>
+                      <td class="c-txt">{className}</td>
+                      <td class="c-code">{cats.map(c => c.categoryCode).join(', ')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  )}
+
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">04 · Questions</p>
+      <h2 class="hub-h2">Frequently asked questions</h2>
+      <div class="hub-faq">
+        {faq.map(item => (
+          <div class="hub-faq-item">
+            <p class="q">{item.q}</p>
+            <p>{item.a}</p>
+          </div>
+        ))}
+      </div>
+
+      <div class="hub-note">
+        Once the class and category are settled, the label follows mechanically — there is nothing left to decide.
+        The <a href="/label-constructor/">GHS Label Maker</a> assembles pictograms, signal word, hazard statements and
+        precautionary statements from the same dataset behind this page. For the elements themselves see
+        <a href="/pictograms/"> pictograms</a>, <a href="/h-statements/">hazard statements</a> and
+        <a href="/p-statements/">precautionary statements</a>.
+      </div>
+    </div>
+  </section>
+</Layout>
