@@ -6,6 +6,7 @@ import GhsCalculator from '../../components/GhsCalculator'
 import SharePage from '../../components/SharePage.astro'
 import { supabase } from '../../lib/supabase'
 import { hHref } from '../../lib/hStatementSlug'
+import { substanceName, substanceNameFull } from '../../lib/substanceName'
 
 export async function getStaticPaths() {
   return [
@@ -152,7 +153,7 @@ const { data: picData } = await supabase
 // Загружаем вещества с этой пиктограммой (первые 24)
 const { data: substancesRaw } = await supabase
   .from('substances')
-  .select('cas_number, iupac_name, common_name, signal_word, ghs_pictogram_codes')
+  .select('cas_number, iupac_name, common_name, display_name_short, signal_word, ghs_pictogram_codes')
   .contains('ghs_pictogram_codes', [upperCode])
   .not('cas_number', 'is', null)
   .limit(24)
@@ -919,14 +920,14 @@ const ghsJsonLd = {
 
       <ul class="divide-y divide-gray-200 border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm">
         {substances.map(s => {
-          const name = s.common_name || s.iupac_name
+          const name = substanceName(s)
           const pics = s.ghs_pictogram_codes ?? []
           const casEnc = encodeURIComponent(s.cas_number)
           const slug = sdsSlug.get(s.cas_number)
           const inner = (
             <>
               <div class="min-w-0">
-                <span class="font-semibold text-[#062A78] block truncate">{name}</span>
+                <span class="font-semibold text-[#062A78] block truncate" title={substanceNameFull(s)}>{name}</span>
                 <span class="text-xs text-gray-500">CAS {s.cas_number}</span>
               </div>
               <div class="flex items-center gap-2 shrink-0">

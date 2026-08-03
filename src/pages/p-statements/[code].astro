@@ -15,6 +15,7 @@ import { splitClpNotation, hasClpNotation } from '../../lib/clpNotation'
 // у `rowRes` он вдобавок означал `!rowRes.data`, то есть страница отдавала
 // РЕДИРЕКТ на хаб. Разбор: claude/silent-supabase-failures.md.
 import { must, mustSingle } from '../../lib/mustQuery'
+import { substanceNameFull, truncateName } from '../../lib/substanceName'
 
 const SITE = 'https://ghspictograms.com'
 const GHSSYMBOLS = 'https://ghssymbols.com'
@@ -117,6 +118,7 @@ type Sub = {
   cas_number: string | null
   index_number: string | null
   common_name: string | null
+  display_name_short: string | null
   iupac_name: string
 }
 const subs: Sub[] = []
@@ -129,7 +131,7 @@ if (total > 0) {
       `substances chunk ${from} for ${code}`,
       await supabase
         .from('substances')
-        .select('cas_number, index_number, common_name, iupac_name')
+        .select('cas_number, index_number, common_name, display_name_short, iupac_name')
         .contains('p_statement_codes', [code])
         .order('index_number')
         .range(from, from + PAGE - 1),
@@ -143,7 +145,7 @@ if (total > 0) {
 // ⚠ 231 строка substances.iupac_name содержит CRLF — это данные CLP Annex VI
 // (одно вещество несколькими именами). В строке списка перенос рвёт вёрстку.
 const clean = (s: string) => s.replace(/\r?\n+/g, '; ').replace(/\s+/g, ' ').trim()
-const nameOf = (s: Sub) => clean(s.common_name || s.iupac_name)
+const nameOf = (s: Sub) => clean(substanceNameFull(s))
 
 const slugByCas = new Map(
   ((must('sds_pages (live)', sdsRes) ?? []) as { slug: string; cas_number: string | null }[])
@@ -159,12 +161,17 @@ const hrefOf = (s: Sub): string | null => {
 }
 
 const items = subs
-  .map((s) => ({
-    name: nameOf(s),
-    cas: s.cas_number,
-    index: s.index_number,
-    href: hrefOf(s),
-  }))
+  .map((s) => {
+    // name — полное (сортировка, data-s фильтр, title=); short — подпись в списке
+    const name = nameOf(s)
+    return {
+      name,
+      short: truncateName(name),
+      cas: s.cas_number,
+      index: s.index_number,
+      href: hrefOf(s),
+    }
+  })
   .sort((a, b) => a.name.localeCompare(b.name, 'en'))
 const groupEntries = items.filter((s) => !s.cas).length
 
@@ -459,7 +466,7 @@ const breadcrumbJson = JSON.stringify({
               const label = s.cas ? `CAS ${s.cas}` : `Index No ${s.index ?? '—'}`
               const inner = (
                 <span class="txt">
-                  <span class="name">{s.name}</span>
+                  <span class="name" title={s.name}>{s.short}</span>
                   <span class="cas">{label}</span>
                 </span>
               )

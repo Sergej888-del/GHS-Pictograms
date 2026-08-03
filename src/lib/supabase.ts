@@ -28,6 +28,7 @@ export interface Substance {
   un_number: string | null
   iupac_name: string
   common_name: string | null
+  display_name_short: string | null
   name_ru: string | null
   synonyms: string[] | null
   molecular_formula: string | null

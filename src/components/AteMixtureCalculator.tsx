@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Fuse from 'fuse.js'
 import ShareResult from './ShareResult'
 import { supabase } from '../lib/supabase'
+import { substanceNameFull, truncateName } from '../lib/substanceName'
 import {
   resolveRoute, computeRoute, rollUp, tableKey, UNITS, P_TEXT,
   type Route, type InhalForm, type Resolved, type RouteResult,
@@ -36,6 +37,7 @@ interface SubRow {
   cas_number: string
   iupac_name: string
   common_name: string | null
+  display_name_short: string | null
   synonyms: string[] | null
   ec_number: string | null
   molecular_formula: string | null
@@ -126,7 +128,7 @@ export default function AteMixtureCalculator() {
       while (true) {
         const { data, error } = await supabase
           .from('substances')
-          .select('id, cas_number, iupac_name, common_name, synonyms, ec_number, molecular_formula, h_statement_codes, ate_oral')
+          .select('id, cas_number, iupac_name, common_name, display_name_short, synonyms, ec_number, molecular_formula, h_statement_codes, ate_oral')
           .not('cas_number', 'is', null)
           .order('cas_number', { ascending: true })
           .range(from, from + size - 1)
@@ -137,7 +139,7 @@ export default function AteMixtureCalculator() {
           const page = bySubId.get(r.id) ?? null
           if (cas.includes('[') && !page) continue
           const displayCas = cas.includes('[') ? page!.cas : cas
-          const displayName = r.common_name?.trim() || r.iupac_name
+          const displayName = substanceNameFull(r)
           rows.push({
             ...r, cas_number: cas,
             display_name: displayName, display_norm: norm(displayName), name_norm: norm(r.iupac_name),
@@ -404,7 +406,7 @@ export default function AteMixtureCalculator() {
                       {searchResults.map(s => (
                         <li key={s.id}>
                           <button type="button" onClick={() => selectSub(c.key, s)} className="w-full px-3 py-2 text-left text-sm hover:bg-teal-50">
-                            <span className="font-medium text-gray-900">{s.display_name}</span>
+                            <span className="font-medium text-gray-900" title={s.display_name}>{truncateName(s.display_name)}</span>
                             <span className="ml-2 font-mono text-xs text-gray-400">{s.display_cas}</span>
                             {(s.h_statement_codes ?? []).some(h => isAcuteTox(h)) && <span className="ml-2 text-xs text-teal-600">acute-tox data</span>}
                           </button>

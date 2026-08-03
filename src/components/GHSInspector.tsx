@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Fuse from 'fuse.js'
 import { createClient } from '@supabase/supabase-js'
+import { substanceName, substanceNameFull } from '../lib/substanceName'
 
 /** Клиент на уровне модуля — в Vite/Astro env доступен как import.meta.env.PUBLIC_* */
 const supabase = createClient(
@@ -12,6 +13,7 @@ interface SubstanceRow {
   cas_number: string
   iupac_name: string
   common_name: string | null
+  display_name_short: string | null
   ghs_pictogram_codes: string[] | null
   signal_word: string | null
   h_statement_codes: string[] | null
@@ -130,7 +132,7 @@ export default function GHSInspector() {
       while (true) {
         const { data: chunk, error } = await supabase
           .from('substances')
-          .select('cas_number, iupac_name, common_name, ghs_pictogram_codes, signal_word, h_statement_codes')
+          .select('cas_number, iupac_name, common_name, display_name_short, ghs_pictogram_codes, signal_word, h_statement_codes')
           .not('cas_number', 'is', null)
           .range(from, from + size - 1)
         console.log('Error:', error)
@@ -155,7 +157,7 @@ export default function GHSInspector() {
   const fuse = useMemo(
     () =>
       new Fuse(all, {
-        keys: ['cas_number', 'iupac_name', 'common_name'],
+        keys: ['cas_number', 'iupac_name', 'common_name', 'display_name_short'],
         threshold: 0.4,
         minMatchCharLength: 2,
       }),
@@ -179,8 +181,6 @@ export default function GHSInspector() {
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])
-
-  const displayName = (s: SubstanceRow) => s.common_name?.trim() || s.iupac_name
 
   if (loading) {
     return (
@@ -245,7 +245,7 @@ export default function GHSInspector() {
                   type="button"
                   onClick={() => {
                     setSelected(s)
-                    setQuery(displayName(s))
+                    setQuery(substanceNameFull(s))
                     setOpen(false)
                   }}
                   style={{
@@ -259,7 +259,7 @@ export default function GHSInspector() {
                     color: '#0f172a',
                   }}
                 >
-                  <span style={{ fontWeight: 600 }}>{displayName(s)}</span>
+                  <span style={{ fontWeight: 600 }} title={substanceNameFull(s)}>{substanceName(s)}</span>
                   <span style={{ color: '#64748b', marginLeft: 8 }}>CAS {s.cas_number}</span>
                 </button>
               </li>
@@ -292,7 +292,7 @@ export default function GHSInspector() {
               <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0f172a', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span aria-hidden>📋</span> GHS Classification
               </h2>
-              <p style={{ fontSize: 15, fontWeight: 700, color: '#062A78', margin: '0 0 4px' }}>{displayName(selected)}</p>
+              <p style={{ fontSize: 15, fontWeight: 700, color: '#062A78', margin: '0 0 4px' }}>{substanceNameFull(selected)}</p>
               <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px' }}>CAS {selected.cas_number}</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16, alignItems: 'center' }}>
                 {(selected.ghs_pictogram_codes ?? []).map((code) =>

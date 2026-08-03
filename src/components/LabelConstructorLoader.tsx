@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { substanceName, substanceNameFull } from '../lib/substanceName'
 import GHSLabelConstructor from './GHSLabelConstructor'
 import SubstanceFilterBrowse from './SubstanceFilterBrowse'
 
@@ -17,6 +18,7 @@ interface Substance {
   id: string
   iupac_name: string
   common_name: string | null
+  display_name_short: string | null
   cas_number: string
   ec_number: string | null
   signal_word: string | null
@@ -29,7 +31,7 @@ interface Pictogram { code: string; name_en: string; svg_content: string | null 
 interface HStatement { code: string; text_en: string }
 interface PStatement { code: string; text_en: string }
 
-type SearchRow = { cas_number: string; common_name: string | null; iupac_name: string }
+type SearchRow = { cas_number: string; common_name: string | null; display_name_short: string | null; iupac_name: string }
 
 export default function LabelConstructorLoader() {
   const [cas, setCas] = useState<string | null>(null)
@@ -70,7 +72,7 @@ export default function LabelConstructorLoader() {
       setNotFound(false)
       const { data: sub } = await supabase
         .from('substances')
-        .select('id, iupac_name, common_name, cas_number, ec_number, signal_word, ghs_pictogram_codes, h_statement_codes, p_statement_codes')
+        .select('id, iupac_name, common_name, display_name_short, cas_number, ec_number, signal_word, ghs_pictogram_codes, h_statement_codes, p_statement_codes')
         .eq('cas_number', cas)
         .single()
 
@@ -110,7 +112,7 @@ export default function LabelConstructorLoader() {
     const t = setTimeout(async () => {
       setSearching(true)
       const casLike = /^[\d[\]/]/.test(searchQ) || searchQ.includes('-')
-      let q = supabase.from('substances').select('cas_number, common_name, iupac_name').not('cas_number', 'is', null).limit(8)
+      let q = supabase.from('substances').select('cas_number, common_name, display_name_short, iupac_name').not('cas_number', 'is', null).limit(8)
       q = casLike ? q.ilike('cas_number', `%${searchQ}%`) : q.ilike('iupac_name', `%${searchQ}%`)
       const { data } = await q
       setSearchResults((data ?? []) as SearchRow[])
@@ -147,7 +149,7 @@ export default function LabelConstructorLoader() {
                     }}
                     className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors"
                   >
-                    <span className="font-semibold text-[#062A78]">{r.common_name || r.iupac_name}</span>
+                    <span className="font-semibold text-[#062A78]" title={substanceNameFull(r)}>{substanceName(r)}</span>
                     <span className="block text-sm text-gray-500">CAS {r.cas_number}</span>
                   </button>
                 </li>
@@ -201,7 +203,7 @@ export default function LabelConstructorLoader() {
 
   if (!substance) return null
 
-  const displayName = substance.common_name || substance.iupac_name
+  const displayName = substanceNameFull(substance)
 
   return (
     <div className="space-y-6">

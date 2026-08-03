@@ -43,6 +43,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
 import { shortForCode, urlForCode, familyBadgeForCode } from '../lib/storageClasses'
+import { substanceNameFull, truncateName } from '../lib/substanceName'
 
 // SDS Manager affiliate — the callout already tells the reader to verify against
 // the SDS; this link serves that exact moment. GA separates placements via the
@@ -59,6 +60,7 @@ interface SubstanceRow {
   cas_number: string
   iupac_name: string
   common_name: string | null
+  display_name_short: string | null
   synonyms: string[] | null
   ec_number: string | null
   ghs_pictogram_codes: string[] | null
@@ -66,7 +68,7 @@ interface SubstanceRow {
 interface IndexedSubstance extends SubstanceRow {
   cas_nodash: string
   name_norm: string
-  /** common_name if present, else iupac_name — what the list shows */
+  /** substanceNameFull(): common_name → display_name_short → iupac_name */
   display_name: string
   display_norm: string
   /** normalized synonyms, joined for the Fuse index */
@@ -241,7 +243,7 @@ export default function StorageTool() {
       while (true) {
         const { data, error } = await supabase
           .from('substances')
-          .select('id, cas_number, iupac_name, common_name, synonyms, ec_number, ghs_pictogram_codes')
+          .select('id, cas_number, iupac_name, common_name, display_name_short, synonyms, ec_number, ghs_pictogram_codes')
           .not('cas_number', 'is', null)
           .order('cas_number', { ascending: true })
           .range(from, from + size - 1)
@@ -254,7 +256,7 @@ export default function StorageTool() {
           // their live page; without one they stay out (as before rev6).
           if (cas.includes('[') && !page) continue
           const displayCas = cas.includes('[') ? page!.cas : cas
-          const displayName = r.common_name?.trim() || r.iupac_name
+          const displayName = substanceNameFull(r)
           rows.push({
             ...r,
             cas_number: cas,
@@ -539,7 +541,7 @@ export default function StorageTool() {
                       onClick={() => selectSubstance(s.cas_number)}
                       className={selectedCas === s.cas_number ? 'tool-row on' : 'tool-row'}
                     >
-                      <span className="n">{s.display_name}</span>
+                      <span className="n" title={s.display_name}>{truncateName(s.display_name)}</span>
                       <span className="m">
                         {s.display_cas}
                         {s.ec_number ? ` · EC ${s.ec_number}` : ''}

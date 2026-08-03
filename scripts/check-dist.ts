@@ -854,6 +854,69 @@ function hubMarkers(html: string, name: string): Map<string, string> {
   return out
 }
 
+
+// ───────────────────── имена веществ (session 34) ─────────────────────
+
+/**
+ * Как страница печатает имя: substanceNameFull() из src/lib/substanceName.ts,
+ * а затем clean() внутри самой страницы — он схлопывает пробелы и превращает
+ * перевод строки в «; ». Повторяем ровно это, иначе сверка соврёт.
+ */
+function pageCleanName(raw: string): string {
+  return raw.replace(/\r?\n+/g, '; ').replace(/\s+/g, ' ').trim()
+}
+
+let displayNameCache: Set<string> | null = null
+
+/** Имена, которые вещество имеет право показать: common_name → display_name_short → iupac_name. */
+async function expectedDisplayNames(): Promise<Set<string>> {
+  if (displayNameCache) return displayNameCache
+  const rows = await selectAll<{
+    common_name: string | null
+    display_name_short: string | null
+    iupac_name: string | null
+  }>(
+    'substances',
+    'index_number, common_name, display_name_short, iupac_name',
+    (q: any) => q.order('index_number'),
+  )
+  // ⚠ RLS без политики отдаёт anon пустоту, а не ошибку — без этой строки проверка молча позеленеет
+  assertNonEmpty('substance-display-name', 'substances', rows)
+  const out = new Set<string>()
+  for (const r of rows) {
+    const name = r.common_name?.trim() || r.display_name_short?.trim() || (r.iupac_name ?? '').trim()
+    if (name) out.add(pageCleanName(name))
+  }
+  displayNameCache = out
+  return out
+}
+
+/**
+ * Распаковка атрибута полностью, включая ЧИСЛОВЫЕ сущности.
+ * ⚠ Без этого проверка врёт: имя 2,2',2"-(hexahydro-…) печатается как
+ * 2,2',2&#34;-(hexahydro-…, а запись &#34; сама кончается точкой с запятой —
+ * и правило «в имени не должно быть ;» срабатывает на пустом месте.
+ * Числовые сущности раскрываем ПЕРВЫМИ, &amp; — последним (это делает
+ * unescapeHtml), иначе получится двойная распаковка.
+ */
+function unescapeAttr(s: string): string {
+  const numeric = s
+    .replace(/&#(\d+);/g, (_, d: string) => String.fromCodePoint(Number(d)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h: string) => String.fromCodePoint(parseInt(h, 16)))
+  return unescapeHtml(numeric)
+}
+
+/** Подписи веществ из списков: <span class="name" title="ПОЛНОЕ">обрезанное</span>. */
+function printedSubstanceNames(): { name: string; page: string }[] {
+  const out: { name: string; page: string }[] = []
+  const re = /<span class="name" title="([^"]*)"/g
+  for (const { rel, html } of allPages()) {
+    if (!rel.startsWith('h-statements/') && !rel.startsWith('p-statements/')) continue
+    for (const m of html.matchAll(re)) out.push({ name: unescapeAttr(m[1]), page: rel })
+  }
+  return out
+}
+
 const CHECKS: Check[] = [
   {
     id: 'sds-pages',
@@ -2633,6 +2696,63 @@ const CHECKS: Check[] = [
     },
   },
 
+  {
+    id: 'substance-display-name',
+    group: 'Имена',
+    title: 'Имя вещества в списках — человеческое, а не строка Annex VI',
+    run: async () => {
+      const expected = await expectedDisplayNames()
+      const detail: string[] = []
+
+      // а) инвариант на стороне базы
+      const dbSemicolon = [...expected].filter((n) => n.includes(';'))
+      if (dbSemicolon.length) {
+        detail.push(
+          `в базе ${dbSemicolon.length} имён с точкой с запятой. Это сырая колонка Annex VI ` +
+            '«International Chemical Identification» — она список синонимов, а не имя: ' +
+            preview(dbSemicolon.map((s) => `«${s.slice(0, 40)}»`), 6),
+        )
+      }
+
+      // б) что реально напечатано в dist
+      const printed = printedSubstanceNames()
+      if (printed.length < 500) {
+        detail.push(
+          `в dist найдено всего ${printed.length} подписей <span class="name" title=…>. ` +
+            'Похоже, разметка списка изменилась и проверка смотрит не туда. ' +
+            'Чинить надо проверку, а не выключать её.',
+        )
+      }
+
+      const semicolon = printed.filter((p) => p.name.includes(';'))
+      if (semicolon.length) {
+        detail.push(
+          `напечатано имён с точкой с запятой: ${semicolon.length}. ` +
+            preview(semicolon.slice(0, 6).map((p) => `${p.page}: «${p.name.slice(0, 45)}»`), 6),
+        )
+      }
+
+      const unknown = [...new Set(printed.filter((p) => !expected.has(p.name)).map((p) => p.name))]
+      if (unknown.length) {
+        detail.push(
+          `имён, которых база не даёт ни по одному источнику: ${unknown.length}. ` +
+            'Так выглядит забытый display_name_short в .select() — откат на сырое имя происходит молча: ' +
+            preview(unknown.map((s) => `«${s.slice(0, 40)}»`), 8),
+        )
+      }
+
+      const ok = detail.length === 0
+      return {
+        id: 'substance-display-name',
+        group: 'Имена',
+        ok,
+        headline: ok
+          ? `${printed.length} подписей в dist, все совпали с правилом common_name → display_name_short → iupac_name`
+          : `${printed.length} подписей в dist, расхождений ${semicolon.length + unknown.length}`,
+        detail,
+      }
+    },
+  },
 ]
 
 // ─────────────────────────── прогон ───────────────────────────

@@ -8,6 +8,7 @@
 export type SubstanceRow = {
   cas_number: string
   common_name: string | null
+  display_name_short: string | null
   iupac_name: string
   ghs_pictogram_codes: string[] | null
   h_statement_codes: string[] | null
@@ -28,6 +29,7 @@ export type HPRowLite = { code: string; text_en: string }
 export type RelatedProp = {
   cas_number: string
   common_name: string | null
+  display_name_short: string | null
   iupac_name: string
 }
 
@@ -60,6 +62,7 @@ export function computeRelatedInTop200(
     .map(({ o }) => ({
       cas_number: o.cas_number,
       common_name: o.common_name,
+      display_name_short: o.display_name_short,
       iupac_name: o.iupac_name,
     }))
 }

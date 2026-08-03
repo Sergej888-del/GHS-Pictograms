@@ -2,11 +2,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
+import { substanceName, substanceNameFull } from '../lib/substanceName'
 
 interface Substance {
   cas_number: string
   iupac_name: string
   common_name: string | null
+  display_name_short: string | null
   ec_number: string | null
   ghs_pictogram_codes: string[] | null
   signal_word: string | null
@@ -74,7 +76,7 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
       while (true) {
         const { data: chunk } = await supabase
           .from('substances')
-          .select('cas_number, iupac_name, common_name, ec_number, ghs_pictogram_codes, signal_word')
+          .select('cas_number, iupac_name, common_name, display_name_short, ec_number, ghs_pictogram_codes, signal_word')
           .not('cas_number', 'is', null)
           .range(from, from + size - 1)
         if (!chunk || chunk.length === 0) break
@@ -107,7 +109,7 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
 
   // Fuse.js поиск
   const fuse = useMemo(() => new Fuse(all, {
-    keys: ['cas_number', 'iupac_name', 'common_name'],
+    keys: ['cas_number', 'iupac_name', 'common_name', 'display_name_short'],
     threshold: 0.3,
     minMatchCharLength: 2,
   }), [all])
@@ -253,7 +255,7 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
       ) : (
         <ul className="divide-y divide-gray-200 border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
           {results.map(r => {
-            const name = r.common_name || r.iupac_name
+            const name = substanceName(r)
             const casEnc = encodeURIComponent(r.cas_number)
             const slug = sdsSlug.get(r.cas_number)
             const detailHref = slug
@@ -290,6 +292,7 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
                       margin: 0,
                       flex: 1,
                     }}
+                    title={substanceNameFull(r)}
                   >
                     {name}
                   </p>

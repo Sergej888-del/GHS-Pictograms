@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { substanceName, substanceNameFull } from '../lib/substanceName'
 
 const PAGE_SIZE = 50
 
@@ -7,6 +8,7 @@ type Row = {
   cas_number: string
   iupac_name: string
   common_name: string | null
+  display_name_short: string | null
   ec_number: string | null
 }
 
@@ -42,7 +44,7 @@ export default function PictogramsBrowse() {
 
     let query = supabase
       .from('substances')
-      .select('cas_number, iupac_name, common_name, ec_number', { count: 'exact' })
+      .select('cas_number, iupac_name, common_name, display_name_short, ec_number', { count: 'exact' })
       .not('cas_number', 'is', null)
       .order('cas_number', { ascending: true })
 
@@ -107,12 +109,12 @@ export default function PictogramsBrowse() {
               <li className="px-4 py-8 text-center text-gray-600">No substances found.</li>
             ) : (
               rows.map((r) => {
-                const name = r.common_name || r.iupac_name
+                const name = substanceName(r)
                 const href = `/pictograms/${encodeURIComponent(r.cas_number)}/`
                 return (
                   <li key={r.cas_number}>
                     <a href={href} className="block px-4 py-4 hover:bg-slate-50 transition-colors">
-                      <span className="font-semibold text-[#062A78]">{name}</span>
+                      <span className="font-semibold text-[#062A78]" title={substanceNameFull(r)}>{name}</span>
                       <span className="block text-sm text-gray-600 mt-1">
                         CAS {r.cas_number}
                         {r.ec_number ? ` · EC ${r.ec_number}` : ''}
