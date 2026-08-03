@@ -39,6 +39,10 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { STORAGE_CLASSES } from '../src/lib/storageClasses'
 import { SDS_SECTIONS } from '../src/lib/sdsSections'
 import { hSlug } from '../src/lib/hStatementSlug'
+// ⚠ Те же обёртки, что стоят на сборке: проверка обязана падать на отказе запроса,
+// а не считать пустой ответ фактом о данных. И тот же ограничитель параллелизма —
+// иначе сотня одновременных RPC утопит пулер, и проверка начнёт врать (session 32).
+import { must, mapLimit } from '../src/lib/mustQuery'
 
 config({ path: resolve(process.cwd(), '.env.local') })
 config()
@@ -343,6 +347,366 @@ async function structureData(): Promise<StructRow[]> {
   structCache = rows.filter((r) => r.pubchem_cid != null)
   return structCache
 }
+
+// ───────── Страница вещества: §2 · §7 · §9…§15 (session 32) ─────────
+//
+// ⚠⚠ Зачем ещё один срез, когда рядом уже есть sdsData().
+// sdsData отвечает на вопрос «что дала таблица substance_response» — ею живут
+// §4, §5, §6 и §8, и они проверены с session 16. Разделы §2, §7, §9, §10, §11,
+// §12, §13, §14, §15 растут из ДРУГОГО источника: строки `substances` и вердикта
+// `get_storage_verdict`. Проверок на этот второй источник не было ни одной —
+// и ровно он обвалился 2026-08-03, молча сняв §10 с 15 страниц, среди которых
+// серная, соляная и азотная кислоты. Разбор: claude/silent-supabase-failures.md.
+//
+// ⚠ Вердикт спрашивается той же RPC и тем же CAS, что и страница
+// (`substances.cas_number`, не `sds_pages.cas_number`): проверка обязана видеть
+// ровно то, что видел рендер, иначе она сверяет две разные вселенные.
+// mapLimit — по той же причине, по какой он стоит на странице: залп из сотни
+// одновременных RPC валит пулер таймаутами, и проверка начинает врать.
+
+const SUBSTANCE_COLS =
+  'id, cas_number, ghs_pictogram_codes, h_statement_codes, euh_codes, ' +
+  'ate_oral, ate_dermal, ate_inhalation_gas, ate_inhalation_vapour, ate_inhalation_dust, ' +
+  'lc50_fish, ec50_daphnia, ec50_algae, ' +
+  'flash_point, lel_vol_pct, uel_vol_pct, autoignition_c, ' +
+  'melting_point, boiling_point, density, water_solubility, log_kow'
+
+type SubRow = {
+  id: number
+  cas_number: string | null
+  ghs_pictogram_codes: string[] | null
+  h_statement_codes: string[] | null
+  euh_codes: string[] | null
+  ate_oral: number | null
+  ate_dermal: number | null
+  ate_inhalation_gas: number | null
+  ate_inhalation_vapour: number | null
+  ate_inhalation_dust: number | null
+  lc50_fish: number | null
+  ec50_daphnia: number | null
+  ec50_algae: number | null
+  flash_point: number | null
+  lel_vol_pct: number | null
+  uel_vol_pct: number | null
+  autoignition_c: number | null
+  melting_point: number | null
+  boiling_point: number | null
+  density: number | null
+  water_solubility: string | null
+  log_kow: number | null
+}
+
+type SubPage = {
+  slug: string
+  pageCas: string | null
+  sub: SubRow | null
+  /** §10: у вещества есть реактивная группа ИЛИ пара incompatible/caution. */
+  stability: boolean
+  /** UN-номера, которые §14 возьмёт из dg_substances — тем же путём, что страница. */
+  dgUns: string[]
+  /** UN-номера по расширенному набору CAS (алиасы) — запасной путь §14, как у вердикта. */
+  aliasUns: string[]
+}
+
+/**
+ * ⚠⚠ Кэшируем ПРОМИС, а не результат.
+ *
+ * Этот срез нужен четырнадцати проверкам сразу. Кэш по результату заполняется
+ * только при успехе — значит после отказа КАЖДАЯ следующая проверка начинала
+ * загрузку заново: 14 заходов по 78 вызовов RPC, то есть больше тысячи запросов
+ * в базу, которая только что этот же вызов не вытянула. Первый таймаут
+ * превращался в шторм (поймано 2026-08-03 на ацетилене).
+ *
+ * С кэшем по промису обращение к базе ровно одно: остальные проверки ждут тот
+ * же промис и получают тот же ответ — успех или ту же самую ошибку.
+ */
+let subPageLoad: Promise<SubPage[]> | null = null
+
+/**
+ * `get_storage_verdict` с повтором на ВРЕМЕННОМ отказе.
+ *
+ * ⚠⚠ Почему повтор уместен здесь и категорически неуместен на сборке.
+ * На сборке отказ запроса обязан ронять всё: страница без раздела опаснее, чем
+ * сборка, которой не случилось (claude/silent-supabase-failures.md). Проверка
+ * же ничего не публикует — она читает готовый dist, и падение из-за одного
+ * таймаута правду не показывает, а прячет.
+ *
+ * ⚠ Повторяем ТОЛЬКО временное — таймаут, обрыв соединения. Ошибка прав или
+ * отсутствующая функция повтора не переживёт и упадёт сразу, как и должна.
+ */
+async function verdictWithRetry(cas: string): Promise<any> {
+  const TRANSIENT = /timeout|canceling statement|fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN/i
+  let last = ''
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const res = await supabase.rpc('get_storage_verdict', { p_cas: cas })
+    if (!res.error) return res.data ?? null
+    last = res.error.message
+    if (!TRANSIENT.test(last)) break
+    if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 900))
+  }
+  throw new Error(`get_storage_verdict(${cas}) — ${last}`)
+}
+
+/**
+ * ⚠⚠⚠ ПОЧЕМУ ПРОВЕРКА БОЛЬШЕ НЕ ЗОВЁТ `get_storage_verdict` 78 РАЗ.
+ *
+ * Замер 2026-08-03: один вызов — **1,8 секунды** при полностью прогретом кэше
+ * (`Buffers: shared hit=2175`, чтения с диска нет вовсе). Время уходит не на
+ * данные, а на планирование десятка CTE внутри функции: каждый кусок по
+ * отдельности отрабатывает за 3–40 мс.
+ *
+ * ⚠ А у роли `anon` в этом проекте `statement_timeout = 3 s`. То есть запас над
+ * одним вызовом — чуть больше секунды, и любая конкуренция его съедает. Отсюда
+ * `canceling statement due to statement timeout` на 13 проверках подряд, и,
+ * почти наверняка, отсюда же пропажа §10 с 15 страниц на сборке 2026-08-03:
+ * дело было не в «залпе» как таковом, а в том, что вызов изначально идёт на
+ * грани лимита.
+ *
+ * Поэтому §10 и запасной путь §14 проверка считает САМА, тремя обычными
+ * выборками (1 923 + 2 346 + 9 строк) вместо 78 тяжёлых вызовов. Логика ровно
+ * та же, что в теле функции:
+ *   cas_set  = CAS вещества + алиасы в обе стороны
+ *   groups   = substance_reactive_group_link по cas_set
+ *   пары     = reactive_group_compat, где группа с любой стороны, статус
+ *              incompatible или caution
+ *   §10 = groups не пусто ИЛИ пар больше нуля
+ *
+ * ⚠ Риск такого повтора — разъехаться с функцией и этого не заметить. Против
+ * него стоит отдельная проверка `sds-verdict-canary`: она зовёт настоящую RPC
+ * на трёх веществах и сверяет её ответ с локальным расчётом. Три вызова база
+ * переживает, а расхождение логики становится видно сразу.
+ */
+type VerdictInputs = {
+  aliasOf: Map<string, Set<string>>
+  groupsByCas: Map<string, Set<number>>
+  pairsFor: (groups: Set<number>) => number
+  unsByCas: Map<string, Set<string>>
+}
+
+function casSetOf(cas: string, aliasOf: Map<string, Set<string>>): Set<string> {
+  return aliasOf.get(cas) ?? new Set([cas])
+}
+
+function substancePages(): Promise<SubPage[]> {
+  if (!subPageLoad) subPageLoad = loadSubstancePages()
+  return subPageLoad
+}
+
+async function loadSubstancePages(): Promise<SubPage[]> {
+  const pages = await selectAll<{ slug: string; cas_number: string | null; substance_id: number | null }>(
+    'sds_pages',
+    'slug, cas_number, substance_id',
+    (q) => q.eq('status', 'live').order('slug'),
+  )
+  assertNonEmpty('sds-substance-pages', 'sds_pages', pages)
+
+  const ids = [...new Set(pages.map((p) => p.substance_id).filter((v): v is number => v != null))]
+  const subs = ids.length
+    ? await selectAll<SubRow>('substances', SUBSTANCE_COLS, (q) => q.in('id', ids).order('id'))
+    : []
+  assertNonEmpty('sds-substance-rows', 'substances', subs)
+  const byId = new Map(subs.map((s) => [s.id, s]))
+
+  // ⚠ .order() обязателен: selectAll пагинирует по 1000, а без порядка PostgREST
+  // не обязан отдавать строки последовательно (урок §S19.5).
+  const links = await selectAll<{ cas_number: string; un_number: string }>(
+    'substance_un_link',
+    'cas_number, un_number',
+    (q) => q.order('un_number'),
+  )
+  const dg = await selectAll<{ un_number: string }>('dg_substances', 'un_number', (q) => q.order('un_number'))
+  assertNonEmpty('sds-dg', 'dg_substances', dg)
+  const dgSet = new Set(dg.map((d) => d.un_number))
+
+  verdictInputs = await loadVerdictInputs(links, dgSet)
+  const { aliasOf, groupsByCas, pairsFor, unsByCas } = verdictInputs
+
+  return pages.map((p) => {
+    const sub = p.substance_id != null ? (byId.get(p.substance_id) ?? null) : null
+
+    // §10 — вердикт, посчитанный локально. Почему не RPC: см. блок выше.
+    let stability = false
+    if (sub?.cas_number) {
+      const set = casSetOf(sub.cas_number, aliasOf)
+      const groups = new Set<number>()
+      for (const c of set) for (const g of groupsByCas.get(c) ?? []) groups.add(g)
+      stability = groups.size > 0 || pairsFor(groups) > 0
+    }
+
+    // §14 — ровно логика страницы: сначала dg_substances по ОБЕИМ формам CAS
+    // (усечённой в substances у multi-CAS записей Annex VI и настоящей в
+    // sds_pages), и только если там пусто — путь вердикта, то есть тот же
+    // список UN, но по расширенному алиасами набору CAS.
+    const forms = [...new Set([sub?.cas_number, p.cas_number].filter(Boolean))] as string[]
+    const dgUns = [...new Set(forms.flatMap((f) => [...(unsByCas.get(f) ?? [])]))].sort()
+    const aliasForms = sub?.cas_number ? [...casSetOf(sub.cas_number, aliasOf)] : []
+    const aliasUns = [...new Set(aliasForms.flatMap((f) => [...(unsByCas.get(f) ?? [])]))].sort()
+
+    return { slug: p.slug, pageCas: p.cas_number, sub, stability, dgUns, aliasUns }
+  })
+}
+
+let verdictInputs: VerdictInputs | null = null
+
+/** Три обычные выборки вместо 78 вызовов RPC — см. блок над VerdictInputs. */
+async function loadVerdictInputs(
+  links: { cas_number: string; un_number: string }[],
+  dgSet: Set<string>,
+): Promise<VerdictInputs> {
+  const aliases = await selectAll<{ alias_cas: string; canonical_cas: string }>(
+    'substance_cas_alias',
+    'alias_cas, canonical_cas',
+    (q) => q.order('alias_cas'),
+  )
+  // ⚠⚠ Урок session 21, на который наступили ещё раз 2026-08-03.
+  // У `substance_cas_alias` RLS включён, а политики чтения НЕТ — для anon это не
+  // ошибка, а пустая выборка. Расчёт §10 молча терял пять веществ с усечённым
+  // multi-CAS Annex VI (борная кислота, гептан, MDI, TDI, ксилол): их настоящий
+  // CAS лежит именно в этой таблице. Проверка показывала 72 вместо 77 и выглядела
+  // как «сборка потеряла блок», хотя блок был на месте.
+  // ⚠ RPC этого не замечает: она SECURITY DEFINER и читает таблицу мимо RLS.
+  // Поэтому расхождение и появляется ТОЛЬКО в прямом чтении.
+  assertNonEmpty('sds-cas-alias', 'substance_cas_alias', aliases)
+  const rgLinks = await selectAll<{ cas_number: string; rg_id: number }>(
+    'substance_reactive_group_link',
+    'cas_number, rg_id',
+    (q) => q.order('cas_number'),
+  )
+  assertNonEmpty('sds-rg-links', 'substance_reactive_group_link', rgLinks)
+  const compat = await selectAll<{ rg_a: number; rg_b: number; status: string }>(
+    'reactive_group_compat',
+    'rg_a, rg_b, status',
+    (q) => q.order('rg_a'),
+  )
+  assertNonEmpty('sds-rg-compat', 'reactive_group_compat', compat)
+
+  // Классы эквивалентности CAS: alias -> canonical и обратно, плюс «братья»
+  // по общему canonical — ровно те четыре ветки UNION, что делает cas_set в SQL.
+  const byCanonical = new Map<string, Set<string>>()
+  for (const a of aliases) {
+    if (!byCanonical.has(a.canonical_cas)) byCanonical.set(a.canonical_cas, new Set([a.canonical_cas]))
+    byCanonical.get(a.canonical_cas)!.add(a.alias_cas)
+  }
+  const aliasOf = new Map<string, Set<string>>()
+  for (const [canon, members] of byCanonical) {
+    for (const m of members) {
+      if (!aliasOf.has(m)) aliasOf.set(m, new Set())
+      for (const x of members) aliasOf.get(m)!.add(x)
+    }
+    void canon
+  }
+
+  const groupsByCas = new Map<string, Set<number>>()
+  for (const l of rgLinks) {
+    if (!groupsByCas.has(l.cas_number)) groupsByCas.set(l.cas_number, new Set())
+    groupsByCas.get(l.cas_number)!.add(l.rg_id)
+  }
+
+  const relevant = compat.filter((c) => c.status === 'incompatible' || c.status === 'caution')
+  const pairsFor = (groups: Set<number>): number =>
+    groups.size === 0 ? 0 : relevant.filter((c) => groups.has(c.rg_a) || groups.has(c.rg_b)).length
+
+  const unsByCas = new Map<string, Set<string>>()
+  for (const l of links) {
+    if (!dgSet.has(l.un_number)) continue
+    if (!unsByCas.has(l.cas_number)) unsByCas.set(l.cas_number, new Set())
+    unsByCas.get(l.cas_number)!.add(l.un_number)
+  }
+
+  return { aliasOf, groupsByCas, pairsFor, unsByCas }
+}
+
+/** Слаги страниц, для которых выполняется предикат по строке substances + вердикту. */
+async function subSlugsWhere(pred: (p: SubPage) => boolean): Promise<Set<string>> {
+  return new Set((await substancePages()).filter(pred).map((p) => p.slug))
+}
+
+const isNum = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v)
+/** «Заполненное» число: ate_* и eco_* держат 0 как незаполненный placeholder. */
+const positive = (v: unknown): boolean => typeof v === 'number' && v > 0
+
+/** Есть ли у вещества хоть одно физ-хим значение — ровно те поля, что печатает §9. */
+function hasPhysData(s: SubRow | null): boolean {
+  if (!s) return false
+  return (
+    isNum(s.flash_point) ||
+    isNum(s.lel_vol_pct) ||
+    isNum(s.uel_vol_pct) ||
+    isNum(s.autoignition_c) ||
+    isNum(s.melting_point) ||
+    isNum(s.boiling_point) ||
+    positive(s.density) ||
+    (typeof s.water_solubility === 'string' && s.water_solubility.trim().length > 0) ||
+    isNum(s.log_kow)
+  )
+}
+
+/** §11 показывается только при СТРОГО положительном ATE — ноль означает «не импортировано». */
+const hasAte = (s: SubRow | null): boolean =>
+  !!s &&
+  (positive(s.ate_oral) ||
+    positive(s.ate_dermal) ||
+    positive(s.ate_inhalation_gas) ||
+    positive(s.ate_inhalation_vapour) ||
+    positive(s.ate_inhalation_dust))
+
+/** §12 — та же логика > 0. Сегодня даёт пустое множество: эко-импорта ещё не было. */
+const hasEco = (s: SubRow | null): boolean =>
+  !!s && (positive(s.lc50_fish) || positive(s.ec50_daphnia) || positive(s.ec50_algae))
+
+/** §14 — UN-номера, которые страница обязана напечатать: dg_substances, иначе путь вердикта. */
+function expectedUns(p: SubPage): string[] {
+  return p.dgUns.length ? p.dgUns : p.aliasUns
+}
+
+/**
+ * Сверка НАБОРА НАПЕЧАТАННЫХ ЗНАЧЕНИЙ, а не наличия блока.
+ *
+ * ⚠ Почему это отдельный вид проверки. comparePageSets отвечает «блок есть или
+ * блока нет» — и остался бы зелёным, напечатай страница чужие пиктограммы или
+ * потеряй половину H-кодов. Такой отказ выглядит как правдоподобная страница, и
+ * глазами его не ловят.
+ *
+ * ⚠ Формы маркеров выверены на сборке 2026-08-03 (109 страниц): именно
+ * `>GHS02<`, `>H314</a>` и `>UN 1830<` дают РОВНО набор из базы. Голый `GHS02`
+ * не годится — те же коды идут прозой в FAQ и в JSON-LD, и проверка считала бы
+ * их по второму разу.
+ */
+function compareValueSets(
+  id: string,
+  group: string,
+  relDir: string,
+  extract: (html: string) => string[],
+  expected: Map<string, string[]>,
+  noun: string,
+): Result {
+  const detail: string[] = []
+  let checked = 0
+  let values = 0
+  for (const slug of pageSlugs(relDir)) {
+    const html = readPage(`${relDir}/${slug}/index.html`)
+    if (html === null) continue
+    checked++
+    const actual = [...new Set(extract(html))].sort()
+    const want = [...new Set(expected.get(slug) ?? [])].sort()
+    values += actual.length
+    if (actual.join(',') !== want.join(',')) {
+      detail.push(`${slug}: база [${want.join(', ') || '-'}] / страница [${actual.join(', ') || '-'}]`)
+    }
+  }
+  const ok = detail.length === 0
+  return {
+    id,
+    group,
+    ok,
+    headline: ok
+      ? `${values} ${noun} на ${checked} страницах — все совпали с базой`
+      : `расходится на ${detail.length} из ${checked} страниц`,
+    detail: ok ? [`сверено поимённо, страниц: ${checked}`] : detail.slice(0, 20),
+  }
+}
+
+const rxAll = (html: string, re: RegExp): string[] => [...html.matchAll(re)].map((m) => m[1])
 
 // ─────────────────────── P-фразы: данные из базы ───────────────────────
 
@@ -680,6 +1044,310 @@ const CHECKS: Check[] = [
             .map((r) => r.slug),
         ),
       ),
+  },
+  // ───────── §2 · §7 · §9…§15 — вторая половина страницы вещества (session 32) ─────────
+  //
+  // ⚠ Все ожидания ниже считаются из базы в момент запуска, ни одного числа в коде.
+  // Сегодняшний расклад (2026-08-03, 109 live-страниц): substance есть у 78, §10 — 77,
+  // §14 — 53, §11 — 5, §12 и §15 — ноль. Числа тут только как ориентир для чтения;
+  // проверка спрашивает их заново.
+  {
+    id: 'sds-s2',
+    group: 'SDS',
+    title: 'Section 2 — Hazards identification (есть строка в substances)',
+    run: async () =>
+      comparePageSets('sds-s2', 'SDS', 'sds', ['id="s2"'], await subSlugsWhere((p) => p.sub !== null)),
+  },
+  {
+    // ⚠ Не «блок на месте», а «напечатаны ТЕ САМЫЕ пиктограммы». Ошибка в наборе
+    // пиктограмм на странице химической безопасности — это неверная маркировка,
+    // и выглядит она совершенно нормально.
+    id: 'sds-s2-pictograms',
+    group: 'SDS',
+    title: 'Section 2 — набор пиктограмм совпадает с ghs_pictogram_codes',
+    run: async () =>
+      compareValueSets(
+        'sds-s2-pictograms',
+        'SDS',
+        'sds',
+        (html) => rxAll(html, />(GHS0\d)</g),
+        new Map((await substancePages()).map((p) => [p.slug, p.sub?.ghs_pictogram_codes ?? []])),
+        'пиктограмм',
+      ),
+  },
+  {
+    // H и EUH идут на странице одной и той же ссылкой (hHref), поэтому и сверяются
+    // объединением. ⚠ Суффиксы важны: H361d, H360Fd, H361fd — это РАЗНЫЕ записи
+    // Annex VI, и подрезать их до H361 нельзя.
+    id: 'sds-s2-h-codes',
+    group: 'SDS',
+    title: 'Section 2 — набор H- и EUH-кодов совпадает с базой',
+    run: async () =>
+      compareValueSets(
+        'sds-s2-h-codes',
+        'SDS',
+        'sds',
+        (html) => rxAll(html, />((?:EU)?H\d{3}[A-Za-z]*)<\/a>/g),
+        new Map(
+          (await substancePages()).map((p) => [
+            p.slug,
+            [...(p.sub?.h_statement_codes ?? []), ...(p.sub?.euh_codes ?? [])],
+          ]),
+        ),
+        'кодов',
+      ),
+  },
+  {
+    id: 'sds-s7',
+    group: 'SDS',
+    title: 'Section 7 — Handling and storage',
+    run: async () =>
+      comparePageSets('sds-s7', 'SDS', 'sds', ['id="s7"'], await subSlugsWhere((p) => p.sub !== null)),
+  },
+  {
+    id: 'sds-s9',
+    group: 'SDS',
+    title: 'Section 9 — блок физ-хим свойств (в любой из двух форм)',
+    run: async () =>
+      comparePageSets('sds-s9', 'SDS', 'sds', ['id="s9"'], await subSlugsWhere((p) => p.sub !== null)),
+  },
+  {
+    // ⚠ У §9 ДВЕ формы, и различать их обязательно: страница с данными и страница
+    // с честной строкой «значения ещё импортируются» несут один и тот же id="s9".
+    // Проверка только по id пропустила бы день, когда таблица значений исчезла и
+    // все 78 страниц молча съехали на заглушку.
+    id: 'sds-s9-values',
+    group: 'SDS',
+    title: 'Section 9 — таблица значений там, где значения есть в базе',
+    run: async () =>
+      comparePageSets(
+        'sds-s9-values',
+        'SDS',
+        'sds',
+        ['Source: CAMEO Chemicals (NOAA, public domain); per-value source references'],
+        await subSlugsWhere((p) => hasPhysData(p.sub)),
+      ),
+  },
+  {
+    id: 'sds-s9-stub',
+    group: 'SDS',
+    title: 'Section 9 — заглушка ровно там, где значений в базе нет',
+    run: async () =>
+      comparePageSets(
+        'sds-s9-stub',
+        'SDS',
+        'sds',
+        ['is being populated for this substance from ECHA registration data'],
+        await subSlugsWhere((p) => p.sub !== null && !hasPhysData(p.sub)),
+      ),
+  },
+  {
+    // ⚠⚠ Та самая проверка, которой не было 2026-08-03. §10 живёт вердиктом
+    // get_storage_verdict, и когда RPC отказала по таймауту, блок исчез с 15
+    // страниц молча — включая серную, соляную и азотную кислоты.
+    id: 'sds-s10',
+    group: 'SDS',
+    title: 'Section 10 — Stability and reactivity (вердикт CAMEO)',
+    run: async () =>
+      comparePageSets('sds-s10', 'SDS', 'sds', ['id="s10"'], await subSlugsWhere((p) => p.stability)),
+  },
+  {
+    // ⚠⚠ Канарейка. §10 и запасной путь §14 проверка считает сама, тремя обычными
+    // выборками вместо 78 вызовов `get_storage_verdict` (вызов стоит 1,8 с при
+    // лимите anon в 3 с — см. блок над VerdictInputs). Риск такого повтора один:
+    // разъехаться с настоящей функцией и не заметить. Поэтому на трёх веществах
+    // мы всё-таки зовём RPC и сверяем её ответ с локальным расчётом.
+    //
+    // ⚠ Вещества выбираются ДЕТЕРМИНИРОВАННО (первое, среднее, последнее по слагу
+    // среди имеющих строку в substances), а не случайно: проверка, которая от
+    // прогона к прогону смотрит в разные места, невоспроизводима.
+    id: 'sds-verdict-canary',
+    group: 'SDS',
+    title: 'Локальный расчёт §10/§14 совпадает с настоящей RPC (контрольные пробы)',
+    run: async () => {
+      const withSub = (await substancePages()).filter((p) => p.sub?.cas_number)
+      if (withSub.length === 0) {
+        return {
+          id: 'sds-verdict-canary',
+          group: 'SDS',
+          ok: false,
+          headline: 'ни одной страницы со строкой в substances — сверять нечего',
+          detail: [],
+        }
+      }
+      // ⚠ Четвёртая проба — обязательно вещество с УСЕЧЁННЫМ multi-CAS Annex VI
+      // (длина ровно 20, обрезано полем varchar(20)): «10043-35-3[1]11113-5».
+      // Именно на них локальный расчёт и разошёлся с RPC 2026-08-03, а три
+      // «обычные» пробы этого не увидели. Проба должна попадать в тот угол,
+      // где логика сложнее всего, а не в середину.
+      const odd = withSub.find((p) => (p.sub!.cas_number as string).length >= 20)
+      const idx = [0, Math.floor(withSub.length / 2), withSub.length - 1]
+      const probes = [...new Set(idx)].map((i) => withSub[i])
+      if (odd && !probes.includes(odd)) probes.push(odd)
+      const detail: string[] = []
+      for (const p of probes) {
+        const cas = p.sub!.cas_number as string
+        let v: any
+        try {
+          v = await verdictWithRetry(cas)
+        } catch (e) {
+          detail.push(`${p.slug}: RPC не ответила — ${String(e).slice(0, 120)}`)
+          continue
+        }
+        const rpcGroups: unknown[] = v?.reactive_groups ?? []
+        const rpcReact: any[] = v?.reactivity ?? []
+        const rpcStability =
+          rpcGroups.length > 0 || rpcReact.some((r) => r?.status === 'incompatible' || r?.status === 'caution')
+        if (rpcStability !== p.stability) {
+          detail.push(`${p.slug} (${cas}): §10 — RPC ${rpcStability}, локально ${p.stability}`)
+        }
+        const rpcUns = [...new Set(((v?.adr ?? []) as any[]).map((a) => String(a.un)))].sort()
+        if (rpcUns.join(',') !== p.aliasUns.join(',')) {
+          detail.push(
+            `${p.slug} (${cas}): UN по вердикту [${rpcUns.join(', ') || '-'}], локально [${p.aliasUns.join(', ') || '-'}]`,
+          )
+        }
+      }
+      const ok = detail.length === 0
+      return {
+        id: 'sds-verdict-canary',
+        group: 'SDS',
+        ok,
+        headline: ok
+          ? `${probes.length} пробы сошлись с get_storage_verdict`
+          : `расхождений: ${detail.length} — локальный расчёт разошёлся с функцией`,
+        detail: ok ? [`пробы: ${probes.map((p) => p.slug).join(', ')}`] : detail,
+      }
+    },
+  },
+  {
+    id: 'sds-s11',
+    group: 'SDS',
+    title: 'Section 11 — ATE (строго > 0: ноль в базе означает «не импортировано»)',
+    run: async () =>
+      comparePageSets('sds-s11', 'SDS', 'sds', ['id="s11"'], await subSlugsWhere((p) => hasAte(p.sub))),
+  },
+  {
+    // Сегодня ожидание пустое. Проверка нужна ровно для дня, когда эко-импорт
+    // приедет: она сама скажет, что §12 появилась не везде, где появились данные.
+    // ⚠ Заодно это сторож на anchorCoverage §12 в sdsSections.ts.
+    id: 'sds-s12',
+    group: 'SDS',
+    title: 'Section 12 — Ecological information (lc50/ec50 > 0)',
+    run: async () =>
+      comparePageSets('sds-s12', 'SDS', 'sds', ['id="s12"'], await subSlugsWhere((p) => hasEco(p.sub))),
+  },
+  {
+    id: 'sds-s13',
+    group: 'SDS',
+    title: 'Section 13 — Disposal considerations',
+    run: async () =>
+      comparePageSets('sds-s13', 'SDS', 'sds', ['id="s13"'], await subSlugsWhere((p) => p.sub !== null)),
+  },
+  {
+    id: 'sds-s14',
+    group: 'SDS',
+    title: 'Section 14 — Transport (dg_substances, иначе adr из вердикта)',
+    run: async () =>
+      comparePageSets('sds-s14', 'SDS', 'sds', ['id="s14"'], await subSlugsWhere((p) => expectedUns(p).length > 0)),
+  },
+  {
+    // ⚠ Номер UN — это то, что уезжает на оранжевую табличку транспортной единицы.
+    // Здесь сверяется КАЖДЫЙ номер, а не факт наличия секции.
+    id: 'sds-s14-un',
+    group: 'SDS',
+    title: 'Section 14 — набор UN-номеров совпадает с базой',
+    run: async () =>
+      compareValueSets(
+        'sds-s14-un',
+        'SDS',
+        'sds',
+        (html) => rxAll(html, />UN (\d{3,4})</g),
+        new Map((await substancePages()).map((p) => [p.slug, expectedUns(p)])),
+        'UN-номеров',
+      ),
+  },
+  {
+    // ⚠⚠ Один UN-номер занимает в Таблице A ADR несколько строк (группы упаковки,
+    // диапазоны концентраций), и до session 32 страница печатала карточку на
+    // каждую: три одинаковых на вид блока «UN 1202» подряд на дизтопливе, девять
+    // карточек на шесть номеров у гипохлорита кальция — всего 12 страниц из 53.
+    // Теперь строки сведены под один номер, а различия идут списком вариантов.
+    // Проверка держит это: карточка на номер — ровно одна.
+    id: 'sds-s14-one-card-per-un',
+    group: 'SDS',
+    title: 'Section 14 — на каждый UN-номер ровно одна карточка',
+    run: async () => {
+      const detail: string[] = []
+      let pages = 0
+      for (const slug of pageSlugs('sds')) {
+        const html = readPage(`sds/${slug}/index.html`)
+        if (!html || !html.includes('id="s14"')) continue
+        pages++
+        const cards = rxAll(html, />UN number<[\s\S]{0,240}?>UN (\d{3,4})</g)
+        const seen = new Map<string, number>()
+        for (const un of cards) seen.set(un, (seen.get(un) ?? 0) + 1)
+        const dup = [...seen.entries()].filter(([, n]) => n > 1)
+        if (dup.length) {
+          detail.push(`${slug}: ${dup.map(([un, n]) => `UN ${un} x${n}`).join(', ')}`)
+        }
+      }
+      const ok = detail.length === 0
+      return {
+        id: 'sds-s14-one-card-per-un',
+        group: 'SDS',
+        ok,
+        headline: ok ? `${pages} страниц с §14, повторов карточек нет` : `повторы на ${detail.length} из ${pages} страниц`,
+        detail: ok ? ['маркер: ">UN number<" ... ">UN NNNN<"'] : detail.slice(0, 20),
+      }
+    },
+  },
+  {
+    // ⚠ В колонке группы упаковки Таблицы A у 28 позиций стоит не I/II/III, а
+    // примечание: «CARRIAGE PROHIBITED» (UN 2186), «NOT SUBJECT TO ADR» (UN 1910).
+    // Страница печатала его как группу упаковки — «2 · CARRIAGE PROHIBITED».
+    // На транспортной странице это разные по смыслу вещи: «пакуйте так» против
+    // «везти запрещено». Теперь примечание идёт отдельной плашкой, а в строке
+    // «Class · PG» допустимы только настоящие группы упаковки.
+    id: 'sds-s14-pg-values',
+    group: 'SDS',
+    title: 'Section 14 — в строке «Class · PG» только настоящие группы упаковки',
+    run: async () => {
+      const okPg = /^(I|II|III)(\s*\/\s*(I|II|III))*$/
+      const detail: string[] = []
+      let checked = 0
+      for (const slug of pageSlugs('sds')) {
+        const html = readPage(`sds/${slug}/index.html`)
+        if (!html || !html.includes('id="s14"')) continue
+        // ⚠ Значение берётся из СЛЕДУЮЩЕГО <p>, а не «после первого >»: между
+        // подписью и значением стоит </p> со своим «>», и ленивый шаблон ловил
+        // на нём перевод строки. Проверка при этом оставалась зелёной —
+        // сравнивала пустую строку (session 32, поймано на живом dist).
+        for (const raw of rxAll(html, />Class . PG<\/p>[\s\S]{0,220}?<p[^>]*>([^<]+)<\/p>/g)) {
+          checked++
+          const parts = raw.split('·').map((s) => s.trim())
+          const pg = parts.length > 1 ? parts.slice(1).join(' · ') : null
+          if (pg && !okPg.test(pg)) detail.push(`${slug}: "${raw.trim()}"`)
+        }
+      }
+      const ok = detail.length === 0
+      return {
+        id: 'sds-s14-pg-values',
+        group: 'SDS',
+        ok,
+        headline: ok ? `${checked} строк «Class · PG», все значения годные` : `негодных значений: ${detail.length}`,
+        detail: ok ? ['допускаются только I, II, III и их сочетания через /'] : detail.slice(0, 20),
+      }
+    },
+  },
+  {
+    // regRows на странице сегодня жёстко пустой массив: импорта Step-4 не было.
+    // Проверка держит это честным — и загорится в тот день, когда таблица
+    // substance_regulatory_status появится, а страница её не подхватит.
+    id: 'sds-s15',
+    group: 'SDS',
+    title: 'Section 15 — Regulatory (ждёт импорта Step-4, сегодня ноль страниц)',
+    run: async () => expectAbsent('sds-s15', 'SDS', 'sds', ['id="s15"']),
   },
   {
     id: 'storage-classes',

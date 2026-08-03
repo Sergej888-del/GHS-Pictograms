@@ -10,15 +10,23 @@
 import Layout from '../../layouts/Layout.astro'
 import SdsManagerCard from '../../components/SdsManagerCard.astro'
 import { supabase } from '../../lib/supabase'
+import { must } from '../../lib/mustQuery'
 
 const SITE = 'https://ghspictograms.com'
 
-const { data: pagesRaw } = await supabase
-  .from('sds_pages')
-  .select('slug, cas_number, display_name, formula_display, template_variant, synonyms_search')
-  .eq('status', 'live')
-  .order('display_name')
-const pages = pagesRaw ?? []
+// ⚠ must(), а не `const { data }`: отказ этого запроса не ронял сборку, а выдавал
+// ПУСТОЙ хаб — библиотека без единого вещества при живых шапке и подвале. Проверка
+// sds-hub-payload поймала бы это уже после сборки; лучше не собраться вовсе
+// (session 32, claude/silent-supabase-failures.md).
+const pages =
+  must(
+    'sds_pages (live) for /sds/',
+    await supabase
+      .from('sds_pages')
+      .select('slug, cas_number, display_name, formula_display, template_variant, synonyms_search')
+      .eq('status', 'live')
+      .order('display_name'),
+  ) ?? []
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 

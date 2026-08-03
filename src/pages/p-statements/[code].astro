@@ -10,6 +10,11 @@ import Layout from '../../layouts/Layout.astro'
 import { supabase } from '../../lib/supabase'
 import { truncateMetaDescription } from '../../lib/metaDescription'
 import { splitClpNotation, hasClpNotation } from '../../lib/clpNotation'
+// ⚠ «Падать громко на ОШИБКЕ, деградировать тихо на ПУСТОТЕ» — session 31.
+// До session 32 отказ любого из запросов ниже давал не ошибку, а пропавший блок;
+// у `rowRes` он вдобавок означал `!rowRes.data`, то есть страница отдавала
+// РЕДИРЕКТ на хаб. Разбор: claude/silent-supabase-failures.md.
+import { must, mustSingle } from '../../lib/mustQuery'
 
 const SITE = 'https://ghspictograms.com'
 const GHSSYMBOLS = 'https://ghssymbols.com'
@@ -17,7 +22,8 @@ const COLLAPSE_AT = 100
 const PAGE = 1000
 
 export async function getStaticPaths() {
-  const { data } = await supabase.from('p_statements').select('code').order('code')
+  // ⚠ Отказ здесь давал бы НОЛЬ страниц P-кодов при «успешной» сборке.
+  const data = must('p_statements (getStaticPaths)', await supabase.from('p_statements').select('code').order('code'))
   return (data ?? []).map((r: { code: string }) => ({ params: { code: r.code } }))
 }
 
@@ -44,11 +50,13 @@ const [rowRes, jurisRes, linkRes, comboRes, allCodesRes, countsRes, sdsRes] = aw
   supabase.from('sds_pages').select('slug, cas_number').eq('status', 'live'),
 ])
 
-if (!rowRes.data) {
+// ⚠ Отказ запроса и «кода нет в реестре» — разные вещи; раньше они сливались.
+const pRow = mustSingle(`p_statements(${code})`, rowRes)
+if (!pRow) {
   return Astro.redirect('/p-statements/')
 }
 
-const p = rowRes.data as {
+const p = pRow as {
   code: string
   category: string
   text_en: string
@@ -63,7 +71,7 @@ const hasVerbatim = plain !== p.text_en
 const notation = splitClpNotation(p.text_en)
 const showNotation = hasClpNotation(p.text_en)
 
-const juris = (jurisRes.data ?? []) as {
+const juris = (must('statement_jurisdictions', jurisRes) ?? []) as {
   id: string
   label: string
   sublabel: string
@@ -72,14 +80,14 @@ const juris = (jurisRes.data ?? []) as {
   note: string | null
 }[]
 const jStatus = new Map(
-  ((linkRes.data ?? []) as { jurisdiction: string; status: string; replaced_by: string | null }[]).map((r) => [
+  ((must('p_statement_jurisdiction', linkRes) ?? []) as { jurisdiction: string; status: string; replaced_by: string | null }[]).map((r) => [
     r.jurisdiction,
     r,
   ])
 )
 const liveIn = juris.filter((j) => jStatus.get(j.id)?.status === 'current')
 
-const combos = (comboRes.data ?? []) as {
+const combos = (must('p_statement_combinations', comboRes) ?? []) as {
   code: string
   components: string[]
   text_en: string
@@ -87,13 +95,13 @@ const combos = (comboRes.data ?? []) as {
 }[]
 
 // Соседние коды — навигация prev/next по всему реестру
-const allCodes = (allCodesRes.data ?? []) as { code: string; text_plain: string | null; text_en: string }[]
+const allCodes = (must('p_statements (all)', allCodesRes) ?? []) as { code: string; text_plain: string | null; text_en: string }[]
 const idx = allCodes.findIndex((r) => r.code === code)
 const prev = idx > 0 ? allCodes[idx - 1] : null
 const next = idx >= 0 && idx < allCodes.length - 1 ? allCodes[idx + 1] : null
 
 const total =
-  ((countsRes.data ?? []) as { code: string; kind: string; substances: number }[]).find(
+  ((must('get_statement_counts', countsRes) ?? []) as { code: string; kind: string; substances: number }[]).find(
     (r) => r.kind === 'P' && r.code === code
   )?.substances ?? 0
 
@@ -114,12 +122,18 @@ type Sub = {
 const subs: Sub[] = []
 if (total > 0) {
   for (let from = 0; ; from += PAGE) {
-    const { data: chunk } = await supabase
-      .from('substances')
-      .select('cas_number, index_number, common_name, iupac_name')
-      .contains('p_statement_codes', [code])
-      .order('index_number')
-      .range(from, from + PAGE - 1)
+    // ⚠⚠ Отказ здесь не отличался от «строки кончились»: список веществ молча
+    // обрывался на границе страницы. У P280 их 3171 — счётчик показывал бы 3171,
+    // а список 1000 (session 32).
+    const chunk = must(
+      `substances chunk ${from} for ${code}`,
+      await supabase
+        .from('substances')
+        .select('cas_number, index_number, common_name, iupac_name')
+        .contains('p_statement_codes', [code])
+        .order('index_number')
+        .range(from, from + PAGE - 1),
+    )
     if (!chunk?.length) break
     subs.push(...(chunk as Sub[]))
     if (chunk.length < PAGE) break
@@ -132,7 +146,7 @@ const clean = (s: string) => s.replace(/\r?\n+/g, '; ').replace(/\s+/g, ' ').tri
 const nameOf = (s: Sub) => clean(s.common_name || s.iupac_name)
 
 const slugByCas = new Map(
-  ((sdsRes.data ?? []) as { slug: string; cas_number: string | null }[])
+  ((must('sds_pages (live)', sdsRes) ?? []) as { slug: string; cas_number: string | null }[])
     .filter((r) => r.cas_number)
     .map((r) => [r.cas_number as string, r.slug])
 )

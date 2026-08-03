@@ -9,6 +9,7 @@
     "dev": "node --use-system-ca ./node_modules/astro/bin/astro.mjs dev",
     "build": "astro build",
     "check:dist": "node --use-system-ca --import tsx scripts/check-dist.ts",
+    "check:seo": "node --import tsx scripts/check-seo.ts",
     "generate:redirects": "node scripts/generate-pictogram-redirects.mjs",
     "preview": "astro preview",
     "astro": "astro",

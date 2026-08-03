@@ -3,13 +3,18 @@ export const prerender = true
 import Layout from '../../layouts/Layout.astro'
 import PictogramSelector from '../../components/PictogramSelector'
 import { supabase } from '../../lib/supabase'
+import { must } from '../../lib/mustQuery'
 
 // Reference grid pictograms come from the shared pictograms_signals table
 // (single source of truth across the ecosystem). Fetched at build time.
-const { data: pictoRows } = await supabase
-  .from('pictograms_signals')
-  .select('code, name_en, svg_content')
-  .order('code')
+// ⚠ must(), а не `const { data }`: при отказе запроса деструктуризация давала
+// пустую сетку пиктограмм БЕЗ единой строчки в логе — страница осталась бы на вид
+// нормальной и просто лишилась бы своего содержимого (session 32; тот же дефект,
+// что снял §10 с 15 страниц веществ — claude/silent-supabase-failures.md).
+const pictoRows = must(
+  'pictograms_signals for /pictogram-selector/',
+  await supabase.from('pictograms_signals').select('code, name_en, svg_content').order('code'),
+)
 const PICTOS = (pictoRows ?? []).filter((p) => /^GHS0[1-9]$/.test(p.code))
 
 const STATS = [

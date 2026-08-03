@@ -310,7 +310,7 @@ const verdictHeadline =
       : 'No storage segregation conflicts documented'
 
 // §14 transport rows — dg_substances (with Kemler) preferred, verdict.adr fallback
-const transportRows =
+const transportRaw =
   dgRows.length > 0
     ? dgRows.map((d: any) => ({
         un: d.un_number,
@@ -327,7 +327,98 @@ const transportRows =
         un: a.un, name: a.name, class: a.class, pg: a.pg,
         code: null, cat: null, labels: [], kemler: null, ver: null,
       }))
-const adrVersion = transportRows.find((t: any) => t.ver)?.ver ?? '2025'
+
+/**
+ * ⚠⚠ Колонка «группа упаковки» Таблицы A несёт не только I / II / III.
+ * У 28 позиций там стоит примечание: «CARRIAGE PROHIBITED» (UN 2186,
+ * хлороводород охлаждённый) или «NOT SUBJECT TO ADR» (UN 1910, оксид кальция).
+ * До session 32 страница печатала это как группу упаковки — «2 · CARRIAGE
+ * PROHIBITED». Примечание группой упаковки не является, и путать их на
+ * транспортной странице нельзя: одно говорит «пакуйте так», другое — «везти
+ * запрещено».
+ */
+const PG_NOTE = /^(CARRIAGE PROHIBITED|NOT SUBJECT TO ADR)/i
+
+/**
+ * ⚠⚠ Один UN-номер занимает в Таблице A ADR НЕСКОЛЬКО строк — по строке на
+ * группу упаковки и на диапазон концентрации. До session 32 страница печатала
+ * карточку на КАЖДУЮ строку, и выходило три одинаковых на вид блока
+ * «UN 1202 · 3 · III» подряд. Так было на 12 страницах из 53: дизтопливо (три
+ * строки), гипохлорит кальция (девять карточек на шесть номеров), едкий натр,
+ * едкое кали, уксусная и муравьиная кислоты, фенол, перекись водорода, этанол,
+ * ксилол, оксид этилена, MDI.
+ *
+ * Строки НЕ дубликаты — различие настоящее (PG II против PG III, «свыше 51 %»
+ * против «не более 51 %»), поэтому их не выбрасываем, а сводим под один номер:
+ * общее (класс, знаки, Kemler) печатается карточками один раз, различия идут
+ * списком вариантов под ними. Данные те же, повтора нет.
+ */
+type TransportVariant = {
+  name: string | null
+  pg: string | null
+  note: string | null
+  code: string | null
+  cat: number | null
+}
+type TransportGroup = {
+  un: string
+  class: string | null
+  labels: string[]
+  kemler: string | null
+  ver: string | null
+  variants: TransportVariant[]
+}
+
+const transportRows: TransportGroup[] = (() => {
+  const order: string[] = []
+  const byUn = new Map<string, TransportGroup>()
+  for (const t of transportRaw) {
+    const un = String(t.un)
+    if (!byUn.has(un)) {
+      order.push(un)
+      byUn.set(un, { un, class: null, labels: [], kemler: null, ver: null, variants: [] })
+    }
+    const g = byUn.get(un)!
+    // Общее дозаполняем первой непустой строкой: Kemler и знаки проставлены
+    // не в каждой строке номера.
+    g.class ??= t.class ?? null
+    g.kemler ??= t.kemler ?? null
+    g.ver ??= t.ver ?? null
+    if (!g.labels.length && t.labels?.length) g.labels = t.labels
+    const pgRaw = typeof t.pg === 'string' ? t.pg : null
+    const isNote = pgRaw != null && PG_NOTE.test(pgRaw)
+    const variant: TransportVariant = {
+      name: t.name ?? null,
+      pg: isNote ? null : pgRaw,
+      note: isNote ? pgRaw : null,
+      code: t.code ?? null,
+      cat: typeof t.cat === 'number' ? t.cat : null,
+    }
+    const sig = JSON.stringify(variant)
+    if (!g.variants.some((v) => JSON.stringify(v) === sig)) g.variants.push(variant)
+  }
+  return order.map((un) => byUn.get(un)!)
+})()
+
+const adrVersion = transportRows.find((t) => t.ver)?.ver ?? '2025'
+/** Группы упаковки под одним номером: «II» либо «II / III». */
+const pgLabel = (g: TransportGroup): string | null => {
+  const list = [...new Set(g.variants.map((v) => v.pg).filter(Boolean) as string[])]
+  return list.length ? list.join(' / ') : null
+}
+/** Примечания вместо группы упаковки — «CARRIAGE PROHIBITED» и подобные. */
+const pgNotes = (g: TransportGroup): string[] => [
+  ...new Set(g.variants.map((v) => v.note).filter(Boolean) as string[]),
+]
+/** Значение, общее для ВСЕХ вариантов номера; иначе null — печатать в карточке нечего. */
+const sharedCode = (g: TransportGroup): string | null => {
+  const list = [...new Set(g.variants.map((v) => v.code).filter(Boolean) as string[])]
+  return list.length === 1 ? list[0] : null
+}
+const sharedCat = (g: TransportGroup): number | null => {
+  const list = [...new Set(g.variants.map((v) => v.cat).filter((v): v is number => v != null))]
+  return list.length === 1 ? list[0] : null
+}
 
 // Hero hazard-summary pills (derived from harmonised data only)
 const hCodes: string[] = substance?.h_statement_codes ?? []
@@ -355,9 +446,13 @@ if (substance?.signal_word || physShorts.length) {
 if (healthShorts.length) heroPills.push({ text: capList(healthShorts).join(' · '), dot: 'bg-amber-400', mono: false })
 if (envShorts.length) heroPills.push({ text: capList(envShorts, 2).join(' · '), dot: 'bg-emerald-400', mono: false })
 if (transportRows.length === 1) {
+  // ⚠ После сведения строк по номеру (session 32) пилюля появляется и там, где
+  // у номера несколько строк Таблицы A — например у ксилола (UN 1307, PG II и III):
+  // раньше таких страниц было две «строки», и пилюля молча не рисовалась.
   const t = transportRows[0]
+  const pg = pgLabel(t)
   heroPills.push({
-    text: `UN ${t.un} · ADR ${t.class}${t.pg ? ` · PG ${t.pg}` : ''}`,
+    text: `UN ${t.un} · ADR ${t.class}${pg ? ` · PG ${pg}` : ''}`,
     dot: null, mono: true,
   })
 }
@@ -1523,33 +1618,38 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
               <h2 class={h2Cls} style={grotesk}>{cap} road transport — ADR {adrVersion}</h2>
 
               <div class="mt-5 space-y-5">
-                {transportRows.map((t: any) => (
+                {transportRows.map((t) => (
                   <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px] items-start">
+                    <div>
                     <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                       <div class="rounded-[10px] border border-gray-200 bg-white px-3.5 py-3">
                         <p class={cardLabelCls} style={mono}>UN number</p>
                         <p class="mt-1 text-[15px] font-semibold text-gray-900" style={mono}>UN {t.un}</p>
                       </div>
-                      {t.name && (
+                      {/* Наименование карточкой — только когда под номером ОДНА
+                          запись. Когда их несколько, они уходят в список ниже:
+                          три карточки «Proper shipping name» подряд читались как
+                          повтор одного и того же номера (session 32). */}
+                      {t.variants.length === 1 && t.variants[0].name && (
                         <div class="rounded-[10px] border border-gray-200 bg-white px-3.5 py-3">
                           <p class={cardLabelCls} style={mono}>Proper shipping name</p>
-                          <p class="mt-1 text-sm font-semibold text-gray-900">{t.name}</p>
+                          <p class="mt-1 text-sm font-semibold text-gray-900">{t.variants[0].name}</p>
                         </div>
                       )}
                       <div class="rounded-[10px] border border-gray-200 bg-white px-3.5 py-3">
                         <p class={cardLabelCls} style={mono}>Class · PG</p>
-                        <p class="mt-1 text-[15px] font-semibold text-gray-900" style={mono}>{t.class}{t.pg ? ` · ${t.pg}` : ''}</p>
+                        <p class="mt-1 text-[15px] font-semibold text-gray-900" style={mono}>{t.class}{pgLabel(t) ? ` · ${pgLabel(t)}` : ''}</p>
                       </div>
-                      {t.code && (
+                      {sharedCode(t) && (
                         <div class="rounded-[10px] border border-gray-200 bg-white px-3.5 py-3">
                           <p class={cardLabelCls} style={mono}>Classification code</p>
-                          <p class="mt-1 text-[15px] font-semibold text-gray-900" style={mono}>{t.code}</p>
+                          <p class="mt-1 text-[15px] font-semibold text-gray-900" style={mono}>{sharedCode(t)}</p>
                         </div>
                       )}
-                      {t.cat != null && (
+                      {sharedCat(t) != null && (
                         <div class="rounded-[10px] border border-gray-200 bg-white px-3.5 py-3">
                           <p class={cardLabelCls} style={mono}>Transport category</p>
-                          <p class="mt-1 text-[15px] font-semibold text-gray-900" style={mono}>{t.cat}</p>
+                          <p class="mt-1 text-[15px] font-semibold text-gray-900" style={mono}>{sharedCat(t)}</p>
                         </div>
                       )}
                       {t.labels.length > 0 && (
@@ -1561,6 +1661,34 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
                       {/* Tunnel-restriction letter + Limited Quantity cards join
                           this grid at their import — tunnel_code in the DB is the
                           KEMLER number (rendered on the plate), not the letter. */}
+                    </div>
+
+                    {/* ⚠ Примечание из колонки группы упаковки — «CARRIAGE PROHIBITED»
+                        у UN 2186, «NOT SUBJECT TO ADR» у UN 1910. Отдельной плашкой,
+                        а НЕ в строке «Class · PG»: это не группа упаковки. */}
+                    {pgNotes(t).map((n) => (
+                      <p class="mt-2.5 rounded-[10px] border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] font-semibold text-amber-900">
+                        ADR Table A, packing-group column: <span style={mono}>{n}</span>
+                      </p>
+                    ))}
+
+                    {/* Несколько строк Таблицы A под одним номером — концентрации
+                        и группы упаковки. Это и есть настоящее различие между ними. */}
+                    {t.variants.length > 1 && (
+                      <div class="mt-2.5 overflow-hidden rounded-[10px] border border-gray-200 bg-white">
+                        <p class="border-b border-slate-100 bg-slate-50 px-3.5 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-500" style={mono}>
+                          {t.variants.length} ADR entries under UN {t.un}
+                        </p>
+                        {t.variants.map((v) => (
+                          <p class="flex gap-3 border-b border-slate-100 px-3.5 py-2.5 last:border-b-0">
+                            <span class="min-w-[54px] shrink-0 text-[12px] font-semibold text-slate-500" style={mono}>
+                              {v.pg ? `PG ${v.pg}` : v.note ? '—' : ''}
+                            </span>
+                            <span class="text-[13px] leading-relaxed text-slate-700">{v.name ?? '—'}</span>
+                          </p>
+                        ))}
+                      </div>
+                    )}
                     </div>
 
                     {t.kemler && (

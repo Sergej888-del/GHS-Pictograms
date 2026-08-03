@@ -31,6 +31,11 @@ const STATIC_PAGES = [
   { url: '/label-constructor/', changefreq: 'weekly', priority: '0.85' },
   { url: '/pictogram-selector/', changefreq: 'weekly', priority: '0.85' },
   { url: '/compliance/', changefreq: 'weekly', priority: '0.9' },
+  // ⚠ session 32: юридические страницы отсутствовали в sitemap, хотя индексируются
+  // и на них ведут ссылки из подвала. Нашла проверка sitemap-both-ways в check-seo.
+  { url: '/privacy/', changefreq: 'yearly', priority: '0.3' },
+  { url: '/terms/', changefreq: 'yearly', priority: '0.3' },
+  { url: '/affiliate-disclosure/', changefreq: 'yearly', priority: '0.3' },
 ];
 
 const GHS_PAGES = GHS_CODES.map(code => ({

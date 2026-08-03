@@ -15,6 +15,13 @@ import { supabase } from '../../lib/supabase'
 import { truncateMetaDescription } from '../../lib/metaDescription'
 import { splitClpNotation, hasClpNotation } from '../../lib/clpNotation'
 import { hCodeFromSlug, hHref, hSlug } from '../../lib/hStatementSlug'
+// ⚠ «Падать громко на ОШИБКЕ, деградировать тихо на ПУСТОТЕ» — session 31.
+// До session 32 каждый запрос этой страницы был написан как `const { data } = …`,
+// и отказ сети превращался не в ошибку, а в пропавший блок. Хуже: у `rowRes`
+// отказ означал `!rowRes.data`, то есть страница отдавала РЕДИРЕКТ на хаб —
+// сборка молча выкатила бы 108 редиректов вместо 108 страниц.
+// Разбор: claude/silent-supabase-failures.md.
+import { must, mustSingle } from '../../lib/mustQuery'
 
 const SITE = 'https://ghspictograms.com'
 const GHSSYMBOLS = 'https://ghssymbols.com'
@@ -22,7 +29,8 @@ const COLLAPSE_AT = 100
 const PAGE = 1000
 
 export async function getStaticPaths() {
-  const { data } = await supabase.from('h_statements').select('code').order('code')
+  // ⚠ Отказ здесь давал бы НОЛЬ страниц H-кодов, и сборка считалась бы успешной.
+  const data = must('h_statements (getStaticPaths)', await supabase.from('h_statements').select('code').order('code'))
   // ⚠ Параметр маршрута — СЛАГ, не код: у девяти суффиксных кодов Annex VI они
   // расходятся, иначе H360Fd и H360FD пишутся в одну папку. См. lib/hStatementSlug.ts.
   return (data ?? []).map((r: { code: string }) => ({ params: { code: hSlug(r.code) } }))
@@ -63,11 +71,14 @@ const [rowRes, jurisRes, linkRes, comboRes, revRes, mapRes, allCodesRes, countsR
     supabase.from('sds_pages').select('slug, cas_number').eq('status', 'live'),
   ])
 
-if (!rowRes.data) {
+// ⚠ Отказ запроса и «кода нет в реестре» — РАЗНЫЕ вещи, и раньше они сливались
+// в один редирект. mustSingle роняет сборку на ошибке и пропускает пустоту.
+const hRow = mustSingle(`h_statements(${code})`, rowRes)
+if (!hRow) {
   return Astro.redirect('/h-statements/')
 }
 
-const h = rowRes.data as {
+const h = hRow as {
   code: string
   category: string
   text_en: string
@@ -84,7 +95,7 @@ const hasVerbatim = plain !== h.text_en
 const notation = splitClpNotation(h.text_en, 'h')
 const showNotation = hasClpNotation(h.text_en, 'h')
 
-const juris = (jurisRes.data ?? []) as {
+const juris = (must('statement_jurisdictions', jurisRes) ?? []) as {
   id: string
   label: string
   sublabel: string
@@ -93,14 +104,14 @@ const juris = (jurisRes.data ?? []) as {
   note: string | null
 }[]
 const jStatus = new Map(
-  ((linkRes.data ?? []) as { jurisdiction: string; status: string; replaced_by: string | null }[]).map((r) => [
+  ((must('h_statement_jurisdiction', linkRes) ?? []) as { jurisdiction: string; status: string; replaced_by: string | null }[]).map((r) => [
     r.jurisdiction,
     r,
   ])
 )
 const liveIn = juris.filter((j) => jStatus.get(j.id)?.status === 'current')
 
-const combos = (comboRes.data ?? []) as {
+const combos = (must('h_statement_combinations', comboRes) ?? []) as {
   code: string
   components: string[]
   text_en: string
@@ -117,14 +128,17 @@ type MapRow = {
   pictogram_code: string | null
   signal_word: string | null
 }
-const maps = (mapRes.data ?? []) as MapRow[]
+const maps = (must('hazard_category_mapping', mapRes) ?? []) as MapRow[]
 let hazardClass: { name_en: string; ghs_chapter: string | null } | null = null
 if (maps.length) {
-  const { data: cls } = await supabase
-    .from('hazard_class_catalog')
-    .select('id, name_en, ghs_chapter')
-    .eq('id', maps[0].hazard_class_id)
-    .maybeSingle()
+  const cls = mustSingle(
+    `hazard_class_catalog(${maps[0].hazard_class_id})`,
+    await supabase
+      .from('hazard_class_catalog')
+      .select('id, name_en, ghs_chapter')
+      .eq('id', maps[0].hazard_class_id)
+      .maybeSingle(),
+  )
   hazardClass = (cls as { name_en: string; ghs_chapter: string | null } | null) ?? null
 }
 const categories = [...new Set(maps.map((m) => m.category_code))]
@@ -154,7 +168,7 @@ const REVISIONS: [number, number][] = [
   [10, 2023],
   [11, 2025],
 ]
-const revRows = (revRes.data ?? []) as { revision: number; year: number; status: string }[]
+const revRows = (must('h_statement_revisions', revRes) ?? []) as { revision: number; year: number; status: string }[]
 const revByNum = new Map(revRows.map((r) => [r.revision, r.status]))
 const firstRev = h.un_first_revision
 const delRev = h.un_deleted_revision
@@ -196,7 +210,7 @@ if (firstRev === null) {
 const unReplacement = jStatus.get('UN_GHS_11')?.replaced_by ?? null
 
 // ── Соседние коды: внутри своей категории ───────────────────────────────────
-const allCodes = (allCodesRes.data ?? []) as {
+const allCodes = (must('h_statements (all)', allCodesRes) ?? []) as {
   code: string
   category: string
   text_plain: string | null
@@ -208,7 +222,7 @@ const prev = idx > 0 ? siblings[idx - 1] : null
 const next = idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1] : null
 
 const total =
-  ((countsRes.data ?? []) as { code: string; kind: string; substances: number }[]).find(
+  ((must('get_statement_counts', countsRes) ?? []) as { code: string; kind: string; substances: number }[]).find(
     (r) => r.kind === countsKind && r.code === code
   )?.substances ?? 0
 
@@ -226,12 +240,19 @@ type Sub = {
 const subs: Sub[] = []
 if (total > 0) {
   for (let from = 0; ; from += PAGE) {
-    const { data: chunk } = await supabase
-      .from('substances')
-      .select('cas_number, index_number, common_name, iupac_name')
-      .contains(subsColumn, [code])
-      .order('index_number')
-      .range(from, from + PAGE - 1)
+    // ⚠⚠ Здесь отказ был особенно коварен: `if (!chunk?.length) break` не
+    // отличал «строки кончились» от «запрос упал», и список веществ молча
+    // обрывался на границе страницы — у H400 их 1129, то есть счётчик над
+    // списком показывал бы 1129, а сам список 1000 (session 32).
+    const chunk = must(
+      `substances chunk ${from} for ${code}`,
+      await supabase
+        .from('substances')
+        .select('cas_number, index_number, common_name, iupac_name')
+        .contains(subsColumn, [code])
+        .order('index_number')
+        .range(from, from + PAGE - 1),
+    )
     if (!chunk?.length) break
     subs.push(...(chunk as Sub[]))
     if (chunk.length < PAGE) break
@@ -244,7 +265,7 @@ const clean = (s: string) => s.replace(/\r?\n+/g, '; ').replace(/\s+/g, ' ').tri
 const nameOf = (s: Sub) => clean(s.common_name || s.iupac_name)
 
 const slugByCas = new Map(
-  ((sdsRes.data ?? []) as { slug: string; cas_number: string | null }[])
+  ((must('sds_pages (live)', sdsRes) ?? []) as { slug: string; cas_number: string | null }[])
     .filter((r) => r.cas_number)
     .map((r) => [r.cas_number as string, r.slug])
 )
