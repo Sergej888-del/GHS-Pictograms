@@ -292,6 +292,8 @@ interface Check {
 type SdsPage = { slug: string; cas_number: string | null }
 type Response = {
   cas_number: string
+  cameo_chem_id: number | null
+  cameo_name: string | null
   first_aid: string | null
   fire_haz: string | null
   fire_fight: string | null
@@ -308,11 +310,51 @@ async function sdsData() {
   const pages = await selectAll<SdsPage>('sds_pages', 'slug, cas_number', (q) => q.eq('status', 'live'))
   const resp = await selectAll<Response>(
     'substance_response',
-    'cas_number, first_aid, fire_haz, fire_fight, non_fire_resp, idlh_value, niosh_pgd_file',
+    'cas_number, cameo_chem_id, cameo_name, first_aid, fire_haz, fire_fight, non_fire_resp, idlh_value, niosh_pgd_file',
   )
   const byCas = new Map(resp.map((r) => [r.cas_number, r]))
   sdsCache = { pages, byCas }
   return sdsCache
+}
+
+// ───────────── Курируемый выбор записи CAMEO (session 33) ─────────────
+//
+// За 249 CAS в CAMEO стоит больше одной записи, и тексты §4/§5/§6 у них разные:
+// у азотной кислоты — красная дымящая против обычной, у никеля — пирофорный
+// катализатор Ренея против металла. Импорт брал наименьший chem_id, то есть по
+// сути случайную запись. Теперь запись выбирается вручную и лежит в
+// substance_cameo_choice; проверки ниже требуют, чтобы у КАЖДОЙ живой страницы
+// с аварийными данными выбор существовал и совпадал с тем, что реально
+// импортировано. Строка excluded = true — это тоже выбор: «подходящей записи в
+// CAMEO нет, данные не берём» (оксид железа: единственная запись — IRON OXIDE,
+// SPENT, самовозгорающаяся масса очистки газа).
+type CameoChoice = { cas_number: string; chem_id: number | null; chosen_name: string | null; excluded: boolean }
+
+let choiceCache: Map<string, CameoChoice> | null = null
+
+async function cameoChoices(): Promise<Map<string, CameoChoice>> {
+  if (choiceCache) return choiceCache
+  const rows = await selectAll<CameoChoice>(
+    'substance_cameo_choice',
+    'cas_number, chem_id, chosen_name, excluded',
+    (q) => q.order('cas_number'),
+  )
+  // ⚠ RLS без политики отдаёт anon пустую выборку, а не ошибку — урок session 21
+  // и повтор 2026-08-03 на substance_cas_alias. Пустая таблица роняет прогон.
+  assertNonEmpty('sds-cameo-choice', 'substance_cameo_choice', rows)
+  choiceCache = new Map(rows.map((r) => [r.cas_number, r]))
+  return choiceCache
+}
+
+/** Обратно из HTML-эскейпа: имена записей CAMEO содержат ' и & (4,4'-…). */
+function unescapeHtml(s: string): string {
+  return s
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
 }
 
 /** Слаги live-страниц, у которых выполняется предикат по substance_response. */
@@ -860,6 +902,126 @@ const CHECKS: Check[] = [
     title: 'Section 6 — Spill and leak response',
     run: async () =>
       comparePageSets('sds-s6', 'SDS', 'sds', ['id="s6"'], await sdsSlugsWhere((r) => has(r?.non_fire_resp))),
+  },
+  {
+    // ⚠⚠ Главная защита от дефекта session 32: аварийные тексты одного продукта
+    // на странице другого. Импорт без строки выбора запрещён — иначе он снова
+    // возьмёт наименьший chem_id, и никель снова получит тексты Ренея.
+    id: 'sds-cameo-choice',
+    group: 'SDS',
+    title: 'Запись CAMEO выбрана курируемо и совпадает с импортом',
+    run: async () => {
+      const { pages, byCas } = await sdsData()
+      const choices = await cameoChoices()
+      const noChoice: string[] = []
+      const drifted: string[] = []
+      const excludedButPresent: string[] = []
+      let checked = 0
+      for (const p of pages) {
+        if (!p.cas_number) continue
+        const r = byCas.get(p.cas_number)
+        const c = choices.get(p.cas_number)
+        if (!r) {
+          // Данных нет — выбор нужен только если он объявлен исключением.
+          if (c && !c.excluded) noChoice.push(`${p.slug}: выбор есть (${c.chem_id}), а строки в substance_response нет`)
+          continue
+        }
+        checked++
+        if (!c) {
+          noChoice.push(`${p.slug} (${p.cas_number}): импортирована запись ${r.cameo_chem_id}, курируемого выбора нет`)
+          continue
+        }
+        if (c.excluded) {
+          excludedButPresent.push(`${p.slug}: помечен excluded, но §4-§6 импортированы (${r.cameo_chem_id})`)
+          continue
+        }
+        if (c.chem_id !== r.cameo_chem_id) {
+          drifted.push(`${p.slug}: выбрано ${c.chem_id} (${c.chosen_name}), импортировано ${r.cameo_chem_id} (${r.cameo_name})`)
+        }
+      }
+      const detail = [...noChoice, ...drifted, ...excludedButPresent]
+      const ok = detail.length === 0
+      return {
+        id: 'sds-cameo-choice',
+        group: 'SDS',
+        ok,
+        headline: ok
+          ? `${checked} страниц с §4-§6, у каждой выбор записи CAMEO явный и совпадает с импортом`
+          : `${detail.length} расхождений выбора записи CAMEO`,
+        detail: ok ? [`substance_cameo_choice: ${choices.size} строк`] : detail.slice(0, 20),
+      }
+    },
+  },
+  {
+    // Подпись «§4-§6 воспроизводят запись X» — это не украшение. У формальдегида
+    // §9 описывает газ (т. кип. -21 C), а §4-§6 — 37-50 % раствор, потому что
+    // чистого газа в CAMEO нет вовсе. Без подписи читатель этого не увидит.
+    id: 'sds-cameo-entry-shown',
+    group: 'SDS',
+    title: 'Section 4 — на странице напечатано имя записи CAMEO',
+    run: async () => {
+      const { pages, byCas } = await sdsData()
+      const expected = new Map<string, string[]>(
+        pages.map((p) => {
+          const r = p.cas_number ? byCas.get(p.cas_number) : undefined
+          // Подпись живёт внутри §4, поэтому ждём её ровно там, где есть first_aid.
+          return [p.slug, r && has(r.first_aid) && r.cameo_name ? [r.cameo_name] : []]
+        }),
+      )
+      return compareValueSets(
+        'sds-cameo-entry-shown',
+        'SDS',
+        'sds',
+        // \s* между текстом и тегом: Astro волен перенести строку на границе
+        // выражения, и жёсткий пробел дал бы ложную тревогу вместо находки.
+        (html) => rxAll(html, /reproduce the CAMEO Chemicals entry\s*<strong>([^<]+)<\/strong>/g).map(unescapeHtml),
+        expected,
+        'имён записи',
+      )
+    },
+  },
+  {
+    // Второй дефект того же импорта: реактивные группы собирались объединением
+    // по ВСЕМ записям CAS, поэтому у чистого вещества появлялись свойства его
+    // смесей (у едкого натра — гидриды металлов от раствора с боргидридом).
+    // Обратная сторона нашлась в session 33: у 22 живых страниц групп не было
+    // вообще, включая аммиачную селитру и оксид кальция, и калькулятор
+    // совместимости про них молчал. Группы питают §7, §10 и калькулятор, так что
+    // пустота здесь — не косметика.
+    id: 'sds-cameo-groups',
+    group: 'SDS',
+    title: 'У выбранной записи CAMEO есть реактивные группы в базе',
+    run: async () => {
+      const choices = await cameoChoices()
+      const links = await selectAll<{ cas_number: string; rg_id: number }>(
+        'substance_reactive_group_link',
+        'cas_number, rg_id',
+        (q) => q.order('cas_number'),
+      )
+      assertNonEmpty('sds-cameo-groups', 'substance_reactive_group_link', links)
+      const byCas = new Map<string, number>()
+      for (const l of links) byCas.set(l.cas_number, (byCas.get(l.cas_number) ?? 0) + 1)
+      const { pages } = await sdsData()
+      const empty: string[] = []
+      let checked = 0
+      for (const p of pages) {
+        if (!p.cas_number) continue
+        const c = choices.get(p.cas_number)
+        if (!c || c.excluded) continue
+        checked++
+        if (!byCas.get(p.cas_number)) empty.push(`${p.slug} (${p.cas_number}): выбрана ${c.chosen_name}, групп нет`)
+      }
+      const ok = empty.length === 0
+      return {
+        id: 'sds-cameo-groups',
+        group: 'SDS',
+        ok,
+        headline: ok
+          ? `${checked} веществ с курируемым выбором, у всех есть реактивные группы`
+          : `${empty.length} веществ без реактивных групп`,
+        detail: ok ? ['группы питают §7, §10 и калькулятор совместимости'] : empty.slice(0, 20),
+      }
+    },
   },
   {
     // §8 (session 27). Секция рендерится там, где у вещества есть запись в NIOSH

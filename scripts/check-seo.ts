@@ -596,7 +596,20 @@ const CHECKS: Check[] = [
     run: () => {
       // Не ошибка сама по себе: noindex — законный инструмент. Но список должен
       // быть коротким и знакомым, иначе однажды под него уедет что-то нужное.
-      const list = PAGES.filter((p) => isNoindex(p.html)).map((p) => p.url).sort()
+      //
+      // ⚠ Урок session 33. Одних слов мало: /storage-compatibility/compressed-gases/
+      // насчитала 11 052 слова, и это выглядело как «забыли снять флаг». На деле
+      // 275 из них — ссылки на вещества, а собственного текста ~835 слов: прозы
+      // у страницы нет вовсе, и noindex стоит правильно. Поэтому рядом со словами
+      // печатается число внутренних ссылок — «много слов при многих ссылках» это
+      // перечень, а не статья, и решать по одному счётчику слов нельзя.
+      const list = PAGES.filter((p) => isNoindex(p.html))
+        .map((p) => {
+          const words = p.html.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length
+          const links = internalLinks(p.html).length
+          return `${p.url} — ${words} слов, ${links} внутр. ссылок`
+        })
+        .sort()
       return {
         id: 'noindex-inventory',
         group: 'Обход',

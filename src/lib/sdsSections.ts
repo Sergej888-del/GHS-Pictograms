@@ -110,7 +110,10 @@ export const SDS_SECTIONS: SdsSectionMeta[] = [
     answer:
       'What an untrained bystander should do in the first minutes after eye, skin, inhalation or ingestion exposure — and what a doctor needs to know.',
     anchor: '#s4',
-    anchorCoverage: 99,
+    // 99 -> 98 (session 33): у оксида железа §4/§5/§6 сняты. Единственная запись
+    // CAMEO за CAS 1309-37-1 — IRON OXIDE, SPENT, самовозгорающаяся масса
+    // очистки газа; к пигментному Fe2O3 не относится.
+    anchorCoverage: 98,
   },
   {
     n: 5,
@@ -124,7 +127,10 @@ export const SDS_SECTIONS: SdsSectionMeta[] = [
     answer:
       'What to extinguish the fire with, what must never be used, what the fire itself releases, and what protection firefighters need.',
     anchor: '#s5',
-    anchorCoverage: 93,
+    // 93 -> 91 (session 33): минус оксид железа и минус никель. У курируемой
+    // записи 17434 NICKEL нет текстов тушения — раньше сюда попадали тексты
+    // RANEY NICKEL, пирофорного катализатора.
+    anchorCoverage: 91,
   },
   {
     n: 6,
@@ -138,7 +144,8 @@ export const SDS_SECTIONS: SdsSectionMeta[] = [
     answer:
       'How to contain and clean up a spill without making it worse — separately for people who happen to be there and for trained responders.',
     anchor: '#s6',
-    anchorCoverage: 91,
+    // 91 -> 89 (session 33): те же два вещества, что и у §5.
+    anchorCoverage: 89,
   },
   {
     n: 7,
@@ -166,7 +173,9 @@ export const SDS_SECTIONS: SdsSectionMeta[] = [
     answer:
       'The occupational exposure limits that apply, and the engineering controls and personal protective equipment that keep workers under them.',
     anchor: '#s8',
-    anchorCoverage: 76,
+    // 76 -> 75 (session 33): у оксида железа вместе со строкой substance_response
+    // ушёл и niosh_pgd_file (npgd0344), а §8 держится именно на нём.
+    anchorCoverage: 75,
   },
   {
     n: 9,

@@ -67,12 +67,18 @@ export async function getStaticPaths() {
   // rows), not substances.cas_number, which is truncated for those five.
   // prot_clothing / health_haz / description / air_water_reactions are in the
   // table but deliberately not selected — nothing renders them yet.
+  // ⚠ cameo_name IS selected (session 33): §4–§6 must say WHICH CAMEO entry the
+  // text describes. CAMEO stores several entries per CAS (solution / mixture /
+  // refrigerated / molten), and for some substances no entry describes the pure
+  // substance at all — formaldehyde is only ever a solution there. Naming the
+  // entry is what keeps the page honest when the form differs from §9.
+  // The choice itself is curated in substance_cameo_choice, never automatic.
   const responses = must(
     'substance_response',
     await supabase
       .from('substance_response')
       .select(
-        'cas_number, first_aid, first_aid_src, fire_haz, fire_haz_src, fire_fight, fire_fight_src, non_fire_resp, non_fire_resp_src, isolation, isolation_src, erg_guide_no, erg_guide_title, idlh_value, idlh_unit, idlh_note, niosh_pgd_file',
+        'cas_number, cameo_name, first_aid, first_aid_src, fire_haz, fire_haz_src, fire_fight, fire_fight_src, non_fire_resp, non_fire_resp_src, isolation, isolation_src, erg_guide_no, erg_guide_title, idlh_value, idlh_unit, idlh_note, niosh_pgd_file',
       ),
   )
   const respMap: Record<string, any> = {}
@@ -579,6 +585,18 @@ function rRoutes(t?: string | null): { route: string; text: string }[] {
 }
 function rSrc(src?: string | null): string {
   return `Source: ${src ?? 'CAMEO Chemicals'} — via CAMEO Chemicals (NOAA), public domain.`
+}
+// §4–§6 attribution (session 33). CAMEO keys its response data to a PRODUCT
+// entry, not to a substance: 249 CAS numbers carry more than one entry, and the
+// wording of first aid, fire fighting and spill response can differ between
+// them. Which entry a page uses is a curated decision (substance_cameo_choice);
+// this line makes that decision visible to the reader, because the entry does
+// not always match the form §9 describes — formaldehyde is a gas in §9 and a
+// 37-50 % solution in §4-§6, and CAMEO has no entry for the pure gas at all.
+// Also appended to the grey source line of §5 and §6.
+const cameoEntry: string | null = response?.cameo_name ?? null
+function rSrcEntry(src?: string | null): string {
+  return cameoEntry ? `${rSrc(src)} Entry: ${cameoEntry}.` : rSrc(src)
 }
 const faRoutes = rRoutes(response?.first_aid)
 const hasFirstAid = Boolean(response?.first_aid)
@@ -1210,6 +1228,16 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
               centre or the supplier's safety data sheet.
             </p>
           </div>
+          {cameoEntry && (
+            <div class="mt-2.5 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <p class="text-[12.5px] leading-relaxed text-gray-700">
+                §4–§6 below reproduce the CAMEO Chemicals entry <strong>{cameoEntry}</strong>. CAMEO
+                publishes response data per product entry, so the entry can describe a solution, a
+                refrigerated liquid or a molten form rather than the pure substance in §9 — check it
+                matches what you are handling.
+              </p>
+            </div>
+          )}
           {faRoutes.length > 0 ? (
             <div class="mt-5 grid gap-2.5 sm:grid-cols-2">
               {faRoutes.map((r: any) => (
@@ -1262,7 +1290,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
               <div set:html={rBlock(response.fire_fight)} />
             </div>
           )}
-          <p class="mt-2 text-[10.5px] text-gray-400" style={mono}>{rSrc(response.fire_fight_src ?? response.fire_haz_src)}</p>
+          <p class="mt-2 text-[10.5px] text-gray-400" style={mono}>{rSrcEntry(response.fire_fight_src ?? response.fire_haz_src)}</p>
         </section>
       )}
 
@@ -1283,7 +1311,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
               <div set:html={rBlock(response.isolation)} />
             </div>
           )}
-          <p class="mt-2 text-[10.5px] text-gray-400" style={mono}>{rSrc(response.non_fire_resp_src ?? response.isolation_src)}</p>
+          <p class="mt-2 text-[10.5px] text-gray-400" style={mono}>{rSrcEntry(response.non_fire_resp_src ?? response.isolation_src)}</p>
         </section>
       )}
 
@@ -1878,6 +1906,12 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
               advice, and it does not replace emergency services, a poison centre or the supplier's safety
               data sheet.
             </p>
+            {cameoEntry && (
+              <p class="mt-2 text-[12px] leading-relaxed text-rose-100/70">
+                Text below is the CAMEO Chemicals entry <strong class="text-rose-50">{cameoEntry}</strong> —
+                confirm it matches the form in front of you.
+              </p>
+            )}
           </div>
 
           <section class="emg-sec">
