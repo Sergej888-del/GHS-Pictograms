@@ -87,11 +87,11 @@ async function fetchComplianceSitemapEntries(): Promise<
 async function fetchSdsSitemapEntries(): Promise<
   { url: string; changefreq: string; priority: string }[]
 > {
-  const { data } = await supabase
-    .from('sds_pages')
-    .select('slug')
-    .eq('status', 'live');
-  const live = data ?? [];
+  // ⚠ Падать громко на ошибке, деградировать тихо на пустоте (session 31).
+  // Молча пустой ответ здесь означает sitemap без 109 URL и никакого следа в логе.
+  const res = await supabase.from('sds_pages').select('slug').eq('status', 'live');
+  if (res.error) throw new Error(`sitemap: sds_pages — ${res.error.message}`);
+  const live = res.data ?? [];
   return [
     { url: '/sds/', changefreq: 'weekly', priority: '0.9' },
     ...live.map((p) => ({
@@ -128,10 +128,9 @@ async function fetchSdsSectionSitemapEntries(): Promise<
 async function fetchPStatementSitemapEntries(): Promise<
   { url: string; changefreq: string; priority: string }[]
 > {
-  const { data } = await supabase
-    .from('p_statements')
-    .select('code');
-  const codes = data ?? [];
+  const res = await supabase.from('p_statements').select('code');
+  if (res.error) throw new Error(`sitemap: p_statements — ${res.error.message}`);
+  const codes = res.data ?? [];
   return [
     { url: '/p-statements/', changefreq: 'weekly', priority: '0.9' },
     ...codes.map((c: { code: string }) => ({
@@ -146,10 +145,9 @@ async function fetchPStatementSitemapEntries(): Promise<
 async function fetchHStatementSitemapEntries(): Promise<
   { url: string; changefreq: string; priority: string }[]
 > {
-  const { data } = await supabase
-    .from('h_statements')
-    .select('code');
-  const codes = data ?? [];
+  const res = await supabase.from('h_statements').select('code');
+  if (res.error) throw new Error(`sitemap: h_statements — ${res.error.message}`);
+  const codes = res.data ?? [];
   return [
     { url: '/h-statements/', changefreq: 'weekly', priority: '0.9' },
     ...codes.map((c: { code: string }) => ({

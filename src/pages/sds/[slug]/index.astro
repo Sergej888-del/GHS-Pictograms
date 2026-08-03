@@ -36,6 +36,7 @@ import SdsManagerCard from '../../../components/SdsManagerCard.astro'
 import SharePage from '../../../components/SharePage.astro'
 import { shortForCode, urlForCode } from '../../../lib/storageClasses'
 import { supabase } from '../../../lib/supabase'
+import { must, mustSingle, mapLimit } from '../../../lib/mustQuery'
 import { hHref } from '../../../lib/hStatementSlug'
 
 const SITE = 'https://ghspictograms.com'
@@ -48,10 +49,13 @@ const TOOL = '/tools/chemical-storage-compatibility/'
 const EMERGENCY_ENABLED = true
 
 export async function getStaticPaths() {
-  const { data: pages } = await supabase
-    .from('sds_pages')
-    .select('slug, cas_number, substance_id, tier, template_variant, display_name, synonyms_display, synonyms_search, formula_display')
-    .eq('status', 'live')
+  const pages = must(
+    'sds_pages (live)',
+    await supabase
+      .from('sds_pages')
+      .select('slug, cas_number, substance_id, tier, template_variant, display_name, synonyms_display, synonyms_search, formula_display')
+      .eq('status', 'live'),
+  )
   if (!pages || pages.length === 0) return []
 
   // cas -> slug map so cross-links point at live SDS pages where they exist
@@ -63,11 +67,14 @@ export async function getStaticPaths() {
   // rows), not substances.cas_number, which is truncated for those five.
   // prot_clothing / health_haz / description / air_water_reactions are in the
   // table but deliberately not selected — nothing renders them yet.
-  const { data: responses } = await supabase
-    .from('substance_response')
-    .select(
-      'cas_number, first_aid, first_aid_src, fire_haz, fire_haz_src, fire_fight, fire_fight_src, non_fire_resp, non_fire_resp_src, isolation, isolation_src, erg_guide_no, erg_guide_title, idlh_value, idlh_unit, idlh_note, niosh_pgd_file',
-    )
+  const responses = must(
+    'substance_response',
+    await supabase
+      .from('substance_response')
+      .select(
+        'cas_number, first_aid, first_aid_src, fire_haz, fire_haz_src, fire_fight, fire_fight_src, non_fire_resp, non_fire_resp_src, isolation, isolation_src, erg_guide_no, erg_guide_title, idlh_value, idlh_unit, idlh_note, niosh_pgd_file',
+      ),
+  )
   const respMap: Record<string, any> = {}
   for (const r of responses ?? []) respMap[r.cas_number] = r
 
@@ -78,17 +85,22 @@ export async function getStaticPaths() {
   // Only rows WITH a PubChem CID are taken: that is exactly the 96 pages we hold
   // real structural data for. The other 13 (9 petroleum UVCBs, kaolin, crystalline
   // silica, carbon black, xylene) would produce a stub, so they get no section.
-  const { data: structures } = await supabase
-    .from('substance_structure')
-    .select(
-      'slug, structure_kind, svg_file, smiles, inchi, inchikey, molar_mass, pubchem_cid, vsepr_geometry, vsepr_bond_angle, valence_electrons, lone_pairs, functional_groups, hybridization',
-    )
-    .not('pubchem_cid', 'is', null)
+  const structures = must(
+    'substance_structure',
+    await supabase
+      .from('substance_structure')
+      .select(
+        'slug, structure_kind, svg_file, smiles, inchi, inchikey, molar_mass, pubchem_cid, vsepr_geometry, vsepr_bond_angle, valence_electrons, lone_pairs, functional_groups, hybridization',
+      )
+      .not('pubchem_cid', 'is', null),
+  )
   const structMap: Record<string, any> = {}
   for (const s of structures ?? []) structMap[s.slug] = s
 
-  return await Promise.all(
-    pages.map(async (page) => {
+  // ⚠ 6, а не Promise.all по всем 109: страница делает ~7 запросов, и залп
+  // из ~700 одновременных обращений валит пулер Supabase таймаутами.
+  // См. mapLimit в src/lib/mustQuery.ts и claude/silent-supabase-failures.md.
+  return await mapLimit(pages, 6, async (page) => {
       let substance: any = null
       let verdict: any = null
       let pictos: any[] = []
@@ -101,52 +113,68 @@ export async function getStaticPaths() {
       const structure = structMap[page.slug] ?? null
 
       if (page.substance_id) {
-        const { data: s } = await supabase
-          .from('substances')
-          .select(
-            'cas_number, ec_number, index_number, reach_reg_number, iupac_name, h_statement_codes, euh_codes, ghs_pictogram_codes, signal_word, p_statement_codes, molecular_formula, molecular_weight, melting_point, boiling_point, flash_point, density, lel_vol_pct, uel_vol_pct, autoignition_c, water_solubility, log_kow, ate_oral, ate_dermal, ate_inhalation_vapour, ate_inhalation_dust, ate_inhalation_gas, lc50_fish, ec50_daphnia, ec50_algae',
-          )
-          .eq('id', page.substance_id)
-          .single()
-        substance = s ?? null
+        substance = mustSingle(
+          `substances(id=${page.substance_id}) for ${page.slug}`,
+          await supabase
+            .from('substances')
+            .select(
+              'cas_number, ec_number, index_number, reach_reg_number, iupac_name, h_statement_codes, euh_codes, ghs_pictogram_codes, signal_word, p_statement_codes, molecular_formula, molecular_weight, melting_point, boiling_point, flash_point, density, lel_vol_pct, uel_vol_pct, autoignition_c, water_solubility, log_kow, ate_oral, ate_dermal, ate_inhalation_vapour, ate_inhalation_dust, ate_inhalation_gas, lc50_fish, ec50_daphnia, ec50_algae',
+            )
+            .eq('id', page.substance_id)
+            .single(),
+        )
 
         if (substance) {
-          const { data: v } = await supabase.rpc('get_storage_verdict', {
-            p_cas: substance.cas_number,
-          })
-          verdict = v ?? null
+          // ⚠ Это тот самый запрос, отказ которого 2026-08-03 снял §10 с 15 страниц.
+          verdict =
+            must(
+              `get_storage_verdict(${substance.cas_number}) for ${page.slug}`,
+              await supabase.rpc('get_storage_verdict', { p_cas: substance.cas_number }),
+            ) ?? null
 
           if (substance.ghs_pictogram_codes?.length) {
-            const { data: p } = await supabase
-              .from('pictograms_signals')
-              .select('code, name_en, svg_content')
-              .in('code', substance.ghs_pictogram_codes)
+            const p = must(
+              `pictograms_signals for ${page.slug}`,
+              await supabase
+                .from('pictograms_signals')
+                .select('code, name_en, svg_content')
+                .in('code', substance.ghs_pictogram_codes),
+            )
             pictos = (p ?? []).sort((a, b) => a.code.localeCompare(b.code))
           }
           if (substance.h_statement_codes?.length) {
-            const { data: h } = await supabase
-              .from('h_statements')
-              .select('code, text_en:text_plain')
-              .in('code', substance.h_statement_codes)
+            const h = must(
+              `h_statements for ${page.slug}`,
+              await supabase
+                .from('h_statements')
+                .select('code, text_en:text_plain')
+                .in('code', substance.h_statement_codes),
+            )
             hRows = (h ?? []).sort((a, b) => a.code.localeCompare(b.code))
           }
           // EUH supplementary statements (CLP Annex VI) — texts live in h_statements too.
           if (substance.euh_codes?.length) {
-            const { data: eh } = await supabase
-              .from('h_statements')
-              .select('code, text_en:text_plain')
-              .in('code', substance.euh_codes)
+            const eh = must(
+              `h_statements (EUH) for ${page.slug}`,
+              await supabase
+                .from('h_statements')
+                .select('code, text_en:text_plain')
+                .in('code', substance.euh_codes),
+            )
             euhRows = (eh ?? []).sort((a, b) => a.code.localeCompare(b.code))
           }
           if (substance.p_statement_codes?.length) {
-            const { data: p } = await supabase
-              .from('p_statements')
-              // ⚠ text_plain, не text_en: с session 19 text_en держит ДОСЛОВНУЮ
-              // формулировку CLP с пропусками («Wash … thoroughly after handling»,
-              // «IF IN EYES:»). Дословный вариант уместен только на /p-statements/<code>/,
-              // где рядом объясняется, что подставляет поставщик.
-              .select('code, text_en:text_plain')
-              .in('code', substance.p_statement_codes)
+            const p = must(
+              `p_statements for ${page.slug}`,
+              await supabase
+                .from('p_statements')
+                // ⚠ text_plain, не text_en: с session 19 text_en держит ДОСЛОВНУЮ
+                // формулировку CLP с пропусками («Wash … thoroughly after handling»,
+                // «IF IN EYES:»). Дословный вариант уместен только на /p-statements/<code>/,
+                // где рядом объясняется, что подставляет поставщик.
+                .select('code, text_en:text_plain')
+                .in('code', substance.p_statement_codes),
+            )
             pRows = (p ?? []).sort((a, b) => a.code.localeCompare(b.code))
           }
 
@@ -155,29 +183,34 @@ export async function getStaticPaths() {
           // Requires the anon read policy from supabase/rls_dg_read_v1.sql;
           // until it is applied this returns [] and we fall back to verdict.adr
           // (same cards, no Kemler plate) — the build never breaks either way.
+          // ⚠ Именно [], а не ошибка: RLS без политики отдаёт пустой набор строк,
+          // поэтому must() тут ничего не ломает и документированное поведение цело.
           // Look up by BOTH CAS forms: substances.cas_number (truncated for the
           // 5 recovered multi-CAS rows) and sds_pages.cas_number (the real CAS
           // the backfilled links are keyed by — e.g. xylene 1330-20-7).
           const casForms = [...new Set([substance.cas_number, page.cas_number].filter(Boolean))]
-          const { data: links } = await supabase
-            .from('substance_un_link')
-            .select('un_number')
-            .in('cas_number', casForms)
+          const links = must(
+            `substance_un_link for ${page.slug}`,
+            await supabase.from('substance_un_link').select('un_number').in('cas_number', casForms),
+          )
           const uns = (links ?? []).map((l: any) => l.un_number)
           if (uns.length) {
-            const { data: dg } = await supabase
-              .from('dg_substances')
-              .select('un_number, proper_shipping_name, transport_class, classification_code, packing_group, label_codes, transport_category, tunnel_code, adr_version')
-              .in('un_number', uns)
+            const dg = must(
+              `dg_substances for ${page.slug}`,
+              await supabase
+                .from('dg_substances')
+                .select('un_number, proper_shipping_name, transport_class, classification_code, packing_group, label_codes, transport_category, tunnel_code, adr_version')
+                .in('un_number', uns),
+            )
             dgRows = (dg ?? []).sort((a: any, b: any) => a.un_number.localeCompare(b.un_number))
           }
 
           const firstClass = verdict?.classes?.[0]
           if (firstClass) {
-            const { data: sim } = await supabase.rpc('get_class_substances', {
-              p_sc_code: firstClass,
-              p_limit: 9,
-            })
+            const sim = must(
+              `get_class_substances(${firstClass}) for ${page.slug}`,
+              await supabase.rpc('get_class_substances', { p_sc_code: firstClass, p_limit: 9 }),
+            )
             similar = (sim?.items ?? [])
               .filter((i: any) => i.cas !== substance.cas_number)
               .slice(0, 8)
@@ -188,8 +221,7 @@ export async function getStaticPaths() {
         params: { slug: page.slug },
         props: { page, substance, verdict, pictos, hRows, euhRows, pRows, similar, dgRows, liveMap, response, structure },
       }
-    }),
-  )
+  })
 }
 
 const { page, substance, verdict, pictos, hRows, euhRows, pRows, similar, dgRows, liveMap, response, structure } =
