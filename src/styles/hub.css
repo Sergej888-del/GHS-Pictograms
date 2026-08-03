@@ -2018,3 +2018,82 @@ button.hub-pair:last-child { border-bottom: 0; }
   letter-spacing: -0.02em;
   color: var(--ink);
 }
+
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   ⚠ session 30 · таблица хаба классов опасности (/hazard-classes/)
+
+   Три пробела дизайн-системы, вскрывшиеся на первой странице с шестью
+   колонками. Правила общие, не страничные: любая таблица хаба может ими
+   пользоваться.
+
+   1. .c-code задаёт только ширину и nowrap. Моноширинным было лишь `a` внутри,
+      поэтому код без ссылки (категория 1.1, 1A) выпадал в Inter и стоял рядом
+      с моно-navy H-кодом. Модификатор, а не правка самого .c-code: в той же
+      ячейке на страницах H/P лежит название юрисдикции («EU CLP»), которому
+      моноширинный шрифт не нужен.
+   2. .c-codes — ячейка со СПИСКОМ кодов. У .c-code для этого не годится
+      width:1% + nowrap: десять P-кодов в одну строку не помещаются.
+   3. <summary> без стиля рисуется дефолтным треугольником браузера. Канон
+      сайта для раскрывашки — .hub-toggle, но у него margin-top:22px, который
+      внутри ячейки не нужен.
+   ───────────────────────────────────────────────────────────────────────────── */
+.hub-table .c-code.is-code {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--navy);
+}
+
+.hub-table .c-codes {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.9;
+  color: var(--ink-2);
+}
+.hub-table .c-codes a { color: var(--teal-700); font-weight: 600; text-decoration: none; }
+.hub-table .c-codes a:hover { color: var(--navy); text-decoration: underline; }
+.hub-table .c-codes .plus { color: var(--line-2); margin: 0 1px; }
+/* Каждый код — отдельный inline-block: разделять пробелом нельзя, у комбинации
+   вида P370+P372+P380+P373 конец одного кода вплотную упирается в начало
+   следующего, и «P373P372» читается как один код. */
+.hub-table .c-codes .pset { display: inline-block; margin-right: 12px; }
+
+/* Колонка с пиктограммами: сам знак, а не его код — на сайте про пиктограммы
+   строка «GHS02» вместо символа читается как пропущенная картинка. Файлы лежат
+   в public/pictograms/, их всего девять на всю таблицу, так что браузер берёт
+   каждый из кэша; loading="lazy" не даёт грузить те, что ниже экрана. */
+.hub-table .c-picts { width: 1%; white-space: nowrap; }
+.hub-table .c-picts .pict-lnk {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-right: 12px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--navy);
+  text-decoration: none;
+}
+.hub-table .c-picts .pict-lnk:last-child { margin-right: 0; }
+.hub-table .c-picts .pict-lnk:hover { color: var(--teal-700); text-decoration: underline; }
+.hub-table .c-picts .pict-ico-xs { display: block; width: 30px; height: 30px; flex: 0 0 auto; }
+
+.hub-table summary.hub-toggle {
+  display: inline-block;
+  margin-top: 0;
+  list-style: none;
+  font-size: 11px;
+}
+.hub-table summary.hub-toggle::-webkit-details-marker { display: none; }
+.hub-table summary.hub-toggle::after { content: ' +'; opacity: .7; }
+.hub-table details[open] > summary.hub-toggle::after { content: ' \2212'; }
+.hub-table details > * + * { margin-top: 8px; }
+.hub-table details .c-txt-body { font-family: var(--font-body); font-size: 13.5px; line-height: 1.6; color: var(--ink-2); }
+
+/* «none» и «—» в ячейке — это заглушка вместо значения, а не подсказка под
+   абзацем. У .clp-hint display:block и margin-top:8px, из-за чего заглушка
+   уезжала на 8 px ниже базовой линии соседних ячеек той же строки. */
+.hub-table td > .clp-hint { display: inline; margin-top: 0; color: var(--ink-3); }

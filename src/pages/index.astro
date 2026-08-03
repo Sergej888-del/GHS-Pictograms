@@ -148,6 +148,16 @@ const otherTools = [
 // в Bing кластер H даёт примерно 207 кликов за квартал против трёх у P, и это
 // единственный справочник с историей ревизий по каждому коду.
 const referenceCards = [
+  // ⚠ session 30: хаб классов идёт первым — это верхний этаж иерархии
+  // (класс → категория → пиктограмма / H-код / P-коды), от которого зависят
+  // остальные три справочника ниже.
+  {
+    href: '/hazard-classes/',
+    accent: '#062a78',
+    tag: 'Classification',
+    title: 'Hazard classes and categories',
+    copy: 'All 33 GHS hazard classes and every CLP category in one table — with the pictogram, signal word, H-code and P-codes each category triggers.',
+  },
   {
     href: '/h-statements/',
     accent: '#1e3a8a',

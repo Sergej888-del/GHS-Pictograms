@@ -24,6 +24,26 @@ import { supabase } from '../../lib/supabase'
 import { truncateMetaDescription } from '../../lib/metaDescription'
 import { hHref } from '../../lib/hStatementSlug'
 
+/**
+ * ⚠ session 30: комбинированные P-коды своих страниц НЕ имеют.
+ * /p-statements/[code] строится из таблицы `p_statements` — это 118 одиночных
+ * кодов. Комбинации лежат в `p_statement_combinations` и показываются на
+ * страницах своих компонентов. Ссылка на комбинацию целиком
+ * (/p-statements/P301+P310/) отдавала 404 — на этой странице таких было 30.
+ * Канон сайта — индекс /p-statements/: комбинация разбирается на компоненты,
+ * каждый линкуется на свою страницу.
+ */
+const pParts = (code: string): string[] =>
+  code.split('+').map(part => part.trim()).filter(Boolean)
+
+/**
+ * ⚠ session 30: в колонке Category лежит либо код (1.1, 1A, 2), либо словесное
+ * имя категории («Unstable explosive», «Chemically unstable A»). Моноширинный
+ * стиль кода на фразу вешать нельзя — она читается как строка терминала, да и
+ * nowrap из .c-code растягивает колонку. Код — моно, имя — обычный текст.
+ */
+const isCatCode = (value: string): boolean => /^[\d.]+[A-Za-z]?$/.test(value.trim())
+
 export const prerender = true
 
 const SITE = 'https://ghspictograms.com'
@@ -449,21 +469,45 @@ const breadcrumbJson = JSON.stringify({
                   <tbody>
                     {cls.categories.filter(c => c.inClp).map(cat => (
                       <tr data-cat={cat.categoryCode}>
-                        <td class="c-code">{cat.categoryCode}</td>
-                        <td>
+                        <td class={isCatCode(cat.categoryCode) ? 'c-code is-code' : 'c-txt'}>{cat.categoryCode}</td>
+                        <td class="c-picts">
                           {cat.pictograms.length
-                            ? cat.pictograms.map(p => <a href={`/ghs/${p.toLowerCase()}/`}>{p} </a>)
+                            ? cat.pictograms.map(p => (
+                                <a class="pict-lnk" href={`/ghs/${p.toLowerCase()}/`}>
+                                  <img
+                                    class="pict-ico-xs"
+                                    src={`/pictograms/${p.toLowerCase()}.svg`}
+                                    width="30"
+                                    height="30"
+                                    loading="lazy"
+                                    decoding="async"
+                                    alt={`${p} pictogram`}
+                                  />
+                                  <span>{p}</span>
+                                </a>
+                              ))
                             : <span class="clp-hint">none</span>}
                         </td>
                         <td>{cat.signalWord ?? <span class="clp-hint">none</span>}</td>
                         <td class="c-code">
                           {cat.hCode ? <a href={hHref(cat.hCode)}>{cat.hCode}</a> : <span class="clp-hint">none</span>}
                         </td>
-                        <td>
+                        <td class="c-codes">
                           {cat.pCodes.length ? (
                             <details>
-                              <summary>{cat.pCodes.length} P-codes</summary>
-                              {cat.pCodes.map(p => <a href={`/p-statements/${p}/`}>{p} </a>)}
+                              <summary class="hub-toggle">{cat.pCodes.length} P-codes</summary>
+                              <div>
+                                {cat.pCodes.map(code => (
+                                  <span class="pset">
+                                    {pParts(code).map((part, j) => (
+                                      <>
+                                        {j > 0 && <span class="plus">+</span>}
+                                        <a href={`/p-statements/${part}/`}>{part}</a>
+                                      </>
+                                    ))}
+                                  </span>
+                                ))}
+                              </div>
                             </details>
                           ) : (
                             <span class="clp-hint">none</span>
@@ -472,9 +516,9 @@ const breadcrumbJson = JSON.stringify({
                         <td class="c-txt">
                           {cat.criteria.length ? (
                             <details>
-                              <summary>Show</summary>
+                              <summary class="hub-toggle">Criteria</summary>
                               {cat.criteria.map(cr => (
-                                <p>
+                                <p class="c-txt-body">
                                   {cr.criteria_en}
                                   {cr.label_clp_en && <span class="clp-hint"> — {cr.label_clp_en}</span>}
                                   {cr.footnote && <span class="clp-hint"> {cr.footnote}</span>}
@@ -520,7 +564,7 @@ const breadcrumbJson = JSON.stringify({
                 <tbody>
                   {noLabelCategories.map(c => (
                     <tr>
-                      <td class="c-code">{c.categoryCode}</td>
+                      <td class={isCatCode(c.categoryCode) ? 'c-code is-code' : 'c-txt'}>{c.categoryCode}</td>
                       <td class="c-txt">Classified in CLP, no label elements assigned by the regulation.</td>
                     </tr>
                   ))}
@@ -548,7 +592,7 @@ const breadcrumbJson = JSON.stringify({
                   {[...nonClpByClass.entries()].map(([className, cats]) => (
                     <tr>
                       <td class="c-txt">{className}</td>
-                      <td class="c-code">{cats.map(c => c.categoryCode).join(', ')}</td>
+                      <td class="c-code is-code">{cats.map(c => c.categoryCode).join(', ')}</td>
                     </tr>
                   ))}
                 </tbody>
