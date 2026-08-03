@@ -1,0 +1,325 @@
+---
+// SDS sections hub — /sds-sections/ (session 31).
+//
+// Head term of the cluster: `msds sections` 590, `sections of a sds` 390,
+// `sections of an sds` 320, `sds sheet sections` 90, plus the two OSHA counting
+// questions — 1 560 combined volume, more than any single section page.
+//
+// ⚠ The finder does not fetch or render anything: every term in SDS_FINDER is
+// printed into the HTML as a chip under its section, and the box only filters
+// what is already there. A list drawn by JS does not exist for a crawler, and
+// these ~200 terms are exactly the long-tail this hub is here to catch.
+import Layout from '../../layouts/Layout.astro'
+import SdsManagerCard from '../../components/SdsManagerCard.astro'
+import { getCollection } from 'astro:content'
+import { SDS_SECTIONS, SDS_GROUPS, SDS_FINDER, sdsSectionUrl } from '../../lib/sdsSections'
+
+const SITE = 'https://ghspictograms.com'
+const canonical = `${SITE}/sds-sections/`
+
+// A section is linkable only once its page exists — same rule as the route.
+const live = new Set(
+  (await getCollection('sdsSections', ({ data }) => !data.draft)).map((e) => e.data.n as number),
+)
+
+// Terms grouped under the section that owns them (first number = primary home).
+const termsBySection = new Map<number, string[]>()
+for (const t of SDS_FINDER) {
+  const primary = t.n[0]
+  const bucket = termsBySection.get(primary)
+  if (bucket) bucket.push(t.term)
+  else termsBySection.set(primary, [t.term])
+}
+
+const groupOrder = ['response', 'workplace', 'technical', 'lifecycle', 'admin'] as const
+
+const title = 'SDS Sections: All 16 Explained (MSDS Format)'
+const description =
+  'Every section of a safety data sheet, 1 to 16: what each must contain under REACH Annex II and OSHA HazCom, which are mandatory where, and where to find a specific item.'
+
+const faq = [
+  {
+    q: 'How many sections does an SDS have?',
+    a: 'Sixteen. The count and the order come from Annex 4 of the UN GHS and are the same worldwide: Identification, Hazards identification, Composition, First aid, Firefighting, Accidental release, Handling and storage, Exposure controls, Physical and chemical properties, Stability and reactivity, Toxicological information, Ecological information, Disposal, Transport, Regulatory information, Other information.',
+  },
+  {
+    q: 'How many sections does OSHA require on an SDS?',
+    a: 'OSHA enforces twelve of the sixteen: sections 1 to 11 and section 16. Sections 12 (Ecological information), 13 (Disposal considerations), 14 (Transport information) and 15 (Regulatory information) may appear on a US safety data sheet but are not enforced by OSHA, because those subjects fall to the EPA, the Department of Transportation and other agencies. In practice almost every commercial US sheet carries all sixteen anyway. Under REACH Annex II in the EU, all sixteen are mandatory.',
+  },
+  {
+    q: 'Are there 8 sections on each SDS?',
+    a: 'No — an SDS has sixteen sections. The confusion usually comes from the older Material Safety Data Sheet, which had no fixed section count before GHS, and from training material that covers only the first eight because those are the ones an operator reads during an incident.',
+  },
+  {
+    q: 'What are the most important sections of an SDS?',
+    a: 'It depends who is reading. In an emergency, sections 1 to 4 answer what it is, how bad it is, what is in it and what to do in the first minutes. For daily work, sections 7 and 8 govern handling, storage and protective equipment. For an auditor, section 16 comes first — the revision date tells you whether the rest of the document can be trusted. No section is optional in the EU.',
+  },
+  {
+    q: 'Is there a difference between MSDS sections and SDS sections?',
+    a: 'Yes. "MSDS" is the pre-GHS US term, and MSDS documents had no mandated section count, headings or order — content varied by supplier. The 16-section structure arrived with the UN GHS in 2003 and became US law through OSHA\'s 2012 HazCom rule, fully enforced from 1 June 2015. A document labelled "MSDS" today is either a legacy file or a loose use of the word; the sections you should be looking for are the sixteen below.',
+  },
+]
+
+const jsonLd: Record<string, unknown>[] = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: title,
+    description,
+    url: canonical,
+    numberOfItems: 16,
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: 'The 16 sections of a safety data sheet',
+    numberOfItems: 16,
+    itemListElement: SDS_SECTIONS.map((s) => ({
+      '@type': 'ListItem',
+      position: s.n,
+      name: `Section ${s.n} — ${s.short}`,
+      url: `${SITE}${sdsSectionUrl(s.n)}`,
+    })),
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faq.map((f) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a },
+    })),
+  },
+]
+---
+
+<Layout title={title} description={description} canonical={canonical}>
+  <section class="hub-hero tint-teal">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+
+    <div class="hub-wrap hub-hero-inner">
+      <p class="hub-hero-eyebrow">Reference · SDS format</p>
+      <h1>The 16 sections of a safety data sheet</h1>
+      <p class="hub-hero-sub">
+        The headings are identical worldwide — the content behind them is not. Every section below,
+        with what the EU and the US each require under it, and where to look for one specific item.
+      </p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">16 sections</span>
+        <span class="hub-hero-chip">All 16 mandatory in the EU</span>
+        <span class="hub-hero-chip">12 enforced by OSHA</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 01 · THE 16 SECTIONS -->
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">01 · The format</p>
+      <h2 class="hub-h2">All 16 sections, in order</h2>
+      <p class="hub-sub">
+        The section count and the order come from Annex 4 of the UN GHS. They are transposed into EU law by
+        REACH Annex II — as amended by Regulation (EU) 2020/878 — and into US law by OSHA at
+        29 CFR 1910.1200 Appendix D.
+      </p>
+
+      <div class="hub-table-wrap">
+        <table class="hub-table">
+          <thead>
+            <tr>
+              <th>§</th>
+              <th>Heading</th>
+              <th>What it answers</th>
+              <th>OSHA</th>
+            </tr>
+          </thead>
+          <tbody>
+            {SDS_SECTIONS.map((s) => (
+              <tr>
+                <td class="c-code is-code">{s.n}</td>
+                <td class="c-txt">
+                  {live.has(s.n)
+                    ? <a href={sdsSectionUrl(s.n)}><b>{s.short}</b></a>
+                    : <b>{s.short}</b>}
+                  <span class="verbatim">{SDS_GROUPS[s.group].label}</span>
+                </td>
+                <td class="c-txt">{s.answer}</td>
+                <td class="c-txt">
+                  {s.usMandatory
+                    ? <span class="sdss-flag yes">Mandatory</span>
+                    : <span class="sdss-flag no">Not enforced</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p class="juris-note">
+        <b>Sections 12 to 15 are not enforced by OSHA</b> — ecology, disposal, transport and wider chemical
+        law belong to the EPA, the Department of Transportation and other agencies, not to the Hazard
+        Communication Standard. They are still mandatory under REACH Annex II, and nearly every commercial
+        US sheet carries them anyway so that one document can travel.
+      </p>
+    </div>
+  </section>
+
+  <!-- 02 · FINDER -->
+  <section class="hub-sec-deep">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">02 · Find an item</p>
+      <h2 class="hub-h2">Which section is it in?</h2>
+      <p class="hub-sub">
+        Type what you are looking for — <code>gloves</code>, <code>flash point</code>,
+        <code>UN number</code>, <code>LD50</code>, <code>waste code</code> — and this points at the
+        section that carries it.
+      </p>
+
+      <div class="hub-panel sdss-find">
+        <div class="hub-panel-row">
+          <span class="hub-panel-label">Looking for</span>
+          <label for="sdss-q" class="sr-only">What are you looking for on the safety data sheet?</label>
+          <input
+            id="sdss-q"
+            class="hub-search-inline"
+            type="search"
+            placeholder="gloves, flash point, UN number, CAS, LD50…"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="sdss-find-out" id="sdss-out">
+          {SDS_SECTIONS.map((s) => {
+            const terms = termsBySection.get(s.n) ?? []
+            return terms.length > 0 ? (
+              <a
+                href={sdsSectionUrl(s.n)}
+                class="sdss-find-row"
+                data-terms={terms.join(' | ')}
+                data-n={s.n}
+              >
+                <span class="n">Section {s.n}</span>
+                <span>
+                  <span class="t">{s.short}</span>
+                  <span class="why">{terms.join(' · ')}</span>
+                </span>
+              </a>
+            ) : null
+          })}
+        </div>
+        <p class="sdss-find-none" id="sdss-none" hidden>
+          Nothing on the sheet is indexed under that word yet. The
+          <a href="/sds-sections/section-16-other-information/">section 16</a> abbreviations key is the
+          usual place to start when a term on a sheet is unfamiliar — and every section page below lists
+          its own subsections in full.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 · READING GROUPS -->
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">03 · How to read one</p>
+      <h2 class="hub-h2">The sections cluster by who reads them</h2>
+      <p class="hub-sub">
+        The order is not arbitrary. It runs from what someone needs in thirty seconds to what an auditor
+        checks last.
+      </p>
+      <div class="hub-cards">
+        {groupOrder.map((g) => {
+          const members = SDS_SECTIONS.filter((s) => s.group === g)
+          const range =
+            members.length === 1
+              ? `Section ${members[0].n}`
+              : `Sections ${members[0].n}–${members[members.length - 1].n}`
+          return (
+            <div class="hub-card static" style="--acc:#062a78;--acc-line:#bfdbfe;--acc-soft:#eff6ff;--acc-ink:#1d4ed8">
+              <p class="tag">{range}</p>
+              <h3>{SDS_GROUPS[g].label}</h3>
+              <p class="copy">
+                {SDS_GROUPS[g].who}. {members.map((m) => m.short).join(' · ')}
+              </p>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 · FAQ -->
+  <section class="hub-sec-b">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">04 · FAQ</p>
+      <h2 class="hub-h2">Frequently asked questions</h2>
+      <div class="hub-faq">
+        {faq.map((f) => (
+          <div class="hub-faq-item">
+            <p class="q">{f.q}</p>
+            <p class="a">{f.a}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <div class="hub-close-panel">
+        <div class="dots" aria-hidden="true"></div>
+        <h2>Looking at a real sheet, not the format?</h2>
+        <p>
+          The <a href="/sds/">SDS library</a> carries substance reference pages built on this structure —
+          harmonised classification from CLP Annex VI, a computed storage verdict, response data and
+          transport information. For the format itself in one continuous read, see
+          <a href="/compliance/sds/sds-format-16-sections-explained/">Safety data sheet format: 16 sections explained</a>.
+        </p>
+      </div>
+
+      <SdsManagerCard
+        service="management"
+        body="Knowing what belongs in each section is one problem; having the current revision of every sheet your site actually uses is another. Suppliers reissue whenever a classification, an exposure limit or a regulatory status moves, and an inspector asks for the sheet in force today. For keeping that library central, version-controlled and QR-accessible from the floor, the solution we recommend is SDS Manager. It also offers SDS authoring and a broader EHS suite."
+        href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=sdssechub"
+      />
+
+      <p class="hub-fine">
+        Reference aid only. This hub describes what the regulations require under each heading; it is not a
+        substitute for the safety data sheet of the product you hold, or for professional advice on
+        classification.
+      </p>
+    </div>
+  </section>
+
+  {jsonLd.map((block) => (
+    <script type="application/ld+json" set:html={JSON.stringify(block)} slot="head" />
+  ))}
+
+  <script is:inline>
+    ;(function () {
+      var q = document.getElementById('sdss-q')
+      var out = document.getElementById('sdss-out')
+      var none = document.getElementById('sdss-none')
+      if (!q || !out) return
+      var rows = Array.prototype.slice.call(out.querySelectorAll('.sdss-find-row'))
+      var blobs = rows.map(function (r) {
+        return (
+          (r.getAttribute('data-terms') || '') +
+          ' | ' +
+          (r.querySelector('.t') ? r.querySelector('.t').textContent : '')
+        ).toLowerCase()
+      })
+      q.addEventListener('input', function () {
+        var v = q.value.toLowerCase().replace(/\s+/g, ' ').trim()
+        var shown = 0
+        rows.forEach(function (r, i) {
+          var hit = !v || blobs[i].indexOf(v) > -1
+          r.hidden = !hit
+          if (hit) shown++
+        })
+        if (none) none.hidden = shown > 0
+      })
+    })()
+  </script>
+</Layout>

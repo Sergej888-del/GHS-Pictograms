@@ -3,7 +3,7 @@ title: "Safety Data Sheet Format: 16 Sections Explained"
 description: "Walk through every section of a 16-section SDS under UN GHS, OSHA HCS, and REACH 2020/878: what each must include, regional rules, common errors."
 slug: "sds-format-16-sections-explained"
 pubDate: 2026-05-09
-updatedDate: 2026-06-13
+updatedDate: 2026-08-03
 category: "compliance"
 pillar: "sds"
 type: "deep-dive"
@@ -19,6 +19,7 @@ keywords:
   - "sds sections"
   - "msds vs sds"
 relatedPages:
+  - "/sds-sections/"
   - "/compliance/sds/sds-authoring-software/"
   - "/compliance/un-ghs/un-ghs-implementation-by-country/"
   - "/compliance/osha-hcs/osha-hcs-2024-changes/"
@@ -143,214 +144,35 @@ Reading top to bottom, an emergency responder gets the first 8 sections quickly.
 
 ## The 16 sections, one by one
 
-### Section 1 — Identification
-
-The opening section identifies the substance or mixture and its supplier.
-
-**Required content:**
-- **Product identifier** — the same trade name, product code, or chemical name that appears on the label
-- **Other means of identification** — synonyms, CAS number, EC number, formula
-- **Recommended use and restrictions** — intended applications, plus statutory or supplier-recommended restrictions
-- **Supplier details** — full name, address, phone number, and email of the manufacturer, importer, or other responsible party
-- **Emergency phone number** — required by OSHA HCS to be available; a 24-hour emergency line is standard practice
-
-**EU specifics under Regulation (EU) 2020/878:** if the SDS covers a hazardous mixture with a UFI assigned under Annex VIII to CLP, the UFI must appear in subsection 1.1. If the substance includes one or more nanoforms, the word "nanoform" must appear in the product identifier.
-
-**Practical tip:** the trade name, product code, and revision date in Section 1 must match the purchase order and the physical label byte-for-byte. Typos here trigger automatic compliance rejections.
-
-### Section 2 — Hazard(s) Identification
-
-Section 2 communicates the hazard classification and the label elements derived from it.
-
-**Required content:**
-- **2.1 Classification** of the substance or mixture under GHS/CLP/HCS rules — every hazard class and category
-- **2.2 Label elements** — pictogram(s), signal word ("Danger" or "Warning"), all hazard (H) statements, and all precautionary (P) statements
-- **2.3 Other hazards** — including PBT (persistent, bioaccumulative, toxic) and vPvB (very persistent, very bioaccumulative) substances; under EU 2020/878, also endocrine-disrupting properties at concentrations of 0.1% by weight or higher
-
-**US specifics under OSHA HCS:** the US recognizes a "Hazards Not Otherwise Classified" (HNOC) category for hazards that do not fit any GHS class but where the manufacturer has evidence of harm. HNOC information goes in Section 2. The 2024 HCS final rule introduced new sub-sections covering chemicals under pressure and refined simple-asphyxiant disclosure — see our [OSHA HCS 2024 Changes](/compliance/osha-hcs/osha-hcs-2024-changes/) article for transition deadlines.
-
-**UN GHS Rev 11 update:** Annex 11 of the latest revision provides specific guidance on simple asphyxiants in Section 2. Details in [UN GHS Rev 11 Changes](/compliance/un-ghs/un-ghs-rev-11-changes/).
-
-**Practical tip:** the hazard classification in Section 2 must align mathematically with the ingredient mixture in Section 3. Auditors run consistency checks on this pair first.
-
-### Section 3 — Composition / Information on Ingredients
-
-Section 3 lists what is actually in the product.
-
-**Two sub-sections:**
-- **3.1 Substances** — for single-substance SDS: chemical name, CAS, EC, REACH registration number where available, identification of impurities and stabilizing additives that affect classification
-- **3.2 Mixtures** — for mixtures: each ingredient that is hazardous, listed with concentration or concentration range, plus identifiers and CLP classification
-
-**EU specifics under 2020/878:** Section 3 must now also include, where applicable, the Specific Concentration Limit, M-factor, Acute Toxicity Estimate, and particle characteristics for each listed ingredient. Concentration thresholds for when an ingredient must be listed have been tightened.
-
-**Practical tip:** the ATE values you put here are what your downstream user will plug into mixture classification software. The [ATE Calculator](/tools/ate-mixture-calculator/) shows how those numbers flow into final mixture classification.
-
-### Section 4 — First-Aid Measures
-
-Section 4 tells responders what to do for each route of exposure.
-
-**Sub-sections:**
-- **4.1 Description of first-aid measures** — by route: inhalation, skin contact, eye contact, ingestion
-- **4.2 Most important symptoms and effects** — both acute and delayed
-- **4.3 Indication of immediate medical attention and special treatment needed**
-
-**Practical tip:** match the wording to the hazard category. A Skin Corr. 1A substance demands "rinse with running water for at least 15 minutes" — not the generic "rinse if irritation occurs." Reviewers check this consistency between Section 2 classification and Section 4 wording.
-
-### Section 5 — Fire-Fighting Measures
-
-Section 5 supports fire response decisions.
-
-**Sub-sections:**
-- **5.1 Suitable extinguishing media** (and unsuitable media — water on a metal fire is a deadly mistake)
-- **5.2 Special hazards arising from the substance or mixture** — toxic combustion products (HF from fluorinated polymers, HCN from nitrogen-containing compounds, dioxins from chlorinated organics)
-- **5.3 Advice for firefighters** — PPE level (typically self-contained breathing apparatus and full protective gear), evacuation distances
-
-### Section 6 — Accidental Release Measures
-
-Section 6 covers spill response.
-
-**Sub-sections:**
-- **6.1 Personal precautions, protective equipment, emergency procedures**
-- **6.2 Environmental precautions** — preventing release to drains, waterways, soil
-- **6.3 Methods and material for containment and clean-up** — absorbents (vermiculite, sand, dedicated chemical sorbent), neutralization where applicable, decontamination of contaminated equipment
-
-### Section 7 — Handling and Storage
-
-Section 7 addresses normal operating conditions.
-
-**Sub-sections:**
-- **7.1 Precautions for safe handling** — ventilation, grounding for flammables, avoiding incompatibilities, hygiene practices
-- **7.2 Conditions for safe storage** — incompatible materials, ventilation requirements, container materials, temperature, humidity, sunlight
-- **7.3 Specific end uses** — for substances with REACH-registered exposure scenarios, this sub-section either points to the extended SDS annex or summarizes the operational conditions
-
-**Practical tip:** the storage incompatibility list here must match the storage matrix on the substance's hazard reference page. Cross-check against `/hazards/[cas]/` storage data on ghssymbols.com.
-
-### Section 8 — Exposure Controls / Personal Protection
-
-Section 8 quantifies exposure limits and specifies PPE.
-
-**Sub-sections:**
-- **8.1 Control parameters** — Occupational Exposure Limits (OEL/PEL/TLV in the US, EU IOELV and Member State limits in Europe, plus REACH Derived No-Effect Levels (DNEL) and Predicted No-Effect Concentrations (PNEC))
-- **8.2 Exposure controls** — engineering controls (local exhaust ventilation, closed systems), individual protection measures (eye, skin, respiratory PPE), with glove material recommendations including breakthrough time when relevant
-
-**Practical tip:** if the substance has a "skin" notation in OEL tables, declare it explicitly here. Missing skin notation is a frequent omission on imported SDS.
-
-### Section 9 — Physical and Chemical Properties
-
-Section 9 lists measured or predicted physical and chemical properties.
-
-**Sub-sections:**
-- **9.1 Information on basic physical and chemical properties** — physical state, color, odor, melting/freezing point, boiling point, flash point, evaporation rate, flammability, explosive limits, vapor pressure, vapor density, density, solubility, partition coefficient (log Kow), auto-ignition temperature, decomposition temperature, viscosity
-- **9.2 Other information** — under EU 2020/878, this sub-section must include specific physical-hazard endpoints from CLP Annex I Part 2 (such as those used for Aerosols or Self-Heating substances classification)
-
-**Format change in 2020/878:** the basic properties in 9.1 may now appear in any order and any format, as long as all required properties are present. Authors no longer need to maintain a fixed order if a different sequence reads more naturally.
-
-**Practical tip:** never leave a property blank. State "not applicable" with a reason ("substance is solid at room temperature — no flash point") or "no data available" with a justification. Empty fields fail audits.
-
-### Section 10 — Stability and Reactivity
-
-Section 10 covers chemical behavior under various conditions.
-
-**Sub-sections:**
-- **10.1 Reactivity** — general reactivity profile
-- **10.2 Chemical stability** — stable under normal conditions? polymerization risks?
-- **10.3 Possibility of hazardous reactions** — including conditions that trigger them
-- **10.4 Conditions to avoid** — heat, light, mechanical shock, static, specific gas atmospheres
-- **10.5 Incompatible materials** — strong oxidizers, strong acids, water, specific metals
-- **10.6 Hazardous decomposition products** — what forms when the substance burns, hydrolyzes, or photolyses
-
-### Section 11 — Toxicological Information
-
-Section 11 documents health hazards in technical detail.
-
-**Sub-section 11.1:** information on toxicological effects, organized by hazard class:
-- Acute toxicity (oral, dermal, inhalation LD50/LC50; ATE for the mixture)
-- Skin corrosion/irritation
-- Serious eye damage/irritation
-- Respiratory or skin sensitization
-- Germ cell mutagenicity
-- Carcinogenicity
-- Reproductive toxicity
-- STOT (single exposure)
-- STOT (repeated exposure)
-- Aspiration hazard
-
-**Sub-section 11.2 (NEW under EU 2020/878):** information on other hazards, primarily endocrine-disrupting properties for human health.
-
-**Practical tip:** the LD50 and LC50 numbers here flow into mixture classification calculations. For mixtures, the ATE values from supplier SDS power downstream classification — see how on the [ATE Calculator](/tools/ate-mixture-calculator/). For substances, the toxicology entry at [ghssymbols.com/hazards/](https://ghssymbols.com/hazards/) mirrors the data the supplier should report.
-
-### Section 12 — Ecological Information
-
-Section 12 covers environmental fate and effects.
-
-**Sub-sections:**
-- **12.1 Toxicity** — aquatic acute and chronic categories, terrestrial toxicity where relevant
-- **12.2 Persistence and degradability** — biodegradation half-life, hydrolysis
-- **12.3 Bioaccumulative potential** — log Kow, BCF
-- **12.4 Mobility in soil** — Koc value, leaching potential
-- **12.5 Results of PBT and vPvB assessment**
-- **12.6 Endocrine-disrupting properties** (NEW under EU 2020/878) — when applicable, addressing effects on non-target organisms
-- **12.7 Other adverse effects** — ozone depletion potential, photochemical ozone creation potential, global warming potential
-
-**OSHA position:** OSHA does not enforce Section 12 in the US — environmental matters fall under EPA jurisdiction — but most US authors include it for international coherence.
-
-### Section 13 — Disposal Considerations
-
-Section 13 advises on safe disposal.
-
-**Sub-section 13.1:** waste treatment methods, including:
-- Description of waste residues and information on safe handling
-- Disposal methods for the substance/mixture and any contaminated packaging
-- Reference to applicable waste codes (EU European Waste Catalogue codes; US RCRA hazardous waste codes; national equivalents elsewhere)
-
-**Practical tip:** disposal advice that violates the user's local waste regulations is one of the most common audit findings. A US-authored SDS recommending sewer disposal of a substance classified as hazardous waste under RCRA — or under the EU EWC — fails the local rule and exposes the supplier.
-
-### Section 14 — Transport Information
-
-Section 14 covers transport classification and dangerous-goods compliance.
-
-**Sub-sections:**
-- **14.1 UN number** — the four-digit identifier from the UN Model Regulations
-- **14.2 UN proper shipping name**
-- **14.3 Transport hazard class(es)** — including subsidiary risks
-- **14.4 Packing group** (I, II, or III, where applicable)
-- **14.5 Environmental hazards** — marine pollutant flag for sea transport
-- **14.6 Special precautions for user**
-- **14.7 Maritime transport in bulk** — specific information for IBC Code, IMSBC Code, IGC Code where the cargo is shipped in bulk
-
-**Mode-specific differences:** the same substance can have slightly different requirements under road (ADR in Europe, US DOT 49 CFR), rail (RID), sea (IMDG), and air (IATA DGR) regulations. A correctly authored Section 14 either notes that classification is identical across modes or breaks out the differences.
-
-**Cross-check:** GHS labels and ADR/DOT transport diamonds are different graphics serving different audiences. The [GHS vs ADR Inspector](/inspector/) shows how a single substance can carry both label systems on its outer packaging.
-
-### Section 15 — Regulatory Information
-
-Section 15 captures additional regulatory status not already covered elsewhere.
-
-**Sub-sections:**
-- **15.1 Safety, health, and environmental regulations specific to the substance or mixture**
-- **15.2 Chemical safety assessment** — for REACH-registered substances above 10 tonnes per year, an indication of whether a CSA has been carried out
-
-**EU specifics:** REACH Authorization (Annex XIV inclusion), REACH Restriction (Annex XVII), inclusion on the SVHC Candidate List for endocrine disruption or other concerns, and CLP Annex VI harmonised classification status. Recent CLP ATP 22 entries — covered in our [CLP ATP 22 article](/compliance/clp/clp-atp-22-changes/) — must propagate into Section 15 for affected substances.
-
-**US specifics:** TSCA inventory status, SARA Title III Sections 302 and 313 reportable categories, CERCLA reportable quantities, California Proposition 65 listing for known carcinogens or reproductive toxicants, and state right-to-know lists.
-
-**Other regions:** national inventory status (Canada DSL/NDSL, Australia AICIS, Japan ENCS, Korea KECI, China IECSC) — see the country-by-country breakdown in [UN GHS Implementation by Country](/compliance/un-ghs/un-ghs-implementation-by-country/).
-
-**OSHA enforcement note:** OSHA does not enforce Section 15 in the US, but the substance classifications referenced often come from US authorities anyway, and downstream users expect them to be present.
-
-### Section 16 — Other Information
-
-Section 16 closes the document with housekeeping data.
-
-**Required content:**
-- **Date of preparation or last revision** — the most-checked field by auditors
-- **Indication of changes from the previous version** — usually a brief change log
-- **Glossary or list of abbreviations** — LD50, ATE, vPvB, DNEL, PNEC, CSA, BCF, Koc, etc.
-- **Full text of any H- and P-statement codes** referenced in earlier sections
-- **Training advice** where appropriate
-- **Key references and sources** used to compile the data
-
-**Practical tip:** every time a regulation cited in Sections 2, 3, 11, 12, 14, or 15 changes — including CLP ATPs and OSHA HCS revisions — bump the revision date and append a change-log entry. SDS with revision dates that have not moved despite recent regulatory updates fail audit.
+Below is what each heading carries, with the regulation's own numbering. Each row links to a
+full breakdown of that section: the complete subsection checklist under REACH Annex II, OSHA
+Appendix D and UN GHS Annex 4 side by side, where the EU and US genuinely diverge, and the
+errors that get that section rejected. The whole set is indexed at
+[SDS sections: all 16 explained](/sds-sections/).
+
+| § | Heading | What it carries |
+|---|---|---|
+| **1** | [Identification](/sds-sections/section-1-identification/) | Product identifier, supplier details, recommended and advised-against uses, and the emergency telephone number. In the EU also the UFI and, where relevant, the word “nanoform”. |
+| **2** | [Hazard(s) identification](/sds-sections/section-2-hazards-identification/) | The classification, then the label elements that follow from it — signal word, pictograms, H-statements, P-statements — plus other hazards that do not result in classification. |
+| **3** | [Composition / information on ingredients](/sds-sections/section-3-composition/) | The hazardous ingredients, their identifiers and their concentration or range, with specific concentration limits, M-factors and ATE values where they exist. |
+| **4** | [First-aid measures](/sds-sections/section-4-first-aid-measures/) | Route-by-route instructions a non-professional can follow, the symptoms to expect acutely and with delay, and when specialist treatment is needed. |
+| **5** | [Fire-fighting measures](/sds-sections/section-5-fire-fighting-measures/) | Suitable and — the half most often dropped — unsuitable extinguishing media, the hazardous combustion products, and the protection firefighters need. |
+| **6** | [Accidental release measures](/sds-sections/section-6-accidental-release-measures/) | Personal precautions split between non-emergency personnel and trained responders, environmental precautions, and containment and clean-up methods. |
+| **7** | [Handling and storage](/sds-sections/section-7-handling-and-storage/) | Precautions for safe handling, the conditions and incompatibilities that govern storage, and any specific end uses. |
+| **8** | [Exposure controls / personal protection](/sds-sections/section-8-exposure-controls/) | The occupational exposure limits and biological limit values in force where the sheet is supplied, DNELs and PNECs, engineering controls, and PPE item by item. |
+| **9** | [Physical and chemical properties](/sds-sections/section-9-physical-and-chemical-properties/) | The eighteen basic properties (a) to (r) after the 2020/878 restructuring, then further data relevant to the physical hazard classes. |
+| **10** | [Stability and reactivity](/sds-sections/section-10-stability-and-reactivity/) | Reactivity, chemical stability, possible hazardous reactions, conditions to avoid, incompatible materials and hazardous decomposition products. |
+| **11** | [Toxicological information](/sds-sections/section-11-toxicological-information/) | Renamed by 2020/878 to “Information on hazard classes as defined in Regulation (EC) No 1272/2008” plus “Information on other hazards” — the data behind every health hazard class. |
+| **12** | [Ecological information](/sds-sections/section-12-ecological-information/) | Aquatic toxicity, persistence and degradability, bioaccumulation, mobility, PBT and vPvB results and — new in 2020/878 — endocrine disrupting properties. |
+| **13** | [Disposal considerations](/sds-sections/section-13-disposal-considerations/) | Waste treatment methods for the product, its residues and its contaminated packaging, and the properties that affect how it can be treated. |
+| **14** | [Transport information](/sds-sections/section-14-transport-information/) | UN number or ID number, proper shipping name, transport hazard class, packing group, environmental hazards, and maritime bulk transport under IMO instruments. |
+| **15** | [Regulatory information](/sds-sections/section-15-regulatory-information/) | Authorisation, restriction, SVHC status, major-accident thresholds and national provisions — plus whether a chemical safety assessment has been carried out. |
+| **16** | [Other information](/sds-sections/section-16-other-information/) | The revision date and version, what changed, the abbreviation key, the full text of the H-statements referenced elsewhere, and the data sources. |
+
+⚠ **Sections 12 to 15 are not enforced by OSHA.** Ecology, disposal, transport and wider chemical
+law fall to the EPA, the Department of Transportation and other agencies, not to the Hazard
+Communication Standard. All sixteen are mandatory under REACH Annex II, and in practice nearly
+every commercial US sheet carries all sixteen so that one document can travel.
 
 ---
 
@@ -444,6 +266,7 @@ Compliance audits and regulatory inspections surface the same recurring errors:
 - [UN GHS Rev 11 Changes](/compliance/un-ghs/un-ghs-rev-11-changes/) — Annex 11 simple-asphyxiant guidance and other Section 2 updates
 - [CLP ATP 22 Changes: Annex VI Updates May 2026](/compliance/clp/clp-atp-22-changes/) — new harmonised classifications affecting Section 15
 - [SDS Authoring Software: What It Does and What It Costs](/compliance/sds/sds-authoring-software/) — published prices, and how software compares with outsourcing the sheets.
+- [SDS sections: all 16 explained](/sds-sections/) — the section-by-section reference this article summarises: subsection checklists for the EU, US and UN texts, and a jump into the same section on any of our substance pages
 - [SDS library](/sds/) — see the 16-section structure applied to real substances: harmonised classification, storage verdicts, and transport data for 100+ chemicals
 
 ---

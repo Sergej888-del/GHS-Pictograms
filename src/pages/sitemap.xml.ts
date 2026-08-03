@@ -102,6 +102,28 @@ async function fetchSdsSitemapEntries(): Promise<
   ];
 }
 
+/**
+ * SDS format: the /sds-sections/ hub + one page per section that has a prose
+ * entry. Read from the collection, not from SDS_SECTIONS — the spine knows all
+ * 16, but only an entry gives a section a URL, and the sitemap must never
+ * announce a page the route does not build.
+ */
+async function fetchSdsSectionSitemapEntries(): Promise<
+  { url: string; changefreq: string; priority: string }[]
+> {
+  const entries = await getCollection('sdsSections', ({ data }) => !data.draft);
+  return [
+    { url: '/sds-sections/', changefreq: 'weekly', priority: '0.9' },
+    ...entries
+      .sort((a, b) => a.data.n - b.data.n)
+      .map((e) => ({
+        url: `/sds-sections/${e.data.slug}/`,
+        changefreq: 'monthly',
+        priority: '0.85',
+      })),
+  ];
+}
+
 /** Precautionary statements: hub + every code in the registry (grows with no code change). */
 async function fetchPStatementSitemapEntries(): Promise<
   { url: string; changefreq: string; priority: string }[]
@@ -139,13 +161,15 @@ async function fetchHStatementSitemapEntries(): Promise<
 }
 
 export const GET: APIRoute = async () => {
-  const [blogPages, compliancePages, sdsPages, pStatementPages, hStatementPages] = await Promise.all([
-    fetchBlogSitemapEntries(),
-    fetchComplianceSitemapEntries(),
-    fetchSdsSitemapEntries(),
-    fetchPStatementSitemapEntries(),
-    fetchHStatementSitemapEntries(),
-  ]);
+  const [blogPages, compliancePages, sdsPages, sdsSectionPages, pStatementPages, hStatementPages] =
+    await Promise.all([
+      fetchBlogSitemapEntries(),
+      fetchComplianceSitemapEntries(),
+      fetchSdsSitemapEntries(),
+      fetchSdsSectionSitemapEntries(),
+      fetchPStatementSitemapEntries(),
+      fetchHStatementSitemapEntries(),
+    ]);
 
   const allPages = [
     ...STATIC_PAGES,
@@ -153,6 +177,7 @@ export const GET: APIRoute = async () => {
     ...COMPLIANCE_PILLAR_PAGES,
     ...STORAGE_PAGES,
     ...sdsPages,
+    ...sdsSectionPages,
     ...pStatementPages,
     ...hStatementPages,
     ...compliancePages,

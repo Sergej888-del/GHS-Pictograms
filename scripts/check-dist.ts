@@ -37,6 +37,7 @@ import { resolve, join } from 'node:path'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { STORAGE_CLASSES } from '../src/lib/storageClasses'
+import { SDS_SECTIONS } from '../src/lib/sdsSections'
 import { hSlug } from '../src/lib/hStatementSlug'
 
 config({ path: resolve(process.cwd(), '.env.local') })
@@ -1589,7 +1590,218 @@ const CHECKS: Check[] = [
         detail,
       }
     },
-  }
+  },
+
+  // ─────────────── SDS sections: /sds-sections/ (session 31) ───────────────
+  // Раздел построен из контент-коллекции, а выпадашка веществ — из живой базы.
+  // Поэтому проверок две породы: набор страниц сверяется с прозой на диске,
+  // а всё, что про вещества, — с `sds_pages` в момент запуска.
+  {
+    id: 'sdssec-pages',
+    group: 'SDS sections',
+    title: 'Набор страниц /sds-sections/ равен набору MDX-файлов коллекции',
+    run: async () => {
+      // ⚠ Ожидание берётся из src/content/sds-sections, а НЕ из SDS_SECTIONS:
+      // спина знает все 16, но URL появляется только вместе с прозой. Ровно то
+      // же правило зашито в getStaticPaths маршрута.
+      const dir = resolve(process.cwd(), 'src/content/sds-sections')
+      const expected = new Set(
+        !existsSync(dir)
+          ? []
+          : readdirSync(dir)
+              .filter((f) => f.endsWith('.mdx') || f.endsWith('.md'))
+              .map((f) => f.replace(/\.mdx?$/, '')),
+      )
+      const actual = new Set(pageSlugs('sds-sections'))
+      const { missing, extra } = diffSets(actual, expected)
+      const ok = missing.length === 0 && extra.length === 0
+      const detail: string[] = []
+      if (missing.length) detail.push(`нет в dist (${missing.length}): ${preview(missing)}`)
+      if (extra.length) detail.push(`лишние в dist (${extra.length}): ${preview(extra)}`)
+      if (ok) detail.push('каждой секции с прозой соответствует ровно одна страница')
+      return {
+        id: 'sdssec-pages',
+        group: 'SDS sections',
+        ok,
+        headline: `${actual.size} страниц в dist, коллекция ожидает ${expected.size}`,
+        detail,
+      }
+    },
+  },
+  {
+    id: 'sdssec-picker-count',
+    group: 'SDS sections',
+    title: 'Выпадашка веществ на каждой странице секции равна живому реестру sds_pages',
+    run: async () => {
+      // ⚠ Главная проверка раздела. Список тянется из Supabase в getStaticPaths;
+      // если база молча ответит пустотой, страницы соберутся БЕЗ блока и в логе
+      // сборки не будет ни строчки. Здесь это видно сразу.
+      const { pages } = await sdsData()
+      const expected = pages.length
+      const detail: string[] = []
+      for (const slug of pageSlugs('sds-sections')) {
+        const html = readPage(`sds-sections/${slug}/index.html`)
+        if (html === null) {
+          detail.push(`${slug}: нет index.html`)
+          continue
+        }
+        const n = countOccurrences(html, 'data-blob="')
+        if (n !== expected) detail.push(`${slug}: ${n} веществ, ожидалось ${expected}`)
+      }
+      const ok = detail.length === 0
+      if (ok) detail.push(`маркер: data-blob=" на каждой строке списка`)
+      return {
+        id: 'sdssec-picker-count',
+        group: 'SDS sections',
+        ok,
+        headline: ok
+          ? `на всех страницах по ${expected} веществ`
+          : `расхождений: ${detail.length}`,
+        detail,
+      }
+    },
+  },
+  {
+    id: 'sdssec-picker-targets',
+    group: 'SDS sections',
+    title: 'Каждая ссылка выпадашки ведёт на существующую страницу вещества',
+    run: async () => {
+      const live = new Set(pageSlugs('sds'))
+      const bad = new Set<string>()
+      let links = 0
+      for (const slug of pageSlugs('sds-sections')) {
+        const html = readPage(`sds-sections/${slug}/index.html`)
+        if (!html) continue
+        for (const m of html.matchAll(/href="\/sds\/([a-z0-9-]+)\/(#s\d+)?"/g)) {
+          links++
+          if (!live.has(m[1])) bad.add(`${slug} -> /sds/${m[1]}/`)
+        }
+      }
+      const ok = bad.size === 0
+      return {
+        id: 'sdssec-picker-targets',
+        group: 'SDS sections',
+        ok,
+        headline: ok ? `${links} ссылок, все ведут в живые страницы` : `битых целей: ${bad.size}`,
+        detail: ok ? [`живых страниц /sds/: ${live.size}`] : [preview([...bad], 20)],
+      }
+    },
+  },
+  {
+    id: 'sdssec-anchors',
+    group: 'SDS sections',
+    title: 'Покрытие якорей #sN на страницах веществ совпадает с anchorCoverage',
+    run: async () => {
+      // ⚠ Числа в src/lib/sdsSections.ts — замер, а не догадка (session 31,
+      // 2026-08-03). Они устареют, как только §12 (эко-импорт) и §15 (Step 4)
+      // появятся на страницах веществ. Пусть это ловится здесь, а не глазами.
+      const slugs = pageSlugs('sds')
+      const detail: string[] = []
+      for (const sec of SDS_SECTIONS) {
+        let n = 0
+        for (const s of slugs) {
+          const html = readPage(`sds/${s}/index.html`)
+          if (html && html.includes(`id="s${sec.n}"`)) n++
+        }
+        if (n !== sec.anchorCoverage) {
+          // ⚠ Читается в ДВЕ стороны, и это важно (session 31, первый же прогон):
+          //  * n БОЛЬШЕ записанного — секция доехала до новых веществ, обновить константу;
+          //  * n МЕНЬШЕ — блок пропал со страниц, и почти наверняка это не данные,
+          //    а молча упавший запрос в getStaticPaths страницы вещества.
+          // Арбитр — база, а не эта константа. Так поймали 15 веществ, потерявших
+          // §10 из-за отказа get_storage_verdict на флаky-сборке.
+          const verdict = n > sec.anchorCoverage ? 'больше — похоже, обновить константу' : 'МЕНЬШЕ — похоже, сборка потеряла блок'
+          detail.push(
+            `section ${sec.n}: якорь #s${sec.n} на ${n} страницах, в sdsSections.ts записано ${sec.anchorCoverage} — ${verdict}`,
+          )
+        }
+        // Ссылку с якорем ставим только там, где якорь реально есть.
+        if (sec.anchor === null && n > 20) {
+          detail.push(`section ${sec.n}: anchor = null, но якорь уже на ${n} страницах — пора включить`)
+        }
+      }
+      const ok = detail.length === 0
+      if (ok) detail.push(`сверено 16 секций против ${slugs.length} страниц веществ`)
+      return {
+        id: 'sdssec-anchors',
+        group: 'SDS sections',
+        ok,
+        headline: ok ? 'все 16 замеров совпали' : `расхождений: ${detail.length}`,
+        detail,
+      }
+    },
+  },
+  {
+    id: 'sdssec-checklist',
+    group: 'SDS sections',
+    title: 'Все три списка чек-листа лежат в HTML на сборке, а не рисуются JS-ом',
+    run: async () => {
+      // Переключатель юрисдикций только снимает hidden. Если списки начнут
+      // рисоваться скриптом, для краулера страница станет пустой — а список
+      // подпунктов и есть её содержимое.
+      const detail: string[] = []
+      for (const slug of pageSlugs('sds-sections')) {
+        const html = readPage(`sds-sections/${slug}/index.html`)
+        if (!html) continue
+        const lists = ['eu', 'us', 'un'].filter((j) => html.includes(`data-for="${j}"`))
+        const boxes = countOccurrences(html, 'type="checkbox"')
+        if (lists.length < 3) detail.push(`${slug}: списков ${lists.length} из 3 (${lists.join(', ') || 'нет ни одного'})`)
+        if (boxes === 0) detail.push(`${slug}: ни одного пункта чек-листа в HTML`)
+      }
+      const ok = detail.length === 0
+      if (ok) detail.push('маркеры: data-for="eu" + data-for="us" + data-for="un" + type="checkbox"')
+      return {
+        id: 'sdssec-checklist',
+        group: 'SDS sections',
+        ok,
+        headline: ok ? 'на всех страницах три списка и непустой чек-лист' : `проблем: ${detail.length}`,
+        detail,
+      }
+    },
+  },
+  {
+    id: 'sdssec-sitemap',
+    group: 'SDS sections',
+    title: 'Хаб и все страницы секций попали в sitemap.xml',
+    run: async () => {
+      const xml = readPage('sitemap.xml')
+      if (xml === null) {
+        return { id: 'sdssec-sitemap', group: 'SDS sections', ok: false, headline: 'нет dist/sitemap.xml', detail: [] }
+      }
+      const expected = ['/sds-sections/', ...pageSlugs('sds-sections').map((s) => `/sds-sections/${s}/`)]
+      const missing = expected.filter((u) => !xml.includes(`<loc>https://ghspictograms.com${u}</loc>`))
+      const ok = missing.length === 0
+      return {
+        id: 'sdssec-sitemap',
+        group: 'SDS sections',
+        ok,
+        headline: ok ? `все ${expected.length} URL в sitemap` : `в sitemap нет ${missing.length} из ${expected.length}`,
+        detail: ok ? ['маркер: <loc>…/sds-sections/…</loc>'] : [preview(missing, 20)],
+      }
+    },
+  },
+  {
+    id: 'sdssec-global-nav',
+    group: 'SDS sections',
+    title: 'Ссылка на хаб стоит на каждой странице сайта (шапка и подвал)',
+    run: async () => {
+      // Шапка и подвал глобальные — ссылка обязана быть на каждой странице,
+      // которая эту шапку рендерит. ⚠ Не на каждой странице сайта: /subscribed/
+      // — самостоятельный noindex-экран после подписки, он идёт мимо Layout со
+      // своим <html>, и требовать от него ссылку значит ловить ложную тревогу.
+      // Поэтому фильтр по маркеру шапки, а не по всем файлам.
+      const pages = allPages().filter((p) => p.rel.endsWith('index.html') && p.html.includes('sh-header'))
+      const without = pages.filter((p) => !p.html.includes('href="/sds-sections/"')).map((p) => p.rel)
+      const ok = without.length === 0
+      return {
+        id: 'sdssec-global-nav',
+        group: 'SDS sections',
+        ok,
+        headline: ok ? `ссылка на всех ${pages.length} страницах` : `нет на ${without.length} из ${pages.length}`,
+        detail: ok ? ['маркер: href="/sds-sections/"'] : [preview(without, 20)],
+      }
+    },
+  },
 
 ]
 

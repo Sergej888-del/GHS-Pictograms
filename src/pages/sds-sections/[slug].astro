@@ -1,0 +1,600 @@
+---
+// One page per SDS section — /sds-sections/section-<n>-<name>/ (session 31).
+//
+// Paths come from the `sdsSections` content collection, NOT from SDS_SECTIONS:
+// the spine knows all 16, but a section only gets a URL once its prose entry
+// exists. (Session 29 lesson: never build a URL from a list the route's
+// getStaticPaths does not actually generate.)
+//
+// Everything the jurisdiction switch can show is rendered into the HTML at build
+// time — the switch only flips a class. A checklist drawn by JS does not exist
+// for a crawler, and this page IS the checklist.
+import Layout from '../../layouts/Layout.astro'
+import SdsManagerCard from '../../components/SdsManagerCard.astro'
+import { getCollection, render } from 'astro:content'
+import { SDS_SECTIONS, SDS_SECTION_BY_N, SDS_GROUPS, sdsSectionUrl } from '../../lib/sdsSections'
+import { supabase } from '../../lib/supabase'
+
+const SITE = 'https://ghspictograms.com'
+
+export async function getStaticPaths() {
+  // One Supabase round-trip for all 16 pages: the substance picker (session 31,
+  // Sergej's call) is the same live list the /sds/ hub renders.
+  const [entries, subsRes] = await Promise.all([
+    getCollection('sdsSections', ({ data }) => !data.draft),
+    supabase
+      .from('sds_pages')
+      .select('slug, display_name, cas_number, formula_display')
+      .eq('status', 'live')
+      .order('display_name'),
+  ])
+  // ⚠ Fail loudly on a Supabase ERROR, degrade quietly on an empty result.
+  // Without the throw, an unreachable database would ship 16 pages with the
+  // picker silently missing and nothing in the build log to say why — the same
+  // class of failure as the 30 dead links of session 29, just quieter.
+  if (subsRes.error) {
+    throw new Error(`sds-sections: substance picker query failed — ${subsRes.error.message}`)
+  }
+  const substances = subsRes.data ?? []
+  return entries.map((entry) => ({ params: { slug: entry.data.slug }, props: { entry, substances } }))
+}
+
+const { entry, substances = [] } = Astro.props as { entry: any; substances: any[] }
+const d = entry.data
+const meta = SDS_SECTION_BY_N.get(d.n)!
+const grp = SDS_GROUPS[meta.group]
+const { Content } = await render(entry)
+
+const canonical = `${SITE}/sds-sections/${d.slug}/`
+const prev = d.n > 1 ? SDS_SECTION_BY_N.get(d.n - 1)! : null
+const next = d.n < 16 ? SDS_SECTION_BY_N.get(d.n + 1)! : null
+
+// Which jurisdictions actually have a checklist for this section.
+const JURIS = [
+  { key: 'eu', label: 'EU', sub: 'REACH Annex II', rows: d.checklist.eu ?? [] },
+  { key: 'us', label: 'US', sub: 'OSHA App. D', rows: d.checklist.us ?? [] },
+  { key: 'un', label: 'UN', sub: 'GHS Annex 4', rows: d.checklist.un ?? [] },
+].filter((j) => j.rows.length > 0)
+
+const updated = (d.updatedDate ?? d.pubDate) as Date
+
+// Section numbering on the page adapts to which optional blocks exist.
+let sn = 0
+const pad = () => String(++sn).padStart(2, '0')
+const nGlance = pad()
+const nCheck = pad()
+const nGuide = pad()
+const nDiff = d.diffs?.length ? pad() : null
+const nErr = d.errors?.length ? pad() : null
+const nSubs = substances.length ? pad() : null
+const nLinks = d.related?.length ? pad() : null
+const nFaq = d.faq?.length ? pad() : null
+
+// Substance picker. `meta.anchor` is null for the sections the substance
+// template does not render (§1, §3, §11, §12, §15) — those links open the page
+// itself rather than a fragment that is not there.
+const cap = (s: string) => (s || '').charAt(0).toUpperCase() + (s || '').slice(1)
+const subHref = (slug: string) => `/sds/${slug}/${meta.anchor ?? ''}`
+const coverageNote = meta.anchor
+  ? meta.anchorCoverage >= substances.length
+    ? `Every substance page carries a section ${d.n} block.`
+    : `${meta.anchorCoverage} of the ${substances.length} substance pages currently carry a section ${d.n} block; on the rest the link opens the page itself.`
+  : `The substance pages do not carry a separate section ${d.n} block yet, so these links open the page itself.`
+
+const jsonLd: Record<string, unknown>[] = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: d.title,
+    description: d.description,
+    datePublished: (d.pubDate as Date).toISOString(),
+    dateModified: updated.toISOString(),
+    author: { '@type': 'Organization', name: 'GHS Pictograms', url: SITE },
+    publisher: {
+      '@type': 'Organization',
+      name: 'GHS Pictograms',
+      url: SITE,
+      logo: { '@type': 'ImageObject', url: `${SITE}/favicon.svg` },
+    },
+    mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'SDS sections', item: `${SITE}/sds-sections/` },
+      { '@type': 'ListItem', position: 2, name: `Section ${d.n} — ${meta.short}`, item: canonical },
+    ],
+  },
+]
+if (d.faq?.length) {
+  jsonLd.push({
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: d.faq.map((f: { q: string; a: string }) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a },
+    })),
+  })
+}
+---
+
+<Layout title={d.title} description={d.description} canonical={canonical}>
+  <!-- HERO -->
+  <section class="hub-hero tint-teal">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+
+    <div class="hub-wrap hub-hero-left">
+      <nav class="hub-crumb" aria-label="Breadcrumb">
+        <a href="/sds-sections/">SDS sections</a><span class="sep">/</span>Section {d.n}
+      </nav>
+      <p class="hub-hero-eyebrow">Section {d.n} of 16 · {grp.label}</p>
+      <h1>SDS Section {d.n}: {meta.short}</h1>
+      <p class="hub-hero-sub">{d.intro}</p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">Mandatory in the EU</span>
+        <span class="hub-hero-chip">{meta.usMandatory ? 'Mandatory under OSHA HCS' : 'Not mandatory under OSHA HCS'}</span>
+        {JURIS.find((j) => j.key === 'eu') && (
+          <span class="hub-hero-chip">{JURIS.find((j) => j.key === 'eu')!.rows.length} required items (EU)</span>
+        )}
+      </div>
+      <a href="#required" class="hub-hero-cta">What this section must contain →</a>
+    </div>
+  </section>
+
+  <!-- 01 · AT A GLANCE — the same heading in three legal texts -->
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">{nGlance} · At a glance</p>
+      <h2 class="hub-h2">What section {d.n} of an SDS contains</h2>
+      <p class="hub-sub">{meta.answer}</p>
+
+      <div class="hub-table-wrap sdss-glance">
+        <table class="hub-table">
+          <thead>
+            <tr>
+              <th>Legal text</th>
+              <th>Heading as printed</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="c-code is-code"><span class="src">EU</span></td>
+              <td class="c-txt">
+                SECTION {d.n}: {meta.eu}
+                <span class="verbatim">REACH Annex II, as amended by Regulation (EU) 2020/878</span>
+              </td>
+              <td class="c-txt"><span class="sdss-flag yes">Mandatory</span></td>
+            </tr>
+            <tr>
+              <td class="c-code is-code"><span class="src">US</span></td>
+              <td class="c-txt">
+                {d.n}. {meta.us}
+                <span class="verbatim">OSHA HCS, 29 CFR 1910.1200 Appendix D</span>
+              </td>
+              <td class="c-txt">
+                {meta.usMandatory
+                  ? <span class="sdss-flag yes">Mandatory</span>
+                  : <span class="sdss-flag no">Not mandatory</span>}
+              </td>
+            </tr>
+            <tr>
+              <td class="c-code is-code"><span class="src">UN</span></td>
+              <td class="c-txt">
+                {d.n}. {meta.un}
+                <span class="verbatim">GHS Rev. 11, Annex 4 (A4.2.3.1)</span>
+              </td>
+              <td class="c-txt"><span class="sdss-flag rec">Recommended</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="juris-note">
+        The numbering is harmonised worldwide; the wording is not. The UN GHS is a model text with no legal
+        force of its own — it becomes binding only where a country adopts it, which is why the EU and US
+        columns are the ones an inspector reads from.
+      </p>
+    </div>
+  </section>
+
+  <!-- 02 · REQUIRED CONTENT — the interactive checklist -->
+  <section class="hub-sec-deep" id="required">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">{nCheck} · Required content</p>
+      <h2 class="hub-h2">Section {d.n} checklist</h2>
+      <p class="hub-sub">
+        Every item the regulation requires under this heading. Switch jurisdiction to see how the
+        requirement actually changes — this is not the same list with different labels.
+      </p>
+
+      <div class="hub-panel sdss-check" data-juris={JURIS[0]?.key}>
+        <div class="hub-panel-row">
+          <span class="hub-panel-label">Jurisdiction</span>
+          <div class="juris" role="group" aria-label="Choose jurisdiction">
+            {JURIS.map((j, i) => (
+              <button type="button" data-j={j.key} aria-pressed={i === 0 ? 'true' : 'false'}>
+                {j.label}<span class="sub">{j.sub}</span>
+              </button>
+            ))}
+          </div>
+          <div class="sdss-score" aria-live="polite">
+            <span class="sdss-score-n"><b data-done>0</b> / <span data-total>0</span></span>
+            <span class="sdss-score-t">items ticked</span>
+          </div>
+        </div>
+
+        <div class="sdss-meter" aria-hidden="true"><span data-bar style="width:0%"></span></div>
+
+        {JURIS.map((j, i) => (
+          <div class="sdss-list" data-for={j.key} hidden={i !== 0}>
+            {j.rows.map((r: { id: string; title: string; what: string }) => (
+              <label class="sdss-item">
+                <input type="checkbox" />
+                <span class="sdss-body">
+                  <span class="sdss-head"><span class="sdss-id">{r.id}</span><span class="sdss-title">{r.title}</span></span>
+                  <span class="sdss-what" set:html={r.what} />
+                </span>
+              </label>
+            ))}
+          </div>
+        ))}
+
+        <div class="sdss-actions">
+          <button type="button" class="hub-toggle" data-act="all">Tick all ↓</button>
+          <button type="button" class="hub-toggle" data-act="none">Clear</button>
+          <button type="button" class="hub-toggle" data-act="copy">Copy the gaps as an audit note</button>
+          <span class="sdss-copied" hidden>Copied to clipboard</span>
+        </div>
+
+        <p class="hub-fine" style="margin-top:16px">
+          Reference aid, not a legal audit. The checklist reproduces the structure the regulation
+          requires; whether the content under each heading is adequate for your product is a judgment
+          only the person who classified it can make.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 · GUIDANCE — the hand-written body -->
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">{nGuide} · Guidance</p>
+      <div class="storage-prose hub-prose">
+        <Content />
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 · EU vs US -->
+  {nDiff && (
+    <section class="hub-sec-b">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow navy">{nDiff} · Divergence</p>
+        <h2 class="hub-h2">Where the EU and the US disagree in section {d.n}</h2>
+        <p class="hub-sub">
+          A sheet written to satisfy one of these can fail the other. These are the points where the
+          two texts genuinely require different things.
+        </p>
+        <div class="hub-table-wrap">
+          <table class="hub-table sdss-diff">
+            <thead>
+              <tr>
+                <th>Point</th>
+                <th>EU — REACH Annex II</th>
+                <th>US — OSHA App. D</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.diffs.map((x: { point: string; eu: string; us: string }) => (
+                <tr>
+                  <td class="c-txt"><b>{x.point}</b></td>
+                  <td class="c-txt" set:html={x.eu} />
+                  <td class="c-txt" set:html={x.us} />
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  )}
+
+  <!-- 05 · COMMON ERRORS -->
+  {nErr && (
+    <section class="hub-sec-white">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nErr} · Failure modes</p>
+        <h2 class="hub-h2">What gets section {d.n} rejected</h2>
+        <div class="hub-cards">
+          {d.errors.map((e: { title: string; body: string }) => (
+            <div class="hub-card static" style="--acc:#e11d48;--acc-line:#fecdd3;--acc-soft:#fff1f2;--acc-ink:#9f1239">
+              <p class="tag">Common error</p>
+              <h3>{e.title}</h3>
+              <p class="copy" set:html={e.body} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+
+  <!-- SUBSTANCE PICKER — jump from the format to a real sheet -->
+  {nSubs && (
+    <section class="hub-sec-deep">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nSubs} · On a real substance</p>
+        <h2 class="hub-h2">See section {d.n} filled in</h2>
+        <p class="hub-sub">
+          Pick a substance and go straight to its section {d.n}. These are our own reference pages —
+          harmonised classification from CLP Annex VI, a computed storage verdict and sourced response
+          data — not supplier PDFs.
+        </p>
+
+        <div class="hub-panel sdss-subs">
+          <div class="hub-panel-row">
+            <span class="hub-panel-label">Substance</span>
+            <label for="sdss-sub-q" class="sr-only">Filter substances by name or CAS number</label>
+            <input
+              id="sdss-sub-q"
+              class="hub-search-inline"
+              type="search"
+              placeholder="Filter by name or CAS…"
+              autocomplete="off"
+            />
+            <span class="sdss-subs-count"><b data-shown>{substances.length}</b> of {substances.length}</span>
+          </div>
+
+          <ul class="sdss-subs-list" id="sdss-subs-list">
+            {substances.map((s: any) => (
+              <li data-blob={`${s.display_name ?? ''} ${s.cas_number ?? ''} ${s.formula_display ?? ''}`.toLowerCase()}>
+                <a href={subHref(s.slug)}>
+                  <span class="nm">{cap(s.display_name)}</span>
+                  {s.cas_number && <span class="cas">CAS {s.cas_number}</span>}
+                </a>
+              </li>
+            ))}
+          </ul>
+
+          <p class="sdss-subs-none" id="sdss-subs-none" hidden>
+            No substance matches that. The full library is at <a href="/sds/">/sds/</a>, and the
+            <a href="/tools/chemical-storage-compatibility/">storage compatibility tool</a> covers
+            3,600+ substances by CAS number.
+          </p>
+
+          <p class="hub-fine" style="margin-top:14px">{coverageNote}</p>
+        </div>
+      </div>
+    </section>
+  )}
+
+  <!-- 06 · WHERE THIS LIVES ON THIS SITE -->
+  {nLinks && (
+    <section class="hub-sec-a">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nLinks} · On this site</p>
+        <h2 class="hub-h2">Data and tools that feed section {d.n}</h2>
+        <p class="hub-sub">
+          Reference data and calculators on this site that answer part of this section — and the
+          substance pages where you can see it filled in.
+        </p>
+        <ul class="hub-index wide" style="margin-top:20px">
+          {d.related.map((r: { href: string; label: string; note: string }) => (
+            <li>
+              <a href={r.href} class="hub-index-card">
+                <span class="txt">
+                  <span class="name">{r.label}</span>
+                  <span class="cas">{r.note}</span>
+                </span>
+                <span class="formula" aria-hidden="true">→</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  )}
+
+  <!-- 07 · FAQ -->
+  {nFaq && (
+    <section class="hub-sec-white">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nFaq} · FAQ</p>
+        <h2 class="hub-h2">Frequently asked questions</h2>
+        <div class="hub-faq">
+          {d.faq.map((f: { q: string; a: string }) => (
+            <div class="hub-faq-item">
+              <p class="q">{f.q}</p>
+              <p class="a" set:html={f.a} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+
+  <!-- RAIL + PREV/NEXT + SOURCES -->
+  <section class="hub-sec-b">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">All 16 sections</p>
+      <h2 class="hub-h2">The rest of the safety data sheet</h2>
+      <div class="sdss-rail">
+        {SDS_SECTIONS.map((s) => (
+          <a href={sdsSectionUrl(s.n)} class={s.n === d.n ? 'sdss-rail-item is-here' : 'sdss-rail-item'}>
+            <span class="n">{s.n}</span>
+            <span class="t">{s.short}</span>
+          </a>
+        ))}
+      </div>
+
+      <div class="hub-prevnext" style="margin-top:26px">
+        {prev ? (
+          <a href={sdsSectionUrl(prev.n)}>
+            <span class="dir">← Previous</span>
+            <span class="code">Section {prev.n}</span>
+            <span class="txt">{prev.short}</span>
+          </a>
+        ) : (
+          <a href="/sds-sections/">
+            <span class="dir">← Up</span>
+            <span class="code">All 16 sections</span>
+            <span class="txt">The SDS format explained section by section</span>
+          </a>
+        )}
+        {next ? (
+          <a href={sdsSectionUrl(next.n)} class="next">
+            <span class="dir">Next →</span>
+            <span class="code">Section {next.n}</span>
+            <span class="txt">{next.short}</span>
+          </a>
+        ) : (
+          <a href="/sds-sections/" class="next">
+            <span class="dir">Up →</span>
+            <span class="code">All 16 sections</span>
+            <span class="txt">The SDS format explained section by section</span>
+          </a>
+        )}
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <SdsManagerCard
+        service="management"
+        body={d.affiliateBody}
+        href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=sdssec"
+      />
+
+      {d.sources?.length > 0 && (
+        <div class="sdss-sources">
+          <p class="hub-panel-label">Sources</p>
+          <ol>
+            {d.sources.map((s: { label: string; href: string }) => (
+              <li><a href={s.href}>{s.label}</a></li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      <p class="hub-fine">
+        Last reviewed {updated.toISOString().slice(0, 10)}. This page describes what the regulations
+        require under section {d.n}; it is not a substitute for the safety data sheet of the product
+        you actually hold, or for professional advice on classifying it.
+      </p>
+    </div>
+  </section>
+
+  {jsonLd.map((block) => (
+    <script type="application/ld+json" set:html={JSON.stringify(block)} slot="head" />
+  ))}
+
+  <script is:inline>
+    // Substance picker filter. Every row is in the HTML at build time; this only
+    // hides rows, so the 109 links stay crawlable.
+    ;(function () {
+      var q = document.getElementById('sdss-sub-q')
+      var list = document.getElementById('sdss-subs-list')
+      var none = document.getElementById('sdss-subs-none')
+      if (!q || !list) return
+      var rows = Array.prototype.slice.call(list.querySelectorAll('li[data-blob]'))
+      var shownEl = document.querySelector('.sdss-subs-count [data-shown]')
+      var norm = function (s) { return (s || '').toLowerCase().replace(/sulph/g, 'sulf').replace(/\s+/g, ' ').trim() }
+      var blobs = rows.map(function (r) { return norm(r.getAttribute('data-blob')) })
+      q.addEventListener('input', function () {
+        var tokens = norm(q.value).split(' ').filter(Boolean)
+        var n = 0
+        rows.forEach(function (r, i) {
+          var hit = tokens.every(function (t) { return blobs[i].indexOf(t) > -1 })
+          r.hidden = !hit
+          if (hit) n++
+        })
+        if (shownEl) shownEl.textContent = String(n)
+        if (none) none.hidden = n > 0
+      })
+    })()
+  </script>
+
+  <script is:inline>
+    ;(function () {
+      var root = document.querySelector('.sdss-check')
+      if (!root) return
+      var btns = root.querySelectorAll('.juris button')
+      var lists = root.querySelectorAll('.sdss-list')
+      var doneEl = root.querySelector('[data-done]')
+      var totalEl = root.querySelector('[data-total]')
+      var bar = root.querySelector('[data-bar]')
+      var copied = root.querySelector('.sdss-copied')
+
+      function active() {
+        return root.querySelector('.sdss-list:not([hidden])')
+      }
+      function refresh() {
+        var l = active()
+        if (!l) return
+        var boxes = l.querySelectorAll('input[type=checkbox]')
+        var done = l.querySelectorAll('input[type=checkbox]:checked').length
+        doneEl.textContent = String(done)
+        totalEl.textContent = String(boxes.length)
+        bar.style.width = boxes.length ? Math.round((done / boxes.length) * 100) + '%' : '0%'
+        root.setAttribute('data-complete', done === boxes.length && boxes.length > 0 ? 'yes' : 'no')
+      }
+      btns.forEach(function (b) {
+        b.addEventListener('click', function () {
+          var key = b.getAttribute('data-j')
+          btns.forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false') })
+          lists.forEach(function (l) { l.hidden = l.getAttribute('data-for') !== key })
+          root.setAttribute('data-juris', key)
+          refresh()
+        })
+      })
+      root.addEventListener('change', function (e) {
+        if (e.target && e.target.type === 'checkbox') refresh()
+      })
+      root.querySelectorAll('[data-act]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var act = b.getAttribute('data-act')
+          var l = active()
+          if (!l) return
+          if (act === 'all' || act === 'none') {
+            l.querySelectorAll('input[type=checkbox]').forEach(function (c) { c.checked = act === 'all' })
+            refresh()
+            return
+          }
+          var juris = root.querySelector('.juris button[aria-pressed=true]')
+          var head = 'SDS section review — ' + document.title.split('|')[0].trim() +
+            '\n' + (juris ? juris.childNodes[0].nodeValue.trim() : '') + ' requirements\n' +
+            location.href + '\n\nStill missing:\n'
+          var gaps = []
+          l.querySelectorAll('.sdss-item').forEach(function (it) {
+            var c = it.querySelector('input[type=checkbox]')
+            if (c && !c.checked) {
+              gaps.push('- ' + it.querySelector('.sdss-id').textContent + ' ' + it.querySelector('.sdss-title').textContent)
+            }
+          })
+          var text = head + (gaps.length ? gaps.join('\n') : '(nothing — every required item is present)')
+          function flash() {
+            if (!copied) return
+            copied.hidden = false
+            setTimeout(function () { copied.hidden = true }, 2200)
+          }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(flash, function () {})
+          } else {
+            var ta = document.createElement('textarea')
+            ta.value = text
+            document.body.appendChild(ta)
+            ta.select()
+            try { document.execCommand('copy') } catch (err) {}
+            document.body.removeChild(ta)
+            flash()
+          }
+        })
+      })
+      refresh()
+    })()
+  </script>
+</Layout>
