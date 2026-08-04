@@ -25,6 +25,11 @@ import { substanceSlug, substanceHref } from '../../lib/substanceSlug'
 import { hHref } from '../../lib/hStatementSlug'
 import { buildPropertyRows, buildSourceNotes, type LcssRecord } from '../../lib/lcssProperties'
 import { buildIntro, type TextRecord } from '../../lib/substanceIntro'
+// ⚠⚠ Партнёрская карточка ставится ТОЛЬКО компонентом. Разметка (rel="sponsored
+// nofollow noopener", target, дисклоуз, fp_sid) зашита в него один раз, и обе
+// проверки группы Affiliate в check:dist проверяют именно её. Ссылка, вписанная
+// руками мимо компонента, — тот самый сценарий отказа, который они ловят.
+import SdsManagerCard from '../../components/SdsManagerCard.astro'
 import lcssValues from '../../data/lcss-values.json'
 import lcssText from '../../data/lcss-text.json'
 
@@ -109,12 +114,73 @@ export async function getStaticPaths() {
       .map((s) => [s.cas_number as string, s.slug])
   )
 
-  return clean.map((row) => ({
-    params: { slug: substanceSlug(substanceNameFull(row), row.cas_number) },
+  // ⚠⚠ Соседи по алфавиту (session 37). До этого вещества не были связаны между
+  // собой ВООБЩЕ: раздел вёл только «вверх» — на коды и на букву указателя.
+  // Цепь prev → next проходит все 3 650 страниц насквозь, и это единственная
+  // связь «вбок» в разделе.
+  //
+  // ⚠ Порядок ОБЯЗАН совпадать с browse/[letter].astro: там список сортируется
+  // тем же `localeCompare(name, 'en')` по имени ПОСЛЕ substanceTitleName.
+  // Разойдутся правила — и «следующее» на странице не совпадёт со следующим в
+  // указателе, а читатель прочтёт это как ошибку данных, а не вёрстки.
+  //
+  // ⚠ Второй ключ сортировки — CAS. Имя вещества уникальным НЕ является
+  // (у `2,4,4-trimethyl-1-pentene` два CAS, проверка title-unique нашла 77 таких
+  // повторов). Без второго ключа порядок двух одноимённых записей зависел бы от
+  // устойчивости сортировки движка, то есть был бы неопределён.
+  //
+  // ⚠⚠ Цепь идёт по ВСЕМУ справочнику, а не внутри буквы, и на стыках это видно:
+  // после `Zoxamide` следующим стоит `α-[3-(1-oxoprop-2-enyl)…`. Это не сбой.
+  // Буква указателя считается по ПЕРВОМУ ЗНАКУ (всё, что не a–z, уходит в «0-9»),
+  // а порядок — по правилам сравнения строк, где греческие буквы стоят после
+  // латиницы. Поэтому корзина «0-9» разложена по цепи двумя кусками: символы и
+  // цифры в начале, 13 греческих имён в самом конце. Проверено на всех 3 650:
+  // внутри каждой буквы порядок цепи совпадает с порядком указателя знак в знак.
+  //
+  // ⚠ Лишних запросов в базу здесь нет: весь набор уже в `clean`.
+  const ordered = clean
+    .map((row) => {
+      const name = substanceTitleName(substanceNameFull(row))
+      return {
+        row,
+        name,
+        // ⚠ Адрес строит ТОЛЬКО substanceHref/substanceSlug. Прямая склейка
+        // `/substances/${name}-${cas}/` не переживёт ни имени со скобкой, ни
+        // обрезки до SLUG_NAME_MAX — см. hStatementSlug.ts, там уже наступали.
+        href: substanceHref(name, row.cas_number),
+      }
+    })
+    // ⚠ Три ключа, и каждый закрывает свой случай:
+    //   1) localeCompare — тот же порядок, что печатает указатель;
+    //   2) CAS — имена совпали (77 таких повторов);
+    //   3) двоичное сравнение имени — localeCompare вернул 0 на РАЗНЫХ строках
+    //      (пунктуация может быть неразличима на первых уровнях сравнения).
+    // Без третьего ключа порядок зависел бы от того, как Postgres вернул строки
+    // с одинаковым cas_number, а этот порядок не определён и может меняться
+    // между сборками — то есть prev/next «плавали» бы без единой правки кода.
+    .sort(
+      (a, b) =>
+        a.name.localeCompare(b.name, 'en') ||
+        a.row.cas_number.localeCompare(b.row.cas_number) ||
+        (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+    )
+
+  /** Что знает страница о соседе: этого хватает на карточку и ни байта больше. */
+  const card = (it: (typeof ordered)[number]) => ({
+    name: it.name,
+    cas: it.row.cas_number,
+    href: it.href,
+    formula: it.row.molecular_formula,
+  })
+
+  return ordered.map((it, i) => ({
+    params: { slug: substanceSlug(substanceNameFull(it.row), it.row.cas_number) },
     props: {
-      row,
-      hText: Object.fromEntries((row.h_statement_codes ?? []).map((c) => [c, hText.get(c) ?? ''])),
-      sdsSlug: sdsByCas.get(row.cas_number) ?? null,
+      row: it.row,
+      hText: Object.fromEntries((it.row.h_statement_codes ?? []).map((c) => [c, hText.get(c) ?? ''])),
+      sdsSlug: sdsByCas.get(it.row.cas_number) ?? null,
+      prev: i > 0 ? card(ordered[i - 1]) : null,
+      next: i < ordered.length - 1 ? card(ordered[i + 1]) : null,
     },
   }))
 }
@@ -138,9 +204,14 @@ type Props = {
   }
   hText: Record<string, string>
   sdsSlug: string | null
+  prev: Neighbour | null
+  next: Neighbour | null
 }
 
-const { row, hText, sdsSlug } = Astro.props as Props
+/** Сосед по алфавиту. Считается в getStaticPaths — см. комментарий там. */
+type Neighbour = { name: string; cas: string; href: string; formula: string | null }
+
+const { row, hText, sdsSlug, prev, next } = Astro.props as Props
 
 // ⚠ Имя для показа: заглавная первая буква там, где это типографика, а не правка
 // номенклатуры. Разбор и список исключений — в substanceName.ts. На адрес не влияет:
@@ -159,6 +230,7 @@ const sourceNotes = buildSourceNotes(lcss)
 // src/pages/substances/browse/[letter].astro, иначе крошка поведёт в 404.
 const firstChar = name.trim().charAt(0).toLowerCase()
 const letterBucket = firstChar >= 'a' && firstChar <= 'z' ? firstChar : '0-9'
+const letterLabel = letterBucket === '0-9' ? '0–9' : letterBucket.toUpperCase()
 const noteTopics = [...new Set(sourceNotes.map((n) => n.topic))]
 const notesAreFire = noteTopics.includes('Fire and explosion')
 const intro = buildIntro({ name, formula, weight: row.molecular_weight, signal: row.signal_word, texts, lcss })
@@ -259,7 +331,7 @@ const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad()
       <nav class="hub-crumb" aria-label="Breadcrumb">
         <a href="/">Home</a><span class="sep">/</span>
         <a href="/substances/">Substances</a><span class="sep">/</span>
-        <a href={`/substances/browse/${letterBucket}/`}>{letterBucket === '0-9' ? '0–9' : letterBucket.toUpperCase()}</a><span class="sep">/</span>
+        <a href={`/substances/browse/${letterBucket}/`}>{letterLabel}</a><span class="sep">/</span>
         <span>{truncateName(name, 40)}</span>
       </nav>
       <p class="hub-hero-eyebrow">Substance profile</p>
@@ -389,6 +461,21 @@ const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad()
             ))}
           </p>
         )}
+
+        {/*
+          ⚠ Ссылки на хабы, а не только на отдельные коды (session 37). До этого
+          в хаб H-фраз, P-фраз и пиктограмм со страницы вещества можно было попасть
+          ТОЛЬКО через подвал: в теле были ссылки на конкретные коды и ни одной —
+          на их справочник.
+          ⚠ Числа кодов здесь намеренно не печатаются: захардкоженное «108 фраз»
+          устаревает молча при первой же правке данных.
+        */}
+        <p class="hub-note">
+          This page lists only the codes assigned to {truncateName(name, 26)}. The full
+          reference lives on the <a href="/h-statements/">hazard statements hub</a>, the{' '}
+          <a href="/p-statements/">precautionary statements hub</a> and the{' '}
+          <a href="/pictograms/">GHS pictograms hub</a>.
+        </p>
       </div>
     </section>
   )}
@@ -502,6 +589,85 @@ const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad()
       </div>
     </section>
   )}
+
+  {/*
+    ⚠⚠ Партнёрская карточка стоит ТОЛЬКО там, где своей SDS у нас нет
+    (решение Сергея, session 37). На 106 веществах с живой SDS в герое уже есть
+    кнопка на неё — карточка спорила бы с собственной страницей за тот же клик.
+    На остальных она закрывает настоящую дыру: читатель пришёл за листом
+    безопасности, а у нас его нет.
+
+    ⚠ Абзац перед карточкой — не подводка к рекламе, а ответ на вопрос, с которым
+    человек сюда пришёл. SDS выпускается на ПРОДУКТ, а не на вещество, поэтому
+    «SDS ацетона» как единого документа не существует в принципе.
+
+    ⚠ Секция намеренно НЕ пронумерована: 01–05 несут данные, здесь данных нет.
+  */}
+  {!sdsSlug && (
+    <section class="hub-sec-b" id="sds">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">Safety Data Sheet</p>
+        <h2 class="hub-h2">Getting an SDS for {truncateName(name, 26)}</h2>
+        <p class="hub-sub">
+          A Safety Data Sheet is written for a product, not for a substance: the supplier of
+          the grade you actually buy issues it, so two suppliers of {truncateName(name, 22)}
+          issue two different sheets. That is why there is no single authoritative SDS for a
+          substance to download — what there is, is the job of collecting the sheets for the
+          products you hold and keeping them current as suppliers revise them.
+        </p>
+        <SdsManagerCard
+          service="management"
+          href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=subspage"
+        />
+      </div>
+    </section>
+  )}
+
+  {/*
+    ⚠⚠ Соседи по алфавиту. Считаются в getStaticPaths — см. комментарий там.
+    Когда соседа нет (первая и последняя запись справочника), карточка ведёт
+    «вверх», на буквенный указатель: пустая половина хуже, чем ссылка.
+  */}
+  <section class="hub-sec-white" id="nearby">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">Nearby</p>
+      <h2 class="hub-h2">Substances next to {truncateName(name, 26)}</h2>
+      <nav class="hub-prevnext" aria-label="Neighbouring substances">
+        {prev ? (
+          <a href={prev.href}>
+            <span class="dir">← Previous</span>
+            <span class="code sub-nb-name">{truncateName(prev.name, 38)}</span>
+            <span class="txt">CAS {prev.cas}{prev.formula ? ` · ${prev.formula}` : ''}</span>
+          </a>
+        ) : (
+          <a href={`/substances/browse/${letterBucket}/`}>
+            <span class="dir">← Up</span>
+            <span class="code">{letterLabel}</span>
+            <span class="txt">Alphabetical index</span>
+          </a>
+        )}
+        {next ? (
+          <a href={next.href} class="next">
+            <span class="dir">Next →</span>
+            <span class="code sub-nb-name">{truncateName(next.name, 38)}</span>
+            <span class="txt">CAS {next.cas}{next.formula ? ` · ${next.formula}` : ''}</span>
+          </a>
+        ) : (
+          <a href={`/substances/browse/${letterBucket}/`} class="next">
+            <span class="dir">Up →</span>
+            <span class="code">{letterLabel}</span>
+            <span class="txt">Alphabetical index</span>
+          </a>
+        )}
+      </nav>
+
+      <p class="hub-note">
+        Keep going: <a href={`/substances/browse/${letterBucket}/`}>substances starting
+        with {letterLabel}</a>, or <a href="/substances/">search the whole database</a> by
+        name, CAS number, pictogram or signal word.
+      </p>
+    </div>
+  </section>
 
   <section class="hub-sec-deep">
     <div class="hub-wrap">

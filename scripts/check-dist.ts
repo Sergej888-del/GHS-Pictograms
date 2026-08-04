@@ -3085,6 +3085,299 @@ const CHECKS: Check[] = [
       }
     },
   },
+
+  // ─────────────── перелинковка справочника (session 37) ───────────────
+  // ⚠⚠ Три проверки ниже закрывают дыру, честно записанную в хендоффе session 36:
+  // буквенный указатель не был покрыт НИ ОДНОЙ проверкой, а связей «вбок» между
+  // веществами не существовало вовсе.
+
+  {
+    id: 'subs-browse',
+    group: 'subs',
+    title: 'Буквенный указатель собран, и каждое вещество лежит ровно в одной букве',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('subs-browse', slugs)
+      if (miss) return miss
+
+      const exp = await substanceExpectation()
+
+      // ⚠ Правило буквы продублировано в трёх местах (страница вещества, страница
+      // указателя, эта проверка) — иначе крошка поведёт в 404. Здесь оно записано
+      // третий раз НАМЕРЕННО: проверка обязана быть независимым источником, а не
+      // импортом того же кода, который проверяет.
+      const bucketOf = (name: string): string => {
+        const c = name.trim().charAt(0).toLowerCase()
+        return c >= 'a' && c <= 'z' ? c : '0-9'
+      }
+
+      const expectedByLetter = new Map<string, Set<string>>()
+      for (const [slug, v] of exp.bySlug) {
+        const l = bucketOf(v.name)
+        if (!expectedByLetter.has(l)) expectedByLetter.set(l, new Set())
+        expectedByLetter.get(l)!.add(slug)
+      }
+
+      const built = pageSlugs(join('substances', 'browse'))
+      const detail: string[] = []
+      const { missing, extra } = diffSets(new Set(built), new Set(expectedByLetter.keys()))
+      if (missing.length) {
+        detail.push(
+          `буквы, у которых есть вещества, но нет страницы (${missing.length}): ${preview(missing)}`,
+        )
+      }
+      if (extra.length) {
+        detail.push(
+          `собраны буквы без единого вещества (${extra.length}): ${preview(extra)}. ` +
+            'Пустая страница в индексе хуже её отсутствия.',
+        )
+      }
+
+      // ⚠ Маркер по правилу 1: строку `<a class="hub-index-card" href="/substances/`
+      // производит ТОЛЬКО список указателя. Ни подвал, ни герой её не дают.
+      const CARD = 'href="/substances/'
+      assertAscii('subs-browse', ['<a class="hub-index-card" ' + CARD])
+      const LINK = /<a class="hub-index-card" href="\/substances\/([^"\/]+)\/"/g
+
+      const builtSet = new Set(slugs!)
+      let listed = 0
+      for (const letter of built) {
+        const rel = join('substances', 'browse', letter, 'index.html')
+        const html = readPage(rel)
+        if (html === null) {
+          detail.push(`${letter}: папка есть, а ${rel} нет`)
+          continue
+        }
+        const linked = new Set([...html.matchAll(LINK)].map((m) => m[1]))
+        listed += linked.size
+        const want = expectedByLetter.get(letter)
+        if (!want) continue
+        // ⚠ diffSets(actual, expected): missing — чего база ждёт, а в списке нет;
+        // extra — что в списке есть, а база не ждёт. Порядок аргументов важен.
+        const cmp = diffSets(linked, want)
+        if (cmp.missing.length) {
+          detail.push(`${letter}: база ждёт, в списке нет (${cmp.missing.length}): ${preview(cmp.missing)}`)
+        }
+        if (cmp.extra.length) {
+          detail.push(`${letter}: в списке есть, база не ждёт (${cmp.extra.length}): ${preview(cmp.extra)}`)
+        }
+        const dead = [...linked].filter((s) => !builtSet.has(s))
+        if (dead.length) {
+          detail.push(`${letter}: указатель ведёт на несобранные страницы (${dead.length}): ${preview(dead)}`)
+        }
+      }
+
+      // Сумма по буквам обязана сойтись с числом страниц раздела: вещество,
+      // не попавшее ни в одну букву, из указателя недостижимо.
+      if (listed !== slugs!.length) {
+        detail.push(
+          `в буквах перечислено ${listed} веществ, а страниц собрано ${slugs!.length}: ` +
+            `${Math.abs(listed - slugs!.length)} не сходится`,
+        )
+      }
+
+      const ok = detail.length === 0
+      if (ok) {
+        detail.push(`маркер: <a class="hub-index-card" href="/substances/<slug>/"`)
+        detail.push(`букв со страницей: ${built.length}, перечислено веществ: ${listed}`)
+      }
+      return {
+        id: 'subs-browse',
+        group: 'subs',
+        ok,
+        headline: ok
+          ? `${built.length} буквенных страниц, все ${listed} веществ достижимы из указателя`
+          : `расхождений: ${detail.length}`,
+        detail,
+      }
+    },
+  },
+
+  {
+    id: 'subs-prevnext',
+    group: 'subs',
+    title: 'Соседи по алфавиту образуют одну сплошную цепь через весь справочник',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('subs-prevnext', slugs)
+      if (miss) return miss
+
+      // ⚠⚠ Эта проверка НЕ спрашивает базу СПЕЦИАЛЬНО. Она читает готовый HTML и
+      // проверяет граф на связность: пройти цепь от первого вещества до последнего
+      // и убедиться, что она задела каждую страницу ровно один раз. Урок session 34:
+      // когда всё зеленеет, проверь независимость источников. Здесь источник —
+      // сам dist, а не то же самое правило, по которому он собран.
+      const NAV = /<nav class="hub-prevnext" aria-label="Neighbouring substances">([\s\S]*?)<\/nav>/
+      assertAscii('subs-prevnext', ['<nav class="hub-prevnext" aria-label="Neighbouring substances">'])
+      const HREF = /<a href="([^"]+)"/g
+      const SUB = /^\/substances\/([^\/]+)\/$/
+      const UP = /^\/substances\/browse\/([^\/]+)\/$/
+
+      const detail: string[] = []
+      const noNav: string[] = []
+      const badShape: string[] = []
+      const nextOf = new Map<string, string>()
+      const prevOf = new Map<string, string>()
+      const heads: string[] = [] // первая запись: «назад» ведёт вверх, на букву
+      const tails: string[] = [] // последняя запись: «вперёд» ведёт вверх
+      const builtSet = new Set(slugs!)
+      const dead: string[] = []
+
+      for (const slug of slugs!) {
+        const html = readPage(join('substances', slug, 'index.html'))
+        if (html === null) {
+          noNav.push(slug)
+          continue
+        }
+        const nav = NAV.exec(html)
+        if (!nav) {
+          noNav.push(slug)
+          continue
+        }
+        const hrefs = [...nav[1].matchAll(HREF)].map((m) => m[1])
+        if (hrefs.length !== 2) {
+          badShape.push(`${slug}: ссылок в блоке ${hrefs.length}, а должно быть 2`)
+          continue
+        }
+        const [back, fwd] = hrefs
+        const bm = SUB.exec(back)
+        const fm = SUB.exec(fwd)
+        if (bm) {
+          prevOf.set(slug, bm[1])
+          if (!builtSet.has(bm[1])) dead.push(`${slug} ← ${bm[1]}`)
+        } else if (UP.test(back)) heads.push(slug)
+        else badShape.push(`${slug}: «назад» ведёт не на вещество и не на букву -> ${back}`)
+
+        if (fm) {
+          nextOf.set(slug, fm[1])
+          if (!builtSet.has(fm[1])) dead.push(`${slug} → ${fm[1]}`)
+        } else if (UP.test(fwd)) tails.push(slug)
+        else badShape.push(`${slug}: «вперёд» ведёт не на вещество и не на букву -> ${fwd}`)
+      }
+
+      if (noNav.length) {
+        detail.push(
+          `нет блока соседей (${noNav.length}): ${preview(noNav)}. ` +
+            'Так выглядит страница, до которой перелинковка не доехала.',
+        )
+      }
+      if (badShape.length) detail.push(`неверная форма блока (${badShape.length}): ${preview(badShape, 6)}`)
+      if (dead.length) detail.push(`сосед ведёт на несобранную страницу (${dead.length}): ${preview(dead)}`)
+
+      // Концов у цепи ровно два, и они разные.
+      if (heads.length !== 1) detail.push(`начал цепи должно быть 1, найдено ${heads.length}: ${preview(heads)}`)
+      if (tails.length !== 1) detail.push(`концов цепи должно быть 1, найдено ${tails.length}: ${preview(tails)}`)
+
+      // Взаимность: если A говорит «следующий B», то B обязан говорить «предыдущий A».
+      const oneWay: string[] = []
+      for (const [from, to] of nextOf) {
+        if (prevOf.get(to) !== from) oneWay.push(`${from} → ${to}, но обратно ${prevOf.get(to) ?? '—'}`)
+      }
+      if (oneWay.length) detail.push(`связь односторонняя (${oneWay.length}): ${preview(oneWay, 6)}`)
+
+      // Проход цепи целиком: единственный способ поймать разрыв и кольцо.
+      let walked = 0
+      if (heads.length === 1) {
+        const seen = new Set<string>()
+        let cur: string | undefined = heads[0]
+        while (cur && !seen.has(cur)) {
+          seen.add(cur)
+          walked++
+          cur = nextOf.get(cur)
+        }
+        if (cur && seen.has(cur)) detail.push(`цепь замкнулась в кольцо на ${cur}`)
+        if (walked !== slugs!.length) {
+          const unreachable = slugs!.filter((s) => !seen.has(s))
+          detail.push(
+            `цепь прошла ${walked} страниц из ${slugs!.length}: ` +
+              `${unreachable.length} недостижимы обходом «вперёд», например ${preview(unreachable, 6)}`,
+          )
+        }
+      }
+
+      const ok = detail.length === 0
+      if (ok) {
+        detail.push(`маркер: <nav class="hub-prevnext" aria-label="Neighbouring substances">`)
+        detail.push(`связей «вбок»: ${nextOf.size + prevOf.size}, концы цепи: ${heads[0]} … ${tails[0]}`)
+      }
+      return {
+        id: 'subs-prevnext',
+        group: 'subs',
+        ok,
+        headline: ok
+          ? `цепь прошла все ${walked} страниц без разрывов и колец`
+          : `расхождений: ${detail.length}`,
+        detail,
+      }
+    },
+  },
+
+  {
+    id: 'subs-affiliate-placement',
+    group: 'subs',
+    title: 'Партнёрская карточка стоит ровно там, где своей SDS у нас нет',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('subs-affiliate-placement', slugs)
+      if (miss) return miss
+
+      // ⚠⚠ Инвариант, а не число: на каждой странице вещества обязано быть РОВНО
+      // одно из двух — кнопка на нашу SDS в герое ЛИБО карточка партнёра. Ни ноль
+      // (читателю некуда идти за листом безопасности), ни два (карточка спорит с
+      // собственной страницей за тот же клик).
+      // ⚠ Маркеры по правилу 1. `href="/sds/` в чистом виде не годится: подвал
+      // кладёт ссылку на хаб /sds/ на КАЖДУЮ страницу сайта.
+      const OWN = '<a class="hub-hero-cta" href="/sds/'
+      const CARD = 'fp_sid=subspage'
+      assertAscii('subs-affiliate-placement', [OWN, CARD])
+
+      const neither: string[] = []
+      const both: string[] = []
+      let own = 0
+      let card = 0
+      for (const slug of slugs!) {
+        const html = readPage(join('substances', slug, 'index.html'))
+        if (html === null) {
+          neither.push(`${slug} (файла нет)`)
+          continue
+        }
+        const hasOwn = html.includes(OWN)
+        const hasCard = html.includes(CARD)
+        if (hasOwn) own++
+        if (hasCard) card++
+        if (hasOwn && hasCard) both.push(slug)
+        if (!hasOwn && !hasCard) neither.push(slug)
+      }
+
+      const detail: string[] = []
+      if (both.length) {
+        detail.push(
+          `и своя SDS, и карточка партнёра (${both.length}): ${preview(both)}. ` +
+            'Условие в разметке разошлось с sdsSlug.',
+        )
+      }
+      if (neither.length) {
+        detail.push(
+          `ни своей SDS, ни карточки (${neither.length}): ${preview(neither)}. ` +
+            'Читателю, пришедшему за листом безопасности, идти некуда.',
+        )
+      }
+      const ok = detail.length === 0
+      if (ok) {
+        detail.push(`маркеры: "${OWN}…" и "${CARD}"`)
+        detail.push('разметку ссылки (rel, дисклоуз, fpr) держат проверки группы Affiliate')
+      }
+      return {
+        id: 'subs-affiliate-placement',
+        group: 'subs',
+        ok,
+        headline: ok
+          ? `${own} страниц ведут на нашу SDS, ${card} — на партнёра, пересечений нет`
+          : `расхождений: ${detail.length}`,
+        detail,
+      }
+    },
+  },
 ]
 
 // ─────────────────────────── прогон ───────────────────────────

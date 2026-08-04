@@ -511,11 +511,29 @@
    Hero colours are untouched (§0.2): the pages keep HERO_BG from
    src/lib/storageClasses.ts via an inline style that overrides .hub-hero. */
 
-/* Left-aligned hero (category pages; hubs stay centred) */
+/* Left-aligned hero (category pages; hubs stay centred)
+   ⚠⚠ ПОЧИНЕНО в session 37, и стоит понимать, что именно было сломано.
+   Базовый .hub-hero-inner — это flex-колонка с `align-items: center` и
+   `text-align: center`. Класс .hub-hero-left эти два свойства НЕ трогал, а
+   правил только отступы, ширину заголовка и `justify-content` у чипов. В
+   результате на семи разделах крошка, надзаголовок, h1, чипы и кнопка
+   оставались по центру, а влево уезжал ровно один элемент — подзаголовок,
+   у которого ниже прописан `margin-left: 0` (авто-margin справа прижимал его
+   к левому краю). Читалось как случайность, а не как решение.
+   ⚠⚠ Класс стоит на восьми разделах, но ломало только ПЯТЬ — те, где он написан
+   ВМЕСТЕ с .hub-hero-inner: страница вещества, буквенный указатель, хаб
+   /substances/, H-коды, P-коды. Остальные три (разделы SDS, классы хранения,
+   матрица совместимости) написаны как `hub-wrap hub-hero-left`, без inner, и
+   поэтому центрирование к ним никогда не применялось — они и до правки стояли
+   влево. Проверено скриншотами всех восьми до и после (session 37).
+   ⚠ Побочный итог правки: теперь все восемь выглядят ОДИНАКОВО, а до неё две
+   половины раздела расходились без всякой причины. */
 .hub-hero-left {
   position: relative;
   padding-top: clamp(36px, 4.6vw, 60px);
   padding-bottom: clamp(34px, 4.4vw, 56px);
+  align-items: flex-start;
+  text-align: left;
 }
 .hub-hero-left h1 { max-width: 900px; font-size: clamp(30px, 4.2vw, 50px); }
 .hub-hero-left .hub-hero-eyebrow { margin-bottom: 10px; }
@@ -2501,6 +2519,19 @@ a.sub-alpha-item:hover { border-color: var(--teal-200); background: var(--teal-5
 .sub-quote p { font-size: 15px; line-height: 1.65; color: var(--ink-2); margin: 0; }
 .sub-quote .hub-fine { margin: 8px 0 0; color: var(--ink-3); }
 .sub-quote .sub-h3 { margin: 0 0 8px; font-size: 16px; }
+
+/* — Соседи по алфавиту на странице вещества (session 37).
+     ⚠ Блок .hub-prevnext переиспользуется как есть — новый CSS ему не нужен.
+     Правится ровно одна подпись: у H- и P-кодов в .code лежит код, и
+     моноширинный шрифт там по смыслу; здесь в .code лежит ИМЯ вещества, и
+     `2,2'-azobis(2-methylpropionitrile)` моноширинным читается заметно хуже.
+     ⚠ Класс свой (`sub-` — префикс справочника), чужой .code не трогаем. — */
+.hub-prevnext .sub-nb-name {
+  font-family: var(--font-heading);
+  font-size: 16px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
 
 @media (max-width: 640px) {
   .sub-pict { width: 84px; }
