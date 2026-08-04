@@ -3312,6 +3312,197 @@ const CHECKS: Check[] = [
     },
   },
 
+  // ─────────────────── фирменный знак и значки (session 37) ───────────────────
+  // ⚠⚠ Зачем это вообще проверять. Дефолтный favicon.ico фреймворка Astro
+  // (чёрный квадрат с ракетой) пролежал в public/ полтора года и показывался
+  // во вкладке браузера как логотип сайта. Рядом лежал og-default.png —
+  // ПРОЗРАЧНЫЙ ПИКСЕЛЬ 1 × 1 на 70 байт, из-за которого каждое превью ссылки в
+  // Slack, LinkedIn и Telegram выходило пустым. Оба дефекта прожили так долго
+  // ровно потому, что их никто не стерёг: они не ломают сборку и не видны
+  // на самой странице.
+  {
+    id: 'brand-icons',
+    group: 'Brand',
+    title: 'Значки на месте, не дефолтные и пригодны к своим размерам',
+    run: async () => {
+      const detail: string[] = []
+
+      /** Кадры внутри .ico: 6 байт заголовка, дальше по 16 байт на кадр. */
+      const icoFrames = (buf: Buffer): Array<[number, number]> => {
+        if (buf.length < 6 || buf.readUInt16LE(0) !== 0 || buf.readUInt16LE(2) !== 1) return []
+        const n = buf.readUInt16LE(4)
+        const out: Array<[number, number]> = []
+        for (let i = 0; i < n && 6 + 16 * i + 1 < buf.length; i++) {
+          out.push([buf[6 + 16 * i] || 256, buf[7 + 16 * i] || 256])
+        }
+        return out
+      }
+
+      /** Ширина, высота и тип цвета PNG из блока IHDR — без сторонних библиотек. */
+      const png = (buf: Buffer): { w: number; h: number; colour: number } | null => {
+        if (buf.length < 26 || buf.readUInt32BE(0) !== 0x89504e47) return null
+        if (buf.toString('ascii', 12, 16) !== 'IHDR') return null
+        return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20), colour: buf[25] }
+      }
+
+      const read = (rel: string): Buffer | null => {
+        const abs = join(DIST, rel)
+        return existsSync(abs) ? readFileSync(abs) : null
+      }
+
+      // ── .ico: кадр 16 × 16 обязателен ──
+      const ico = read('favicon.ico')
+      if (!ico) detail.push('нет dist/favicon.ico')
+      else {
+        const frames = icoFrames(ico)
+        if (!frames.length) detail.push('favicon.ico не разбирается как ICO')
+        else if (!frames.some(([w, h]) => w === 16 && h === 16)) {
+          detail.push(
+            `в favicon.ico нет кадра 16 × 16, есть только ${frames.map((f) => f.join('×')).join(', ')}. ` +
+              'Браузер сожмёт кадр 32, полосы знака попадут на половину пикселя и замылятся — ' +
+              'ровно то, ради чего кадр 16 рисовали по сетке вручную.',
+          )
+        }
+        // ⚠ Дефолт Astro — 32 × 32 в одном кадре и весит около 650 байт.
+        // Точный размер не проверяем: значок могут пересобрать. Проверяем суть:
+        // одинокий кадр 32 — это и есть признак «значок не наш».
+        if (icoFrames(ico).length === 1 && icoFrames(ico)[0][0] === 32) {
+          detail.push('favicon.ico несёт единственный кадр 32 × 32 — так выглядит дефолтный значок Astro')
+        }
+      }
+
+      // ── apple-touch-icon: без альфа-канала вовсе ──
+      // ⚠⚠ iOS кладёт поверх своё скругление и подставляет под прозрачность
+      // ЧЁРНЫЙ. Прозрачные углы дают чёрные уголки на домашнем экране.
+      // Тип цвета 6 и 4 — с альфой, 2 и 0 — без.
+      const touch = read('apple-touch-icon.png')
+      if (!touch) detail.push('нет dist/apple-touch-icon.png')
+      else {
+        const m = png(touch)
+        if (!m) detail.push('apple-touch-icon.png не разбирается как PNG')
+        else {
+          if (m.w !== 180 || m.h !== 180) detail.push(`apple-touch-icon.png ${m.w}×${m.h}, а должен быть 180×180`)
+          if (m.colour === 6 || m.colour === 4) {
+            detail.push(
+              'apple-touch-icon.png с альфа-каналом. iOS подставит под прозрачность чёрный, ' +
+                'и на домашнем экране будут чёрные углы. Заливать фоном во весь квадрат.',
+            )
+          }
+        }
+      }
+
+      // ── иконки манифеста ──
+      for (const [rel, size] of [['icon-192.png', 192], ['icon-512.png', 512]] as const) {
+        const buf = read(rel)
+        if (!buf) { detail.push(`нет dist/${rel}`); continue }
+        const m = png(buf)
+        if (!m) detail.push(`${rel} не разбирается как PNG`)
+        else if (m.w !== size || m.h !== size) detail.push(`${rel} ${m.w}×${m.h}, а должен быть ${size}×${size}`)
+      }
+
+      // ── манифест разбирается, и всё, что он объявляет, существует ──
+      const mf = readPage('site.webmanifest')
+      if (mf === null) detail.push('нет dist/site.webmanifest')
+      else {
+        try {
+          const parsed = JSON.parse(mf) as { icons?: Array<{ src?: string }> }
+          for (const icon of parsed.icons ?? []) {
+            const src = (icon.src ?? '').replace(/^\//, '')
+            if (src && !existsSync(join(DIST, src))) detail.push(`манифест зовёт ${icon.src}, а файла нет`)
+          }
+        } catch (e) {
+          detail.push(`site.webmanifest не разбирается как JSON: ${(e as Error).message}`)
+        }
+      }
+
+      // ── ссылки в <head> стоят на КАЖДОЙ странице ──
+      // ⚠ Маркеры по правилу 1: эти строки производит только Layout.astro.
+      const LINKS = [
+        'href="/favicon.svg"',
+        'href="/favicon.ico"',
+        'href="/apple-touch-icon.png"',
+        'href="/site.webmanifest"',
+      ]
+      assertAscii('brand-icons', LINKS)
+      const pages = allPages()
+      for (const marker of LINKS) {
+        const without = pages.filter((p) => !p.html.includes(marker)).map((p) => p.rel)
+        if (without.length) {
+          detail.push(`${marker} нет на ${without.length} страницах из ${pages.length}: ${preview(without, 6)}`)
+        }
+      }
+
+      const ok = detail.length === 0
+      if (ok) {
+        detail.push(`ссылки на значки на всех ${pages.length} страницах`)
+        detail.push(`favicon.ico: кадры ${icoFrames(ico!).map((f) => f.join('×')).join(', ')}`)
+      }
+      return {
+        id: 'brand-icons',
+        group: 'Brand',
+        ok,
+        headline: ok ? 'значки свои, размеры и прозрачность в порядке' : `расхождений: ${detail.length}`,
+        detail,
+      }
+    },
+  },
+
+  {
+    id: 'brand-og',
+    group: 'Brand',
+    title: 'Превью для соцсетей существует, нужного размера и не пустое',
+    run: async () => {
+      const detail: string[] = []
+      const abs = join(DIST, 'og-default.png')
+      if (!existsSync(abs)) {
+        detail.push('нет dist/og-default.png — каждое превью ссылки в соцсетях выйдет пустым')
+      } else {
+        const buf = readFileSync(abs)
+        // ⚠⚠ Порог веса — не придирка. Прежний файл был прозрачным пикселем
+        // 1 × 1 на 70 байт: формально «картинка есть», а по факту пусто.
+        // Размер он бы прошёл только вместе с проверкой ширины, поэтому нужны обе.
+        if (buf.length < 10_000) {
+          detail.push(
+            `og-default.png весит ${buf.length} байт. Так выглядит заглушка, а не превью: ` +
+              'до session 37 здесь лежал прозрачный пиксель 1 × 1 на 70 байт.',
+          )
+        }
+        if (buf.length >= 26 && buf.readUInt32BE(0) === 0x89504e47 && buf.toString('ascii', 12, 16) === 'IHDR') {
+          const w = buf.readUInt32BE(16)
+          const h = buf.readUInt32BE(20)
+          if (w !== 1200 || h !== 630) {
+            detail.push(`og-default.png ${w}×${h}, а площадки ждут 1200×630`)
+          }
+        } else {
+          detail.push('og-default.png не разбирается как PNG')
+        }
+      }
+
+      // ⚠ og:image обязан быть АБСОЛЮТНЫМ адресом: Facebook и LinkedIn
+      // относительный путь не разрешают и показывают пустое место.
+      const OG = 'property="og:image" content="https://'
+      assertAscii('brand-og', [OG])
+      // ⚠ Страницы под noindex из требования исключены осознанно: их не увидит
+      // ни поиск, ни лента. Сейчас такая ровно одна — /subscribed/. Значок ей
+      // при этом положен, и его требует brand-icons: вкладку человек видит.
+      const pages = allPages().filter((p) => !/name="robots"[^>]*noindex/.test(p.html))
+      const relative = pages.filter((p) => !p.html.includes(OG)).map((p) => p.rel)
+      if (relative.length) {
+        detail.push(`og:image не абсолютный на ${relative.length} страницах: ${preview(relative, 6)}`)
+      }
+
+      const ok = detail.length === 0
+      if (ok) detail.push(`og:image абсолютный на всех ${pages.length} индексируемых страницах, файл 1200×630`)
+      return {
+        id: 'brand-og',
+        group: 'Brand',
+        ok,
+        headline: ok ? 'превью 1200×630 на месте' : `расхождений: ${detail.length}`,
+        detail,
+      }
+    },
+  },
+
   {
     id: 'subs-affiliate-placement',
     group: 'subs',

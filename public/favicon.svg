@@ -1,14 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
-  <rect width="32" height="32" fill="#0D2B6B" rx="4" />
-  <text
-    x="16"
-    y="16"
-    fill="#FFFFFF"
-    font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-    font-size="9"
-    font-weight="700"
-    letter-spacing="-0.02em"
-    text-anchor="middle"
-    dominant-baseline="central"
-  >GHS</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <rect width="32" height="32" rx="6.5" fill="#062a78"></rect>
+  <rect x="6" y="7" width="20" height="3.8" rx="1.1" fill="#eaf2ff"></rect>
+  <rect x="6" y="14.1" width="13.6" height="3.8" rx="1.1" fill="#eaf2ff"></rect>
+  <rect x="12" y="21.2" width="7.6" height="3.8" rx="1.1" fill="#5eead4"></rect>
 </svg>

@@ -8,7 +8,14 @@
   <div class="sf-bar"></div>
   <div class="sf-wrap sf-grid">
     <div>
-      <div class="sf-logo"><span class="dot"></span>ghspictograms<span class="tld">.com</span></div>
+      {/* ⚠ Тот же знак, что в шапке, и та же сдвинутая третья полоса — разбор
+          в SiteHeader.astro. В подвале знак ВСЕГДА статичен. */}
+      <div class="sf-logo">
+        <svg class="sf-mark" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true" focusable="false">
+          <rect x="5" y="6" width="22" height="4.3" rx="1.2" fill="#eaf2ff" />
+          <rect x="5" y="13.85" width="15" height="4.3" rx="1.2" fill="#eaf2ff" />
+          <rect x="11.5" y="21.7" width="8.5" height="4.3" rx="1.2" fill="#5eead4" />
+        </svg>ghspictograms<span class="tld">.com</span></div>
       <p class="sf-tagline">
         Chemical safety reference data and free GHS/CLP tools. Independent, sourced, free to use.
       </p>
@@ -99,13 +106,10 @@
     font-weight: 700;
     font-size: 16px;
   }
-  .sf-logo .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--teal-300);
-    margin-right: 8px;
+  .sf-mark {
+    flex: none;
     align-self: center;
+    margin-right: 9px;
   }
   .sf-logo .tld {
     color: var(--ink-dark-4);

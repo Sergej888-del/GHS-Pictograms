@@ -5,13 +5,39 @@
 interface Props {
   /** SDS Library live count label; homepage passes the live number, elsewhere the manual default. */
   sdsCount?: string
+  /**
+   * ⚠⚠ Сборка знака проигрывается ТОЛЬКО на главной и ТОЛЬКО один раз.
+   * На остальных 4 095 страницах знак статичен: движение в шапке справочника,
+   * куда человек пришёл из поиска за конкретным числом, — помеха, а не
+   * приветствие. Значок, плитки, превью и печать статичны ВСЕГДА.
+   */
+  animateMark?: boolean
 }
-const { sdsCount = '109' } = Astro.props
+const { sdsCount = '109', animateMark = false } = Astro.props
 ---
 
 <header class="sh-header">
   <div class="sh-wrap sh-row">
-    <a href="/" class="sh-logo"><span class="dot"></span>ghspictograms<span class="tld">.com</span></a>
+    {/*
+      ⚠ Знак заменил бирюзовую точку `<span class="dot">` (session 37). По смыслу
+      точка не пропала: она стала короткой акцентной полосой, и тот же teal-300
+      различает три домена — teal у pictograms, sky у symbols, brass у labels.
+
+      ⚠⚠ Третья полоса СДВИНУТА вправо (x=11.5), а не прижата влево. Это не
+      украшение. В один цвет, без акцента, три полосы, прижатые влево, — это
+      стандартная иконка «выровнять по левому краю» из любого редактора. Сдвиг —
+      единственное, что отличает знак от неё в печати на этикетках и в PDF.
+      Вернуть flush-left можно только вместе с новой монохромной версией.
+
+      ⚠ aria-hidden: знак декоративный, имя сайта стоит рядом текстом.
+    */}
+    <a href="/" class="sh-logo">
+      <svg class:list={['sh-mark', animateMark && 'is-animated']} viewBox="0 0 32 32"
+           width="26" height="26" aria-hidden="true" focusable="false">
+        <rect x="5" y="6" width="22" height="4.3" rx="1.2" fill="#eaf2ff" />
+        <rect x="5" y="13.85" width="15" height="4.3" rx="1.2" fill="#eaf2ff" />
+        <rect x="11.5" y="21.7" width="8.5" height="4.3" rx="1.2" fill="#5eead4" />
+      </svg>ghspictograms<span class="tld">.com</span></a>
 
     <nav class="sh-nav" aria-label="Main">
       <button type="button" id="nav-tools-btn" aria-expanded="false">Tools<span class="caret">▼</span></button>
@@ -160,17 +186,48 @@ const { sdsCount = '109' } = Astro.props
     letter-spacing: -0.02em;
     flex: 0 0 auto;
   }
-  .sh-logo .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--teal-300);
-    box-shadow: 0 0 10px rgba(94, 234, 212, 0.8);
-    margin-right: 8px;
+  /* ⚠ Знак вместо прежней точки. flex:none обязателен: иначе на узком экране
+     flex-контейнер сожмёт SVG раньше, чем перенесёт текст. */
+  .sh-mark {
+    flex: none;
     align-self: center;
+    margin-right: 9px;
   }
   .sh-logo .tld {
     color: var(--ink-dark-4);
+  }
+
+  /* ── Сборка знака: только главная, только один прогон ──
+     ⚠⚠ Анимация включается КЛАССОМ `is-animated`, который ставит проп
+     animateMark. Без класса полосы просто нарисованы — никакого `opacity:0`
+     в исходном состоянии, иначе на 4 095 страницах знак остался бы невидимым,
+     если бы CSS не доехал.
+     ⚠ transform-box: fill-box обязателен: без него transform-origin у <rect>
+     внутри SVG считается от области просмотра, и полосы уезжают за кадр. */
+  .sh-mark.is-animated rect {
+    transform-box: fill-box;
+    transform-origin: left center;
+    animation: sh-bar-in 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .sh-mark.is-animated rect:nth-of-type(1) { animation-delay: 100ms; }
+  .sh-mark.is-animated rect:nth-of-type(2) { animation-delay: 260ms; }
+  .sh-mark.is-animated rect:nth-of-type(3) {
+    animation:
+      sh-bar-in 560ms 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both,
+      sh-breathe 4.5s 1.4s ease-in-out infinite;
+  }
+  @keyframes sh-bar-in {
+    from { transform: scaleX(0); opacity: 0; }
+    to   { transform: scaleX(1); opacity: 1; }
+  }
+  @keyframes sh-breathe {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.55; }
+  }
+  /* ⚠⚠ Уважение к настройке системы — не опция. Человеку с вестибулярными
+     нарушениями движение в шапке физически неприятно. Знак сразу в конечном виде. */
+  @media (prefers-reduced-motion: reduce) {
+    .sh-mark.is-animated rect { animation: none !important; }
   }
   .sh-nav {
     display: flex;

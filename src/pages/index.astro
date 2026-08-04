@@ -238,6 +238,20 @@ const roles = [
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
+    {/*
+      ⚠⚠ Главная — СТАНДАЛОН, она не проходит через Layout.astro, и ссылок на
+      значки здесь не было ВООБЩЕ. Браузер молча брал /favicon.ico из корня, а
+      там полтора года лежал дефолтный значок Astro. То есть самая посещаемая
+      страница сайта показывала во вкладке чужой логотип.
+      ⚠ Этот блок обязан совпадать с таким же в Layout.astro и в subscribed.astro —
+      третья копия, и все три стережёт проверка brand-icons в check:dist.
+    */}
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#062a78" />
+
     <meta property="og:title" content="GHS Pictograms — Label Maker & Library" />
     <meta
       property="og:description"
@@ -246,6 +260,8 @@ const roles = [
     <meta property="og:url" content="https://ghspictograms.com/" />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://ghspictograms.com/og-default.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:site_name" content="GHS Pictograms" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="GHS Pictograms — Label Maker & Library" />
@@ -1211,7 +1227,10 @@ const roles = [
   </head>
 
   <body class="hp">
-    <SiteHeader sdsCount={sdsLabel} />
+    {/* ⚠ animateMark стоит ТОЛЬКО здесь. Сборка знака — приветствие на главной;
+        в шапке страницы вещества, куда человек пришёл из поиска за конкретным
+        числом, то же движение читается как помеха. Разбор — SiteHeader.astro. */}
+    <SiteHeader sdsCount={sdsLabel} animateMark={true} />
 
     <section class="hp-hero">
       <div class="dots-a" aria-hidden="true"></div>

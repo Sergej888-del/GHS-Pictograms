@@ -7,6 +7,14 @@ export const prerender = true
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, follow" />
+    {/* ⚠ Третья копия блока значков: страница стандалонная, Layout.astro её не
+        касается. noindex не повод оставлять её без значка — человек видит эту
+        вкладку сразу после подписки. Копии стережёт brand-icons в check:dist. */}
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#062a78" />
     <title>Subscription confirmed — GHS Pictograms</title>
     <style>
       :root {
