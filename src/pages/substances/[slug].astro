@@ -1,0 +1,532 @@
+---
+/**
+ * Страница вещества в справочнике: /substances/<имя>-<cas>/
+ *
+ * ⚠⚠ ПРАВИЛО ОТРИСОВКИ (session 35). Сначала статика, острова только для поиска,
+ * фильтра и сравнения. Причина — дефект старых страниц на ghssymbols:
+ * `SubstancePage` подключён `client:load`, в статике на странице фенола 25 КБ и
+ * ни слова о феноле. Итог в Google: 1 929 показов, 3 клика, CTR 0,16 %.
+ * Здесь весь текст, все таблицы и все числа лежат в HTML. Островов нет вообще.
+ *
+ * ⚠⚠ ПРАВИЛО ЧИСЕЛ. Значение всегда с условиями и источником — см. lcssProperties.ts.
+ *
+ * ⚠ Справочник и SDS не конкурируют: в заголовке справочника НИКОГДА нет слова
+ * SDS, синонимы живут ТОЛЬКО здесь. Разбор: claude/substance-hub-decisions.md §4.3.
+ */
+import Layout from '../../layouts/Layout.astro'
+import { supabase } from '../../lib/supabase'
+import { must } from '../../lib/mustQuery'
+import { truncateMetaDescription } from '../../lib/metaDescription'
+import { substanceNameFull, substanceTitleName, truncateName, NAME_COLUMNS } from '../../lib/substanceName'
+import { substanceSlug, substanceHref } from '../../lib/substanceSlug'
+// ⚠ Ссылку на страницу H-кода строит ТОЛЬКО hHref: у девяти суффиксных кодов
+// (H360Fd, H360FD, H361f…) слаг отличается от кода — см. hStatementSlug.ts.
+// Прямая склейка `/h-statements/${code}/` дала 387 страниц со ссылкой в 404.
+import { hHref } from '../../lib/hStatementSlug'
+import { buildPropertyRows, buildSourceNotes, type LcssRecord } from '../../lib/lcssProperties'
+import { buildIntro, type TextRecord } from '../../lib/substanceIntro'
+import lcssValues from '../../data/lcss-values.json'
+import lcssText from '../../data/lcss-text.json'
+
+const SITE = 'https://ghspictograms.com'
+
+const PICTOGRAM_NAME: Record<string, string> = {
+  GHS01: 'Exploding bomb',
+  GHS02: 'Flame',
+  GHS03: 'Flame over circle',
+  GHS04: 'Gas cylinder',
+  GHS05: 'Corrosion',
+  GHS06: 'Skull and crossbones',
+  GHS07: 'Exclamation mark',
+  GHS08: 'Health hazard',
+  GHS09: 'Environment',
+}
+
+export async function getStaticPaths() {
+  // ⚠ getStaticPaths — изолированная область видимости: видны только top-level импорты.
+  const PAGE = 1000
+  type Row = {
+    cas_number: string
+    ec_number: string | null
+    index_number: string | null
+    common_name: string | null
+    display_name_short: string | null
+    iupac_name: string
+    synonyms: string[] | null
+    molecular_formula: string | null
+    molecular_weight: number | null
+    signal_word: string | null
+    h_statement_codes: string[] | null
+    p_statement_codes: string[] | null
+    euh_codes: string[] | null
+    ghs_pictogram_codes: string[] | null
+  }
+
+  const rows: Row[] = []
+  for (let from = 0; ; from += PAGE) {
+    // PostgREST отдаёт максимум 1000 строк за раз, веществ 4 178.
+    const chunk = must(
+      `substances (getStaticPaths, from=${from})`,
+      await supabase
+        .from('substances')
+        .select(
+          `cas_number, ec_number, index_number, ${NAME_COLUMNS}, synonyms, molecular_formula, molecular_weight, signal_word, h_statement_codes, p_statement_codes, euh_codes, ghs_pictogram_codes`
+        )
+        .not('cas_number', 'is', null)
+        .order('cas_number')
+        .range(from, from + PAGE - 1)
+    ) as Row[] | null
+    if (!chunk?.length) break
+    rows.push(...chunk)
+    if (chunk.length < PAGE) break
+  }
+
+  // ⚠⚠ Отбор по ФОРМЕ CAS, а не по отсутствию скобки. Проверка `!includes('[')`
+  // пропускала три записи, которые CAS не являются: `-` (один дефис),
+  // `127087-87-09016-45-9` и `3811-73-215922-78-8` — два номера, склеенных
+  // обрезкой varchar(20). Слаг из них не разбирается обратно, и редирект
+  // /hazards/<cas>/ на такую страницу не наведётся.
+  // ⚠ Тот же отбор обязан стоять в sitemap.xml.ts и в
+  // ghssymbols/scripts/generate-substance-redirect-map.mjs — иначе счёта разойдутся.
+  const CAS_SHAPE = /^\d{2,7}-\d{2}-\d$/
+  const clean = rows.filter((r) => r.cas_number && CAS_SHAPE.test(r.cas_number))
+
+  const hCodes = [...new Set(clean.flatMap((r) => r.h_statement_codes ?? []))]
+  const hRows = must(
+    'h_statements (getStaticPaths)',
+    await supabase.from('h_statements').select('code, text_en').in('code', hCodes)
+  ) as Array<{ code: string; text_en: string }> | null
+  const hText = new Map((hRows ?? []).map((h) => [h.code, h.text_en]))
+
+  // Страницы SDS: перекрёстная ссылка «как с этим обращаться» → «что это такое».
+  const sdsRows = must(
+    'sds_pages (getStaticPaths)',
+    await supabase.from('sds_pages').select('slug, cas_number, status')
+  ) as Array<{ slug: string; cas_number: string | null; status: string }> | null
+  const sdsByCas = new Map(
+    (sdsRows ?? [])
+      .filter((s) => s.cas_number && s.status === 'live')
+      .map((s) => [s.cas_number as string, s.slug])
+  )
+
+  return clean.map((row) => ({
+    params: { slug: substanceSlug(substanceNameFull(row), row.cas_number) },
+    props: {
+      row,
+      hText: Object.fromEntries((row.h_statement_codes ?? []).map((c) => [c, hText.get(c) ?? ''])),
+      sdsSlug: sdsByCas.get(row.cas_number) ?? null,
+    },
+  }))
+}
+
+type Props = {
+  row: {
+    cas_number: string
+    ec_number: string | null
+    index_number: string | null
+    common_name: string | null
+    display_name_short: string | null
+    iupac_name: string
+    synonyms: string[] | null
+    molecular_formula: string | null
+    molecular_weight: number | null
+    signal_word: string | null
+    h_statement_codes: string[] | null
+    p_statement_codes: string[] | null
+    euh_codes: string[] | null
+    ghs_pictogram_codes: string[] | null
+  }
+  hText: Record<string, string>
+  sdsSlug: string | null
+}
+
+const { row, hText, sdsSlug } = Astro.props as Props
+
+// ⚠ Имя для показа: заглавная первая буква там, где это типографика, а не правка
+// номенклатуры. Разбор и список исключений — в substanceName.ts. На адрес не влияет:
+// substanceSlug опускает регистр, поэтому слаги остаются прежними.
+const name = substanceTitleName(substanceNameFull(row))
+const cas = row.cas_number
+const formula = row.molecular_formula
+const lcss = (lcssValues as Record<string, LcssRecord>)[cas]
+const texts = (lcssText as Record<string, TextRecord>)[cas]
+const propertyRows = buildPropertyRows(lcss)
+// ⚠ Абзацы, не поместившиеся в таблицу значений, не выбрасываются, а показываются
+// ниже под темой. Подпись «Lower explosive limit» над рассказом о взрыве — неправда,
+// но и молчание про взрыв человек прочтёт как «не взрывается». Разбор: lcssProperties.ts.
+const sourceNotes = buildSourceNotes(lcss)
+// ⚠ Буква указателя. Правило обязано совпадать с
+// src/pages/substances/browse/[letter].astro, иначе крошка поведёт в 404.
+const firstChar = name.trim().charAt(0).toLowerCase()
+const letterBucket = firstChar >= 'a' && firstChar <= 'z' ? firstChar : '0-9'
+const noteTopics = [...new Set(sourceNotes.map((n) => n.topic))]
+const notesAreFire = noteTopics.includes('Fire and explosion')
+const intro = buildIntro({ name, formula, weight: row.molecular_weight, signal: row.signal_word, texts, lcss })
+
+// ⚠ 231 строка iupac_name содержит CRLF, а сама колонка Annex VI — перечень
+// синонимов через точку с запятой. Разбираем на список, не показываем строкой.
+const clean = (s: string) => s.replace(/\r?\n+/g, '; ').replace(/\s+/g, ' ').trim()
+const synonymList = [
+  ...new Set(
+    [...(row.synonyms ?? []), ...clean(row.iupac_name).split(';')]
+      .map((s) => s.trim())
+      .filter((s) => s && s.toLowerCase() !== name.toLowerCase())
+  ),
+].slice(0, 40)
+
+const pictograms = (row.ghs_pictogram_codes ?? []).filter((c) => PICTOGRAM_NAME[c])
+const hList = (row.h_statement_codes ?? []).map((code) => ({ code, text: hText[code] ?? '' }))
+
+/**
+ * ⚠⚠ Title собирается под бюджет в 62 знака ЦЕЛИКОМ, поэтому у страницы вещества
+ * нет хвоста «| GHS Pictograms» (titleIsComplete={true}). Бренд съедал 18 знаков
+ * из 65, и все 3 650 заголовков вылезали за обрезку Google.
+ *
+ * ⚠ CAS в заголовке — не украшение, а решение двух задач сразу:
+ *   1) уникальность. Имя вещества уникальным НЕ является: у `2,4,4-trimethyl-1-pentene`
+ *      два CAS (107-39-1 и 25167-70-8), у `Distillates (coal tar), naphthalene oils…`
+ *      шесть. Проверка title-unique нашла 77 таких повторов. CAS уникален (проверено).
+ *   2) запрос. Семейство `cas number` — 26 940 объёма.
+ *
+ * Формулу оставляем: «acetone formula» + «acetone chemical formula» = 14 700.
+ */
+const TITLE_BUDGET = 62
+const titleTail = ` — Properties, CAS ${cas}`
+const titleRoom = TITLE_BUDGET - titleTail.length - (formula ? formula.length + 3 : 0)
+const shortName = truncateName(name, Math.max(titleRoom, 18))
+const titleCore = formula ? `${shortName} (${formula})` : shortName
+const title = `${titleCore}${titleTail}`
+/**
+ * ⚠⚠ CAS в конце description — по той же причине, что и в title: имя вещества
+ * уникальным не является. У фосфора два CAS (7723-14-0 и 12185-10-3), и описание
+ * выходило слово в слово одинаковым. Проверка description-unique их и поймала.
+ *
+ * ⚠ Второй случай, который это лечит: имя без пробелов длиной под сотню знаков
+ * («lithium sodium 4-[4-[4-(nitrilotris…»). Обрезка по последнему пробелу давала
+ * description «Lithium sodium...» — три слова на всю страницу. Хвост с CAS и
+ * сигнальным словом возвращает туда хоть какой-то смысл.
+ */
+const descTail = row.signal_word
+  ? ` CAS ${cas}. Signal word ${row.signal_word}.`
+  : ` CAS ${cas}.`
+const description = truncateMetaDescription(intro.metaSentence, 155 - descTail.length) + descTail
+const canonical = `${SITE}${substanceHref(name, cas)}`
+
+const chemicalJson = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'ChemicalSubstance',
+  name,
+  ...(formula ? { molecularFormula: formula } : {}),
+  ...(row.molecular_weight ? { molecularWeight: `${row.molecular_weight} g/mol` } : {}),
+  ...(synonymList.length ? { alternateName: synonymList.slice(0, 10) } : {}),
+  identifier: [
+    { '@type': 'PropertyValue', propertyID: 'CAS', value: cas },
+    ...(row.ec_number ? [{ '@type': 'PropertyValue', propertyID: 'EC', value: row.ec_number }] : []),
+  ],
+  description: intro.metaSentence,
+  url: canonical,
+})
+
+const breadcrumbJson = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE}/` },
+    { '@type': 'ListItem', position: 2, name: 'Substances', item: `${SITE}/substances/` },
+    { '@type': 'ListItem', position: 3, name, item: canonical },
+  ],
+})
+
+// Нумерация секций считается заранее, а не побочным эффектом разметки.
+let sn = 0
+const pad = () => String(++sn).padStart(2, '0')
+const nIdentification = pad()
+const nClassification = hList.length || pictograms.length ? pad() : null
+const nProperties = propertyRows.length ? pad() : null
+const nNotes = sourceNotes.length ? pad() : null
+const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad() : null
+---
+
+<Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
+  <script type="application/ld+json" slot="head" set:html={chemicalJson} />
+  <script type="application/ld+json" slot="head" set:html={breadcrumbJson} />
+
+  <section class="hub-hero">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+    <div class="hub-wrap hub-hero-inner hub-hero-left">
+      <nav class="hub-crumb" aria-label="Breadcrumb">
+        <a href="/">Home</a><span class="sep">/</span>
+        <a href="/substances/">Substances</a><span class="sep">/</span>
+        <a href={`/substances/browse/${letterBucket}/`}>{letterBucket === '0-9' ? '0–9' : letterBucket.toUpperCase()}</a><span class="sep">/</span>
+        <span>{truncateName(name, 40)}</span>
+      </nav>
+      <p class="hub-hero-eyebrow">Substance profile</p>
+      <h1>{name}</h1>
+      <p class="hub-hero-sub">{intro.lead}</p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">CAS {cas}</span>
+        {formula && <span class="hub-hero-chip">{formula}</span>}
+        {row.molecular_weight && <span class="hub-hero-chip">{row.molecular_weight} g/mol</span>}
+        {row.signal_word && <span class="hub-hero-chip">{row.signal_word}</span>}
+      </div>
+      {sdsSlug && (
+        <p class="sub-hero-cta-row">
+          <a class="hub-hero-cta" href={`/sds/${sdsSlug}/`}>{truncateName(name, 30)} Safety Data Sheet →</a>
+        </p>
+      )}
+    </div>
+  </section>
+
+  <section class="hub-sec-a" id="overview">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">{nIdentification} · Identification</p>
+      <h2 class="hub-h2">What {truncateName(name, 30)} is</h2>
+      <div class="hub-prose" set:html={intro.paragraphs} />
+
+      <div class="hub-panel" id="formula">
+        <div class="hub-panel-row">
+          <span class="hub-panel-label">CAS number</span><span>{cas}</span>
+        </div>
+        {row.ec_number && (
+          <div class="hub-panel-row">
+            <span class="hub-panel-label">EC number</span><span>{row.ec_number}</span>
+          </div>
+        )}
+        {row.index_number && (
+          <div class="hub-panel-row">
+            <span class="hub-panel-label">Index number</span><span>{row.index_number}</span>
+          </div>
+        )}
+        {formula && (
+          <div class="hub-panel-row">
+            <span class="hub-panel-label">Molecular formula</span><span>{formula}</span>
+          </div>
+        )}
+        {row.molecular_weight && (
+          <div class="hub-panel-row">
+            <span class="hub-panel-label">Molecular weight</span><span>{row.molecular_weight} g/mol</span>
+          </div>
+        )}
+        {texts?.classes && (
+          <div class="hub-panel-row">
+            <span class="hub-panel-label">Chemical class</span>
+            <span>{texts.classes.t}</span>
+          </div>
+        )}
+      </div>
+
+      {synonymList.length > 0 && (
+        <div class="sub-synonyms" id="synonyms">
+          <h3 class="sub-h3">Other names for {truncateName(name, 30)}</h3>
+          <ul class="sub-syn-list">
+            {synonymList.map((s) => <li>{s}</li>)}
+          </ul>
+        </div>
+      )}
+    </div>
+  </section>
+
+  {nClassification && (
+    <section class="hub-sec-white" id="hazards">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nClassification} · GHS classification</p>
+        <h2 class="hub-h2">Hazards and label elements</h2>
+        <p class="hub-sub">
+          Harmonised classification under CLP Annex VI. This is the legally binding
+          classification in the EU; other jurisdictions may differ.
+        </p>
+
+        {pictograms.length > 0 && (
+          <div class="sub-picts">
+            {pictograms.map((code) => (
+              <a class="sub-pict" href={`/ghs/${code.toLowerCase()}/`}>
+                <img src={`/pictograms/${code.toLowerCase()}.svg`} width="88" height="88"
+                     alt={`${code} ${PICTOGRAM_NAME[code]} pictogram`} loading="lazy" />
+                <span>{PICTOGRAM_NAME[code]}</span>
+              </a>
+            ))}
+          </div>
+        )}
+
+        {row.signal_word && (
+          <div class="hub-panel">
+            <div class="hub-panel-row">
+              <span class="hub-panel-label">Signal word</span><span>{row.signal_word}</span>
+            </div>
+          </div>
+        )}
+
+        {hList.length > 0 && (
+          <div class="hub-table-wrap">
+            <table class="hub-table">
+              <caption class="hub-fine">Hazard statements assigned to {truncateName(name, 30)}</caption>
+              <thead><tr><th scope="col">Code</th><th scope="col">Hazard statement</th></tr></thead>
+              <tbody>
+                {hList.map((h) => (
+                  <tr>
+                    <td class="c-code"><a href={hHref(h.code)}>{h.code}</a></td>
+                    <td class="c-txt">{h.text}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {(row.euh_codes ?? []).length > 0 && (
+          <p class="hub-fine">
+            Supplemental EU statements: {(row.euh_codes ?? []).join(', ')}
+          </p>
+        )}
+
+        {(row.p_statement_codes ?? []).length > 0 && (
+          <p class="hub-fine">
+            Precautionary statements:{' '}
+            {(row.p_statement_codes ?? []).map((code, i) => (
+              <>{i > 0 && ', '}<a href={`/p-statements/${code}/`}>{code}</a></>
+            ))}
+          </p>
+        )}
+      </div>
+    </section>
+  )}
+
+  {nProperties && (
+    <section class="hub-sec-b" id="properties">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nProperties} · Physical and chemical properties</p>
+        <h2 class="hub-h2">{truncateName(name, 30)} properties</h2>
+        <p class="hub-sub">
+          Every value is shown with the conditions it was measured under and the source
+          it came from. Where sources disagree, all values are listed rather than one
+          being picked — the difference is usually a different form of the substance,
+          not an error.
+        </p>
+
+        <div class="hub-table-wrap">
+          <table class="hub-table sub-props">
+            <thead>
+              <tr>
+                <th scope="col">Property</th>
+                <th scope="col">Value</th>
+                <th scope="col">Conditions</th>
+                <th scope="col">Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {propertyRows.map((prop) =>
+                prop.values.map((val, i) => (
+                  <tr class={i === 0 ? 'sub-prop-first' : 'sub-prop-more'}>
+                    <th scope="row" class="c-prop">{i === 0 ? prop.label : ''}</th>
+                    <td class={val.isText ? 'c-val c-val-text' : 'c-val'}>{val.display}</td>
+                    <td class="c-txt">{val.condition ?? ''}</td>
+                    <td class="c-code">{val.source}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <p class="hub-fine">
+          Values compiled from PubChem Laboratory Chemical Safety Summary. Temperatures
+          converted to Fahrenheit for reference.
+        </p>
+      </div>
+    </section>
+  )}
+
+  {nNotes && (
+    <section class="hub-sec-white" id="fire-notes">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nNotes} · {notesAreFire ? 'Fire and explosion' : 'Source notes'}</p>
+        <h2 class="hub-h2">
+          {notesAreFire
+            ? `Fire and explosion behaviour of ${truncateName(name, 26)}`
+            : `Further notes on ${truncateName(name, 30)}`}
+        </h2>
+        <p class="hub-sub">
+          These are descriptions rather than measured values, so they are kept out of
+          the table above and quoted here with the source that reported them.
+        </p>
+        {noteTopics.map((topic) => (
+          <div class="sub-notes">
+            <h3 class="sub-h3">{topic}</h3>
+            {sourceNotes.filter((n) => n.topic === topic).map((n) => (
+              <div class="sub-quote">
+                <p>{n.text}</p>
+                <p class="hub-fine">Source: {n.source}</p>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </section>
+  )}
+
+  {nHandling && (
+    <section class="hub-sec-white" id="handling">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nHandling} · Handling and storage</p>
+        <h2 class="hub-h2">Storing and handling {truncateName(name, 30)}</h2>
+
+        {texts?.storage && (
+          <div class="sub-quote">
+            <h3 class="sub-h3">Storage conditions</h3>
+            <p>{texts.storage.t}</p>
+            <p class="hub-fine">Source: {texts.storage.s}</p>
+          </div>
+        )}
+        {texts?.incompat && (
+          <div class="sub-quote">
+            <h3 class="sub-h3">Incompatible materials</h3>
+            <p>{texts.incompat.t}</p>
+            <p class="hub-fine">Source: {texts.incompat.s}</p>
+          </div>
+        )}
+        {texts?.reactivity && (
+          <div class="sub-quote">
+            <h3 class="sub-h3">Reactivity</h3>
+            <p>{texts.reactivity.t}</p>
+            <p class="hub-fine">Source: {texts.reactivity.s}</p>
+          </div>
+        )}
+
+        <p class="hub-note">
+          Planning storage for a mix of chemicals?{' '}
+          <a href={`/tools/chemical-storage-compatibility/?substance=${encodeURIComponent(cas)}`}>
+            Check {truncateName(name, 25)} in the storage compatibility matrix →
+          </a>
+        </p>
+      </div>
+    </section>
+  )}
+
+  <section class="hub-sec-deep">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow on-dark">Next</p>
+      <h2 class="hub-h2 on-dark">Work with {truncateName(name, 30)}</h2>
+      <div class="hub-mini-cards">
+        {sdsSlug && (
+          <a class="hub-mini-card" href={`/sds/${sdsSlug}/`}>
+            <strong>Safety Data Sheet</strong>
+            <span>All 16 sections: first aid, firefighting, spill response, exposure controls.</span>
+          </a>
+        )}
+        <a class="hub-mini-card" href={`/tools/ate-mixture-calculator/?cas=${encodeURIComponent(cas)}`}>
+          <strong>ATE mixture calculator</strong>
+          <span>Calculate acute toxicity estimate for a mixture containing this substance.</span>
+        </a>
+        <a class="hub-mini-card" href={`/tools/chemical-storage-compatibility/?substance=${encodeURIComponent(cas)}`}>
+          <strong>Storage compatibility</strong>
+          <span>What this substance must not be stored next to.</span>
+        </a>
+        <a class="hub-mini-card" href="/label-constructor/">
+          <strong>Label constructor</strong>
+          <span>Build a compliant GHS label with these pictograms and statements.</span>
+        </a>
+      </div>
+    </div>
+  </section>
+</Layout>

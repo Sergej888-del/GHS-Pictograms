@@ -7,6 +7,7 @@ import SharePage from '../../components/SharePage.astro'
 import { supabase } from '../../lib/supabase'
 import { hHref } from '../../lib/hStatementSlug'
 import { substanceName, substanceNameFull } from '../../lib/substanceName'
+import { substanceHref } from '../../lib/substanceSlug'
 
 export async function getStaticPaths() {
   return [
@@ -221,7 +222,10 @@ const hazardClassCount = new Set(
  *
  * Решение Сергея: ссылка остаётся живой. Локальная `/sds/<slug>/` там, где страница
  * есть, и АБСОЛЮТНАЯ на ghssymbols у остальных — напрямую, без хопа через редирект.
- * ⚠ Когда `/hazards/` переедут, менять надо здесь и в SubstanceFilterBrowse.tsx.
+ * ⚠⚠ Session 36: раздел переехал, пометка выше закрыта. Ссылка ведёт на СВОЮ
+ * страницу вещества `/substances/<имя>-<cas>/`. Прежняя абсолютная на
+ * ghssymbols.com/hazards/ теперь отдаёт 301 и уводит вес на домен, который мы сливаем.
+ * ⚠ Живая SDS остаётся в приоритете: таких веществ 106, страница богаче.
  */
 const { data: sdsRaw } = await supabase
   .from('sds_pages')
@@ -924,6 +928,15 @@ const ghsJsonLd = {
           const pics = s.ghs_pictogram_codes ?? []
           const casEnc = encodeURIComponent(s.cas_number)
           const slug = sdsSlug.get(s.cas_number)
+          // ⚠ Ссылка только туда, где страница действительно есть. Отбор по форме CAS
+          // обязан совпадать с getStaticPaths в src/pages/substances/[slug].astro:
+          // у 156 записей CAS многосоставный («110-45-2[1]35073-27-»), страницы нет.
+          // Без этой проверки check:seo ловил 115 битых адресов.
+          const detailHref = slug
+            ? `/sds/${slug}/`
+            : /^\d{2,7}-\d{2}-\d$/.test(s.cas_number)
+              ? substanceHref(substanceNameFull(s), s.cas_number)
+              : null
           const inner = (
             <>
               <div class="min-w-0">
@@ -937,19 +950,29 @@ const ghsJsonLd = {
                   </span>
                 )}
                 <span class="text-xs text-gray-400 hidden sm:block">{pics.slice(0,4).join(' ')}</span>
-                <span class="text-[#062A78] text-xs font-medium">{slug ? 'SDS →' : 'Details →'}</span>
+                <span class="text-[#062A78] text-xs font-medium">
+                  {slug ? 'SDS →' : detailHref ? 'Details →' : 'No single CAS'}
+                </span>
               </div>
             </>
           )
           return (
             <li key={s.cas_number} class="flex items-stretch gap-0">
-              <a
-                href={slug ? `/sds/${slug}/` : `https://ghssymbols.com/hazards/${casEnc}/`}
-                rel={slug ? undefined : 'noopener'}
-                class="flex flex-1 min-w-0 items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors gap-4"
-              >
-                {inner}
-              </a>
+              {detailHref ? (
+                <a
+                  href={detailHref}
+                  class="flex flex-1 min-w-0 items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors gap-4"
+                >
+                  {inner}
+                </a>
+              ) : (
+                <span
+                  class="flex flex-1 min-w-0 items-center justify-between px-5 py-3.5 gap-4"
+                  title="Multi-component Annex VI entry — no single CAS, so no substance page"
+                >
+                  {inner}
+                </span>
+              )}
               <a
                 href={`/label-constructor/?cas=${casEnc}`}
                 class="shrink-0 px-4 py-3.5 border-l border-gray-200 text-xs font-semibold text-[#062A78] hover:bg-blue-50 transition-colors flex items-center"

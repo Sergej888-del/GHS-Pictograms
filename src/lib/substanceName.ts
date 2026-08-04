@@ -34,6 +34,48 @@ export function substanceNameFull(s: NameFields): string {
   return (s.iupac_name ?? '').trim()
 }
 
+/**
+ * Дескрипторы, которые в химическом имени обязаны оставаться строчными.
+ * ⚠ Это не стиль, а часть имени: `tert-` и `Tert-` — разные вещи для читателя,
+ * знающего номенклатуру, и вторая форма читается как ошибка.
+ */
+const LOWERCASE_DESCRIPTOR = new Set([
+  'cis', 'trans', 'sec', 'tert', 'iso', 'neo', 'ortho', 'meta', 'para',
+  'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'omega',
+  'endo', 'exo', 'syn', 'anti', 'sym', 'unsym', 'vic', 'gem',
+  'erythro', 'threo', 'rac', 'rel',
+])
+
+/**
+ * Имя для заголовка: <h1>, <title>, хлебные крошки, JSON-LD, начало предложения.
+ *
+ * ⚠⚠ Поднимаем ТОЛЬКО первую букву и ТОЛЬКО когда это типографика, а не правка
+ * имени. 585 имён из 3 653 приходят из источника со строчной, и «acetone» в
+ * заголовке выдачи читается как небрежность. Но слепой `toUpperCase` первой
+ * буквы сломал бы номенклатуру:
+ *
+ *   p-xylene    → P-xylene     ❌ локант положения
+ *   n-butanol   → N-butanol    ❌ уже другое: N — это атом азота
+ *   tert-butanol→ Tert-butanol ❌ дескриптор
+ *   p,p'-DDT    → P,p'-DDT     ❌
+ *
+ * Поэтому не трогаем имя, если оно начинается не с латинской строчной буквы
+ * (цифра, скобка, греческая буква), с односимвольного локанта или со словесного
+ * дескриптора из списка выше. Замер по базе: под защиту попадают 35 имён.
+ *
+ * ⚠ На адрес это не влияет: substanceSlug опускает регистр целиком.
+ */
+export function substanceTitleName(name: string): string {
+  const t = name.trim()
+  if (!t || !/^[a-z]/.test(t)) return t
+  // Односимвольный локант: p-xylene, N-methyl…, d-limonene, p,p'-DDT
+  if (/^[a-z][-,'’]/.test(t)) return t
+  // Словесный дескриптор: cis-, tert-, alpha-…
+  const word = /^([a-z]+)-/.exec(t)
+  if (word && LOWERCASE_DESCRIPTOR.has(word[1])) return t
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}
+
 /** Обрезка по границе слова с многоточием. */
 export function truncateName(name: string, max: number = NAME_MAX): string {
   if (name.length <= max) return name

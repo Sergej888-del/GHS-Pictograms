@@ -39,6 +39,11 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { STORAGE_CLASSES } from '../src/lib/storageClasses'
 import { SDS_SECTIONS } from '../src/lib/sdsSections'
 import { hSlug } from '../src/lib/hStatementSlug'
+// ⚠ Правило имени и правило адреса берём из тех же файлов, по которым
+// строится страница. Списать их сюда — значит завести вторую копию,
+// которая разойдётся молча (так уже вышло у pictogramCasPaths.ts).
+import { substanceNameFull, NAME_COLUMNS } from '../src/lib/substanceName'
+import { substanceSlug, casFromSlug } from '../src/lib/substanceSlug'
 // ⚠ Те же обёртки, что стоят на сборке: проверка обязана падать на отказе запроса,
 // а не считать пустой ответ фактом о данных. И тот же ограничитель параллелизма —
 // иначе сотня одновременных RPC утопит пулер, и проверка начнёт врать (session 32).
@@ -916,6 +921,107 @@ function printedSubstanceNames(): { name: string; page: string }[] {
   }
   return out
 }
+
+
+// ───────────────────── справочник веществ (session 35) ─────────────────────
+//
+// ⚠⚠ ЗАЧЕМ ЭТА ГРУППА. Старые страницы веществ на ghssymbols рендерились
+// островом `client:load`: в статике лежало 25 КБ разметки и ни слова о
+// веществе. Google: 1 929 показов, 3 клика, CTR 0,16 %. Дефект был не виден
+// ни в браузере, ни в dev — только в исходном коде отданного файла.
+// Поэтому subs-static-content проверяет не «страница собралась», а
+// «в файле физически лежит имя, CAS и хотя бы одно число».
+
+type SubstanceRow = {
+  cas_number: string
+  common_name: string | null
+  display_name_short: string | null
+  iupac_name: string | null
+}
+
+type SubstanceExpectation = {
+  /** slug -> строка базы */
+  bySlug: Map<string, { row: SubstanceRow; name: string; cas: string }>
+  /** все CAS, для которых страница обязана существовать */
+  casSet: Set<string>
+  /** сколько строк базы прошло отбор (может быть больше числа слагов при коллизии) */
+  rowCount: number
+}
+
+let substanceExpectationCache: SubstanceExpectation | null = null
+
+/**
+ * Ровно тот же срез, что берёт getStaticPaths в src/pages/substances/[slug].astro:
+ *   cas_number не null  +  в cas_number нет '['
+ * ⚠ Разойтись здесь со страницей — значит получить вечно красную проверку либо,
+ * что хуже, вечно зелёную при недостроенном разделе.
+ */
+async function substanceExpectation(): Promise<SubstanceExpectation> {
+  if (substanceExpectationCache) return substanceExpectationCache
+  const raw = await selectAll<SubstanceRow>(
+    'substances',
+    `cas_number, ${NAME_COLUMNS}`,
+    (q: any) => q.not('cas_number', 'is', null).order('cas_number'),
+  )
+  // ⚠ RLS без политики отдаёт anon пустоту, а не ошибку — без этой строки проверка молча позеленеет
+  assertNonEmpty('subs-pages', 'substances', raw)
+
+  // ⚠⚠ Отбор по ФОРМЕ CAS, ровно как в getStaticPaths страницы вещества.
+  // 156 записей несут многосоставный CAS, обрезанный varchar(20)
+  // («110-45-2[1]35073-27-»), и ещё три CAS не являются вовсе: `-`,
+  // `127087-87-09016-45-9`, `3811-73-215922-78-8`. Страницы для них не строятся.
+  // ⚠ Правило продублировано в пяти местах — при правке менять везде:
+  // substances/[slug].astro, substances/browse/[letter].astro,
+  // substances/index.astro, sitemap.xml.ts, ghssymbols/scripts/generate-substance-redirect-map.mjs.
+  const rows = raw.filter((r) => r.cas_number && /^\d{2,7}-\d{2}-\d$/.test(r.cas_number))
+
+  const bySlug = new Map<string, { row: SubstanceRow; name: string; cas: string }>()
+  const casSet = new Set<string>()
+  for (const row of rows) {
+    const name = substanceNameFull(row)
+    bySlug.set(substanceSlug(name, row.cas_number), { row, name, cas: row.cas_number })
+    casSet.add(row.cas_number)
+  }
+  substanceExpectationCache = { bySlug, casSet, rowCount: rows.length }
+  return substanceExpectationCache
+}
+
+/** Слаги собранных страниц раздела. Пустой ответ отличаем от «папки нет». */
+function builtSubstanceSlugs(): string[] | null {
+  return existsSync(join(DIST, 'substances')) ? pageSlugs('substances') : null
+}
+
+/** Одно и то же объяснение для всех проверок группы: раздела в dist нет. */
+function substanceSectionMissing(id: string, slugs: string[] | null): Result | null {
+  if (slugs === null) {
+    return {
+      id,
+      group: 'subs',
+      ok: false,
+      headline: `нет папки ${join(DIST, 'substances')}`,
+      detail: [
+        'Раздел /substances/ не собран. Проверка НЕ считается пройденной:',
+        'зелёный ответ на отсутствующем разделе — это и есть тихий провал.',
+        'Собрать: npm run build, затем npm run check:dist -- --only subs',
+      ],
+    }
+  }
+  if (slugs.length === 0) {
+    return {
+      id,
+      group: 'subs',
+      ok: false,
+      headline: 'в dist/substances/ ноль страниц веществ',
+      detail: [
+        'Папка есть, но в ней только index.html хаба — ни одной подпапки со страницей.',
+        'Похоже, getStaticPaths вернул пустой список: чаще всего это отказ запроса',
+        'к substances или пустой ответ RLS. Смотреть лог npm run build.',
+      ],
+    }
+  }
+  return null
+}
+
 
 const CHECKS: Check[] = [
   {
@@ -2749,6 +2855,232 @@ const CHECKS: Check[] = [
         headline: ok
           ? `${printed.length} подписей в dist, все совпали с правилом common_name → display_name_short → iupac_name`
           : `${printed.length} подписей в dist, расхождений ${semicolon.length + unknown.length}`,
+        detail,
+      }
+    },
+  },
+  // ───────────────────── справочник веществ (session 35) ─────────────────────
+
+  {
+    id: 'subs-pages',
+    group: 'subs',
+    title: 'Собраны страницы всех веществ с пригодным CAS',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('subs-pages', slugs)
+      if (miss) return miss
+
+      const exp = await substanceExpectation()
+      const { missing, extra } = diffSets(new Set(slugs!), new Set(exp.bySlug.keys()))
+      const detail: string[] = []
+      if (missing.length) detail.push(`нет в dist (${missing.length}): ${preview(missing)}`)
+      if (extra.length) detail.push(`лишние в dist (${extra.length}): ${preview(extra)}`)
+      // Коллизия слагов схлопывает две строки базы в одну страницу — это не
+      // расхождение с dist, но знать о нём надо.
+      if (exp.rowCount !== exp.bySlug.size) {
+        detail.push(
+          `строк базы ${exp.rowCount}, различных слагов ${exp.bySlug.size}: ` +
+            `${exp.rowCount - exp.bySlug.size} записей делят адрес с другой записью`,
+        )
+      }
+      const ok = missing.length === 0 && extra.length === 0
+      // ⚠ Подпись обязана описывать ДЕЙСТВУЮЩИЙ отбор. «не null и без "["» осталось
+      // от прежнего правила и после ужесточения стало враньём в зелёном выводе —
+      // а неверная подпись под галочкой хуже, чем её отсутствие.
+      if (ok && !detail.length) detail.push('отбор: cas_number строгой формы \\d{2,7}-\\d{2}-\\d')
+      return {
+        id: 'subs-pages',
+        group: 'subs',
+        ok,
+        headline: `${slugs!.length} страниц в dist/substances/, база ожидает ${exp.bySlug.size}`,
+        detail,
+      }
+    },
+  },
+
+  {
+    id: 'subs-slug-cas',
+    group: 'subs',
+    title: 'Хвост каждого слага разбирается в CAS, и такой CAS есть в базе',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('subs-slug-cas', slugs)
+      if (miss) return miss
+
+      const exp = await substanceExpectation()
+      const unparsed: string[] = []
+      const unknown: string[] = []
+      for (const slug of slugs!) {
+        // ⚠ Тот же casFromSlug, что стоит в редиректе с ghssymbols: если он
+        // не разберёт адрес здесь, он не разберёт его и на проде.
+        const cas = casFromSlug(slug)
+        if (!cas) unparsed.push(slug)
+        else if (!exp.casSet.has(cas)) unknown.push(`${slug} -> ${cas}`)
+      }
+      const detail: string[] = []
+      if (unparsed.length) {
+        detail.push(
+          `хвост не похож на CAS (${unparsed.length}): ${preview(unparsed)}. ` +
+            'Редирект /hazards/<cas>/ на такую страницу не наведётся.',
+        )
+      }
+      if (unknown.length) {
+        detail.push(`CAS разобран, но его нет в базе (${unknown.length}): ${preview(unknown)}`)
+      }
+      const ok = detail.length === 0
+      if (ok) detail.push(`разобрано ${slugs!.length} слагов, все CAS нашлись в substances`)
+      return {
+        id: 'subs-slug-cas',
+        group: 'subs',
+        ok,
+        headline: ok
+          ? `${slugs!.length} слагов, все дали известный CAS`
+          : `проблем: ${unparsed.length + unknown.length} из ${slugs!.length}`,
+        detail,
+      }
+    },
+  },
+
+  {
+    id: 'subs-static-content',
+    group: 'subs',
+    title: 'Содержимое вещества лежит в HTML, а не подгружается островом',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('subs-static-content', slugs)
+      if (miss) return miss
+
+      const exp = await substanceExpectation()
+      const detail: string[] = []
+
+      // ── а) сплошной обход: у КАЖДОЙ страницы есть <h1> и подпись CAS ──
+      // ⚠ Маркеры по правилу 1: <h1> и chip «CAS …» производит только разметка
+      // hero этой страницы. Считаем страницы, а не вхождения (правило 2).
+      const noH1: string[] = []
+      const noCas: string[] = []
+      for (const slug of slugs!) {
+        const html = readFileSync(join(DIST, 'substances', slug, 'index.html'), 'utf8')
+        if (!/<h1[^>]*>[^<]/.test(html)) noH1.push(slug)
+        const cas = casFromSlug(slug)
+        if (cas && !html.includes(`>CAS ${cas}</span>`)) noCas.push(slug)
+      }
+      if (noH1.length) detail.push(`пустой или отсутствующий <h1> (${noH1.length}): ${preview(noH1)}`)
+      if (noCas.length) detail.push(`нет чипа ">CAS <cas></span>" (${noCas.length}): ${preview(noCas)}`)
+
+      // ── б) контрольные вещества: имя, CAS и ЧИСЛО на месте ──
+      // Список фиксированный и заведомо крупный: если раздел собрался, эти
+      // вещества в нём есть. Ни одного не нашли — значит проверка смотрит не туда.
+      const SAMPLE = ['67-64-1', '108-88-3', '67-56-1', '71-43-2', '7664-93-9', '64-17-5']
+      assertAscii('subs-static-content', SAMPLE.map((c) => `>CAS ${c}</span>`))
+
+      const bySampleCas = new Map<string, string>()
+      for (const [slug, v] of exp.bySlug) if (SAMPLE.includes(v.cas)) bySampleCas.set(v.cas, slug)
+
+      let deepChecked = 0
+      for (const cas of SAMPLE) {
+        const slug = bySampleCas.get(cas)
+        if (!slug) continue
+        const rel = `substances/${slug}/index.html`
+        const html = readPage(rel)
+        if (html === null) {
+          detail.push(`${cas}: базa даёт слаг ${slug}, но файла ${rel} нет`)
+          continue
+        }
+        deepChecked++
+        const name = exp.bySlug.get(slug)!.name
+        // Имя приходит из базы и не обязано быть ASCII — под правило 3 (маркеры
+        // только ASCII) оно не подпадает, поэтому assertAscii к нему не применяем.
+        const escaped = name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        if (!html.includes(escaped)) {
+          detail.push(`${cas} (${slug}): в HTML нет имени «${name.slice(0, 40)}»`)
+        }
+        if (!html.includes(`>CAS ${cas}</span>`)) {
+          // ⚠ Различаем два разных провала. Если голая строка «CAS <cas>» в файле
+          // есть, а точного маркера нет — поменялась разметка чипа, и чинить надо
+          // проверку. Если нет и её — со страницы пропало содержимое.
+          detail.push(
+            html.includes(`CAS ${cas}`)
+              ? `${cas} (${slug}): строка "CAS ${cas}" в файле есть, но не в чипе ">CAS ${cas}</span>". ` +
+                'Разметка hero изменилась — поправить маркер, а не выключать проверку.'
+              : `${cas} (${slug}): в HTML нет ни чипа, ни строки "CAS ${cas}" — содержимого на странице нет`,
+          )
+        }
+        // Число свойства: ячейка <td class="c-val"> таблицы sub-props. Требуем
+        // цифру — пустая таблица и «no data» тут не проходят.
+        // ⚠ Маркер сменился с c-n на c-val вместе с разметкой (session 36):
+        // класс c-n на телефоне дописывает через ::before «substances · ».
+        // Проверка и разметка правятся ОДНИМ движением, иначе проверка ослепнет.
+        const cells = [...html.matchAll(/<td class="c-val(?: c-val-text)?">([^<]*)<\/td>/g)].map((m) => m[1])
+        const numeric = cells.filter((c) => /\d/.test(c))
+        if (!numeric.length) {
+          detail.push(
+            `${cas} (${slug}): ни одного числового значения свойства ` +
+              `(ячеек <td class="c-val">: ${cells.length}). Размер файла ${Math.round(html.length / 1024)} КБ — ` +
+              'так выглядит остров client:load вместо статики.',
+          )
+        }
+      }
+
+      if (deepChecked === 0) {
+        detail.push(
+          `ни одно из контрольных веществ (${SAMPLE.join(', ')}) не нашлось в базе. ` +
+            'Чинить надо проверку, а не выключать её: список устарел или отбор разошёлся со страницей.',
+        )
+      }
+
+      const ok = detail.length === 0
+      return {
+        id: 'subs-static-content',
+        group: 'subs',
+        ok,
+        headline: ok
+          ? `${slugs!.length} страниц с именем и CAS в HTML, из них ${deepChecked} проверены с числами`
+          : `расхождений: ${detail.length}`,
+        detail: ok
+          ? ['маркеры: <h1>, ">CAS <cas></span>", <td class="c-val"> с цифрой']
+          : detail,
+      }
+    },
+  },
+
+  {
+    id: 'subs-sitemap',
+    group: 'subs',
+    title: 'Собранные страницы веществ и sitemap.xml совпадают в обе стороны',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('subs-sitemap', slugs)
+      if (miss) return miss
+
+      const xml = readPage('sitemap.xml')
+      if (xml === null) {
+        return { id: 'subs-sitemap', group: 'subs', ok: false, headline: 'нет dist/sitemap.xml', detail: [] }
+      }
+      // ⚠ Хаб /substances/ в сравнение не входит: у него нет собранной подпапки,
+      // он index.html самого раздела. Берём только адреса с непустым слагом.
+      const inSitemap = new Set(
+        [...xml.matchAll(/<loc>https:\/\/ghspictograms\.com\/substances\/([^<\/]+)\/<\/loc>/g)].map((m) => m[1]),
+      )
+      const { missing, extra } = diffSets(inSitemap, new Set(slugs!))
+      const detail: string[] = []
+      if (missing.length) {
+        detail.push(
+          `собраны, но в sitemap их нет (${missing.length}): ${preview(missing)}`,
+        )
+      }
+      if (extra.length) {
+        detail.push(
+          `sitemap зовёт краулера на несобранные адреса (${extra.length}): ${preview(extra)}. ` +
+            'Это прямое нарушение правила «sitemap не объявляет страницу, которую getStaticPaths не строит».',
+        )
+      }
+      const ok = missing.length === 0 && extra.length === 0
+      if (ok) detail.push('маркер: <loc>https://ghspictograms.com/substances/<slug>/</loc>')
+      return {
+        id: 'subs-sitemap',
+        group: 'subs',
+        ok,
+        headline: `в sitemap ${inSitemap.size} страниц веществ, в dist ${slugs!.length}`,
         detail,
       }
     },

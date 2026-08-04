@@ -1,0 +1,180 @@
+---
+/**
+ * Буквенный указатель справочника: /substances/browse/<буква>/
+ *
+ * ⚠⚠ ЗАЧЕМ. check:seo в session 36 показал `orphans: 3653` — на страницы веществ
+ * не вело НИ ОДНОЙ внутренней ссылки. Основную починку сделали перелинковкой со
+ * страниц H- и P-кодов, но там ссылка живёт внутри свёрнутого списка и вперемешку
+ * с сотнями других. Указатель даёт второй, независимый путь обхода: короткий,
+ * предсказуемый и без острова.
+ *
+ * ⚠ ПОЧЕМУ НЕ `/substances/<буква>/`. На этом уровне уже стоит `[slug].astro`.
+ * Два динамических маршрута в одном сегменте — источник неоднозначности: сегодня
+ * `a` не совпадает ни с одним слагом, а завтра появится вещество с именем из одной
+ * буквы, и один маршрут молча перекроет другой. Отдельный сегмент `browse` снимает
+ * вопрос навсегда.
+ *
+ * ⚠ Островов здесь нет вовсе — правило хаба из substance-hub-decisions.md §4.1.
+ * Поиск живёт на /substances/, указатель обязан быть чистой статикой.
+ */
+import Layout from '../../../layouts/Layout.astro'
+import { supabase } from '../../../lib/supabase'
+import { must } from '../../../lib/mustQuery'
+import { substanceNameFull, substanceTitleName, truncateName, NAME_COLUMNS } from '../../../lib/substanceName'
+import { substanceHref } from '../../../lib/substanceSlug'
+
+const SITE = 'https://ghspictograms.com'
+
+/** Буква указателя. Всё, что начинается не с латинской буквы, уходит в «0-9». */
+function bucketOf(name: string): string {
+  const c = name.trim().charAt(0).toLowerCase()
+  return c >= 'a' && c <= 'z' ? c : '0-9'
+}
+
+const LETTERS = ['0-9', ...'abcdefghijklmnopqrstuvwxyz'.split('')]
+
+export async function getStaticPaths() {
+  // ⚠ getStaticPaths — изолированная область видимости: видны только top-level импорты.
+  const PAGE = 1000
+  type Row = {
+    cas_number: string
+    common_name: string | null
+    display_name_short: string | null
+    iupac_name: string
+    molecular_formula: string | null
+  }
+
+  const rows: Row[] = []
+  for (let from = 0; ; from += PAGE) {
+    const chunk = must(
+      `substances (browse, from=${from})`,
+      await supabase
+        .from('substances')
+        .select(`cas_number, ${NAME_COLUMNS}, molecular_formula`)
+        .not('cas_number', 'is', null)
+        .order('cas_number')
+        .range(from, from + PAGE - 1)
+    ) as Row[] | null
+    if (!chunk?.length) break
+    rows.push(...chunk)
+    if (chunk.length < PAGE) break
+  }
+
+  // ⚠⚠ Отбор ОБЯЗАН совпадать с getStaticPaths в ../[slug].astro и с sitemap:
+  // строгая форма CAS. Иначе указатель поведёт на страницу, которой нет.
+  const CAS_SHAPE = /^\d{2,7}-\d{2}-\d$/
+  const clean = rows.filter((r) => r.cas_number && CAS_SHAPE.test(r.cas_number))
+
+  const bucket = (name: string) => {
+    const c = name.trim().charAt(0).toLowerCase()
+    return c >= 'a' && c <= 'z' ? c : '0-9'
+  }
+  const letters = ['0-9', ...'abcdefghijklmnopqrstuvwxyz'.split('')]
+
+  const byLetter = new Map<string, Array<{ name: string; cas: string; formula: string | null }>>()
+  for (const r of clean) {
+    const raw = substanceNameFull(r)
+    const name = substanceTitleName(raw)
+    const key = bucket(name)
+    if (!byLetter.has(key)) byLetter.set(key, [])
+    byLetter.get(key)!.push({ name, cas: r.cas_number, formula: r.molecular_formula })
+  }
+  for (const list of byLetter.values()) list.sort((a, b) => a.name.localeCompare(b.name, 'en'))
+
+  const counts = Object.fromEntries(letters.map((l) => [l, byLetter.get(l)?.length ?? 0]))
+
+  // ⚠ Пустую букву страницей не делаем: пустая страница в индексе хуже её отсутствия.
+  return letters
+    .filter((l) => (byLetter.get(l)?.length ?? 0) > 0)
+    .map((letter) => ({
+      params: { letter },
+      props: { items: byLetter.get(letter)!, counts },
+    }))
+}
+
+type Item = { name: string; cas: string; formula: string | null }
+type Props = { items: Item[]; counts: Record<string, number> }
+
+const { letter } = Astro.params as { letter: string }
+const { items, counts } = Astro.props as Props
+
+const shown = letter === '0-9' ? 'a number or symbol' : letter.toUpperCase()
+const heading = letter === '0-9' ? 'Substances starting with a number' : `Substances starting with ${letter.toUpperCase()}`
+
+const title = `${heading} — ${items.length} entries`
+const description =
+  `Alphabetical index of ${items.length} substances with a harmonised CLP Annex VI classification ` +
+  `whose name starts with ${shown}. Each entry links to properties, GHS hazards and label elements.`
+const canonical = `${SITE}/substances/browse/${letter}/`
+
+const breadcrumbJson = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE}/` },
+    { '@type': 'ListItem', position: 2, name: 'Substances', item: `${SITE}/substances/` },
+    { '@type': 'ListItem', position: 3, name: heading, item: canonical },
+  ],
+})
+---
+
+<Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
+  <script type="application/ld+json" slot="head" set:html={breadcrumbJson} />
+
+  <section class="hub-hero">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="hub-wrap hub-hero-inner hub-hero-left">
+      <nav class="hub-crumb" aria-label="Breadcrumb">
+        <a href="/">Home</a><span class="sep">/</span>
+        <a href="/substances/">Substances</a><span class="sep">/</span>
+        <span>{letter.toUpperCase()}</span>
+      </nav>
+      <p class="hub-hero-eyebrow">Alphabetical index</p>
+      <h1>{heading}</h1>
+      <p class="hub-hero-sub">
+        {items.length} substances with a harmonised classification under CLP Annex VI.
+        Every entry has its own page with physical properties, hazard statements and label elements.
+      </p>
+    </div>
+  </section>
+
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <nav class="sub-alpha" aria-label="Browse by letter">
+        {LETTERS.map((l) =>
+          counts[l] ? (
+            l === letter ? (
+              <span class="sub-alpha-item is-current" aria-current="page">{l === '0-9' ? '0–9' : l.toUpperCase()}</span>
+            ) : (
+              <a class="sub-alpha-item" href={`/substances/browse/${l}/`}>
+                {l === '0-9' ? '0–9' : l.toUpperCase()}
+              </a>
+            )
+          ) : (
+            <span class="sub-alpha-item is-empty">{l === '0-9' ? '0–9' : l.toUpperCase()}</span>
+          )
+        )}
+      </nav>
+
+      <ul class="hub-index wide" style="margin-top:26px">
+        {items.map((s) => (
+          <li>
+            <a class="hub-index-card" href={substanceHref(s.name, s.cas)}>
+              <span class="txt">
+                <span class="name" title={s.name}>{truncateName(s.name, 58)}</span>
+                <span class="cas">CAS {s.cas}</span>
+              </span>
+              {s.formula && <span class="formula">{s.formula}</span>}
+            </a>
+          </li>
+        ))}
+      </ul>
+
+      <p class="hub-note">
+        Looking for something specific? The <a href="/substances/">substance search</a> filters
+        the whole database by name, CAS number, pictogram or signal word.
+      </p>
+    </div>
+  </section>
+</Layout>

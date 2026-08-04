@@ -38,6 +38,11 @@ import { shortForCode, urlForCode } from '../../../lib/storageClasses'
 import { supabase } from '../../../lib/supabase'
 import { must, mustSingle, mapLimit } from '../../../lib/mustQuery'
 import { hHref } from '../../../lib/hStatementSlug'
+// ⚠ Обратная ссылка на страницу вещества. Со страницы вещества на SDS ведёт кнопка
+// в hero, а обратной не было — и 106 страниц веществ, у которых есть живая SDS,
+// оставались без единой входящей ссылки (списки H- и P-кодов ведут для них в SDS).
+import { substanceHref } from '../../../lib/substanceSlug'
+import { substanceNameFull, NAME_COLUMNS } from '../../../lib/substanceName'
 
 const SITE = 'https://ghspictograms.com'
 const TOOL = '/tools/chemical-storage-compatibility/'
@@ -124,7 +129,12 @@ export async function getStaticPaths() {
           await supabase
             .from('substances')
             .select(
-              'cas_number, ec_number, index_number, reach_reg_number, iupac_name, h_statement_codes, euh_codes, ghs_pictogram_codes, signal_word, p_statement_codes, molecular_formula, molecular_weight, melting_point, boiling_point, flash_point, density, lel_vol_pct, uel_vol_pct, autoignition_c, water_solubility, log_kow, ate_oral, ate_dermal, ate_inhalation_vapour, ate_inhalation_dust, ate_inhalation_gas, lc50_fish, ec50_daphnia, ec50_algae',
+              // ⚠⚠ common_name и display_name_short обязательны: без них substanceNameFull
+              // тихо откатывается на сырую строку Annex VI («acetone; propan-2-one;
+              // propanone»), и слаг выходит /substances/acetone-propan-2-one-propanone-67-64-1/
+              // вместо /substances/acetone-67-64-1/. Ровно 42 битые ссылки в check:seo.
+              // Предупреждение стоит в самом substanceName.ts — и было пропущено.
+              `cas_number, ec_number, index_number, reach_reg_number, ${NAME_COLUMNS}, h_statement_codes, euh_codes, ghs_pictogram_codes, signal_word, p_statement_codes, molecular_formula, molecular_weight, melting_point, boiling_point, flash_point, density, lel_vol_pct, uel_vol_pct, autoignition_c, water_solubility, log_kow, ate_oral, ate_dermal, ate_inhalation_vapour, ate_inhalation_dust, ate_inhalation_gas, lc50_fish, ec50_daphnia, ec50_algae`,
             )
             .eq('id', page.substance_id)
             .single(),
@@ -427,6 +437,18 @@ const sharedCat = (g: TransportGroup): number | null => {
 }
 
 // Hero hazard-summary pills (derived from harmonised data only)
+/**
+ * ⚠ Адрес справочной страницы этого же вещества. Отбор по ФОРМЕ CAS обязан
+ * совпадать с getStaticPaths в src/pages/substances/[slug].astro — иначе ссылка
+ * поведёт на страницу, которой нет.
+ * ⚠ Имя берём из substances, а не page.display_name: слаг строится из него.
+ */
+const substanceCas = substance?.cas_number ?? null
+const profileHref =
+  substanceCas && /^\d{2,7}-\d{2}-\d$/.test(substanceCas) && substance
+    ? substanceHref(substanceNameFull(substance), substanceCas)
+    : null
+
 const hCodes: string[] = substance?.h_statement_codes ?? []
 const dedupe = (arr: (string | null)[]) => [...new Set(arr.filter(Boolean) as string[])]
 const physShorts = dedupe(hCodes.filter((c) => c.startsWith('H2')).map(clpShort))
@@ -1791,8 +1813,18 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
         </section>
       )}
 
-      <!-- CROSS-LINKS: compliance hub + tools -->
+      <!-- CROSS-LINKS: справочник вещества + compliance hub + tools -->
       <section class="grid gap-3 sm:grid-cols-2">
+        {profileHref && (
+          <a href={profileHref} class="rounded-xl border border-teal-200 bg-teal-50/50 p-5 hover:border-teal-300 transition-colors">
+            <p class="text-[11px] font-bold uppercase tracking-wide text-teal-700" style={mono}>Substance profile</p>
+            <p class="mt-1 text-sm font-semibold text-gray-900">What {name} is</p>
+            <p class="mt-1 text-xs text-gray-600">
+              Physical and chemical properties with the conditions each value was measured under,
+              synonyms, formula and the harmonised CLP classification →
+            </p>
+          </a>
+        )}
         <a href="/compliance/sds/" class="rounded-xl border border-blue-200 bg-blue-50/50 p-5 hover:border-blue-300 transition-colors">
           <p class="text-[11px] font-bold uppercase tracking-wide text-blue-700" style={mono}>Compliance hub</p>
           <p class="mt-1 text-sm font-semibold text-gray-900">From classification to SDS</p>

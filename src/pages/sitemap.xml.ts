@@ -2,6 +2,11 @@ import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { supabase } from '../lib/supabase';
 import { hSlug } from '../lib/hStatementSlug';
+// ⚠ Имя и адрес вещества берём из тех же функций, по которым getStaticPaths
+// строит /substances/[slug]. Собрать адрес здесь второй раз — значит рано или
+// поздно объявить в sitemap страницу, которой нет.
+import { substanceNameFull, substanceTitleName, NAME_COLUMNS } from '../lib/substanceName';
+import { substanceHref } from '../lib/substanceSlug';
 
 export const prerender = true;
 
@@ -163,16 +168,95 @@ async function fetchHStatementSitemapEntries(): Promise<
   ];
 }
 
+/**
+ * Справочник веществ: по странице на каждое вещество с пригодным CAS.
+ *
+ * ⚠ Хаб /substances/ сюда НЕ входит — он уже стоит в STATIC_PAGES,
+ * и второй <loc> на тот же адрес — это дубль в sitemap.
+ *
+ * ⚠⚠ ОТБОР ОБЯЗАН СОВПАДАТЬ СО СТРАНИЦЕЙ.
+ * getStaticPaths в src/pages/substances/[slug].astro берёт cas_number строгой
+ * формы \d{2,7}-\d{2}-\d — ровно это же здесь. 156 записей несут многосоставный
+ * CAS, обрезанный varchar(20) («110-45-2[1]35073-27-»), ещё 3 — склеенный или
+ * пустой; страниц для них нет.
+ * Сверка в обе стороны живёт в check:dist, проверка subs-sitemap.
+ *
+ * ⚠ Пагинация по 1000 с order('cas_number'): PostgREST отдаёт не больше 1000
+ * строк за раз, а веществ 4 178. Без ORDER BY окна range() могут перекрыться
+ * и разойтись с набором страниц.
+ */
+async function fetchSubstanceSitemapEntries(): Promise<
+  { url: string; changefreq: string; priority: string }[]
+> {
+  type Row = {
+    cas_number: string;
+    common_name: string | null;
+    display_name_short: string | null;
+    iupac_name: string | null;
+  };
+
+  const PAGE = 1000;
+  const rows: Row[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const res = await supabase
+      .from('substances')
+      .select(`cas_number, ${NAME_COLUMNS}`)
+      .not('cas_number', 'is', null)
+      .order('cas_number')
+      .range(from, from + PAGE - 1);
+    // ⚠ Падать громко на ошибке, деградировать тихо на пустоте (session 31).
+    if (res.error) throw new Error(`sitemap: substances — ${res.error.message}`);
+    const chunk = (res.data ?? []) as Row[];
+    if (!chunk.length) break;
+    rows.push(...chunk);
+    if (chunk.length < PAGE) break;
+  }
+
+  // ⚠⚠ Отбор ОБЯЗАН совпадать с getStaticPaths в src/pages/substances/[slug].astro:
+  // строгая форма CAS, а не просто отсутствие '['. Три записи (`-`,
+  // `127087-87-09016-45-9`, `3811-73-215922-78-8`) скобки не содержат, но CAS не являются.
+  const clean = rows.filter((r) => r.cas_number && /^\d{2,7}-\d{2}-\d$/.test(r.cas_number));
+
+  // ⚠ Буквенные страницы указателя строятся из ТОГО ЖЕ набора, что и страницы
+  // веществ, и по тому же правилу первой буквы, что в
+  // src/pages/substances/browse/[letter].astro. Разъедься они — в sitemap попадёт
+  // буква, для которой страницы нет.
+  const letters = new Set<string>();
+  for (const r of clean) {
+    const c = substanceTitleName(substanceNameFull(r)).trim().charAt(0).toLowerCase();
+    letters.add(c >= 'a' && c <= 'z' ? c : '0-9');
+  }
+
+  return [
+    ...[...letters]
+      .sort()
+      .map((l) => ({ url: `/substances/browse/${l}/`, changefreq: 'weekly', priority: '0.5' })),
+    ...clean.map((r) => ({
+      url: substanceHref(substanceNameFull(r), r.cas_number),
+      changefreq: 'monthly',
+      priority: '0.7',
+    })),
+  ];
+}
+
 export const GET: APIRoute = async () => {
-  const [blogPages, compliancePages, sdsPages, sdsSectionPages, pStatementPages, hStatementPages] =
-    await Promise.all([
-      fetchBlogSitemapEntries(),
-      fetchComplianceSitemapEntries(),
-      fetchSdsSitemapEntries(),
-      fetchSdsSectionSitemapEntries(),
-      fetchPStatementSitemapEntries(),
-      fetchHStatementSitemapEntries(),
-    ]);
+  const [
+    blogPages,
+    compliancePages,
+    sdsPages,
+    sdsSectionPages,
+    pStatementPages,
+    hStatementPages,
+    substancePages,
+  ] = await Promise.all([
+    fetchBlogSitemapEntries(),
+    fetchComplianceSitemapEntries(),
+    fetchSdsSitemapEntries(),
+    fetchSdsSectionSitemapEntries(),
+    fetchPStatementSitemapEntries(),
+    fetchHStatementSitemapEntries(),
+    fetchSubstanceSitemapEntries(),
+  ]);
 
   const allPages = [
     ...STATIC_PAGES,
@@ -183,6 +267,7 @@ export const GET: APIRoute = async () => {
     ...sdsSectionPages,
     ...pStatementPages,
     ...hStatementPages,
+    ...substancePages,
     ...compliancePages,
     ...blogPages,
   ];

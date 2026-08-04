@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
 import { substanceName, substanceNameFull } from '../lib/substanceName'
+import { substanceHref } from '../lib/substanceSlug'
 
 interface Substance {
   cas_number: string
@@ -43,7 +44,10 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
    * и деваться читателю больше некуда, пока не перенесены `/hazards/`.
    * Поэтому: локальная `/sds/<slug>/` там, где страница есть (73 совпадения по CAS),
    * и АБСОЛЮТНАЯ ссылка на ghssymbols у остальных — напрямую, без хопа через редирект.
-   * ⚠ Когда `/hazards/` переедут, менять надо здесь и в src/pages/ghs/[code].astro.
+   * ⚠⚠ Session 36: раздел переехал, пометка выше закрыта. Ссылка ведёт на СВОЮ
+   * страницу вещества `/substances/<имя>-<cas>/`. Прежняя абсолютная на
+   * ghssymbols.com/hazards/ теперь отдаёт 301 и уводит вес на домен, который мы сливаем.
+   * ⚠ Живая SDS остаётся в приоритете: таких веществ 106, страница богаче.
    */
   const [sdsSlug, setSdsSlug] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
@@ -258,9 +262,15 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
             const name = substanceName(r)
             const casEnc = encodeURIComponent(r.cas_number)
             const slug = sdsSlug.get(r.cas_number)
+            // ⚠ Ссылка только туда, где страница есть. Отбор по форме CAS обязан
+            // совпадать с getStaticPaths в src/pages/substances/[slug].astro:
+            // у 156 записей CAS многосоставный, страницы для них не строятся.
+            // ⚠ Остров не попадает в check:seo — здесь битую ссылку поймает только человек.
             const detailHref = slug
               ? `/sds/${slug}/`
-              : `https://ghssymbols.com/hazards/${casEnc}/`
+              : /^\d{2,7}-\d{2}-\d$/.test(r.cas_number)
+                ? substanceHref(substanceNameFull(r), r.cas_number)
+                : null
             const labelHref = `/label-constructor/?cas=${casEnc}`
             const pics = r.ghs_pictogram_codes ?? []
             const casEcLine = `CAS ${r.cas_number}${r.ec_number ? ` · EC ${r.ec_number}` : ''}`
@@ -372,8 +382,7 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
                     {mainBlock}
                   </button>
                   <a
-                    href={detailHref}
-                    rel={slug ? undefined : 'noopener'}
+                    href={detailHref ?? labelHref}
                     onClick={e => e.stopPropagation()}
                     style={{
                       flexShrink: 0,
@@ -387,7 +396,7 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
                       textDecoration: 'none',
                     }}
                   >
-                    {slug ? 'SDS' : 'Details'}
+                    {slug ? 'SDS' : detailHref ? 'Details' : 'Label'}
                   </a>
                 </li>
               )
@@ -396,20 +405,19 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
             return (
               <li key={r.cas_number} style={{ borderBottom: '1px solid #e2e8f0', minWidth: 0, display: 'flex', alignItems: 'stretch' }}>
                 <a
-                  href={detailHref}
-                  rel={slug ? undefined : 'noopener'}
+                  href={detailHref ?? labelHref}
                   style={{ display: 'block', padding: '12px 16px', textDecoration: 'none', minWidth: 0, flex: 1 }}
                   onClick={(e) => {
                     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)
                       return
                     e.preventDefault()
-                    window.location.assign(detailHref)
+                    window.location.assign(detailHref ?? labelHref)
                   }}
                   onKeyDown={(e) => {
                     if (e.key !== 'Enter' && e.key !== ' ') return
                     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
                     e.preventDefault()
-                    window.location.assign(detailHref)
+                    window.location.assign(detailHref ?? labelHref)
                   }}
                 >
                   {mainBlock}

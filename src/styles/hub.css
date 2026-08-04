@@ -2361,3 +2361,149 @@ button.hub-pair:last-child { border-bottom: 0; }
 }
 .sdss-subs-none { margin: 14px 0 0; font-size: 14px; line-height: 1.6; color: var(--ink-2); }
 .sdss-subs-none a { color: var(--teal-700); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ============================================================================
+   sub-* — справочник веществ, /substances/<имя>-<cas>/  (session 35)
+   Префиксы .ss- и .sdss- заняты страницами H-кодов и разделов SDS.
+   Правило раздела: статика первого класса, островов на странице вещества нет.
+   ========================================================================== */
+
+.sub-h3 {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+  margin: 28px 0 10px;
+}
+
+.sub-hero-cta-row { margin: 18px 0 0; }
+
+/* — Синонимы. Живут ТОЛЬКО в справочнике: если продублировать их на странице
+     SDS, две наши страницы начнут драться именно по ним. — */
+.sub-syn-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.sub-syn-list li {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink-2);
+  background: var(--bg-b);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+}
+
+/* — Пиктограммы — */
+.sub-picts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin: 20px 0 8px;
+}
+.sub-pict {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 108px;
+  text-decoration: none;
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: center;
+}
+.sub-pict img { display: block; width: 88px; height: 88px; }
+.sub-pict:hover { color: var(--teal-700); }
+.sub-pict:hover img { filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.14)); }
+
+/* — Таблица свойств.
+     ⚠ Ключевое отличие от обычной hub-table: у одного свойства бывает несколько
+     значений, и это не дубли. У серы 95,3 / 115,2 / 120 °C — три полиморфа.
+     Первая строка свойства несёт название, продолжения идут без него, но
+     остаются частью той же группы: разделитель рисуется только перед первой. — */
+/* ⚠⚠ Колонка значения НЕ использует .c-n. Тот класс занят колонкой «число
+     веществ» и на телефоне дописывает в неё через ::before литерал
+     «substances · » (hub.css, мобильный блок). На странице вещества это дало бы
+     «substances · 150.2 °C» у КАЖДОГО значения — на десктопе невидимо.
+     Предупреждение об этом уже стояло в hub.css над блоком .pict-id, и было
+     пропущено. Своя колонка — .c-val, своя подпись свойства — .c-prop. */
+.sub-props { table-layout: fixed; }
+.sub-props .c-prop { width: 26%; }
+.sub-props .c-val { width: 30%; font-variant-numeric: tabular-nums; font-weight: 600; text-align: left; }
+/* ⚠ Значение словами («Sublimes», «Not flammable») переносим по словам. */
+.sub-props .c-val-text { font-weight: 500; font-size: 14px; }
+.sub-props .c-txt { width: 26%; font-size: 13px; color: var(--ink-3); }
+.sub-props .c-code { width: 18%; font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.sub-props tbody tr { border-top: none; }
+.sub-props tbody tr.sub-prop-first { border-top: 1px solid var(--line); }
+.sub-props tbody tr.sub-prop-more th { border-left: 2px solid var(--line-2); }
+.sub-props tbody tr.sub-prop-more .c-val { font-weight: 400; color: var(--ink-2); }
+.sub-props th[scope='row'] { text-align: left; font-weight: 600; color: var(--ink); }
+
+@media (max-width: 760px) {
+  /* На узком экране фиксированные доли врут: отдаём таблицу браузеру и даём
+     ей прокручиваться, а не ломаться. */
+  .sub-props { table-layout: auto; }
+  .sub-props .c-prop,
+  .sub-props .c-val,
+  .sub-props .c-txt,
+  .sub-props .c-code { width: auto; }
+}
+
+/* — Цитата источника. Текст чужой, поэтому подпись обязательна и видима. — */
+.sub-quote {
+  border-left: 3px solid var(--teal-300);
+  background: var(--bg-a);
+  border-radius: 0 12px 12px 0;
+  padding: 14px 18px;
+  margin: 18px 0 0;
+}
+/* — Буквенный указатель: /substances/browse/<буква>/.
+     ⚠ Пустая буква остаётся видимой, но не кликается: так читатель видит, что
+     раздела нет, а не что ссылку забыли. — */
+.sub-alpha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sub-alpha-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  text-decoration: none;
+  transition: all 200ms ease-out;
+}
+a.sub-alpha-item:hover { border-color: var(--teal-200); background: var(--teal-50); color: var(--teal-700); }
+.sub-alpha-item.is-current { background: var(--teal-700); border-color: var(--teal-700); color: #ffffff; }
+.sub-alpha-item.is-empty { color: var(--ink-3); opacity: 0.45; }
+
+/* — Блок заметок источника: то, что длиннее VALUE_MAX_CHARS и потому не значение. — */
+.sub-notes { margin-top: 26px; }
+.sub-notes .sub-h3 { margin: 0 0 10px; font-size: 15px; color: var(--teal-700); }
+.sub-notes .sub-quote { margin-top: 12px; }
+.sub-notes .sub-quote:first-of-type { margin-top: 0; }
+
+.sub-quote p { font-size: 15px; line-height: 1.65; color: var(--ink-2); margin: 0; }
+.sub-quote .hub-fine { margin: 8px 0 0; color: var(--ink-3); }
+.sub-quote .sub-h3 { margin: 0 0 8px; font-size: 16px; }
+
+@media (max-width: 640px) {
+  .sub-pict { width: 84px; }
+  .sub-pict img { width: 64px; height: 64px; }
+  .sub-props .c-code { font-size: 11px; }
+}

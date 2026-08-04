@@ -102,11 +102,20 @@ function tagContent(html: string, tag: string): string | null {
   return m ? m[1].trim() : null
 }
 
+/**
+ * ⚠⚠ Кавычку значения запоминаем обратной ссылкой (\\1), а не классом ["'].
+ * Класс `[^"']*` обрывал значение на ПЕРВОМ апострофе внутри него, а апостроф
+ * в химическом имени — норма: `1,1',1"-nitrilotripropan-2-ol` давал
+ * description = «1,1». Отсюда 18 ложных «повторов description» и раздутое
+ * «description короче 70». Само значение в HTML было полным и корректным.
+ *
+ * ⚠ Правило шире случая: когда сверка краснеет — сначала подозревай сверку.
+ */
 function metaContent(html: string, name: string): string | null {
   const m =
-    html.match(new RegExp(`<meta[^>]+name=["']${name}["'][^>]*content=["']([^"']*)["']`, 'i')) ??
-    html.match(new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*name=["']${name}["']`, 'i'))
-  return m ? m[1].trim() : null
+    html.match(new RegExp(`<meta[^>]+name=["']${name}["'][^>]*content=(["'])([\\s\\S]*?)\\1`, 'i')) ??
+    html.match(new RegExp(`<meta[^>]+content=(["'])([\\s\\S]*?)\\1[^>]*name=["']${name}["']`, 'i'))
+  return m ? m[2].trim() : null
 }
 
 function linkHref(html: string, rel: string): string | null {

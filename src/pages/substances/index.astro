@@ -9,9 +9,51 @@
 // /pictograms/ занял хаб пиктограмм, правило снято, все ссылки переведены сюда.
 //
 // Разметка страницы перенесена байт-в-байт, чтобы переезд не был заодно и редизайном.
+//
+// ⚠⚠ Session 36: над островом добавлен СТАТИЧЕСКИЙ указатель A–Z.
+// Причина — `orphans: 3653` в check:seo. Остров `client:load` не оставляет в
+// статике ни одной ссылки: в dist тут лежал 21 КБ и ноль путей к 3 650 страницам.
+// Правило хаба (substance-hub-decisions.md §4.1): сначала статика, остров — только
+// для поиска. Поиск остаётся, но обойти раздел теперь можно и без JavaScript.
 export const prerender = true
 import Layout from '../../layouts/Layout.astro'
 import SubstanceFilterBrowse from '../../components/SubstanceFilterBrowse'
+import { supabase } from '../../lib/supabase'
+import { must } from '../../lib/mustQuery'
+import { substanceNameFull, substanceTitleName, NAME_COLUMNS } from '../../lib/substanceName'
+
+type Row = { cas_number: string; common_name: string | null; display_name_short: string | null; iupac_name: string }
+
+const PAGE = 1000
+const rows: Row[] = []
+for (let from = 0; ; from += PAGE) {
+  const chunk = must(
+    `substances (browse index, from=${from})`,
+    await supabase
+      .from('substances')
+      .select(`cas_number, ${NAME_COLUMNS}`)
+      .not('cas_number', 'is', null)
+      .order('cas_number')
+      .range(from, from + PAGE - 1)
+  ) as Row[] | null
+  if (!chunk?.length) break
+  rows.push(...chunk)
+  if (chunk.length < PAGE) break
+}
+
+// ⚠ Отбор и правило первой буквы обязаны совпадать с
+// src/pages/substances/browse/[letter].astro и с sitemap.xml.ts.
+const CAS_SHAPE = /^\d{2,7}-\d{2}-\d$/
+const counts = new Map<string, number>()
+let total = 0
+for (const r of rows) {
+  if (!r.cas_number || !CAS_SHAPE.test(r.cas_number)) continue
+  total++
+  const c = substanceTitleName(substanceNameFull(r)).trim().charAt(0).toLowerCase()
+  const key = c >= 'a' && c <= 'z' ? c : '0-9'
+  counts.set(key, (counts.get(key) ?? 0) + 1)
+}
+const LETTERS = ['0-9', ...'abcdefghijklmnopqrstuvwxyz'.split('')]
 ---
 
 <Layout
@@ -25,5 +67,24 @@ import SubstanceFilterBrowse from '../../components/SubstanceFilterBrowse'
       Search the full database with fuzzy matching, filter by pictogram or signal word, then open a substance in the label builder (up to 100 matches shown).
     </p>
   </section>
+  <section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+    <h2 class="text-xl font-semibold text-gray-900">Browse all {total} substances alphabetically</h2>
+    <p class="mt-2 text-sm text-gray-600">
+      Every substance with a harmonised classification under CLP Annex VI has its own page with
+      physical properties, hazard statements, pictograms and label elements.
+    </p>
+    <nav class="sub-alpha" style="margin-top:14px" aria-label="Browse substances by letter">
+      {LETTERS.map((l) =>
+        counts.get(l) ? (
+          <a class="sub-alpha-item" href={`/substances/browse/${l}/`} title={`${counts.get(l)} substances`}>
+            {l === '0-9' ? '0–9' : l.toUpperCase()}
+          </a>
+        ) : (
+          <span class="sub-alpha-item is-empty">{l === '0-9' ? '0–9' : l.toUpperCase()}</span>
+        )
+      )}
+    </nav>
+  </section>
+
   <SubstanceFilterBrowse client:load />
 </Layout>

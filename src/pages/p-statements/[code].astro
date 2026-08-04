@@ -16,9 +16,9 @@ import { splitClpNotation, hasClpNotation } from '../../lib/clpNotation'
 // РЕДИРЕКТ на хаб. Разбор: claude/silent-supabase-failures.md.
 import { must, mustSingle } from '../../lib/mustQuery'
 import { substanceNameFull, truncateName } from '../../lib/substanceName'
+import { substanceHref } from '../../lib/substanceSlug'
 
 const SITE = 'https://ghspictograms.com'
-const GHSSYMBOLS = 'https://ghssymbols.com'
 const COLLAPSE_AT = 100
 const PAGE = 1000
 
@@ -152,12 +152,20 @@ const slugByCas = new Map(
     .filter((r) => r.cas_number)
     .map((r) => [r.cas_number as string, r.slug])
 )
-// Где есть живая SDS-страница — ведём внутрь; где есть CAS — на ghssymbols;
-// у групповых записей без CAS вести некуда, страницы веществ строятся по CAS.
+// ⚠⚠ Раздел веществ переехал на ghspictograms (/substances/<имя>-<cas>/, session 35).
+// Раньше здесь стояла ссылка на ghssymbols.com/hazards/<cas>/ — ЧУЖОЙ домен, который
+// теперь отдаёт 301. Предыдущая сессия оставила про это пометку в коде; закрываем.
+// ⚠ Это и был источник `orphans: 3653` в check:seo: перелинковка существовала,
+// но целилась мимо — все внутренние ссылки на вещества уходили с сайта.
+// Живую SDS оставляем в приоритете: таких веществ 106, страница богаче, и она
+// уже проиндексирована. Со страницы вещества на SDS ведёт кнопка в hero.
 const hrefOf = (s: Sub): string | null => {
   if (!s.cas_number) return null
   const slug = slugByCas.get(s.cas_number)
-  return slug ? `/sds/${slug}/` : `${GHSSYMBOLS}/hazards/${encodeURIComponent(s.cas_number)}/`
+  if (slug) return `/sds/${slug}/`
+  // ⚠ Отбор ОБЯЗАН совпадать с getStaticPaths в src/pages/substances/[slug].astro:
+  // три записи (`-`, `127087-87-09016-45-9`, `3811-73-215922-78-8`) страницы не имеют.
+  return /^\d{2,7}-\d{2}-\d$/.test(s.cas_number) ? substanceHref(nameOf(s), s.cas_number) : null
 }
 
 const items = subs
