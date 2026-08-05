@@ -2520,6 +2520,154 @@ a.sub-alpha-item:hover { border-color: var(--teal-200); background: var(--teal-5
 .sub-quote .hub-fine { margin: 8px 0 0; color: var(--ink-3); }
 .sub-quote .sub-h3 { margin: 0 0 8px; font-size: 16px; }
 
+/* ══ session 38: карточки P-фраз, класс опасности, превью этикетки, FAQ ══
+   ⚠ Префикс `sub-` — собственный префикс справочника, поэтому новые классы
+   живут здесь, а не заводят шестой префикс. Чужие классы не переиспользуются:
+   правило hub.css «чужой класс не переиспользовать не проверив» стоит выше
+   экономии двадцати строк. */
+
+/* — Таблица «класс — категория». Первая колонка широкая: имена классов длинные
+     («Self-reactive substances and mixtures»), и перенос там неизбежен. — */
+.sub-class { table-layout: fixed; }
+.sub-class .c-prop { width: 42%; text-align: left; font-weight: 600; color: var(--ink); }
+.sub-class .c-txt { width: 24%; font-size: 14px; color: var(--ink-2); }
+.sub-class .c-code { width: 17%; font-family: var(--font-mono); font-size: 13px; }
+.sub-class-ch {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-3);
+}
+
+/* — P-фразы карточками. Раздел («Prevention») задаёт H3, карточки — сетку.
+     ⚠ Карточка — это ссылка целиком, а не код-ссылка внутри текста: попасть
+     пальцем в «P305» на телефоне почти невозможно. — */
+.sub-pgroup { margin-top: 26px; }
+.sub-pgroup:first-of-type { margin-top: 14px; }
+.sub-pgroup .sub-h3 { margin: 0 0 4px; font-size: 16px; color: var(--teal-700); }
+.sub-pgroup .hub-fine { margin: 0 0 12px; }
+.sub-pcards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 10px;
+}
+.sub-pcard {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  text-decoration: none;
+  transition: border-color 200ms ease-out, box-shadow 200ms ease-out;
+}
+.sub-pcard:hover {
+  border-color: var(--teal-200);
+  box-shadow: 0 2px 10px rgba(15, 118, 110, 0.08);
+}
+.sub-pcard-code {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--teal-700);
+  padding-top: 1px;
+}
+.sub-pcard-text { font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+
+/* — Превью этикетки. ⚠ Рамка и красный кант — узнаваемая форма этикетки, но
+     подвал с пропусками обязателен: без него блок читается как готовый к печати,
+     а он таковым не является и быть не может. — */
+.sub-label {
+  margin: 20px 0 0;
+  padding: 18px 20px 14px;
+  background: #ffffff;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  max-width: 640px;
+}
+.sub-label-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.sub-label-picts { display: flex; flex-wrap: wrap; gap: 8px; }
+.sub-label-picts img { display: block; width: 64px; height: 64px; }
+.sub-label-signal {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.sub-label-name {
+  margin: 12px 0 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.sub-label-list { margin: 10px 0 0; padding-left: 18px; }
+.sub-label-list li { font-size: 14px; line-height: 1.55; color: var(--ink); margin-top: 4px; }
+.sub-label-p li { color: var(--ink-2); }
+.sub-label-supplier {
+  margin: 14px 0 0;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line-2);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.sub-label-supplier .sep { margin: 0 7px; color: var(--line-2); }
+
+/* — Блок одного свойства: свой H3 и своя таблица. — */
+.sub-prop-block { margin-top: 24px; }
+.sub-prop-block:first-of-type { margin-top: 12px; }
+.sub-prop-block .sub-h3 { margin: 0 0 8px; font-size: 16px; color: var(--teal-700); }
+/* ⚠ Подпись свойства внутри своего блока дублирует H3 — прячем колонку у
+     первой строки, но НЕ удаляем ячейку: <th scope="row"> держит связь строки
+     с её свойством для скринридера. */
+.sub-prop-block .sub-props .c-prop { width: 22%; color: var(--ink-3); font-weight: 500; }
+
+/* — Пределы воздействия. — */
+.sub-oel { table-layout: fixed; }
+.sub-oel .c-code { width: 14%; font-family: var(--font-mono); font-weight: 700; color: var(--teal-700); text-align: left; }
+.sub-oel .c-val { width: 40%; }
+.sub-oel .c-txt { width: 46%; font-size: 13px; color: var(--ink-3); }
+
+/* — Цитата-предупреждение: пероксиды. Тот же блок, другой кант. — */
+.sub-quote-warn { border-left-color: #f59e0b; background: var(--verdict-sep-bg); }
+
+/* — FAQ. Вопрос — заголовок, ответ — абзац, ничего не свёрнуто. — */
+.sub-faq { margin-top: 14px; }
+.sub-faq-item {
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.sub-faq-item:first-child { border-top: none; padding-top: 4px; }
+.sub-faq-item .sub-h3 { margin: 0 0 8px; font-size: 16px; color: var(--ink); }
+.sub-faq-item p { margin: 0; font-size: 15px; line-height: 1.65; color: var(--ink-2); }
+
+@media (max-width: 760px) {
+  .sub-class,
+  .sub-oel { table-layout: auto; }
+  .sub-class .c-prop,
+  .sub-class .c-txt,
+  .sub-class .c-code,
+  .sub-oel .c-code,
+  .sub-oel .c-val,
+  .sub-oel .c-txt { width: auto; }
+  .sub-pcards { grid-template-columns: 1fr; }
+  .sub-label { padding: 14px 15px 12px; }
+  .sub-label-signal { font-size: 19px; }
+}
+
 /* — Соседи по алфавиту на странице вещества (session 37).
      ⚠ Блок .hub-prevnext переиспользуется как есть — новый CSS ему не нужен.
      Правится ровно одна подпись: у H- и P-кодов в .code лежит код, и

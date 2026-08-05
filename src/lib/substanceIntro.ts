@@ -15,13 +15,43 @@
 import type { LcssRecord } from './lcssProperties'
 
 export type TextFact = { t: string; s: string }
+
+/**
+ * Канцерогенность: три источника, и склеивать их нельзя — см. шапку
+ * scripts/build-lcss-text.mjs. `iarc.group` — «Group 1», `iarc.label` —
+ * «Carcinogenic to humans».
+ * ⚠ Голых вердиктов NTP («Clear Evidence») здесь нет СОЗНАТЕЛЬНО: в выгрузке
+ * они идут без указания вида и пола животного, и печатать их — врать.
+ */
+export type CarcRecord = {
+  iarc?: { group: string; label: string; volumes: string[] }
+  ntp?: { report?: string; verdict?: string }
+  notes?: TextFact[]
+}
+
+/**
+ * Пределы воздействия. ⚠ Источник у КАЖДОЙ строки свой и обязателен к показу:
+ * в разделе REL выгрузки встречаются строки OSHA, а в разделе PEL — строки
+ * NIOSH. Подписать блок одним ведомством значит приписать ему чужое число.
+ */
+export type OelRecord = { pel?: TextFact[]; rel?: TextFact[]; idlh?: TextFact[] }
+
 export type TextRecord = Partial<
   Record<
     'color' | 'odor' | 'phys' | 'classes' | 'taste' | 'storage' | 'incompat' | 'airwater' |
-    'reactivity' | 'decomp' | 'stability' | 'fire' | 'physdanger' | 'chemdanger' | 'peroxide' | 'corrosivity',
+    'reactivity' | 'decomp' | 'stability' | 'fire' | 'physdanger' | 'chemdanger' | 'peroxide' | 'corrosivity' |
+    // Разделы, добавленные в session 38. Разбор — scripts/build-lcss-text.mjs.
+    'hazsum' | 'safestore' | 'firepot',
     TextFact
   >
->
+> & {
+  /** Реактивные группы CAMEO: «Ketones», «Aryl Halides». */
+  rgroups?: string[]
+  /** Пометки реактивности CAMEO: «Polymerizable», «Water-Reactive». */
+  alerts?: string[]
+  carc?: CarcRecord
+  oel?: OelRecord
+}
 
 export type IntroInput = {
   name: string

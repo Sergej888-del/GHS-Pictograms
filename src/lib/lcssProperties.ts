@@ -75,6 +75,35 @@ export const PROPERTY_LABEL: Record<string, string> = {
 }
 
 /**
+ * Хвост заголовка H3 над свойством: «Acetone boiling point».
+ *
+ * ⚠⚠ Карта ЯВНАЯ, а не `PROPERTY_LABEL[key].toLowerCase()`. Автоматический
+ * вариант даёт «acetone lower explosive limit (lel)» — аббревиатура в скобках
+ * уезжает в нижний регистр вместе со всей строкой, и заголовок читается как
+ * опечатка. Плюс здесь встают формулировки, под которыми свойство реально
+ * ищут: «vapour pressure» пишется в UK-варианте у трети запросов, а
+ * «water solubility» — частотнее голого «solubility».
+ *
+ * ⚠ Ключи обязаны совпадать с PROPERTY_ORDER. Незнакомый ключ падает на
+ * PROPERTY_LABEL — заголовок будет некрасивым, но страница не сломается.
+ */
+export const PROPERTY_HEADING: Record<string, string> = {
+  bp: 'boiling point',
+  mp: 'melting point',
+  fp: 'flash point',
+  density: 'density',
+  vapor_pressure: 'vapor pressure',
+  vapor_density: 'vapor density',
+  autoignition: 'autoignition temperature',
+  lel: 'lower explosive limit (LEL)',
+  uel: 'upper explosive limit (UEL)',
+  solubility: 'solubility',
+  odor_threshold: 'odor threshold',
+  critical_temp_pressure: 'critical temperature and pressure',
+  corrosivity: 'corrosivity',
+}
+
+/**
  * Короткие имена источников. Полные строки нечитаемы в таблице
  * («Hazardous Substances Data Bank (HSDB)» занимает всю ячейку).
  * ⚠ Порядок важен: первое совпадение по вхождению и выигрывает.

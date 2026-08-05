@@ -12,6 +12,15 @@
  *
  * ⚠ Справочник и SDS не конкурируют: в заголовке справочника НИКОГДА нет слова
  * SDS, синонимы живут ТОЛЬКО здесь. Разбор: claude/substance-hub-decisions.md §4.3.
+ *
+ * ⚠⚠ ПРАВИЛО ЗАГОЛОВКОВ (session 38, решение Сергея). Имя вещества стоит в
+ * КАЖДОМ заголовке секции и подсекции: «Acetone hazard statements», «Acetone
+ * boiling point». Причина — замеры волн 1–4: объём собирают не голые
+ * модификаторы, а связки «вещество + модификатор» (`formula` при веществе —
+ * 20 730, `molecular weight` — 4 570). H2 «Properties» не отвечает ни на один
+ * реальный запрос; «Acetone properties» отвечает.
+ * ⚠ Отсюда же запрет на подстраницы вида /acetone/boiling-point/: объёма на
+ * отдельный URL нет, а H3 с якорем его собирает (substance-hub-decisions.md §4.2).
  */
 import Layout from '../../layouts/Layout.astro'
 import { supabase } from '../../lib/supabase'
@@ -22,9 +31,17 @@ import { substanceSlug, substanceHref } from '../../lib/substanceSlug'
 // ⚠ Ссылку на страницу H-кода строит ТОЛЬКО hHref: у девяти суффиксных кодов
 // (H360Fd, H360FD, H361f…) слаг отличается от кода — см. hStatementSlug.ts.
 // Прямая склейка `/h-statements/${code}/` дала 387 страниц со ссылкой в 404.
+// ⚠ EUH-коды живут в той же таблице и на тех же адресах: /h-statements/EUH014/.
 import { hHref } from '../../lib/hStatementSlug'
-import { buildPropertyRows, buildSourceNotes, type LcssRecord } from '../../lib/lcssProperties'
+import { buildPropertyRows, buildSourceNotes, PROPERTY_HEADING, PROPERTY_LABEL, type LcssRecord } from '../../lib/lcssProperties'
 import { buildIntro, type TextRecord } from '../../lib/substanceIntro'
+import { groupPStatements, countPStatements } from '../../lib/pStatements'
+import { buildHazardClasses, categoryLabel, hasAmbiguity, type HazardClassEntry } from '../../lib/hazardClasses'
+import { buildFaq } from '../../lib/substanceFaq'
+// ⚠ Нотация CLP рисуется тем же кодом, что и на страницах фраз: «…» — пропуск,
+// который заполняет поставщик, «[…]» — необязательная часть. Без этого P-фраза
+// в карточке читается как оборванная строка.
+import { splitClpNotation } from '../../lib/clpNotation'
 // ⚠⚠ Партнёрская карточка ставится ТОЛЬКО компонентом. Разметка (rel="sponsored
 // nofollow noopener", target, дисклоуз, fp_sid) зашита в него один раз, и обе
 // проверки группы Affiliate в check:dist проверяют именно её. Ссылка, вписанная
@@ -103,6 +120,108 @@ export async function getStaticPaths() {
   ) as Array<{ code: string; text_en: string }> | null
   const hText = new Map((hRows ?? []).map((h) => [h.code, h.text_en]))
 
+  // ⚠⚠ P-фразы с текстом, а не одними кодами (session 38). До этого страница
+  // печатала строку «Precautionary statements: P201, P280, P308, P313» — четыре
+  // кода без единого слова о том, что делать. Уникальных кодов у всего
+  // справочника 45, поэтому это ОДИН запрос на всю сборку, а не 3 650.
+  // ⚠ Комбинированных кодов («P301+P310») среди них нет — проверено по базе;
+  // все 45 лежат в `p_statements` и имеют свою страницу.
+  const pCodes = [...new Set(clean.flatMap((r) => r.p_statement_codes ?? []))]
+  const pRows = must(
+    'p_statements (getStaticPaths)',
+    await supabase.from('p_statements').select('code, text_en, category').in('code', pCodes)
+  ) as Array<{ code: string; text_en: string; category: string }> | null
+  const pMeta = new Map((pRows ?? []).map((p) => [p.code, { text: p.text_en, category: p.category }]))
+
+  // ⚠ EUH-фразы лежат в ОТДЕЛЬНОЙ колонке `euh_codes`, а их текст — в таблице
+  // `h_statements` с категорией `eu_specific`. Отдельной таблицы под них нет,
+  // и искать её не надо: /h-statements/EUH014/ — существующая страница.
+  const euhCodes = [...new Set(clean.flatMap((r) => r.euh_codes ?? []))]
+  const euhRows = euhCodes.length
+    ? (must(
+        'h_statements (EUH, getStaticPaths)',
+        await supabase.from('h_statements').select('code, text_en').in('code', euhCodes)
+      ) as Array<{ code: string; text_en: string }> | null)
+    : []
+  const euhText = new Map((euhRows ?? []).map((h) => [h.code, h.text_en]))
+
+  // ⚠⚠ Класс и категория опасности выводятся из H-кода, потому что таблица
+  // `hazard_classifications` ПУСТА. Ограничения вывода и правило показа
+  // неоднозначности — в шапке lib/hazardClasses.ts, читать до правок.
+  const mapRows = must(
+    'hazard_category_mapping (getStaticPaths)',
+    await supabase
+      .from('hazard_category_mapping')
+      .select('hazard_class_id, category_code, pictogram_code, signal_word, h_statement_code')
+  ) as Array<{
+    hazard_class_id: string
+    category_code: string | null
+    pictogram_code: string | null
+    signal_word: string | null
+    h_statement_code: string | null
+  }> | null
+  const catalogRows = must(
+    'hazard_class_catalog (getStaticPaths)',
+    await supabase.from('hazard_class_catalog').select('id, class_code, name_en, ghs_chapter, display_order')
+  ) as Array<{
+    id: string
+    class_code: string
+    name_en: string
+    ghs_chapter: string | null
+    display_order: number | null
+  }> | null
+
+  // ⚠⚠⚠ РЕАКТИВНЫЕ ГРУППЫ CAMEO БЕРУТСЯ ИЗ БАЗЫ, А НЕ ИЗ ВЫГРУЗКИ LCSS.
+  // Сверка session 38: в выгрузке PubChem группы собраны объединением по ВСЕМ
+  // записям CAMEO с тем же CAS, поэтому метанолу достаётся «Amines, Phosphines,
+  // and Pyridines» от записи METHANOL, TALLOW ALKYL IMINOBISETHANOL, а едкому
+  // натру — «Water and Aqueous Solutions» от его раствора. Это дефект B из
+  // claude/cameo-cas-collisions.md §4, уже вычищенный в базе через
+  // substance_cameo_choice (session 33).
+  // ⚠⚠ Второй довод, важнее первого: на ЭТОЙ ЖЕ таблице считает матрица
+  // совместимости, в которую со страницы ведёт ссылка. Возьми мы группу из
+  // другого источника — страница и инструмент разошлись бы, и читатель увидел
+  // бы два разных ответа на один вопрос по одной ссылке.
+  //
+  // ⚠⚠⚠ И ЭТОГО МАЛО. Замер session 38: в таблице ДВА источника —
+  //   `…curated record via substance_cameo_choice (session 33)` — 130 связей, 98 веществ
+  //   `CAMEO Chemicals v3.1.0, NOAA/EPA`                        — 1 800 связей, 987 веществ
+  // В session 33 вычистили только те 98, у которых есть своя SDS. Остальные 987
+  // лежат тем же объединением по CAS, что и выгрузка: 1,78 группы на вещество
+  // против 1,81 в выгрузке, «Water and Aqueous Solutions» 54 против 58 — это
+  // одни и те же данные.
+  //
+  // ⚠⚠ Поэтому берём ТОЛЬКО курируемые. На 987 страницах секции просто не будет.
+  // «NaOH несовместим с водой» на странице по безопасности — это не косметический
+  // дефект, и пустая секция тут честнее. Проверка subs-reactive-group в
+  // check:dist держит счёт: блок обязан стоять ровно на курируемых и нигде ещё.
+  // ⚠ Отбор по source_ref, а не по вхождению в substance_cameo_choice: source_ref
+  // говорит, ОТКУДА взялась строка, а таблица выбора — лишь что решение принято.
+  // При следующем переимпорте разойтись может именно вторая.
+  const RG_CURATED = 'CAMEO Chemicals 3.1.0 - curated record via substance_cameo_choice (session 33)'
+  const rgLinkRows = must(
+    'substance_reactive_group_link (getStaticPaths)',
+    await supabase
+      .from('substance_reactive_group_link')
+      .select('cas_number, rg_id')
+      .eq('source_ref', RG_CURATED)
+  ) as Array<{ cas_number: string; rg_id: string }> | null
+  const rgNameRows = must(
+    'chem_reactive_groups (getStaticPaths)',
+    await supabase.from('chem_reactive_groups').select('rg_id, name')
+  ) as Array<{ rg_id: string; name: string }> | null
+  const rgName = new Map((rgNameRows ?? []).map((g) => [g.rg_id, g.name]))
+  const rgByCas = new Map<string, string[]>()
+  for (const link of rgLinkRows ?? []) {
+    const label = rgName.get(link.rg_id)
+    if (!label) continue
+    if (!rgByCas.has(link.cas_number)) rgByCas.set(link.cas_number, [])
+    rgByCas.get(link.cas_number)!.push(label)
+  }
+  // ⚠ Сортировка здесь, а не в разметке: порядок строк PostgREST не определён,
+  // а от него зависит текст абзаца и, через него, уникальность description.
+  for (const [cas, list] of rgByCas) rgByCas.set(cas, [...new Set(list)].sort())
+
   // Страницы SDS: перекрёстная ссылка «как с этим обращаться» → «что это такое».
   const sdsRows = must(
     'sds_pages (getStaticPaths)',
@@ -178,6 +297,15 @@ export async function getStaticPaths() {
     props: {
       row: it.row,
       hText: Object.fromEntries((it.row.h_statement_codes ?? []).map((c) => [c, hText.get(c) ?? ''])),
+      // ⚠ В props уезжает только то, что нужно ЭТОЙ странице. Полный справочник
+      // 45 фраз и 33 классов, размноженный на 3 650 страниц, — это 30 МБ мусора
+      // в промежуточных файлах сборки при нулевой пользе.
+      pMeta: Object.fromEntries(
+        (it.row.p_statement_codes ?? []).map((c) => [c, pMeta.get(c)]).filter(([, v]) => Boolean(v)),
+      ),
+      euhText: Object.fromEntries((it.row.euh_codes ?? []).map((c) => [c, euhText.get(c) ?? ''])),
+      hazardClasses: buildHazardClasses(it.row.h_statement_codes, mapRows ?? [], catalogRows ?? []),
+      rgroups: rgByCas.get(it.row.cas_number) ?? [],
       sdsSlug: sdsByCas.get(it.row.cas_number) ?? null,
       prev: i > 0 ? card(ordered[i - 1]) : null,
       next: i < ordered.length - 1 ? card(ordered[i + 1]) : null,
@@ -203,6 +331,11 @@ type Props = {
     ghs_pictogram_codes: string[] | null
   }
   hText: Record<string, string>
+  pMeta: Record<string, { text: string; category: string } | undefined>
+  euhText: Record<string, string>
+  hazardClasses: HazardClassEntry[]
+  /** Реактивные группы CAMEO из базы — см. комментарий в getStaticPaths. */
+  rgroups: string[]
   sdsSlug: string | null
   prev: Neighbour | null
   next: Neighbour | null
@@ -211,7 +344,7 @@ type Props = {
 /** Сосед по алфавиту. Считается в getStaticPaths — см. комментарий там. */
 type Neighbour = { name: string; cas: string; href: string; formula: string | null }
 
-const { row, hText, sdsSlug, prev, next } = Astro.props as Props
+const { row, hText, pMeta, euhText, hazardClasses, rgroups, sdsSlug, prev, next } = Astro.props as Props
 
 // ⚠ Имя для показа: заглавная первая буква там, где это типографика, а не правка
 // номенклатуры. Разбор и список исключений — в substanceName.ts. На адрес не влияет:
@@ -219,6 +352,12 @@ const { row, hText, sdsSlug, prev, next } = Astro.props as Props
 const name = substanceTitleName(substanceNameFull(row))
 const cas = row.cas_number
 const formula = row.molecular_formula
+// ⚠⚠ Имя в заголовке обрезается, потому что у 707 некурированных записей оно
+// длиной с абзац («lithium sodium 4-[4-[4-(nitrilotris…»). H2 на всю ширину
+// экрана — не заголовок. Длины подобраны так, чтобы ключевой хвост
+// («hazard statements») оставался виден на телефоне.
+const nm = truncateName(name, 30)
+const nmShort = truncateName(name, 26)
 const lcss = (lcssValues as Record<string, LcssRecord>)[cas]
 const texts = (lcssText as Record<string, TextRecord>)[cas]
 const propertyRows = buildPropertyRows(lcss)
@@ -232,7 +371,11 @@ const firstChar = name.trim().charAt(0).toLowerCase()
 const letterBucket = firstChar >= 'a' && firstChar <= 'z' ? firstChar : '0-9'
 const letterLabel = letterBucket === '0-9' ? '0–9' : letterBucket.toUpperCase()
 const noteTopics = [...new Set(sourceNotes.map((n) => n.topic))]
-const notesAreFire = noteTopics.includes('Fire and explosion')
+// ⚠ Раздел «Fire Potential» из LCSS — это тоже про пожар, поэтому его наличие
+// переключает заголовок секции так же, как тема заметок. Без этой строки
+// вещество, у которого есть только firepot, получало бы заголовок «Further
+// notes on …» над абзацем о том, при какой температуре оно горит.
+const notesAreFire = noteTopics.includes('Fire and explosion') || Boolean(texts?.firepot)
 const intro = buildIntro({ name, formula, weight: row.molecular_weight, signal: row.signal_word, texts, lcss })
 
 // ⚠ 231 строка iupac_name содержит CRLF, а сама колонка Annex VI — перечень
@@ -248,6 +391,45 @@ const synonymList = [
 
 const pictograms = (row.ghs_pictogram_codes ?? []).filter((c) => PICTOGRAM_NAME[c])
 const hList = (row.h_statement_codes ?? []).map((code) => ({ code, text: hText[code] ?? '' }))
+const euhList = (row.euh_codes ?? []).map((code) => ({ code, text: euhText[code] ?? '' }))
+// ⚠ Группы P-фраз — см. lib/pStatements.ts: раздел берётся ИЗ БАЗЫ, а не из
+// первой цифры кода.
+const pGroups = groupPStatements(row.p_statement_codes, pMeta)
+const pCount = countPStatements(pGroups)
+const pFlat = pGroups.flatMap((g) => g.items)
+const storageCodes = pGroups.find((g) => g.key === 'storage')?.items.map((i) => i.code) ?? []
+
+// ⚠⚠ Разделы LCSS, доехавшие до страницы только в session 38. До этого из
+// 25 разделов выгрузки в JSON лежали 14 — не потому, что остальные запрещены,
+// а потому, что сборка данных нигде не была записана и никем не проверялась.
+// Правило отбора и чёрный список строк — scripts/build-lcss-text.mjs.
+const carc = texts?.carc
+const oel = texts?.oel
+const oelRows = [
+  ...(oel?.pel ?? []).map((r) => ({ kind: 'PEL', full: 'Permissible exposure limit', ...r })),
+  ...(oel?.rel ?? []).map((r) => ({ kind: 'REL', full: 'Recommended exposure limit', ...r })),
+  ...(oel?.idlh ?? []).map((r) => ({ kind: 'IDLH', full: 'Immediately dangerous to life or health', ...r })),
+]
+const hasHealth = Boolean(texts?.hazsum || carc || oelRows.length)
+
+// ⚠ FAQ собирается ИЗ СВОИХ данных и ничего не выдумывает; правило «отсутствие
+// кода — не доказательство безопасности» разобрано в шапке substanceFaq.ts.
+const faq = buildFaq({
+  name: nm,
+  cas,
+  ec: row.ec_number,
+  formula,
+  weight: row.molecular_weight,
+  signalWord: row.signal_word,
+  hCodes: row.h_statement_codes ?? [],
+  hText,
+  pictogramNames: pictograms.map((c) => PICTOGRAM_NAME[c]),
+  propertyRows,
+  storageText: texts?.storage,
+  storageCodes,
+  iarc: carc?.iarc,
+  pel: oel?.pel?.[0],
+})
 
 /**
  * ⚠⚠ Title собирается под бюджет в 62 знака ЦЕЛИКОМ, поэтому у страницы вещества
@@ -284,7 +466,18 @@ const descTail = row.signal_word
 const description = truncateMetaDescription(intro.metaSentence, 155 - descTail.length) + descTail
 const canonical = `${SITE}${substanceHref(name, cas)}`
 
-const chemicalJson = JSON.stringify({
+/**
+ * ⚠⚠ Сериализация JSON-LD с экранированием «<».
+ * В данных встречается угловая скобка: формулировка H350 хранится как
+ * «May cause cancer <state route of exposure…>», и она попадает в ответы FAQ.
+ * Голый `<` внутри <script> закрывает блок раньше времени на строке `</script>`
+ * и роняет разметку молча — проверка jsonld-valid увидит обрывок, но только
+ * если ей повезёт с местом разрыва. `<` — законное JSON-экранирование,
+ * разбирается обратно в «<» без потерь.
+ */
+const ld = (data: unknown) => JSON.stringify(data).replace(/</g, '\\u003c')
+
+const chemicalJson = ld({
   '@context': 'https://schema.org',
   '@type': 'ChemicalSubstance',
   name,
@@ -299,7 +492,7 @@ const chemicalJson = JSON.stringify({
   url: canonical,
 })
 
-const breadcrumbJson = JSON.stringify({
+const breadcrumbJson = ld({
   '@context': 'https://schema.org',
   '@type': 'BreadcrumbList',
   itemListElement: [
@@ -309,19 +502,46 @@ const breadcrumbJson = JSON.stringify({
   ],
 })
 
+/**
+ * ⚠ Разметка FAQPage строится ИЗ ТОГО ЖЕ массива, что и видимый блок. Разметка,
+ * обещающая поиску ответ, которого на странице нет, — это ровно то, за что
+ * Google снимает расширенный сниппет. Один источник на два места.
+ */
+const faqJson = faq.length
+  ? ld({
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: faq.map((f) => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: { '@type': 'Answer', text: f.a },
+      })),
+    })
+  : null
+
 // Нумерация секций считается заранее, а не побочным эффектом разметки.
 let sn = 0
 const pad = () => String(++sn).padStart(2, '0')
 const nIdentification = pad()
-const nClassification = hList.length || pictograms.length ? pad() : null
+const nIdentifiers = pad()
+const nClassification = hList.length || pictograms.length || hazardClasses.length ? pad() : null
+const nPrecautions = pCount ? pad() : null
+const nLabel = pictograms.length || row.signal_word || hList.length ? pad() : null
+const nHealth = hasHealth ? pad() : null
 const nProperties = propertyRows.length ? pad() : null
-const nNotes = sourceNotes.length ? pad() : null
-const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad() : null
+const nNotes = sourceNotes.length || texts?.firepot ? pad() : null
+const nHandling =
+  texts?.storage || texts?.incompat || texts?.reactivity || texts?.safestore ||
+  texts?.peroxide || rgroups.length
+    ? pad()
+    : null
+const nFaq = faq.length ? pad() : null
 ---
 
 <Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
   <script type="application/ld+json" slot="head" set:html={chemicalJson} />
   <script type="application/ld+json" slot="head" set:html={breadcrumbJson} />
+  {faqJson && <script type="application/ld+json" slot="head" set:html={faqJson} />}
 
   <section class="hub-hero">
     <div class="dots-a" aria-hidden="true"></div>
@@ -354,10 +574,26 @@ const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad()
   <section class="hub-sec-a" id="overview">
     <div class="hub-wrap">
       <p class="hub-eyebrow">{nIdentification} · Identification</p>
-      <h2 class="hub-h2">What {truncateName(name, 30)} is</h2>
+      <h2 class="hub-h2">What {nm} is</h2>
       <div class="hub-prose" set:html={intro.paragraphs} />
+    </div>
+  </section>
 
-      <div class="hub-panel" id="formula">
+  {/*
+    ⚠⚠ Идентификаторы вынесены в СВОЮ секцию (session 38). Раньше CAS, EC,
+    формула и масса лежали одной панелью внутри вводной секции, под общим H2
+    «What acetone is». Заголовка со словами «molecular weight» на странице не
+    было ни одного — при том что связка «вещество + molecular weight» это
+    4 570 объёма, а «вещество + formula» — 20 730.
+    ⚠ Якорь #formula сохранён: на него уже ссылаются со страниц SDS.
+  */}
+  <section class="hub-sec-white" id="identifiers">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">{nIdentifiers} · Identifiers</p>
+      <h2 class="hub-h2">{nm} identifiers and molecular data</h2>
+
+      <h3 class="sub-h3" id="cas-number">{nm} CAS number and EC number</h3>
+      <div class="hub-panel">
         <div class="hub-panel-row">
           <span class="hub-panel-label">CAS number</span><span>{cas}</span>
         </div>
@@ -368,30 +604,38 @@ const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad()
         )}
         {row.index_number && (
           <div class="hub-panel-row">
-            <span class="hub-panel-label">Index number</span><span>{row.index_number}</span>
-          </div>
-        )}
-        {formula && (
-          <div class="hub-panel-row">
-            <span class="hub-panel-label">Molecular formula</span><span>{formula}</span>
-          </div>
-        )}
-        {row.molecular_weight && (
-          <div class="hub-panel-row">
-            <span class="hub-panel-label">Molecular weight</span><span>{row.molecular_weight} g/mol</span>
-          </div>
-        )}
-        {texts?.classes && (
-          <div class="hub-panel-row">
-            <span class="hub-panel-label">Chemical class</span>
-            <span>{texts.classes.t}</span>
+            <span class="hub-panel-label">Index number (CLP Annex VI)</span><span>{row.index_number}</span>
           </div>
         )}
       </div>
 
+      {(formula || row.molecular_weight || texts?.classes) && (
+        <>
+          <h3 class="sub-h3" id="formula">{nm} molecular formula and molecular weight</h3>
+          <div class="hub-panel">
+            {formula && (
+              <div class="hub-panel-row">
+                <span class="hub-panel-label">Molecular formula</span><span>{formula}</span>
+              </div>
+            )}
+            {row.molecular_weight && (
+              <div class="hub-panel-row">
+                <span class="hub-panel-label">Molecular weight</span><span>{row.molecular_weight} g/mol</span>
+              </div>
+            )}
+            {texts?.classes && (
+              <div class="hub-panel-row">
+                <span class="hub-panel-label">Chemical class</span>
+                <span>{texts.classes.t}</span>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
       {synonymList.length > 0 && (
         <div class="sub-synonyms" id="synonyms">
-          <h3 class="sub-h3">Other names for {truncateName(name, 30)}</h3>
+          <h3 class="sub-h3">Other names for {nm}</h3>
           <ul class="sub-syn-list">
             {synonymList.map((s) => <li>{s}</li>)}
           </ul>
@@ -401,65 +645,141 @@ const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad()
   </section>
 
   {nClassification && (
-    <section class="hub-sec-white" id="hazards">
+    <section class="hub-sec-a" id="hazards">
       <div class="hub-wrap">
         <p class="hub-eyebrow">{nClassification} · GHS classification</p>
-        <h2 class="hub-h2">Hazards and label elements</h2>
+        <h2 class="hub-h2">{nm} hazard classification</h2>
         <p class="hub-sub">
           Harmonised classification under CLP Annex VI. This is the legally binding
           classification in the EU; other jurisdictions may differ.
         </p>
 
-        {pictograms.length > 0 && (
-          <div class="sub-picts">
-            {pictograms.map((code) => (
-              <a class="sub-pict" href={`/ghs/${code.toLowerCase()}/`}>
-                <img src={`/pictograms/${code.toLowerCase()}.svg`} width="88" height="88"
-                     alt={`${code} ${PICTOGRAM_NAME[code]} pictogram`} loading="lazy" />
-                <span>{PICTOGRAM_NAME[code]}</span>
-              </a>
-            ))}
-          </div>
+        {(pictograms.length > 0 || row.signal_word) && (
+          <>
+            <h3 class="sub-h3" id="pictograms">{nm} pictograms and signal word</h3>
+            {pictograms.length > 0 && (
+              <div class="sub-picts">
+                {pictograms.map((code) => (
+                  <a class="sub-pict" href={`/ghs/${code.toLowerCase()}/`}>
+                    <img src={`/pictograms/${code.toLowerCase()}.svg`} width="88" height="88"
+                         alt={`${code} ${PICTOGRAM_NAME[code]} pictogram`} loading="lazy" />
+                    <span>{PICTOGRAM_NAME[code]}</span>
+                  </a>
+                ))}
+              </div>
+            )}
+            {row.signal_word && (
+              <div class="hub-panel">
+                <div class="hub-panel-row">
+                  <span class="hub-panel-label">Signal word</span><span>{row.signal_word}</span>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
-        {row.signal_word && (
-          <div class="hub-panel">
-            <div class="hub-panel-row">
-              <span class="hub-panel-label">Signal word</span><span>{row.signal_word}</span>
+        {/*
+          ⚠⚠ Класс и категория ВЫВЕДЕНЫ из H-кода, а не выписаны из Annex VI:
+          таблица hazard_classifications в базе пуста. Ограничения вывода и
+          правило показа неоднозначности — в шапке lib/hazardClasses.ts.
+          ⚠ Сигнальное слово в этой таблице НЕ печатается: у H221 категория 1B
+          даёт Danger, категория 2 — Warning. Настоящее слово вещества стоит
+          выше, в панели, и приходит из своей колонки.
+        */}
+        {hazardClasses.length > 0 && (
+          <>
+            <h3 class="sub-h3" id="hazard-class">{nm} hazard class and category</h3>
+            <div class="hub-table-wrap">
+              <table class="hub-table sub-class">
+                <caption class="hub-fine">GHS hazard classes {nmShort} falls into</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Hazard class</th>
+                    <th scope="col">Category</th>
+                    <th scope="col">From code</th>
+                    <th scope="col">Pictogram</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {hazardClasses.map((hc) => (
+                    <tr>
+                      <th scope="row" class="c-prop">
+                        {hc.className}
+                        {hc.ghsChapter && <span class="sub-class-ch">GHS chapter {hc.ghsChapter}</span>}
+                      </th>
+                      <td class="c-txt">{categoryLabel(hc)}</td>
+                      <td class="c-code"><a href={hHref(hc.hCode)}>{hc.hCode}</a></td>
+                      <td class="c-code">
+                        {hc.pictogram ? (
+                          <a href={`/ghs/${hc.pictogram.toLowerCase()}/`}>{hc.pictogram}</a>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+            {hasAmbiguity(hazardClasses) && (
+              <p class="hub-fine">
+                Where two values are shown with “or”, the hazard statement is shared by more
+                than one category or by more than one class, and the code alone does not say
+                which. H272, for example, belongs to oxidising liquids and to oxidising solids —
+                the physical state decides. The binding answer for a specific entry is in the
+                CLP Annex VI table itself.
+              </p>
+            )}
+          </>
         )}
 
         {hList.length > 0 && (
-          <div class="hub-table-wrap">
-            <table class="hub-table">
-              <caption class="hub-fine">Hazard statements assigned to {truncateName(name, 30)}</caption>
-              <thead><tr><th scope="col">Code</th><th scope="col">Hazard statement</th></tr></thead>
-              <tbody>
-                {hList.map((h) => (
-                  <tr>
-                    <td class="c-code"><a href={hHref(h.code)}>{h.code}</a></td>
-                    <td class="c-txt">{h.text}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <h3 class="sub-h3" id="hazard-statements">{nm} hazard statements (H-codes)</h3>
+            <div class="hub-table-wrap">
+              <table class="hub-table">
+                <caption class="hub-fine">Hazard statements assigned to {nmShort}</caption>
+                <thead><tr><th scope="col">Code</th><th scope="col">Hazard statement</th></tr></thead>
+                <tbody>
+                  {hList.map((h) => (
+                    <tr>
+                      <td class="c-code"><a href={hHref(h.code)}>{h.code}</a></td>
+                      <td class="c-txt">{h.text}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
-        {(row.euh_codes ?? []).length > 0 && (
-          <p class="hub-fine">
-            Supplemental EU statements: {(row.euh_codes ?? []).join(', ')}
-          </p>
-        )}
-
-        {(row.p_statement_codes ?? []).length > 0 && (
-          <p class="hub-fine">
-            Precautionary statements:{' '}
-            {(row.p_statement_codes ?? []).map((code, i) => (
-              <>{i > 0 && ', '}<a href={`/p-statements/${code}/`}>{code}</a></>
-            ))}
-          </p>
+        {/*
+          ⚠⚠ EUH-фразы с ТЕКСТОМ (session 38). До этого печаталась строка
+          «Supplemental EU statements: EUH014, EUH066» — коды без слов и без
+          ссылок, хотя страницы у них есть и лежат там же, где H-фразы.
+          ⚠ Их девять на весь справочник, встречаются у 130 веществ.
+        */}
+        {euhList.length > 0 && (
+          <>
+            <h3 class="sub-h3" id="euh-statements">{nm} supplemental EU statements (EUH)</h3>
+            <div class="hub-table-wrap">
+              <table class="hub-table">
+                <caption class="hub-fine">
+                  EU-specific statements assigned to {nmShort}. They exist only in CLP and have
+                  no counterpart in UN GHS.
+                </caption>
+                <thead><tr><th scope="col">Code</th><th scope="col">Statement</th></tr></thead>
+                <tbody>
+                  {euhList.map((e) => (
+                    <tr>
+                      <td class="c-code"><a href={hHref(e.code)}>{e.code}</a></td>
+                      <td class="c-txt">{e.text}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
         {/*
@@ -471,7 +791,7 @@ const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad()
           устаревает молча при первой же правке данных.
         */}
         <p class="hub-note">
-          This page lists only the codes assigned to {truncateName(name, 26)}. The full
+          This page lists only the codes assigned to {nmShort}. The full
           reference lives on the <a href="/h-statements/">hazard statements hub</a>, the{' '}
           <a href="/p-statements/">precautionary statements hub</a> and the{' '}
           <a href="/pictograms/">GHS pictograms hub</a>.
@@ -480,11 +800,258 @@ const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad()
     </section>
   )}
 
+  {/*
+    ⚠⚠ P-фразы КАРТОЧКАМИ ПО РАЗДЕЛАМ (session 38, решение Сергея).
+    Было: одна строка `hub-fine` с кодами через запятую — «Precautionary
+    statements: P201, P280, P308, P313». Читателю это не отвечало ни на один
+    вопрос, а поиску не давало ни одного слова: страница про опасное вещество
+    не содержала слов «wear protective gloves».
+
+    ⚠ Раздел («prevention», «response», …) берётся ИЗ БАЗЫ, а не из первой цифры
+    кода: «P103 Read the label before use» начинается с единицы, но это общая
+    фраза, а не профилактическая. Разбор — в шапке lib/pStatements.ts.
+  */}
+  {nPrecautions && (
+    <section class="hub-sec-white" id="precautions">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nPrecautions} · Precautionary statements</p>
+        <h2 class="hub-h2">{nm} precautionary statements</h2>
+        <p class="hub-sub">
+          CLP Annex VI assigns {pCount} precautionary {pCount === 1 ? 'statement' : 'statements'} to{' '}
+          {nmShort}. They are grouped the way a label groups them: what to do before handling,
+          what to do when something has already happened, how to store it and how to dispose of it.
+        </p>
+
+        {pGroups.map((group) => (
+          <div class="sub-pgroup">
+            <h3 class="sub-h3">{group.label}</h3>
+            {group.blurb && <p class="hub-fine">{group.blurb}</p>}
+            <div class="sub-pcards">
+              {group.items.map((item) => (
+                <a class="sub-pcard" href={`/p-statements/${item.code}/`}>
+                  <span class="sub-pcard-code">{item.code}</span>
+                  <span class="sub-pcard-text">
+                    {splitClpNotation(item.text, 'p').map((piece) =>
+                      piece.kind === 'blank' ? (
+                        <span class="clp-blank" title="Blank filled in by the supplier">{piece.value}</span>
+                      ) : piece.kind === 'opt' ? (
+                        <span class="clp-opt" title="Optional part">{piece.value}</span>
+                      ) : (
+                        piece.value
+                      )
+                    )}
+                  </span>
+                </a>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        <p class="clp-legend">
+          <b>Reading the notation.</b>{' '}
+          <span class="clp-blank">…</span> is a blank the supplier fills in — not a truncated
+          sentence.<span class="sep">·</span>
+          <span class="clp-opt">[square brackets]</span> mark a part printed only when it applies.
+        </p>
+      </div>
+    </section>
+  )}
+
+  {/*
+    ⚠⚠ Превью этикетки. Это НЕ готовая этикетка и не должно выглядеть как
+    готовая: на настоящей обязаны стоять имя и адрес поставщика, номинальное
+    количество и идентификатор продукта, которых у справочника нет и быть не
+    может. Поэтому подвал карточки — это подписанные ПРОПУСКИ, а не пустое
+    место: пустое место читается как «больше ничего не нужно».
+    ⚠ Собирается из тех же данных, что и секции выше. Отдельного источника у
+    превью нет — иначе оно начнёт расходиться с таблицами на той же странице.
+  */}
+  {nLabel && (
+    <section class="hub-sec-a" id="label">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nLabel} · Label elements</p>
+        <h2 class="hub-h2">{nm} GHS label elements</h2>
+        <p class="hub-sub">
+          Everything CLP Annex VI fixes for {nmShort}, laid out the way it appears on a label.
+          The greyed lines are the parts only the supplier can fill in.
+        </p>
+
+        <div class="sub-label">
+          <div class="sub-label-head">
+            {pictograms.length > 0 && (
+              <div class="sub-label-picts">
+                {pictograms.map((code) => (
+                  <img src={`/pictograms/${code.toLowerCase()}.svg`} width="64" height="64"
+                       alt={`${code} ${PICTOGRAM_NAME[code]} pictogram`} loading="lazy" />
+                ))}
+              </div>
+            )}
+            {row.signal_word && <p class="sub-label-signal">{row.signal_word}</p>}
+          </div>
+
+          <p class="sub-label-name">{nm}</p>
+
+          {hList.length > 0 && (
+            <ul class="sub-label-list">
+              {hList.map((h) => <li>{h.text}</li>)}
+            </ul>
+          )}
+          {euhList.length > 0 && (
+            <ul class="sub-label-list">
+              {euhList.map((e) => <li>{e.text}</li>)}
+            </ul>
+          )}
+          {pFlat.length > 0 && (
+            <ul class="sub-label-list sub-label-p">
+              {pFlat.map((p) => (
+                <li>
+                  {splitClpNotation(p.text, 'p').map((piece) =>
+                    piece.kind === 'blank' ? (
+                      <span class="clp-blank">{piece.value}</span>
+                    ) : piece.kind === 'opt' ? (
+                      <span class="clp-opt">{piece.value}</span>
+                    ) : (
+                      piece.value
+                    )
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <p class="sub-label-supplier">
+            Supplier name, address and telephone number<span class="sep">·</span>
+            Product identifier<span class="sep">·</span>Nominal quantity
+          </p>
+        </div>
+
+        <p class="hub-note">
+          Need this as an actual label?{' '}
+          <a href={`/label-constructor/?cas=${encodeURIComponent(cas)}`}>
+            Open {nmShort} in the GHS label constructor →
+          </a>
+        </p>
+      </div>
+    </section>
+  )}
+
+  {/*
+    ⚠⚠ Здоровье и пределы воздействия. Раздел появился в session 38: данные
+    лежали в выгрузке LCSS с самого начала, но до JSON не доехали.
+    ⚠⚠⚠ ДВА НЕЗАВИСИМЫХ ОТВЕТА НА ВОПРОС «КАНЦЕРОГЕН ЛИ». CLP Annex VI — это
+    право ЕС, IARC — научная оценка ВОЗ, и они РАСХОДЯТСЯ штатно: у вещества
+    может не быть гармонизированного H350 и при этом стоять Group 2B. Свести
+    их в один вердикт значит выбрать за читателя, какой из двух источников
+    неправ. Поэтому показываем оба и подписываем, кто что сказал.
+    ⚠ Пределы — американские (OSHA, NIOSH). В ЕС свои значения, которых у нас
+    нет; про это сказано прямо в подписи, а не мелким шрифтом внизу.
+    ⛔ ACGIH TLV в этот блок попасть не может: вырезан на сборке данных
+    построчно, см. BANNED_ROW в scripts/build-lcss-text.mjs.
+  */}
+  {nHealth && (
+    <section class="hub-sec-white" id="health">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nHealth} · Health hazards</p>
+        <h2 class="hub-h2">{nm} health hazards and exposure limits</h2>
+
+        {texts?.hazsum && (
+          <>
+            <h3 class="sub-h3" id="hazard-summary">{nm} hazard summary</h3>
+            <div class="sub-quote">
+              <p>{texts.hazsum.t}</p>
+              <p class="hub-fine">Source: {texts.hazsum.s}</p>
+            </div>
+          </>
+        )}
+
+        {carc && (
+          <>
+            <h3 class="sub-h3" id="carcinogenicity">{nm} carcinogenicity classification</h3>
+            {carc.iarc && (
+              <div class="hub-panel">
+                <div class="hub-panel-row">
+                  <span class="hub-panel-label">IARC classification</span>
+                  <span><b>{carc.iarc.group}</b> — {carc.iarc.label}</span>
+                </div>
+                {carc.iarc.volumes.length > 0 && (
+                  <div class="hub-panel-row">
+                    <span class="hub-panel-label">IARC monographs</span>
+                    <span>{carc.iarc.volumes.join('; ')}</span>
+                  </div>
+                )}
+              </div>
+            )}
+            {carc.ntp?.verdict && (
+              <div class="sub-quote">
+                <p>{carc.ntp.verdict}</p>
+                <p class="hub-fine">
+                  Source: US National Toxicology Program{carc.ntp.report ? ` · ${carc.ntp.report}` : ''}
+                </p>
+              </div>
+            )}
+            {!carc.ntp?.verdict && carc.ntp?.report && (
+              <p class="hub-fine">
+                Studied by the US National Toxicology Program: {carc.ntp.report}
+              </p>
+            )}
+            {carc.notes?.map((n) => (
+              <div class="sub-quote">
+                <p>{n.t}</p>
+                <p class="hub-fine">Source: {n.s}</p>
+              </div>
+            ))}
+            <p class="hub-fine">
+              An IARC group and a CLP classification answer different questions. IARC judges
+              whether the evidence for cancer in humans is strong enough; CLP Annex VI is the
+              legally binding EU classification. A substance can carry one and not the other.
+            </p>
+          </>
+        )}
+
+        {oelRows.length > 0 && (
+          <>
+            <h3 class="sub-h3" id="exposure-limits">{nm} occupational exposure limits</h3>
+            <div class="hub-table-wrap">
+              <table class="hub-table sub-oel">
+                <caption class="hub-fine">
+                  US occupational exposure limits reported for {nmShort}. PEL is enforceable
+                  (OSHA), REL is a recommendation (NIOSH), IDLH is the concentration at which
+                  escape becomes impossible without injury.
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Limit</th>
+                    <th scope="col">Value</th>
+                    <th scope="col">Source</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {oelRows.map((r) => (
+                    <tr>
+                      <th scope="row" class="c-code" title={r.full}>{r.kind}</th>
+                      <td class="c-val c-val-text">{r.t}</td>
+                      <td class="c-txt">{r.s}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p class="hub-fine">
+              These are United States values. The European Union sets its own indicative and
+              binding limits, and the figure that applies at a given workplace is the one in
+              the local regulation — not the one shown here.
+            </p>
+          </>
+        )}
+      </div>
+    </section>
+  )}
+
   {nProperties && (
     <section class="hub-sec-b" id="properties">
       <div class="hub-wrap">
         <p class="hub-eyebrow">{nProperties} · Physical and chemical properties</p>
-        <h2 class="hub-h2">{truncateName(name, 30)} properties</h2>
+        <h2 class="hub-h2">{nm} properties</h2>
         <p class="hub-sub">
           Every value is shown with the conditions it was measured under and the source
           it came from. Where sources disagree, all values are listed rather than one
@@ -492,30 +1059,52 @@ const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad()
           not an error.
         </p>
 
-        <div class="hub-table-wrap">
-          <table class="hub-table sub-props">
-            <thead>
-              <tr>
-                <th scope="col">Property</th>
-                <th scope="col">Value</th>
-                <th scope="col">Conditions</th>
-                <th scope="col">Source</th>
-              </tr>
-            </thead>
-            <tbody>
-              {propertyRows.map((prop) =>
-                prop.values.map((val, i) => (
-                  <tr class={i === 0 ? 'sub-prop-first' : 'sub-prop-more'}>
-                    <th scope="row" class="c-prop">{i === 0 ? prop.label : ''}</th>
-                    <td class={val.isText ? 'c-val c-val-text' : 'c-val'}>{val.display}</td>
-                    <td class="c-txt">{val.condition ?? ''}</td>
-                    <td class="c-code">{val.source}</td>
+        {/*
+          ⚠⚠ ОДНО СВОЙСТВО — ОДИН H3 (session 38, решение Сергея). Раньше все
+          значения лежали в одной таблице под общим H2, и заголовка со словами
+          «boiling point» на странице не было. Связка «вещество + boiling point»
+          ищется отдельно от «вещество + properties», и отвечать на неё должен
+          заголовок, а не строка внутри таблицы.
+
+          ⚠ Разметка ячеек НЕ МЕНЯЛАСЬ: `<td class="c-val">` с цифрой — маркер
+          проверки subs-static-content, которая только по нему и отличает статику
+          от острова client:load. Маркер и разметка правятся одним движением;
+          здесь движения не потребовалось, и это осознанно.
+
+          ⚠ Якорь #properties остаётся на секции, у каждого свойства свой
+          собственный (#boiling-point и т. д.) — по ключу, а не по подписи:
+          подпись меняется, ключ приходит из данных.
+        */}
+        {propertyRows.map((prop) => (
+          <div class="sub-prop-block">
+            <h3 class="sub-h3" id={prop.key.replace(/_/g, '-')}>
+              {nm} {PROPERTY_HEADING[prop.key] ?? (PROPERTY_LABEL[prop.key] ?? prop.key).toLowerCase()}
+            </h3>
+            <div class="hub-table-wrap">
+              <table class="hub-table sub-props">
+                <thead>
+                  <tr>
+                    <th scope="col">Property</th>
+                    <th scope="col">Value</th>
+                    <th scope="col">Conditions</th>
+                    <th scope="col">Source</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {prop.values.map((val, i) => (
+                    <tr class={i === 0 ? 'sub-prop-first' : 'sub-prop-more'}>
+                      <th scope="row" class="c-prop">{i === 0 ? prop.label : ''}</th>
+                      <td class={val.isText ? 'c-val c-val-text' : 'c-val'}>{val.display}</td>
+                      <td class="c-txt">{val.condition ?? ''}</td>
+                      <td class="c-code">{val.source}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+
         <p class="hub-fine">
           Values compiled from PubChem Laboratory Chemical Safety Summary. Temperatures
           converted to Fahrenheit for reference.
@@ -525,18 +1114,27 @@ const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad()
   )}
 
   {nNotes && (
-    <section class="hub-sec-white" id="fire-notes">
+    <section class="hub-sec-a" id="fire-notes">
       <div class="hub-wrap">
         <p class="hub-eyebrow">{nNotes} · {notesAreFire ? 'Fire and explosion' : 'Source notes'}</p>
         <h2 class="hub-h2">
           {notesAreFire
-            ? `Fire and explosion behaviour of ${truncateName(name, 26)}`
-            : `Further notes on ${truncateName(name, 30)}`}
+            ? `${nmShort} fire and explosion behaviour`
+            : `Further notes on ${nm}`}
         </h2>
         <p class="hub-sub">
           These are descriptions rather than measured values, so they are kept out of
           the table above and quoted here with the source that reported them.
         </p>
+        {texts?.firepot && (
+          <div class="sub-notes">
+            <h3 class="sub-h3">{nm} fire potential</h3>
+            <div class="sub-quote">
+              <p>{texts.firepot.t}</p>
+              <p class="hub-fine">Source: {texts.firepot.s}</p>
+            </div>
+          </div>
+        )}
         {noteTopics.map((topic) => (
           <div class="sub-notes">
             <h3 class="sub-h3">{topic}</h3>
@@ -556,25 +1154,70 @@ const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad()
     <section class="hub-sec-white" id="handling">
       <div class="hub-wrap">
         <p class="hub-eyebrow">{nHandling} · Handling and storage</p>
-        <h2 class="hub-h2">Storing and handling {truncateName(name, 30)}</h2>
+        <h2 class="hub-h2">{nm} storage and handling</h2>
+
+        {/*
+          ⚠⚠ Реактивная группа — ключ к матрице совместимости: именно по ней
+          считается, с чем вещество нельзя ставить рядом. Данные из базы, не из
+          выгрузки LCSS — почему именно так, разобрано в getStaticPaths.
+          ⚠ Подпись обязана сказать, что это НЕ класс опасности GHS: у ярлыка
+          CAMEO нет ни кода, ни категории, ни юрисдикции, и рядом с таблицей
+          Annex VI он иначе читается как ещё одна строка классификации.
+          ⛔ Пометок реактивности CAMEO («Polymerizable», «Water-Reactive») тут
+          нет: в выгрузке они собраны объединением по CAS и несут свойства
+          растворов и смесей, а курируемого источника под них в базе нет.
+        */}
+        {rgroups.length > 0 && (
+          <>
+            <h3 class="sub-h3" id="reactive-group">{nm} reactive group</h3>
+            <p>
+              CAMEO Chemicals places {nmShort} in{' '}
+              {rgroups.length === 1 ? 'the reactive group' : 'the reactive groups'}{' '}
+              <b>{rgroups.join(', ')}</b>. Compatibility with other chemicals is worked out
+              from the group, not from the individual substance — which is why two substances
+              you have never seen react can still be flagged as a pair that must be separated.
+            </p>
+            <p class="hub-fine">
+              A reactive group is a CAMEO Chemicals (US NOAA) grouping, not a GHS hazard class:
+              it has no code, no category and no legal force. It is what the storage
+              compatibility matrix on this site computes from.
+            </p>
+          </>
+        )}
+
+        {texts?.peroxide && (
+          <div class="sub-quote sub-quote-warn">
+            <h3 class="sub-h3">{nm} peroxide formation</h3>
+            <p>{texts.peroxide.t}</p>
+            <p class="hub-fine">Source: {texts.peroxide.s}</p>
+          </div>
+        )}
+
+        {texts?.safestore && (
+          <div class="sub-quote">
+            <h3 class="sub-h3">{nm} safe storage</h3>
+            <p>{texts.safestore.t}</p>
+            <p class="hub-fine">Source: {texts.safestore.s}</p>
+          </div>
+        )}
 
         {texts?.storage && (
           <div class="sub-quote">
-            <h3 class="sub-h3">Storage conditions</h3>
+            <h3 class="sub-h3">{nm} storage conditions</h3>
             <p>{texts.storage.t}</p>
             <p class="hub-fine">Source: {texts.storage.s}</p>
           </div>
         )}
         {texts?.incompat && (
           <div class="sub-quote">
-            <h3 class="sub-h3">Incompatible materials</h3>
+            <h3 class="sub-h3">{nm} incompatible materials</h3>
             <p>{texts.incompat.t}</p>
             <p class="hub-fine">Source: {texts.incompat.s}</p>
           </div>
         )}
         {texts?.reactivity && (
           <div class="sub-quote">
-            <h3 class="sub-h3">Reactivity</h3>
+            <h3 class="sub-h3">{nm} reactivity</h3>
             <p>{texts.reactivity.t}</p>
             <p class="hub-fine">Source: {texts.reactivity.s}</p>
           </div>
@@ -591,6 +1234,30 @@ const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad()
   )}
 
   {/*
+    ⚠⚠ FAQ. Каждый ответ собран из СВОИХ данных, разметка FAQPage строится из
+    того же массива — разбор в шапке lib/substanceFaq.ts.
+    ⚠ Вопрос — это H3, а не <summary>: содержимое обязано лежать в HTML
+    развёрнутым. Свёрнутый по умолчанию ответ Google индексирует хуже, а
+    правило отрисовки этого раздела прямо запрещает прятать текст.
+  */}
+  {nFaq && (
+    <section class="hub-sec-b" id="faq">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nFaq} · Questions</p>
+        <h2 class="hub-h2">{nm} — frequently asked questions</h2>
+        <div class="sub-faq">
+          {faq.map((f) => (
+            <div class="sub-faq-item">
+              <h3 class="sub-h3">{f.q}</h3>
+              <p>{f.a}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+
+  {/*
     ⚠⚠ Партнёрская карточка стоит ТОЛЬКО там, где своей SDS у нас нет
     (решение Сергея, session 37). На 106 веществах с живой SDS в герое уже есть
     кнопка на неё — карточка спорила бы с собственной страницей за тот же клик.
@@ -601,13 +1268,13 @@ const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad()
     человек сюда пришёл. SDS выпускается на ПРОДУКТ, а не на вещество, поэтому
     «SDS ацетона» как единого документа не существует в принципе.
 
-    ⚠ Секция намеренно НЕ пронумерована: 01–05 несут данные, здесь данных нет.
+    ⚠ Секция намеренно НЕ пронумерована: 01–09 несут данные, здесь данных нет.
   */}
   {!sdsSlug && (
-    <section class="hub-sec-b" id="sds">
+    <section class="hub-sec-white" id="sds">
       <div class="hub-wrap">
         <p class="hub-eyebrow">Safety Data Sheet</p>
-        <h2 class="hub-h2">Getting an SDS for {truncateName(name, 26)}</h2>
+        <h2 class="hub-h2">Getting an SDS for {nmShort}</h2>
         <p class="hub-sub">
           A Safety Data Sheet is written for a product, not for a substance: the supplier of
           the grade you actually buy issues it, so two suppliers of {truncateName(name, 22)}
@@ -628,10 +1295,10 @@ const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad()
     Когда соседа нет (первая и последняя запись справочника), карточка ведёт
     «вверх», на буквенный указатель: пустая половина хуже, чем ссылка.
   */}
-  <section class="hub-sec-white" id="nearby">
+  <section class="hub-sec-a" id="nearby">
     <div class="hub-wrap">
       <p class="hub-eyebrow">Nearby</p>
-      <h2 class="hub-h2">Substances next to {truncateName(name, 26)}</h2>
+      <h2 class="hub-h2">Substances next to {nmShort}</h2>
       <nav class="hub-prevnext" aria-label="Neighbouring substances">
         {prev ? (
           <a href={prev.href}>
@@ -672,7 +1339,7 @@ const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad()
   <section class="hub-sec-deep">
     <div class="hub-wrap">
       <p class="hub-eyebrow on-dark">Next</p>
-      <h2 class="hub-h2 on-dark">Work with {truncateName(name, 30)}</h2>
+      <h2 class="hub-h2 on-dark">Work with {nm}</h2>
       <div class="hub-mini-cards">
         {sdsSlug && (
           <a class="hub-mini-card" href={`/sds/${sdsSlug}/`}>
@@ -688,7 +1355,7 @@ const nHandling = texts?.storage || texts?.incompat || texts?.reactivity ? pad()
           <strong>Storage compatibility</strong>
           <span>What this substance must not be stored next to.</span>
         </a>
-        <a class="hub-mini-card" href="/label-constructor/">
+        <a class="hub-mini-card" href={`/label-constructor/?cas=${encodeURIComponent(cas)}`}>
           <strong>Label constructor</strong>
           <span>Build a compliant GHS label with these pictograms and statements.</span>
         </a>

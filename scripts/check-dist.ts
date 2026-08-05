@@ -3569,6 +3569,289 @@ const CHECKS: Check[] = [
       }
     },
   },
+
+  {
+    id: 'subs-p-cards',
+    group: 'subs',
+    title: 'P-фразы показаны карточками с текстом, по одной на каждый код из базы',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('subs-p-cards', slugs)
+      if (miss) return miss
+
+      // ⚠⚠ Источник ожидания — база, а не разметка. Проверка отвечает на вопрос
+      // «все ли коды вещества доехали до карточек», и ответить на него, считая
+      // карточки, нельзя: страница, потерявшая половину кодов, тоже даст
+      // непустой список. До session 38 коды печатались строкой без текста, и
+      // ровно поэтому пропажу одного из них было нечем заметить.
+      const rows = await selectAll<{ cas_number: string; p_statement_codes: string[] | null }>(
+        'substances',
+        'cas_number, p_statement_codes',
+        (q: any) => q.not('cas_number', 'is', null),
+      )
+      assertNonEmpty('subs-p-cards', 'substances', rows)
+      const pRows = await selectAll<{ code: string }>('p_statements', 'code')
+      assertNonEmpty('subs-p-cards', 'p_statements', pRows)
+      const known = new Set(pRows.map((p) => p.code))
+
+      const expectedByCas = new Map<string, number>()
+      for (const r of rows) {
+        if (!r.cas_number || !/^\d{2,7}-\d{2}-\d$/.test(r.cas_number)) continue
+        const codes = [...new Set(r.p_statement_codes ?? [])].filter((c) => known.has(c))
+        expectedByCas.set(r.cas_number, codes.length)
+      }
+
+      // ⚠ Маркер по правилу 1: такую строку производит только разметка карточки
+      // в секции precautions. Ссылка на код в другом виде (`href="/p-statements/`
+      // без класса) стоит и в подвале, и в тексте — она бы всё сломала.
+      const CARD = '<a class="sub-pcard" href="/p-statements/'
+      // ⚠ Старая разметка. Если она где-то осталась — значит правку не докатили,
+      // и на этой странице коды по-прежнему без текста.
+      const OLD = 'Precautionary statements:'
+      assertAscii('subs-p-cards', [CARD, OLD])
+
+      const wrongCount: string[] = []
+      const leftovers: string[] = []
+      const emptyText: string[] = []
+      let cards = 0
+      let pages = 0
+      for (const slug of slugs!) {
+        const html = readPage(join('substances', slug, 'index.html'))
+        if (html === null) continue
+        const cas = casFromSlug(slug)
+        const expect = cas ? expectedByCas.get(cas) : undefined
+        if (expect === undefined) continue
+        const got = countOccurrences(html, CARD)
+        cards += got
+        if (got) pages++
+        if (got !== expect) wrongCount.push(`${slug}: карточек ${got}, кодов в базе ${expect}`)
+        if (html.includes(OLD)) leftovers.push(slug)
+        // Карточка без формулировки — это тот же голый код, только в рамке.
+        if (got && !html.includes('<span class="sub-pcard-text">')) emptyText.push(slug)
+      }
+
+      const detail: string[] = []
+      if (wrongCount.length) detail.push(`число карточек не равно числу кодов (${wrongCount.length}): ${preview(wrongCount)}`)
+      if (leftovers.length) {
+        detail.push(
+          `осталась старая строка "${OLD}" (${leftovers.length}): ${preview(leftovers)}. ` +
+            'Это разметка до session 38 — коды без текста.',
+        )
+      }
+      if (emptyText.length) detail.push(`карточки без текста фразы (${emptyText.length}): ${preview(emptyText)}`)
+
+      const ok = detail.length === 0
+      return {
+        id: 'subs-p-cards',
+        group: 'subs',
+        ok,
+        headline: ok ? `${cards} карточек P-фраз на ${pages} страницах, счёт сошёлся с базой` : `расхождений: ${detail.length}`,
+        detail: ok ? [`маркер: "${CARD}…", ожидание из substances.p_statement_codes ∩ p_statements`] : detail,
+      }
+    },
+  },
+
+  {
+    id: 'subs-hazard-class',
+    group: 'subs',
+    title: 'Таблица класса опасности стоит там и только там, где H-код разложился по mapping',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('subs-hazard-class', slugs)
+      if (miss) return miss
+
+      // ⚠⚠ Независимый источник (урок session 34): ожидание строится ПРЯМЫМ
+      // запросом к hazard_category_mapping, а не вызовом buildHazardClasses.
+      // Импортировать проверяемую функцию в проверку значит проверять, что она
+      // равна себе. Правило: у 9 суффиксных кодов (H350i, H360Fd…) строки в
+      // mapping нет вовсе, и страница с ОДНИМ только таким кодом обязана
+      // остаться без таблицы.
+      const rows = await selectAll<{ cas_number: string; h_statement_codes: string[] | null }>(
+        'substances',
+        'cas_number, h_statement_codes',
+        (q: any) => q.not('cas_number', 'is', null),
+      )
+      assertNonEmpty('subs-hazard-class', 'substances', rows)
+      const mapRows = await selectAll<{ h_statement_code: string | null }>(
+        'hazard_category_mapping',
+        'h_statement_code',
+      )
+      assertNonEmpty('subs-hazard-class', 'hazard_category_mapping', mapRows)
+      const mapped = new Set(mapRows.map((m) => m.h_statement_code).filter((c): c is string => Boolean(c)))
+
+      const expectByCas = new Map<string, boolean>()
+      for (const r of rows) {
+        if (!r.cas_number || !/^\d{2,7}-\d{2}-\d$/.test(r.cas_number)) continue
+        expectByCas.set(r.cas_number, (r.h_statement_codes ?? []).some((c) => mapped.has(c)))
+      }
+
+      const TABLE = '<table class="hub-table sub-class">'
+      assertAscii('subs-hazard-class', [TABLE])
+
+      const shouldNot: string[] = []
+      const shouldHave: string[] = []
+      let withTable = 0
+      for (const slug of slugs!) {
+        const html = readPage(join('substances', slug, 'index.html'))
+        if (html === null) continue
+        const cas = casFromSlug(slug)
+        const expect = cas ? expectByCas.get(cas) : undefined
+        if (expect === undefined) continue
+        const has = html.includes(TABLE)
+        if (has) withTable++
+        if (has && !expect) shouldNot.push(slug)
+        if (!has && expect) shouldHave.push(slug)
+      }
+
+      const detail: string[] = []
+      if (shouldHave.length) detail.push(`таблицы нет, а H-код разложился (${shouldHave.length}): ${preview(shouldHave)}`)
+      if (shouldNot.length) {
+        detail.push(
+          `таблица есть, а раскладывать нечего (${shouldNot.length}): ${preview(shouldNot)}. ` +
+            'Либо в mapping появились строки, либо страница печатает пустую таблицу.',
+        )
+      }
+      const ok = detail.length === 0
+      return {
+        id: 'subs-hazard-class',
+        group: 'subs',
+        ok,
+        headline: ok ? `${withTable} страниц с таблицей класса и категории` : `расхождений: ${detail.length}`,
+        detail: ok
+          ? [`маркер: "${TABLE}"`, `кодов с раскладкой в mapping: ${mapped.size}`]
+          : detail,
+      }
+    },
+  },
+
+  {
+    id: 'subs-reactive-group',
+    group: 'subs',
+    title: 'Реактивная группа CAMEO показана ТОЛЬКО для курируемых записей',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('subs-reactive-group', slugs)
+      if (miss) return miss
+
+      // ⚠⚠⚠ САМАЯ ВАЖНАЯ ИЗ ТРЁХ. Замер session 38: в
+      // substance_reactive_group_link 1 085 веществ, но курируемых из них 98.
+      // Остальные 987 — старый импорт объединением по CAS, тот самый дефект B
+      // из claude/cameo-cas-collisions.md: у метанола лишняя группа от записи
+      // METHANOL, TALLOW ALKYL IMINOBISETHANOL, у едкого натра — «Water and
+      // Aqueous Solutions» от его раствора.
+      //
+      // Если фильтр по source_ref когда-нибудь отвалится, страница молча начнёт
+      // печатать «NaOH несовместим с водой». Ошибка не уронит ни сборку, ни
+      // вёрстку, и заметить её будет нечем — кроме этой проверки.
+      const CURATED = 'CAMEO Chemicals 3.1.0 - curated record via substance_cameo_choice (session 33)'
+      const links = await selectAll<{ cas_number: string; source_ref: string }>(
+        'substance_reactive_group_link',
+        'cas_number, source_ref',
+      )
+      assertNonEmpty('subs-reactive-group', 'substance_reactive_group_link', links)
+      const curatedCas = new Set(links.filter((l) => l.source_ref === CURATED).map((l) => l.cas_number))
+      const anyCas = new Set(links.map((l) => l.cas_number))
+
+      const BLOCK = 'id="reactive-group"'
+      assertAscii('subs-reactive-group', [BLOCK])
+
+      const uncurated: string[] = []
+      const missingBlock: string[] = []
+      let shown = 0
+      for (const slug of slugs!) {
+        const html = readPage(join('substances', slug, 'index.html'))
+        if (html === null) continue
+        const cas = casFromSlug(slug)
+        if (!cas) continue
+        const has = html.includes(BLOCK)
+        if (has) shown++
+        if (has && !curatedCas.has(cas)) {
+          uncurated.push(anyCas.has(cas) ? `${slug} (есть группы, но НЕ курируемые)` : `${slug} (групп в базе нет вовсе)`)
+        }
+        if (!has && curatedCas.has(cas)) missingBlock.push(slug)
+      }
+
+      const detail: string[] = []
+      if (uncurated.length) {
+        detail.push(
+          `блок стоит на НЕкурируемой записи (${uncurated.length}): ${preview(uncurated)}. ` +
+            'Отвалился фильтр по source_ref в getStaticPaths — вернуть, а не гасить проверку.',
+        )
+      }
+      if (missingBlock.length) detail.push(`курируемая запись есть, а блока нет (${missingBlock.length}): ${preview(missingBlock)}`)
+
+      const ok = detail.length === 0
+      return {
+        id: 'subs-reactive-group',
+        group: 'subs',
+        ok,
+        headline: ok
+          ? `${shown} страниц с реактивной группой (курируемых записей ${curatedCas.size} из ${anyCas.size})`
+          : `расхождений: ${detail.length}`,
+        detail: ok
+          ? [
+              `маркер: ${BLOCK}`,
+              `⚠ некурируемых записей в таблице: ${anyCas.size - curatedCas.size} — матрица совместимости считает и по ним`,
+            ]
+          : detail,
+      }
+    },
+  },
+
+  {
+    id: 'subs-faq',
+    group: 'subs',
+    title: 'Разметка FAQPage обещает поиску ровно те вопросы, что видны на странице',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('subs-faq', slugs)
+      if (miss) return miss
+
+      // ⚠⚠ Разметка, обещающая ответ, которого на странице нет, — это то, за что
+      // Google снимает расширенный сниппет. Проверяем не «есть ли JSON-LD», а
+      // равенство двух счётчиков: вопросов в разметке и блоков в теле.
+      // ⚠ Оба маркера ASCII и производятся только своей разметкой: "@type":"FAQPage"
+      // ставит ld() на странице вещества, sub-faq-item — только тело блока.
+      const FAQ_TYPE = '"@type":"FAQPage"'
+      const QUESTION = '"@type":"Question"'
+      const ITEM = '<div class="sub-faq-item">'
+      assertAscii('subs-faq', [FAQ_TYPE, QUESTION, ITEM])
+
+      const noFaq: string[] = []
+      const mismatch: string[] = []
+      let questions = 0
+      let pages = 0
+      for (const slug of slugs!) {
+        const html = readPage(join('substances', slug, 'index.html'))
+        if (html === null) continue
+        const hasLd = html.includes(FAQ_TYPE)
+        const items = countOccurrences(html, ITEM)
+        if (!hasLd && items === 0) {
+          // ⚠ CAS есть у каждой страницы, поэтому первый вопрос строится всегда.
+          // Ноль блоков — значит блок не собрался, а не «данных не хватило».
+          noFaq.push(slug)
+          continue
+        }
+        pages++
+        const qs = countOccurrences(html, QUESTION)
+        questions += qs
+        if (qs !== items) mismatch.push(`${slug}: в разметке ${qs}, на странице ${items}`)
+      }
+
+      const detail: string[] = []
+      if (noFaq.length) detail.push(`ни разметки, ни блока FAQ (${noFaq.length}): ${preview(noFaq)}`)
+      if (mismatch.length) detail.push(`разметка и тело разошлись (${mismatch.length}): ${preview(mismatch)}`)
+
+      const ok = detail.length === 0
+      return {
+        id: 'subs-faq',
+        group: 'subs',
+        ok,
+        headline: ok ? `${questions} вопросов на ${pages} страницах, разметка совпала с телом` : `расхождений: ${detail.length}`,
+        detail: ok ? [`маркеры: ${FAQ_TYPE}, ${QUESTION}, ${ITEM}`] : detail,
+      }
+    },
+  },
 ]
 
 // ─────────────────────────── прогон ───────────────────────────
