@@ -801,6 +801,57 @@ const nFaq = faq.length ? pad() : null
   )}
 
   {/*
+    ⚠⚠⚠ ПАРТНЁРСКАЯ КАРТОЧКА — НА КАЖДОЙ СТРАНИЦЕ И ВЫСОКО (решение Сергея,
+    session 38). Это ОТМЕНА правила session 37, а не его дополнение: тогда
+    карточка стояла только там, где своей SDS у нас нет, и низом страницы.
+    Прежний довод — «карточка спорит с собственной страницей SDS за тот же
+    клик» — снят: на 73 страницах со своей SDS кнопка в герое ведёт на наш
+    разбор опубликованных данных, а карточка отвечает на другой вопрос —
+    где взять лист на КОНКРЕТНЫЙ продукт конкретного поставщика. Поэтому у
+    неё и текст другой, а не тот же самый (см. ниже).
+
+    ⚠⚠ Место выбрано Сергеем: сразу после классификации, до P-фраз и этикетки.
+    Читатель к этому моменту уже увидел, чем вещество опасно, — и это ровно та
+    точка, где возникает вопрос «а лист безопасности где».
+
+    ⚠ Абзац перед карточкой — не подводка к рекламе, а ответ на вопрос, с которым
+    человек сюда пришёл. SDS выпускается на ПРОДУКТ, а не на вещество, поэтому
+    «SDS ацетона» как единого документа не существует в принципе.
+
+    ⚠ Секция намеренно НЕ пронумерована: 01–10 несут данные, здесь данных нет.
+    ⚠⚠ Инвариант держит проверка subs-affiliate-placement — она переписана под
+    новое правило: карточка обязана быть на ВСЕХ страницах веществ, а кнопка на
+    свою SDS — ровно на тех, у кого эта SDS есть в базе.
+  */}
+  <section class="hub-sec-b" id="sds">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">Safety Data Sheet</p>
+      <h2 class="hub-h2">Getting an SDS for {nmShort}</h2>
+      {sdsSlug ? (
+        <p class="hub-sub">
+          Our own <a href={`/sds/${sdsSlug}/`}>{truncateName(name, 22)} safety data sheet</a> walks
+          through all sixteen sections of the published data. What it is not is the document an
+          inspector asks for: an SDS is issued for a product by its supplier, so the sheet covering
+          the grade actually standing in your store exists only in that supplier’s version.
+          Collecting those and keeping them current as suppliers revise them is a separate job.
+        </p>
+      ) : (
+        <p class="hub-sub">
+          A Safety Data Sheet is written for a product, not for a substance: the supplier of
+          the grade you actually buy issues it, so two suppliers of {truncateName(name, 22)}
+          issue two different sheets. That is why there is no single authoritative SDS for a
+          substance to download — what there is, is the job of collecting the sheets for the
+          products you hold and keeping them current as suppliers revise them.
+        </p>
+      )}
+      <SdsManagerCard
+        service="management"
+        href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=subspage"
+      />
+    </div>
+  </section>
+
+  {/*
     ⚠⚠ P-фразы КАРТОЧКАМИ ПО РАЗДЕЛАМ (session 38, решение Сергея).
     Было: одна строка `hub-fine` с кодами через запятую — «Precautionary
     statements: P201, P280, P308, P313». Читателю это не отвечало ни на один
@@ -1253,39 +1304,6 @@ const nFaq = faq.length ? pad() : null
             </div>
           ))}
         </div>
-      </div>
-    </section>
-  )}
-
-  {/*
-    ⚠⚠ Партнёрская карточка стоит ТОЛЬКО там, где своей SDS у нас нет
-    (решение Сергея, session 37). На 106 веществах с живой SDS в герое уже есть
-    кнопка на неё — карточка спорила бы с собственной страницей за тот же клик.
-    На остальных она закрывает настоящую дыру: читатель пришёл за листом
-    безопасности, а у нас его нет.
-
-    ⚠ Абзац перед карточкой — не подводка к рекламе, а ответ на вопрос, с которым
-    человек сюда пришёл. SDS выпускается на ПРОДУКТ, а не на вещество, поэтому
-    «SDS ацетона» как единого документа не существует в принципе.
-
-    ⚠ Секция намеренно НЕ пронумерована: 01–09 несут данные, здесь данных нет.
-  */}
-  {!sdsSlug && (
-    <section class="hub-sec-white" id="sds">
-      <div class="hub-wrap">
-        <p class="hub-eyebrow">Safety Data Sheet</p>
-        <h2 class="hub-h2">Getting an SDS for {nmShort}</h2>
-        <p class="hub-sub">
-          A Safety Data Sheet is written for a product, not for a substance: the supplier of
-          the grade you actually buy issues it, so two suppliers of {truncateName(name, 22)}
-          issue two different sheets. That is why there is no single authoritative SDS for a
-          substance to download — what there is, is the job of collecting the sheets for the
-          products you hold and keeping them current as suppliers revise them.
-        </p>
-        <SdsManagerCard
-          service="management"
-          href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=subspage"
-        />
       </div>
     </section>
   )}

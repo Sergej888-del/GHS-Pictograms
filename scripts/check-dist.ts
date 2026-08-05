@@ -3506,51 +3506,79 @@ const CHECKS: Check[] = [
   {
     id: 'subs-affiliate-placement',
     group: 'subs',
-    title: 'Партнёрская карточка стоит ровно там, где своей SDS у нас нет',
+    title: 'Партнёрская карточка на каждой странице вещества, кнопка на свою SDS — где она есть',
     run: async () => {
       const slugs = builtSubstanceSlugs()
       const miss = substanceSectionMissing('subs-affiliate-placement', slugs)
       if (miss) return miss
 
-      // ⚠⚠ Инвариант, а не число: на каждой странице вещества обязано быть РОВНО
-      // одно из двух — кнопка на нашу SDS в герое ЛИБО карточка партнёра. Ни ноль
-      // (читателю некуда идти за листом безопасности), ни два (карточка спорит с
-      // собственной страницей за тот же клик).
+      // ⚠⚠⚠ ИНВАРИАНТ ПЕРЕПИСАН В session 38 ВСЛЕД ЗА ПРАВИЛОМ, а не выключен.
+      // Было (s37): «ровно одно из двух — кнопка на нашу SDS ЛИБО карточка
+      // партнёра», потому что карточка стояла только там, где своей SDS нет.
+      // Стало (решение Сергея, s38): карточка стоит на ВСЕХ 3 650 страницах и
+      // высоко, сразу после классификации. Кнопка в герое ведёт на наш разбор
+      // опубликованных данных, карточка отвечает на другой вопрос — где взять
+      // лист на конкретный продукт конкретного поставщика.
+      //
+      // ⚠⚠ Отсюда две ОТДЕЛЬНЫЕ проверки вместо одной «либо-либо»:
+      //   1) карточка обязана быть ВЕЗДЕ — ноль страниц без неё;
+      //   2) кнопка на свою SDS — ровно на том множестве, что даёт база.
+      // Второе важнее, чем кажется: пересечение по CAS раньше держалось самим
+      // условием `{!sdsSlug && …}`, а теперь его не держит ничто, кроме этой
+      // строки. Слетит sdsByCas — читатель на странице ацетона не узнает, что
+      // у нас есть своя SDS.
+      //
       // ⚠ Маркеры по правилу 1. `href="/sds/` в чистом виде не годится: подвал
       // кладёт ссылку на хаб /sds/ на КАЖДУЮ страницу сайта.
       const OWN = '<a class="hub-hero-cta" href="/sds/'
       const CARD = 'fp_sid=subspage'
       assertAscii('subs-affiliate-placement', [OWN, CARD])
 
-      const neither: string[] = []
-      const both: string[] = []
+      // ⚠ Ожидание кнопки строится СВОИМ запросом, а не чтением разметки:
+      // live-страница SDS с CAS, попавшим в справочник, обязана дать кнопку.
+      const sdsRows = await selectAll<{ slug: string; cas_number: string | null; status: string }>(
+        'sds_pages',
+        'slug, cas_number, status',
+      )
+      assertNonEmpty('subs-affiliate-placement', 'sds_pages', sdsRows)
+      const liveSdsCas = new Set(
+        sdsRows.filter((r) => r.status === 'live' && r.cas_number).map((r) => r.cas_number as string),
+      )
+
+      const noCard: string[] = []
+      const ownWrong: string[] = []
       let own = 0
       let card = 0
       for (const slug of slugs!) {
         const html = readPage(join('substances', slug, 'index.html'))
         if (html === null) {
-          neither.push(`${slug} (файла нет)`)
+          noCard.push(`${slug} (файла нет)`)
           continue
         }
         const hasOwn = html.includes(OWN)
         const hasCard = html.includes(CARD)
         if (hasOwn) own++
         if (hasCard) card++
-        if (hasOwn && hasCard) both.push(slug)
-        if (!hasOwn && !hasCard) neither.push(slug)
+        if (!hasCard) noCard.push(slug)
+
+        const cas = casFromSlug(slug)
+        const expectOwn = Boolean(cas && liveSdsCas.has(cas))
+        if (hasOwn !== expectOwn) {
+          ownWrong.push(`${slug}: кнопка ${hasOwn ? 'есть' : 'нет'}, база ждёт ${expectOwn ? 'есть' : 'нет'}`)
+        }
       }
 
       const detail: string[] = []
-      if (both.length) {
+      if (noCard.length) {
         detail.push(
-          `и своя SDS, и карточка партнёра (${both.length}): ${preview(both)}. ` +
-            'Условие в разметке разошлось с sdsSlug.',
+          `нет карточки партнёра (${noCard.length}): ${preview(noCard)}. ` +
+            'Карточка обязана стоять на каждой странице вещества — решение session 38.',
         )
       }
-      if (neither.length) {
+      if (ownWrong.length) {
         detail.push(
-          `ни своей SDS, ни карточки (${neither.length}): ${preview(neither)}. ` +
-            'Читателю, пришедшему за листом безопасности, идти некуда.',
+          `кнопка на свою SDS не там, где её ждёт база (${ownWrong.length}): ${preview(ownWrong)}. ` +
+            'Разошлись sdsByCas в getStaticPaths и live-страницы в sds_pages.',
         )
       }
       const ok = detail.length === 0
@@ -3563,7 +3591,7 @@ const CHECKS: Check[] = [
         group: 'subs',
         ok,
         headline: ok
-          ? `${own} страниц ведут на нашу SDS, ${card} — на партнёра, пересечений нет`
+          ? `карточка на всех ${card} страницах, кнопка на свою SDS — на ${own}, как в базе`
           : `расхождений: ${detail.length}`,
         detail,
       }
