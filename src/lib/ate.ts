@@ -173,13 +173,37 @@ export interface Resolved {
 
 /**
  * Resolve the effective ATE + category a component contributes on one route.
- * Priority: manual ATE → manual category → trustworthy numeric DB value
- * (oral only; dermal/inhalation are all-zero in the DB) → converted point
- * estimate from the harmonised H-code → unknown.
+ * Priority: manual ATE → manual category → converted point estimate from the
+ * harmonised H-code → unknown.
  *
- * The DB's `ate_oral == 1.00` values are a bulk-import placeholder (556 rows),
- * NOT real data, so they are treated as absent — the harmonised H-code is more
- * defensible and drives the conversion instead.
+ * ⚠⚠⚠ ВЕТКА `db` ВЫКЛЮЧЕНА (session 38, решение Сергея). Раньше здесь стояло
+ * «доверенное числовое значение из базы (только oral)». Проверка показала, что
+ * `substances.ate_oral` — НЕ ATE в мг/кг, и это видно по данным:
+ *
+ *   что говорит Annex VI                     веществ   ate_oral
+ *   H302 — категория 4, ATE 300–2000 мг/кг      54      3–22, среднее 11.9
+ *   H301 — категория 3, ATE 50–300              19      5–21, среднее 13.5
+ *   H300 — категория 1–2, ATE ≤ 50               6      5–14, среднее 9.5
+ *   острой оральной классификации НЕТ вовсе    181      3–22, среднее 14.0
+ *
+ * Распределение ОДИНАКОВОЕ во всех четырёх группах. У настоящих ATE разница
+ * между H300 и H302 была бы в сотни раз. Плюс 181 вещество несёт число, хотя
+ * острой оральной токсичности им Annex VI не присваивал вовсе, а во всём наборе
+ * нет ни одного значения в диапазоне 300–2000 — потолок ровно на 22.
+ *
+ * ⚠⚠ Цена ошибки была несимметрична: число маленькое, поэтому категория
+ * выходила 1–2 — то есть вещество объявлялось ОПАСНЕЕ, чем оно есть по закону.
+ * Ошибка в безопасную сторону, но на сайте про соответствие требованиям
+ * неверное остаётся неверным.
+ *
+ * ⚠ Затрагивало 260 веществ из 3 650 (7 %). Остальные 93 % — 2 868 нулей и
+ * 522 единицы — ветка отбрасывала и раньше, они шли на пересчёт из H-кода.
+ * Теперь туда идут все: у этого пути есть документированное основание
+ * (CLP, таблица 3.1.2), а у числа из базы основания нет никакого.
+ *
+ * ⚠ Включать обратно — только когда выяснится, что такое `ate_oral`. Тип
+ * `Source` вариант 'db' сохраняет намеренно: он описывает возможные источники,
+ * а не те, что сейчас используются.
  */
 export function resolveRoute(c: CompInput, route: Route, form: InhalForm): Resolved {
   const key = tableKey(route, form)
@@ -191,9 +215,14 @@ export function resolveRoute(c: CompInput, route: Route, form: InhalForm): Resol
   if (m?.cat != null) {
     return { ate: pointEstimate(key, m.cat), cat: m.cat, source: 'manual-cat', ambiguous: false }
   }
-  if (route === 'oral' && c.dbAteOral != null && c.dbAteOral > 0 && c.dbAteOral !== 1) {
-    return { ate: c.dbAteOral, cat: categoryFor(c.dbAteOral, key), source: 'db', ambiguous: false }
-  }
+  // ⚠⚠⚠ ВЫКЛЮЧЕНО — разбор в шапке функции. `substances.ate_oral` не является
+  // ATE в мг/кг: у веществ с H302 (300–2000 мг/кг по Annex VI) там лежит 3–22,
+  // ровно как у веществ с H300 (≤ 50). Строка сохранена, а не удалена, чтобы
+  // вернуть её было одним движением, когда источник числа выяснится.
+  //
+  // if (route === 'oral' && c.dbAteOral != null && c.dbAteOral > 0 && c.dbAteOral !== 1) {
+  //   return { ate: c.dbAteOral, cat: categoryFor(c.dbAteOral, key), source: 'db', ambiguous: false }
+  // }
   const h = hCodeForRoute(c.hCodes, route)
   if (h) {
     const cats = H_ACUTE[h].cats

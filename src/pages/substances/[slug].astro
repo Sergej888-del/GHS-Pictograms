@@ -1365,7 +1365,21 @@ const nFaq = faq.length ? pad() : null
             <span>All 16 sections: first aid, firefighting, spill response, exposure controls.</span>
           </a>
         )}
-        <a class="hub-mini-card" href={`/tools/ate-mixture-calculator/?cas=${encodeURIComponent(cas)}`}>
+        {/*
+          ⚠⚠ ПАРАМЕТР `substance`, А НЕ `cas`. Три инструмента читают ТРИ РАЗНЫХ
+          имени, и совпадения между ними нет:
+            /tools/ate-mixture-calculator/   → ?substance=  (+ ?mix=, ?form=)
+            /tools/chemical-storage-compatibility/ → ?substance=
+            /label-constructor/              → ?cas=
+          С запуска справочника здесь стоял `?cas=`, и калькулятор открывался
+          ПУСТЫМ со всех 3 650 страниц. Ссылка вела на живую страницу, параметр
+          был синтаксически безупречен, сборка и все проверки зелёные — поймать
+          это можно было только глазами, что Сергей и сделал (session 38).
+          ⚠ Правя ссылку в инструмент, СНАЧАЛА посмотри `params.get(...)` в его
+          компоненте. Имя параметра — это контракт между двумя файлами, и
+          компилятор его не проверяет.
+        */}
+        <a class="hub-mini-card" href={`/tools/ate-mixture-calculator/?substance=${encodeURIComponent(cas)}`}>
           <strong>ATE mixture calculator</strong>
           <span>Calculate acute toxicity estimate for a mixture containing this substance.</span>
         </a>

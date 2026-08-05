@@ -3880,6 +3880,119 @@ const CHECKS: Check[] = [
       }
     },
   },
+
+  {
+    id: 'subs-deeplink-params',
+    group: 'subs',
+    title: 'Имя параметра в ссылке на инструмент совпадает с тем, что инструмент читает',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('subs-deeplink-params', slugs)
+      if (miss) return miss
+
+      // ⚠⚠⚠ ЗАЧЕМ ЭТА ПРОВЕРКА. Со страницы вещества калькулятор ATE открывался
+      // ПУСТЫМ на всех 3 650 страницах: ссылка вела `?cas=`, а остров читает
+      // `?substance=`. Ссылка была на живую страницу, синтаксис безупречен,
+      // сборка и 83 проверки зелёные — поймал это Сергей глазами (session 38).
+      //
+      // ⚠⚠ Имя параметра — контракт между .astro и .tsx, и его не проверяет
+      // никто: ни TypeScript (строка в строке), ни links-broken (страница
+      // существует), ни один инвариант разметки. Три инструмента читают три
+      // разных имени, и совпадения между ними нет.
+      //
+      // ⚠⚠ Бандл ищется по `component-url` на САМОЙ странице инструмента, а не
+      // по угаданному имени файла. Первая версия проверки искала
+      // `AteMixtureCalculator.*.js` в списке assetFiles() и падала на всех трёх:
+      // там имена лежат с префиксом `_astro/`. Разметка знает адрес своего
+      // острова точно — у неё и надо спрашивать. Так же устроена storage-tool.
+      const LINKS = [
+        { path: '/tools/ate-mixture-calculator/', param: 'substance', page: 'tools/ate-mixture-calculator/index.html', island: 'AteMixtureCalculator' },
+        { path: '/tools/chemical-storage-compatibility/', param: 'substance', page: 'tools/chemical-storage-compatibility/index.html', island: 'StorageTool' },
+        { path: '/label-constructor/', param: 'cas', page: 'label-constructor/index.html', island: 'LabelConstructorLoader' },
+      ]
+
+      const detail: string[] = []
+      const seen: string[] = []
+
+      for (const link of LINKS) {
+        // ── а) какое имя мы РЕАЛЬНО печатаем на страницах вещества ──
+        const re = new RegExp(`href="${link.path.replace(/\//g, '\\/')}\\?([a-zA-Z_]+)=`, 'g')
+        const used = new Set<string>()
+        let pagesWith = 0
+        for (const slug of slugs!) {
+          const html = readPage(join('substances', slug, 'index.html'))
+          if (html === null) continue
+          const found = [...html.matchAll(re)].map((m) => m[1])
+          if (found.length) pagesWith++
+          for (const p of found) used.add(p)
+        }
+
+        if (!pagesWith) {
+          detail.push(`ни одной ссылки на ${link.path} со страниц веществ — блок пропал из разметки`)
+          continue
+        }
+        if (used.size !== 1 || !used.has(link.param)) {
+          detail.push(
+            `${link.path}: на страницах стоит ?${[...used].join('/')}=, а остров читает ?${link.param}= ` +
+              `(${pagesWith} страниц). Инструмент откроется пустым.`,
+          )
+          continue
+        }
+
+        // ── б) а читает ли остров это имя НА САМОМ ДЕЛЕ ──
+        // ⚠ Строковый литерал `get("substance")` переживает минификацию, поэтому
+        // читать бандл можно текстом. Источник независим от нашего ожидания.
+        const toolHtml = readPage(link.page)
+        if (toolHtml === null) {
+          detail.push(`нет ${link.page} — страница инструмента не собралась`)
+          continue
+        }
+        const m = toolHtml.match(new RegExp(`component-url="(/_astro/${link.island}\\.[A-Za-z0-9_-]+\\.js)"`))
+        if (!m) {
+          detail.push(
+            `на ${link.page} нет component-url острова ${link.island}. ` +
+              'Поправить карту LINKS в проверке, а не выключать проверку: без второй половины ' +
+              'она сверяет наше ожидание с нашим же ожиданием.',
+          )
+          continue
+        }
+        const entry = m[1].replace(/^\//, '')
+        const entryText = existsSync(join(DIST, entry)) ? readFileSync(join(DIST, entry), 'utf8') : null
+        if (entryText === null) {
+          detail.push(`${entry} объявлен в разметке, но файла в dist нет`)
+          continue
+        }
+        const needle = (t: string) => t.includes(`get("${link.param}")`) || t.includes(`get('${link.param}')`)
+
+        let where: string | null = null
+        if (needle(entryText)) {
+          where = entry
+        } else {
+          // ⚠ Rollup может вынести чтение в общий чанк. Это законно, поэтому
+          // ищем шире — но ГДЕ нашли, печатаем: расширение поиска ослабляет
+          // точность, и молчать об этом нельзя.
+          const other = assetFiles().find((f) => needle(f.text))
+          if (other) where = `${other.name} (общий чанк, не входной)`
+        }
+        if (!where) {
+          detail.push(
+            `${link.island} не читает ?${link.param}= — литерала get("${link.param}") нет ни в ${entry}, ни в одном _astro/*.js`,
+          )
+          continue
+        }
+        seen.push(`${link.path}?${link.param}= → ${where} (${pagesWith} страниц)`)
+      }
+
+      const ok = detail.length === 0
+      return {
+        id: 'subs-deeplink-params',
+        group: 'subs',
+        ok,
+        headline: ok ? `${seen.length} глубокие ссылки сошлись с тем, что читают острова` : `расхождений: ${detail.length}`,
+        detail: ok ? seen : detail,
+      }
+    },
+  },
 ]
 
 // ─────────────────────────── прогон ───────────────────────────
