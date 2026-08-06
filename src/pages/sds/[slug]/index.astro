@@ -809,6 +809,11 @@ const navItems = [
   ...(substance && (reactiveGroups.length || nIncompat + nCaution > 0) ? [{ id: 's10', label: '§10 Reactivity' }] : []),
   ...(ateReal.length ? [{ id: 's11', label: '§11 Toxicology' }] : []),
   ...(ecoCards.length ? [{ id: 's12', label: '§12 Ecology' }] : []),
+  // ⚠ §13 рисуется всегда, когда есть substance — тем же условием, что §2 и §7.
+  // До session 41 секция на странице была, а пункта в навигации не было: между
+  // «§12 Ecology» и «§14 Transport» читатель видел пропуск в нумерации и решал,
+  // что раздела нет. Инвариант «пункт ↔ секция» держит проверка sds-toc.
+  ...(substance ? [{ id: 's13', label: '§13 Disposal' }] : []),
   ...(transportRows.length ? [{ id: 's14', label: '§14 Transport' }] : []),
   ...(regRows.length ? [{ id: 's15', label: '§15 Regulatory' }] : []),
   { id: 's16', label: '§16 Sources' },

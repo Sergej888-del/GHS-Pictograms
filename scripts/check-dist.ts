@@ -144,6 +144,79 @@ function assetFiles(): { name: string; text: string }[] {
   return assetCache
 }
 
+let styleCache: string[] | null = null
+
+/**
+ * Содержимое каждого dist/_astro/*.css отдельной строкой.
+ *
+ * ⚠ Читаем СОБРАННЫЙ css, а не src/styles/hub.css. Правило, которое есть в
+ * исходнике и не доехало до бандла, — ровно тот отказ, который надо ловить.
+ * По той же причине в маркерах нет пробелов: `@media (max-width: 720px)`
+ * в бандле выглядит как `@media (max-width:720px)`.
+ *
+ * ⚠⚠ Файлы держим ПОРОЗНЬ, а не склеиваем. Склейка ломает поиск медиазапроса:
+ * правило вне всякого `@media` в начале второго файла отмоталось бы назад до
+ * последнего `@media` первого — и проверка уверенно назвала бы чужую ширину.
+ */
+function styleFiles(): string[] {
+  if (styleCache !== null) return styleCache
+  const abs = join(DIST, '_astro')
+  //
+  // ⚠ Пробелы приводятся к одному виду. Искать в css сырой подстрокой нельзя:
+  // минификатор пишет `.hub-table thead{display:none}`, а несжатая сборка —
+  // `.hub-table thead { display: none; }`. Проверка, завязанная на один из
+  // двух видов, покраснеет от смены флага сборки, а не от дефекта.
+  // ⚠ Последняя точка с запятой перед `}` убирается: несжатая сборка пишет
+  // `{display:none;}`, минифицированная — `{display:none}`.
+  //
+  // ⚠⚠ И ГЛАВНОЕ: `:before` приводится к `::before`. Lightning CSS (он стоит
+  // в сборке через Tailwind v4) переписывает двойное двоеточие в одинарное —
+  // проверено на targets ie11, chrome 60 и вовсе без targets, во всех трёх
+  // случаях на выходе `.unt-class:before`. Первая версия этой проверки искала
+  // `::before` буквально и объявила «нет подписи» у всех девятнадцати классов,
+  // хотя правила были на месте. Урок общий: **в собранном css искать надо по
+  // приведённому виду, а не по тому, как написано в исходнике.**
+  const tidy = (css: string) =>
+    css
+      .replace(/\s+/g, ' ')
+      .replace(/\s*([{}:;,])\s*/g, '$1')
+      .replace(/;}/g, '}')
+      .replace(/(?<!:):(before|after)\b/g, '::$1')
+  styleCache = !existsSync(abs)
+    ? []
+    : readdirSync(abs)
+        .filter((f) => f.endsWith('.css'))
+        .map((f) => tidy(readFileSync(join(abs, f), 'utf8')))
+  return styleCache
+}
+
+/** Есть ли подстрока хоть в одном собранном css. */
+function styleHas(needle: string): boolean {
+  return styleFiles().some((css) => css.includes(needle))
+}
+
+/**
+ * Ширина медиазапроса, внутри которого лежит правило: ищем правило, отматываем
+ * назад до ближайшего `@media` в ТОМ ЖЕ файле и читаем из него max-width.
+ * null — правила нет нигде; 0 — правило есть, но вне медиазапроса.
+ */
+function mediaWidthOf(needle: string): number | null {
+  for (const css of styleFiles()) {
+    const at = css.indexOf(needle)
+    if (at < 0) continue
+    const m = css.lastIndexOf('@media', at)
+    if (m < 0) return 0
+    // ⚠ Два написания одного и того же. Lightning CSS без targets выдаёт
+    // современный диапазонный синтаксис `(width<=720px)` вместо
+    // `(max-width:720px)`. Понимать надо оба: иначе проверка при смене
+    // browserslist решит, что правило лежит вне медиазапроса.
+    const cond = css.slice(m, m + 120)
+    const w = /max-width:\s*(\d+)px/.exec(cond) ?? /width\s*<=\s*(\d+)px/.exec(cond)
+    return w ? Number(w[1]) : 0
+  }
+  return null
+}
+
 /**
  * Все HTML-страницы dist рекурсивно: путь относительно dist + текст.
  * Нужна проверкам, которые обходят ВЕСЬ сайт, а не заранее известный набор
@@ -4610,6 +4683,188 @@ const CHECKS: Check[] = [
           ? `${slugs!.length} страниц, ${itemsTotal} пунктов оглавления — все якоря на месте`
           : `расхождений: ${detail.length}`,
         detail: ok ? [`маркер: ${NAV}`, 'сверка идёт в обе стороны: пункт → секция и секция → пункт'] : detail,
+      }
+    },
+  },
+
+  {
+    id: 'sds-toc',
+    group: 'SDS',
+    title: 'Навигация SDS совпадает с секциями страницы в обе стороны',
+    run: async () => {
+      // ⚠⚠ ТА ЖЕ ПРОВЕРКА, ЧТО subs-toc, И ЗАВЕДЕНА ПО ТОЙ ЖЕ ПРИЧИНЕ. На SDS
+      // липкая навигация стояла с самого начала, и именно поэтому дыру в ней
+      // никто не искал: в session 41 нашлось, что §13 Disposal рисуется на
+      // странице, а пункта в navItems у него нет. Между «§12 Ecology» и
+      // «§14 Transport» читатель видел пропуск номера и решал, что раздела нет.
+      //
+      // ⚠ Сверка идёт в ОБЕ стороны: пункт без секции — ссылка в никуда,
+      // секция без пункта — раздел, которого не найти.
+      const slugs = pageSlugs('sds')
+      if (slugs.length === 0) {
+        return {
+          id: 'sds-toc', group: 'SDS', ok: false,
+          headline: 'в dist/sds/ ноль страниц',
+          detail: ['Раздел не собран — зелёный ответ был бы тихим провалом.'],
+        }
+      }
+      const NAV = 'aria-label="On this page"'
+      assertAscii('sds-toc', [NAV])
+
+      const noNav: string[] = []
+      const brokenAnchor: string[] = []
+      const orphanSection: string[] = []
+      let itemsTotal = 0
+      for (const slug of slugs) {
+        const html = readPage(join('sds', slug, 'index.html'))
+        if (html === null) continue
+        const navStart = html.indexOf(NAV)
+        if (navStart < 0) { noNav.push(slug); continue }
+        const navEnd = html.indexOf('</nav>', navStart)
+        const nav = navEnd > navStart ? html.slice(navStart, navEnd) : ''
+        const items = [...nav.matchAll(/href="#([^"]+)"/g)].map((m) => m[1])
+        itemsTotal += items.length
+
+        // ⚠ Считаем только <section id>. Оверлей «Emergency» — это <div id>,
+        // и пунктом навигации он быть не должен: его открывает своя кнопка.
+        const body = html.slice(navEnd < 0 ? 0 : navEnd)
+        const sections = new Set([...body.matchAll(/<section[^>]*\sid="([^"]+)"/g)].map((m) => m[1]))
+
+        for (const id of items) if (!sections.has(id)) brokenAnchor.push(`${slug} → #${id}`)
+        for (const id of sections) if (!items.includes(id)) orphanSection.push(`${slug} → #${id}`)
+      }
+
+      const detail: string[] = []
+      if (noNav.length) detail.push(`нет навигации (${noNav.length}): ${preview(noNav)}`)
+      if (brokenAnchor.length) detail.push(`пункт ведёт на якорь, которого нет (${brokenAnchor.length}): ${preview(brokenAnchor)}`)
+      if (orphanSection.length) {
+        detail.push(
+          `секция есть, а пункта в навигации нет (${orphanSection.length}): ${preview(orphanSection)}. ` +
+            'Новую секцию надо добавлять в navItems тем же условием, что и саму секцию.',
+        )
+      }
+      const ok = detail.length === 0
+      return {
+        id: 'sds-toc',
+        group: 'SDS',
+        ok,
+        headline: ok
+          ? `${slugs.length} страниц, ${itemsTotal} пунктов навигации — все якоря на месте`
+          : `расхождений: ${detail.length}`,
+        detail: ok ? [`маркер: ${NAV}`, 'сверка в обе стороны; оверлей #emergency — <div>, пунктом быть не обязан'] : detail,
+      }
+    },
+  },
+
+  {
+    id: 'mobile-table-labels',
+    group: 'Вёрстка',
+    title: 'Подписи колонок на телефоне: класс в разметке, правило в бандле, та же точка перелома',
+    run: async () => {
+      // ⚠⚠ ЗАЧЕМ ЭТА ПРОВЕРКА СУЩЕСТВУЕТ. Ниже 720 px hub.css прячет `thead` и
+      // раскладывает строку таблицы в стопку. У Таблицы A семь колонок, и без
+      // подписей строка читается «ACETONE · 3 · F1 · II · знак · 3 · 2 · 33»:
+      // «2» — категория перевозки, «33» — номер Кемлера, «3» встречается дважды
+      // и значит разное. В СРАВНИТЕЛЬНОЙ таблице это хуже вдвое: имя юрисдикции
+      // живёт только в шапке, и на телефоне два значения ложились друг под
+      // друга безымянными — прямое нарушение инварианта раздела.
+      //
+      // ⚠⚠ ТРИ ВЕЩИ ПРОВЕРЯЮТСЯ, И ТРЕТЬЯ — ГЛАВНАЯ.
+      //   1. класс есть в разметке;
+      //   2. у класса есть правило в СОБРАННОМ css (класс без правила молчит);
+      //   3. правило лежит в ТОМ ЖЕ медиазапросе, что и `thead{display:none}`.
+      // Третье написано потому, что в session 41 подписи страницы вещества были
+      // выкачены с `max-width: 640px` при перепаде таблицы на 720. В полосе
+      // 641…720 шапка уже спрятана, а подписей ещё нет. Ни сборка, ни первые
+      // две проверки такого не видят: класс на месте, правило на месте, а на
+      // экране голые значения. Поймано скриншотом уже после деплоя.
+      if (styleFiles().length === 0) {
+        return {
+          id: 'mobile-table-labels', group: 'Вёрстка', ok: false,
+          headline: 'в dist/_astro/ нет ни одного .css',
+          detail: ['Стили не собраны — проверять нечего, и зелёный ответ здесь был бы ложью.'],
+        }
+      }
+
+      // Точка перелома самой таблицы — эталон, с которым всё сверяется.
+      const TABLE_STACK = '.hub-table thead{display:none}'
+      const tableWidth = mediaWidthOf(TABLE_STACK)
+      if (tableWidth === null || tableWidth === 0) {
+        return {
+          id: 'mobile-table-labels', group: 'Вёрстка', ok: false,
+          headline: 'не нашёл правило, которое прячет шапку таблицы',
+          detail: [
+            `искал в собранном css подстроку ${JSON.stringify(TABLE_STACK)}`,
+            'Оно есть в hub.css. Если минификатор стал писать иначе — поправить строку поиска здесь,',
+            'а не удалять проверку: без эталонной ширины сверять подписи не с чем.',
+          ],
+        }
+      }
+
+      // ⚠ Классы собираются ИЗ РАЗМЕТКИ, а не списком здесь: список разошёлся бы
+      // молча ровно так же, как словарь знаков в сессии 39.
+      // ⚠⚠ Сверяем ЦЕЛЫЙ токен класса, а не подстроку. `\bun-[a-z]+\b` по
+      // подстроке находит «un-panel» внутри «sub-un-panel», «un-jur» внутри
+      // «sub-un-jur» и ещё три таких — проверка потребовала бы у них подписи
+      // и покраснела бы на пустом месте.
+      const MARKER = /^(?:unt|un)-[a-z]+$/
+      const used = new Set<string>()
+      for (const dir of ['un', 'substances']) {
+        for (const slug of pageSlugs(dir)) {
+          const html = readPage(join(dir, slug, 'index.html'))
+          if (!html) continue
+          for (const m of html.matchAll(/class="([^"]*)"/g)) {
+            for (const t of m[1].split(/\s+/)) if (MARKER.test(t)) used.add(t)
+          }
+        }
+      }
+
+      // ⚠ Два класса подписи не несут намеренно: `unt-name` — имя груза, оно
+      // говорит само за себя, `unt-field` — сам заголовок строки в сравнении.
+      const NO_LABEL = new Set(['unt-name', 'unt-field'])
+
+      const noRule: string[] = []
+      const noBefore: string[] = []
+      const wrongWidth: string[] = []
+      for (const cls of [...used].sort()) {
+        if (!styleHas(`.${cls}`)) { noRule.push(cls); continue }
+        if (NO_LABEL.has(cls)) continue
+        const needle = `.${cls}::before`
+        const w = mediaWidthOf(needle)
+        if (w === null) { noBefore.push(cls); continue }
+        if (w !== tableWidth) wrongWidth.push(`${cls} (${w || 'вне медиазапроса'} против ${tableWidth})`)
+      }
+
+      const detail: string[] = []
+      if (noRule.length) detail.push(`класс в разметке, правила в бандле нет (${noRule.length}): ${preview(noRule)}`)
+      if (noBefore.length) {
+        detail.push(
+          `нет подписи ::before (${noBefore.length}): ${preview(noBefore)}. ` +
+            'На телефоне это значение без имени колонки.',
+        )
+      }
+      if (wrongWidth.length) {
+        detail.push(
+          `подпись включается не на той ширине (${wrongWidth.length}): ${preview(wrongWidth)}. ` +
+            `Таблица схлопывается на ${tableWidth}px — в полосе между этими числами шапка уже спрятана, ` +
+            'а подписей ещё нет.',
+        )
+      }
+      const ok = detail.length === 0
+      return {
+        id: 'mobile-table-labels',
+        group: 'Вёрстка',
+        ok,
+        headline: ok
+          ? `${used.size} классов-подписей, все с правилом и все на ${tableWidth}px`
+          : `расхождений: ${detail.length}`,
+        detail: ok
+          ? [
+              `эталон ширины взят из правила ${TABLE_STACK} — ${tableWidth}px`,
+              `без подписи намеренно: ${[...NO_LABEL].join(', ')}`,
+              'классы собраны из разметки собранных страниц, не списком в коде',
+            ]
+          : detail,
       }
     },
   },

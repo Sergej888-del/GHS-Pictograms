@@ -2845,7 +2845,13 @@ a.sub-alpha-item:hover { border-color: var(--teal-200); background: var(--teal-5
    транспортная строка на телефоне читается как «3 · F1 · II» — три значения без
    единого слова о том, что это класс, классификационный код и группа упаковки.
    Тот же приём уже применён к .pict-adr выше в этом файле. */
-@media (max-width: 640px) {
+/* ⚠⚠ ТОЧКА ПЕРЕЛОМА 720px, А НЕ 640. Мобильную раскладку .hub-table hub.css
+   включает на `max-width: 720px` (строка 1555), и брать сюда привычные 640
+   нельзя: в полосе 641…720 px шапка таблицы уже спрятана, а подписей ещё нет —
+   строка читается как «ACETONE · 3 · F1 · II», четыре значения без единого
+   слова о том, что это. Поймано скриншотом на 700 px уже ПОСЛЕ выкатки.
+   Число обязано совпадать с медиазапросом .hub-table, а не быть круглым. */
+@media (max-width: 720px) {
   /* ⚠⚠ `width: auto` ОБЯЗАТЕЛЕН, и вот почему. Мобильное правило hub.css
      (строка 1557) раскладывает `.hub-table td` в блоки с `width: auto`, но
      специфичность у него ниже, чем у `.hub-table .c-code { width: 1% }`
@@ -2867,4 +2873,77 @@ a.sub-alpha-item:hover { border-color: var(--teal-200); background: var(--teal-5
     color: var(--ink-3);
   }
   .sub-un-table .c-txt { min-width: 0; }
+}
+
+/* ── Подписи колонок таблиц /un/<номер>/ на телефоне (session 41) ───────────
+     ⚠⚠ ЗАЧЕМ. Ниже 720 px hub.css прячет `thead` и раскладывает строку в
+     стопку. На странице номера у Таблицы A семь колонок, и без подписей строка
+     читалась «ACETONE · 3 · F1 · II · знак · 3 · 2 · 33»: восемь значений без
+     единого слова. «2» — категория перевозки, «33» — номер Кемлера, а «3»
+     встречается дважды и означает разное (класс и код знака). Снято скриншотом
+     на 390 px в session 41, в разметке это не видно ничем.
+
+     ⚠⚠⚠ САМОЕ ВАЖНОЕ ЗДЕСЬ — СРАВНИТЕЛЬНАЯ ТАБЛИЦА. На широком экране имя
+     юрисдикции стоит в шапке колонки; на телефоне шапка спрятана, и два
+     значения ложились друг под друга безымянными. Это прямое нарушение
+     инварианта раздела: значение без имени юрисдикции равно дезинформации
+     (un-pages-design.md §3). Подписи ADR / 49 CFR тут — не удобство, а данные.
+
+     ⚠ Точка перелома 720 px обязана совпадать с медиазапросом .hub-table
+     (строка 1555). Круглые 640 оставляют полосу 641…720, где шапка уже
+     спрятана, а подписей ещё нет. — */
+@media (max-width: 720px) {
+  /* ⚠ `width: auto` перебивает `.hub-table .c-code { width: 1% }`: у того
+     правила специфичность выше, чем у мобильного `.hub-table td`. */
+  .hub-table td[class*='unt-'] { width: auto; white-space: normal; }
+  .hub-table td[class*='unt-']::before {
+    color: var(--ink-3);
+    font-weight: 500;
+  }
+
+  /* сравнение двух юрисдикций */
+  .hub-table .unt-field { font-weight: 700; margin-top: 10px; }
+  .hub-table .unt-field:first-child { margin-top: 0; }
+  .hub-table .unt-adr::before { content: 'ADR 2025 · '; }
+  .hub-table .unt-dot::before { content: '49 CFR · '; }
+
+  /* Таблица A и §172.101 */
+  .hub-table .unt-sym::before { content: 'Symbols (1) · '; }
+  .hub-table .unt-class::before { content: 'Class · '; }
+  .hub-table .unt-cc::before { content: 'Classification code · '; }
+  .hub-table .unt-pg::before { content: 'Packing group · '; }
+  .hub-table .unt-cat::before { content: 'Transport category · '; }
+  .hub-table .unt-hin::before { content: 'Hazard ID · '; }
+  .hub-table .unt-pkg::before { content: 'Packaging (8) · '; }
+  .hub-table .unt-qty::before { content: 'Quantity limits (9) · '; }
+  .hub-table .unt-stow::before { content: 'Vessel stowage (10) · '; }
+  .hub-table .unt-labels::before {
+    content: 'Labels';
+    display: block;
+    margin: 8px 0 4px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-3);
+  }
+  /* ⚠ Имя груза подписи не несёт — оно говорит само за себя. Но в стопке оно
+     первое, и работает как заголовок строки: без веса оно теряется среди
+     значений. Правило не косметика, а разметка смысла — проверка
+     mobile-table-labels требует, чтобы у класса в разметке было правило,
+     и поймала `unt-name` ровно потому, что его тут не было. */
+  .hub-table .unt-name { margin-bottom: 6px; font-weight: 600; }
+  /* ⚠ Код знака под картинкой — значение колонки, а не подпись к ней:
+     у 49 CFR там встречается «Empty» и «None». Держим моноширинным. */
+  .hub-table .unt-labels .c-code {
+    display: block;
+    margin-top: 7px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-2);
+  }
+
+  /* категория перевозки и множитель 1.1.3.6.4 */
+  .hub-table .unt-tc { font-weight: 700; }
+  .hub-table .unt-tc::before { content: 'Category · '; font-weight: 500; }
+  .hub-table .unt-tcmax::before { content: 'Max per transport unit · '; }
+  .hub-table .unt-tcmul::before { content: 'Multiplier · '; }
 }

@@ -161,7 +161,19 @@ export async function getStaticPaths() {
   // ⚠ Выкачиваем таблицы целиком и фильтруем в JS, а не шлём .in() на 389
   // значений: строка запроса PostgREST уходит в URL, и такой фильтр на сотни
   // номеров упирается в предел длины. 15 запросов на всю сборку 389 страниц.
-  const [index, adrAll, dotAll, links, subsAll, sdsAll, adrSpAll, dotSpAll, cvAll, hAll] = await Promise.all([
+  //
+  // ⚠⚠ ДВЕ ГРУППЫ, А НЕ ОДИН Promise.all НА ДЕСЯТЬ ЦЕПОЧЕК (session 41).
+  // Сборка легла здесь на `substances (from=0) — canceling statement due to
+  // statement timeout`, при том что получасом раньше тот же код собрался.
+  // Десять цепочек разом, из них `substances` тянет пять страниц по тысяче,
+  // — под этим пулер Supabase отменяет statement. Тот же разбор, что у
+  // `mapLimit` в mustQuery.ts: тяжело не от одного запроса, а от их числа
+  // одновременно. Пик снижен вдвое.
+  //
+  // ⚠ Порядок групп не случаен: первая — таблицы, из которых строятся сами
+  // страницы, вторая — словари текстов к ним. Уронит первая — вторая уже не
+  // нужна.
+  const [index, adrAll, dotAll, links, subsAll] = await Promise.all([
     all<IndexRow>('un_page_index', (a, b) =>
       supabase.from('un_page_index')
         .select('un_number, adr_rows, substance_count, has_sds_page, classes, packing_groups, shipping_name')
@@ -180,6 +192,9 @@ export async function getStaticPaths() {
       supabase.from('substances')
         .select(`cas_number, ${NAME_COLUMNS}, signal_word, h_statement_codes, ghs_pictogram_codes`)
         .not('cas_number', 'is', null).order('cas_number').range(a, b)),
+  ])
+
+  const [sdsAll, adrSpAll, dotSpAll, cvAll, hAll] = await Promise.all([
     all<{ slug: string; cas_number: string; status: string }>('sds_pages', (a, b) =>
       supabase.from('sds_pages').select('slug, cas_number, status').eq('status', 'live').order('slug').range(a, b)),
     all<{ sp_code: string; text_en: string; applies_to: string | null }>('adr_special_provisions', (a, b) =>
@@ -614,9 +629,9 @@ if (substances.length) {
             <tbody>
               {compare.map((c) => (
                 <tr>
-                  <td class="c-code">{c.field}</td>
-                  <td class="c-txt">{c.adr || '—'}</td>
-                  <td class="c-txt">{c.dot || '—'}</td>
+                  <td class="c-code unt-field">{c.field}</td>
+                  <td class="c-txt unt-adr">{c.adr || '—'}</td>
+                  <td class="c-txt unt-dot">{c.dot || '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -658,11 +673,11 @@ if (substances.length) {
             <tbody>
               {adrRows.map((r) => (
                 <tr>
-                  <td class="c-txt"><span class="verbatim">{r.proper_shipping_name}</span></td>
-                  <td class="c-code">{r.transport_class ?? '—'}</td>
-                  <td class="c-code">{r.classification_code ?? '—'}</td>
-                  <td class="c-code">{r.packing_group ?? '—'}</td>
-                  <td>
+                  <td class="c-txt unt-name"><span class="verbatim">{r.proper_shipping_name}</span></td>
+                  <td class="c-code unt-class">{r.transport_class ?? '—'}</td>
+                  <td class="c-code unt-cc">{r.classification_code ?? '—'}</td>
+                  <td class="c-code unt-pg">{r.packing_group ?? '—'}</td>
+                  <td class="unt-labels">
                     <TransportLabel
                       labels={(r.label_codes ?? []).flatMap((c) => adrLabels(c, r.classification_code))}
                       size={68}
@@ -670,8 +685,8 @@ if (substances.length) {
                     />
                     <span class="c-code">{(r.label_codes ?? []).join(', ') || '—'}</span>
                   </td>
-                  <td class="c-code">{r.transport_category ?? '—'}</td>
-                  <td class="c-code">{r.hazard_id_number ?? '—'}</td>
+                  <td class="c-code unt-cat">{r.transport_category ?? '—'}</td>
+                  <td class="c-code unt-hin">{r.hazard_id_number ?? '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -704,9 +719,9 @@ if (substances.length) {
                 <tbody>
                   {categories.map((c) => (
                     <tr>
-                      <td class="c-code">{c}</td>
-                      <td class="c-code">{categoryFootnote && c === 1 ? '50' : TRANSPORT_CATEGORY[c].maxQty}</td>
-                      <td class="c-code">{categoryFootnote && c === 1 ? '× 20' : TRANSPORT_CATEGORY[c].multiplier}</td>
+                      <td class="c-code unt-tc">{c}</td>
+                      <td class="c-code unt-tcmax">{categoryFootnote && c === 1 ? '50' : TRANSPORT_CATEGORY[c].maxQty}</td>
+                      <td class="c-code unt-tcmul">{categoryFootnote && c === 1 ? '× 20' : TRANSPORT_CATEGORY[c].multiplier}</td>
                       <td class="c-txt">{TRANSPORT_CATEGORY[c].meaning}</td>
                     </tr>
                   ))}
@@ -823,11 +838,11 @@ if (substances.length) {
             <tbody>
               {dotRows.map((r) => (
                 <tr>
-                  <td class="c-code">{(r.symbols ?? []).join(' ') || '—'}</td>
-                  <td class="c-txt"><span class="verbatim">{r.proper_shipping_name}</span></td>
-                  <td class="c-code">{r.hazard_class ?? '—'}</td>
-                  <td class="c-code">{r.packing_group ?? '—'}</td>
-                  <td>
+                  <td class="c-code unt-sym">{(r.symbols ?? []).join(' ') || '—'}</td>
+                  <td class="c-txt unt-name"><span class="verbatim">{r.proper_shipping_name}</span></td>
+                  <td class="c-code unt-class">{r.hazard_class ?? '—'}</td>
+                  <td class="c-code unt-pg">{r.packing_group ?? '—'}</td>
+                  <td class="unt-labels">
                     <TransportLabel
                       labels={(r.label_codes ?? []).flatMap((c) => dotLabels(c))}
                       size={68}
@@ -835,18 +850,18 @@ if (substances.length) {
                     />
                     <span class="c-code">{(r.label_codes ?? []).join(', ') || '—'}</span>
                   </td>
-                  <td class="c-code">
+                  <td class="c-code unt-pkg">
                     {[
                       r.pkg_exceptions ? `§173.${r.pkg_exceptions}` : null,
                       r.pkg_non_bulk ? `§173.${r.pkg_non_bulk}` : null,
                       r.pkg_bulk ? `§173.${r.pkg_bulk}` : null,
                     ].filter(Boolean).join(' · ') || '—'}
                   </td>
-                  <td class="c-code">
+                  <td class="c-code unt-qty">
                     {r.qty_passenger ?? '—'} <span style="opacity:.6">passenger</span><br />
                     {r.qty_cargo ?? '—'} <span style="opacity:.6">cargo</span>
                   </td>
-                  <td class="c-code">
+                  <td class="c-code unt-stow">
                     {r.vessel_location ?? '—'}
                     {r.vessel_other?.length ? <span style="opacity:.6"> · {r.vessel_other.join(', ')}</span> : null}
                   </td>
