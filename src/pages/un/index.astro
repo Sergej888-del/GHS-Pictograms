@@ -1,0 +1,372 @@
+---
+/**
+ * Хаб номеров ООН — /un/
+ *
+ * ⚠⚠ ЗДЕСЬ ЛЕЖАТ ВСЕ 2 347 НОМЕРОВ, А СТРАНИЦ ТОЛЬКО 389. Это не недоделка, а
+ * решение: отдельный URL заводится только там, где номер связан хотя бы с одним
+ * нашим веществом и странице есть чем быть непустой. Остальные живут строками
+ * справочника — так номер находится поиском, но домен не получает 1 958 тонких
+ * страниц, которые утянут вниз уже ранжирующиеся (semrush-adr-run-results.md).
+ *
+ * ⚠⚠ ДВЕ ПЛОТНОСТИ, И ЭТО ЗАМЕР, А НЕ ВКУС. Первая версия печатала все 2 347
+ * номеров одинаковыми строками таблицы: 2 347 × 5 ячеек — это ≈ 690 КБ разметки
+ * и ≈ 14 000 узлов DOM на одной странице. Столько узлов Lighthouse считает
+ * чрезмерным DOM, и платит за это не только этот адрес.
+ * Поэтому: номера СО СТРАНИЦЕЙ идут таблицей (389 строк, 5 ячеек — там есть что
+ * показывать в колонках), номера БЕЗ страницы — простым списком, один элемент на
+ * номер. Итог ≈ 190 КБ и ≈ 4 500 узлов, и ни один номер со страницы не пропал.
+ *
+ * ⚠ Правило отрисовки (substance-hub-decisions.md §4.1): сначала статика.
+ * Весь справочник лежит в HTML и работает без JavaScript; поиск — inline-скрипт
+ * поверх уже готовых строк, он ничего не выкачивает. Имя для поиска берётся из
+ * текста ячейки, а не из атрибута data-name: дубль имени в атрибуте стоил бы
+ * ещё 110 КБ на ровном месте.
+ *
+ * ⚠ В заголовке нет ни слова «ADR», ни слова «hazmat» — итог прогона Semrush
+ * (claude/semrush-adr-run-results.md §1 и §3): в англоязычном спросе «adr» не
+ * ищут, а «hazmat» в title без данных 49 CFR приводит человека за 172.101 в
+ * пустоту. Обе системы названы в подзаголовке и в клеймах источников.
+ */
+export const prerender = true
+
+import Layout from '../../layouts/Layout.astro'
+import { supabase } from '../../lib/supabase'
+import { must } from '../../lib/mustQuery'
+import { ADR_CLASS_NAME, ADR_SOURCE, DOT_SOURCE, unHref } from '../../lib/dangerousGoods'
+
+const SITE = 'https://ghspictograms.com'
+const PAGE = 1000
+
+async function all<T>(what: string, build: (from: number, to: number) => any): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE) {
+    const chunk = must(`${what} (from=${from})`, await build(from, from + PAGE - 1)) as T[] | null
+    if (!chunk?.length) break
+    out.push(...chunk)
+    if (chunk.length < PAGE) break
+  }
+  return out
+}
+
+type AdrRow = {
+  un_number: string
+  proper_shipping_name: string
+  transport_class: string | null
+  packing_group: string | null
+}
+
+const [adrAll, index, dotAll] = await Promise.all([
+  all<AdrRow>('dg_substances (hub)', (a, b) =>
+    supabase.from('dg_substances')
+      .select('un_number, proper_shipping_name, transport_class, packing_group')
+      .order('un_number').range(a, b)),
+  all<{ un_number: string; substance_count: number }>('un_page_index (hub)', (a, b) =>
+    supabase.from('un_page_index').select('un_number, substance_count').order('un_number').range(a, b)),
+  all<{ un_number: string }>('dot_substances (hub)', (a, b) =>
+    supabase.from('dot_substances').select('un_number').order('un_number').range(a, b)),
+])
+
+const withPage = new Map(index.map((i) => [i.un_number, i]))
+const inDot = new Set(dotAll.map((d) => d.un_number))
+
+/** Схлопываем строки Таблицы A по номеру — правило s32: карточка одна, варианты внутри. */
+type UnEntry = {
+  un: string
+  name: string
+  classes: string[]
+  pgs: string[]
+  rows: number
+  hasPage: boolean
+  substanceCount: number
+  inDot: boolean
+}
+const map = new Map<string, UnEntry>()
+for (const r of adrAll) {
+  const e = map.get(r.un_number)
+  if (e) {
+    e.rows++
+    if (r.transport_class && !e.classes.includes(r.transport_class)) e.classes.push(r.transport_class)
+    if (r.packing_group && !e.pgs.includes(r.packing_group)) e.pgs.push(r.packing_group)
+  } else {
+    const idx = withPage.get(r.un_number)
+    map.set(r.un_number, {
+      un: r.un_number,
+      name: r.proper_shipping_name,
+      classes: r.transport_class ? [r.transport_class] : [],
+      pgs: r.packing_group ? [r.packing_group] : [],
+      rows: 1,
+      hasPage: Boolean(idx),
+      substanceCount: idx?.substance_count ?? 0,
+      inDot: inDot.has(r.un_number),
+    })
+  }
+}
+const byNumber = (a: UnEntry, b: UnEntry) => a.un.localeCompare(b.un, 'en', { numeric: true })
+const entries = [...map.values()].sort(byNumber)
+
+const CLASS_ORDER = ['1', '2', '3', '4.1', '4.2', '4.3', '5.1', '5.2', '6.1', '6.2', '7', '8', '9']
+const groups = CLASS_ORDER.map((cls) => {
+  const items = entries.filter((e) => e.classes.includes(cls))
+  return {
+    cls,
+    name: ADR_CLASS_NAME[cls],
+    withPage: items.filter((e) => e.hasPage),
+    withoutPage: items.filter((e) => !e.hasPage),
+    total: items.length,
+  }
+}).filter((g) => g.total > 0)
+
+const totalNumbers = entries.length
+const pageNumbers = entries.filter((e) => e.hasPage)
+const bothSystems = entries.filter((e) => e.inDot).length
+const fmt = (n: number) => n.toLocaleString('en-US')
+
+const title = 'UN Number List — Shipping Names, Classes, Packing Groups'
+const description =
+  `Every UN number in Table A of ADR 2025 — ${fmt(totalNumbers)} numbers with proper shipping name, ` +
+  `class and packing group. ${fmt(pageNumbers.length)} have a full page with the US 49 CFR entry beside them.`
+const canonical = `${SITE}/un/`
+
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE}/` },
+      { '@type': 'ListItem', position: 2, name: 'UN numbers', item: canonical },
+    ],
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: title,
+    description,
+    url: canonical,
+  },
+]
+---
+
+<Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
+  {jsonLd.map((block) => (
+    <script type="application/ld+json" slot="head" set:html={JSON.stringify(block)} />
+  ))}
+
+  <section class="hub-hero">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+    <div class="hub-wrap hub-hero-inner hub-hero-left">
+      <nav class="hub-crumb" aria-label="Breadcrumb">
+        <a href="/">Home</a><span class="sep">/</span><span>UN numbers</span>
+      </nav>
+      <p class="hub-hero-eyebrow">Transport reference</p>
+      <h1>UN number reference</h1>
+      <p class="hub-hero-sub">
+        Every UN number in Table A of ADR 2025 with its proper shipping name, class and packing group.
+        {' '}{fmt(pageNumbers.length)} of them have a full page that also carries the United States entry from
+        the 49 CFR 172.101 Hazardous Materials Table — the two systems side by side and never merged, because the
+        same number can carry a different packing group and entirely different special provisions in each.
+      </p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">{fmt(totalNumbers)} UN numbers</span>
+        <span class="hub-hero-chip">{fmt(pageNumbers.length)} full pages</span>
+        <span class="hub-hero-chip">{fmt(bothSystems)} also in 49 CFR</span>
+        <span class="hub-hero-chip">{groups.length} classes</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- НАВИГАЦИЯ ПО СТРАНИЦЕ
+       ⚠ Страница длинная по замыслу: 389 строк таблицей и 1 958 списком.
+       Без якорей до нужного класса приходится мотать колесом, и справочник
+       перестаёт быть справочником. Это чистые ссылки-якоря, без JavaScript. -->
+  <nav class="hub-sec-white" style="padding-top:26px;padding-bottom:0" aria-label="On this page">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">On this page</p>
+      <div class="sub-alpha" style="margin-top:12px">
+        <a class="sub-alpha-item" href="#search" style="min-width:auto">Search</a>
+        <a class="sub-alpha-item" href="#classes" style="min-width:auto">{fmt(pageNumbers.length)} with a page</a>
+        <a class="sub-alpha-item" href="#reference" style="min-width:auto">{fmt(totalNumbers - pageNumbers.length)} reference rows</a>
+      </div>
+
+      <p class="hub-meta" style="margin-top:18px">Jump to a class</p>
+      <div class="sub-alpha" style="margin-top:8px">
+        {groups.map((g) => (
+          <a
+            class="sub-alpha-item"
+            style="min-width:auto"
+            href={g.withPage.length > 0 ? `#class-${g.cls.replace('.', '-')}` : `#ref-class-${g.cls.replace('.', '-')}`}
+            title={`${g.name} — ${fmt(g.total)} numbers, ${fmt(g.withPage.length)} with a page`}
+          >Class {g.cls}<span style="opacity:.55;margin-left:6px">{fmt(g.total)}</span></a>
+        ))}
+      </div>
+    </div>
+  </nav>
+
+  <!-- 01 · ПОИСК ПО УЖЕ ГОТОВЫМ СТРОКАМ -->
+  <section class="hub-sec-a" id="search">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">01 · Find a number</p>
+      <h2 class="hub-h2">Search by UN number or shipping name</h2>
+      <p class="hub-sub">
+        Type a number like 1203, or part of a shipping name like “gasoline”. The whole reference is already in
+        this page — the box only narrows what is shown, so it works the moment the page renders.
+      </p>
+      <div class="hub-search-inline" style="margin-top:20px">
+        <input id="un-q" type="search" placeholder="1203, gasoline, hydrochloric acid…"
+               aria-label="Search UN numbers" autocomplete="off"
+               style="width:100%;max-width:520px;padding:13px 16px;font-size:15px;border:1px solid #dbe2ec;border-radius:10px" />
+      </div>
+      <p class="hub-meta" id="un-count" style="margin-top:12px">{fmt(totalNumbers)} numbers</p>
+    </div>
+  </section>
+
+  <!-- 02 · НОМЕРА СО СТРАНИЦЕЙ -->
+  <section class="hub-sec-white" id="classes">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">02 · Numbers with a full page</p>
+      <h2 class="hub-h2">{fmt(pageNumbers.length)} numbers with their own page, by ADR class</h2>
+      <p class="hub-sub">
+        A number gets its own page where it is linked by CAS to at least one substance we hold — there the page
+        has something to say beyond the table row: the US entry beside the ADR one, the orange plate, and the CLP
+        label elements of the substances that ship under it.
+      </p>
+
+      {groups.filter((g) => g.withPage.length > 0).map((g) => (
+        <div class="hub-panel" data-group id={`class-${g.cls.replace('.', '-')}`} style="margin-top:26px">
+          <div class="hub-panel-label">
+            Class {g.cls} — {g.name}
+            <span style="opacity:.7"> · {fmt(g.withPage.length)} with a page</span>
+          </div>
+          <div class="hub-table-wrap">
+            <table class="hub-table">
+              <thead>
+                <tr>
+                  <th scope="col">UN</th>
+                  <th scope="col">Proper shipping name</th>
+                  <th scope="col">PG</th>
+                  <th scope="col">Rows</th>
+                  <th scope="col">49 CFR</th>
+                </tr>
+              </thead>
+              <tbody>
+                {g.withPage.map((e) => (
+                  <tr data-un={e.un}>
+                    <td class="c-code"><a href={unHref(e.un)}>UN {e.un}</a></td>
+                    <td class="c-txt"><span class="verbatim">{e.name}</span></td>
+                    <td class="c-code">{e.pgs.join(', ') || '—'}</td>
+                    <td class="c-code">{e.rows}</td>
+                    <td class="c-code">{e.inDot ? 'yes' : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <!-- 03 · ОСТАЛЬНЫЕ НОМЕРА -->
+  <section class="hub-sec-b" id="reference">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">03 · Every other number</p>
+      <h2 class="hub-h2">The remaining {fmt(totalNumbers - pageNumbers.length)} numbers of Table A</h2>
+      <p class="hub-sub">
+        Listed, searchable, and deliberately without their own URL: we hold no substance linked to them by CAS,
+        so a page would carry the table row and nothing else. Thin pages cost the whole domain, not just
+        themselves. The row below is what Table A says; the full entry is in the source linked at the foot.
+      </p>
+
+      {groups.filter((g) => g.withoutPage.length > 0).map((g) => (
+        <div class="hub-panel" data-group id={`ref-class-${g.cls.replace('.', '-')}`} style="margin-top:22px">
+          <div class="hub-panel-label">
+            Class {g.cls} — {g.name}
+            <span style="opacity:.7"> · {fmt(g.withoutPage.length)} numbers</span>
+          </div>
+          <ul class="un-plain">
+            {g.withoutPage.map((e) => (
+              <li data-un={e.un}><b>UN {e.un}</b> {e.name}{e.pgs.length ? ` · PG ${e.pgs.join(', ')}` : ''}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
+
+      <p class="hub-fine" style="margin-top:26px">
+        Sources: <a href={ADR_SOURCE.href} rel="nofollow">{ADR_SOURCE.label}</a> ·
+        <a href={DOT_SOURCE.href} rel="nofollow">{DOT_SOURCE.label}</a>.
+        The “49 CFR” column above only says whether the number appears in the United States table at all; what it
+        says there is on the number's own page, under its own source stamp.
+      </p>
+    </div>
+  </section>
+
+  <section class="hub-sec-deep">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow on-dark">Next</p>
+      <h2 class="hub-h2 on-dark">Work with these materials</h2>
+      <div class="hub-mini-cards">
+        <a class="hub-mini-card" href="/substances/">
+          <strong>Substance database</strong>
+          <span>CLP classification, pictograms and hazard statements for 3,650 substances.</span>
+        </a>
+        <a class="hub-mini-card" href="/label-constructor/">
+          <strong>GHS label constructor</strong>
+          <span>Build the workplace label that travels with the material after delivery.</span>
+        </a>
+        <a class="hub-mini-card" href="/tools/chemical-storage-compatibility/">
+          <strong>Storage compatibility</strong>
+          <span>What must not be stored — or loaded — next to what.</span>
+        </a>
+        <a class="hub-mini-card" href="/sds/">
+          <strong>Safety data sheets</strong>
+          <span>Full 16-section sheets, including section 14 transport information.</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <style is:global>
+    .un-plain { list-style: none; margin: 14px 0 0; padding: 0; columns: 2; column-gap: 32px; }
+    .un-plain li {
+      break-inside: avoid;
+      padding: 4px 0;
+      font-size: 13.5px;
+      line-height: 1.45;
+      color: #475569;
+    }
+    .un-plain li b { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; color: #0f172a; }
+    @media (max-width: 780px) { .un-plain { columns: 1; } }
+  </style>
+
+  <script is:inline>
+    (function () {
+      var q = document.getElementById('un-q')
+      var counter = document.getElementById('un-count')
+      if (!q || !counter) return
+      var rows = Array.prototype.slice.call(document.querySelectorAll('[data-un]'))
+      var groups = Array.prototype.slice.call(document.querySelectorAll('[data-group]'))
+      // ⚠ Имя берём из текста строки один раз и запоминаем: дубль имени в
+      // атрибуте data-name стоил бы ≈ 110 КБ разметки на 2 347 номерах.
+      var names = rows.map(function (r) { return (r.textContent || '').toLowerCase() })
+      var total = rows.length
+      var t
+      q.addEventListener('input', function () {
+        clearTimeout(t)
+        t = setTimeout(function () {
+          var v = q.value.trim().toLowerCase()
+          var shown = 0
+          for (var i = 0; i < rows.length; i++) {
+            var hit = !v || rows[i].getAttribute('data-un').indexOf(v) === 0 || names[i].indexOf(v) !== -1
+            rows[i].hidden = !hit
+            if (hit) shown++
+          }
+          groups.forEach(function (g) { g.hidden = !g.querySelector('[data-un]:not([hidden])') })
+          counter.textContent = v
+            ? shown.toLocaleString('en-US') + ' of ' + total.toLocaleString('en-US') + ' numbers'
+            : total.toLocaleString('en-US') + ' numbers'
+        }, 120)
+      })
+    })()
+  </script>
+</Layout>

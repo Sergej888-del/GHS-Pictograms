@@ -1,0 +1,1166 @@
+---
+/**
+ * Страница номера ООН — /un/<номер>/
+ *
+ * ⚠⚠ ЗАЧЕМ ЭТА СТРАНИЦА СУЩЕСТВУЕТ. Транспортный номер и рабочая маркировка
+ * одного вещества в одном месте — секция «GHS side». Справочников по Таблице A
+ * в интернете хватает; ни один из них не показывает рядом пиктограммы CLP,
+ * сигнальное слово и H-коды веществ, которые едут под этим номером. Убрать эту
+ * секцию — значит превратить страницу в дубль чужого справочника
+ * (semrush-adr-run-results.md §«Риск тонкости»).
+ *
+ * ⚠⚠ ДВЕ ЮРИСДИКЦИИ НИКОГДА НЕ СЛИВАЮТСЯ В ОДНУ СТРОКУ. Отдельная панель ADR,
+ * отдельная панель 49 CFR, у каждой своё клеймо источника. Спецположения не
+ * смешиваются и не переводятся: 73 числовых кода есть в обеих системах и значат
+ * разное. Сравнительная таблица 01 сравнивает только те поля, у которых в
+ * колонке стоит имя юрисдикции — значение без имени юрисдикции здесь равно
+ * дезинформации (un-pages-design.md §3).
+ *
+ * ⚠ ВАРИАНТЫ НЕ СХЛОПЫВАЮТСЯ. У 37 номеров в ADR и у 44 в 49 CFR больше одной
+ * строки (UN1418 и UN1583 — по три группы упаковки), и у них разная транспортная
+ * категория, то есть разный множитель в расчёте 1.1.3.6. Выбор строки — явное
+ * действие читателя, а не автоподстановка (правило s32).
+ *
+ * ⚠ Отбор 389 номеров задан представлением `un_page_index`: номер попадает
+ * сюда, если связан хотя бы с одним нашим веществом. Тот же критерий обязан
+ * стоять в sitemap.xml.ts и в проверке check:dist — иначе счёта разойдутся.
+ *
+ * ⚠ Островов нет: весь текст и все таблицы лежат в HTML. Переключатель
+ * юрисдикции — 15 строк inline-скрипта, и по умолчанию видны ОБЕ панели,
+ * поэтому без JavaScript страница не теряет ни одного значения.
+ */
+export const prerender = true
+
+import Layout from '../../layouts/Layout.astro'
+import OrangePlate from '../../components/OrangePlate.astro'
+import SdsManagerCard from '../../components/SdsManagerCard.astro'
+import { supabase } from '../../lib/supabase'
+import { must } from '../../lib/mustQuery'
+import { truncateMetaDescription } from '../../lib/metaDescription'
+import { substanceNameFull, substanceTitleName, truncateName, NAME_COLUMNS } from '../../lib/substanceName'
+import { substanceHref } from '../../lib/substanceSlug'
+import { hHref } from '../../lib/hStatementSlug'
+import {
+  ADR_SOURCE, ADR_SP_SOURCE, ADR_HIN_SOURCE,
+  DOT_SOURCE, DOT_SP_SOURCE, DOT_CLASS_SOURCE,
+  ADR_CLASS_NAME, dotClassName, dotCompatibilityGroup,
+  DOT_SYMBOL, DOT_ID_PREFIX, DOT_STOWAGE, DOT_STOWAGE_OTHER_NOTE,
+  TRANSPORT_CATEGORY, TRANSPORT_CATEGORY_1_FOOTNOTE_UN,
+  readHazardIdNumber, ADR_STATUS_TEXT, unHref, unLabel,
+} from '../../lib/dangerousGoods'
+
+const SITE = 'https://ghspictograms.com'
+
+const PICTOGRAM_NAME: Record<string, string> = {
+  GHS01: 'Exploding bomb',
+  GHS02: 'Flame',
+  GHS03: 'Flame over circle',
+  GHS04: 'Gas cylinder',
+  GHS05: 'Corrosion',
+  GHS06: 'Skull and crossbones',
+  GHS07: 'Exclamation mark',
+  GHS08: 'Health hazard',
+  GHS09: 'Environment',
+}
+
+/**
+ * Имя для <title> и meta. ⚠ В таблицах proper shipping name печатается ВЕРБАТИМ:
+ * это регламентированная строка, её регистр — часть данных. Здесь регистр
+ * опускается только ради выдачи, где КАПС читается как крик. Аббревиатуры с
+ * точками (N.O.S.) и служебные слова не трогаем.
+ */
+function shippingNameForTitle(name: string): string {
+  const lowered = name
+    .split(' ')
+    .map((w) => {
+      // Аббревиатуры с точками — N.O.S., U.N. — не трогаем совсем.
+      if (/\./.test(w)) return w
+      // Строчные буквы внутри слова значат, что регистр уже осмысленный.
+      if (/[a-z]/.test(w)) return w
+      // Короткие всекаписные куски (UN, PG, C4) оставляем как есть.
+      const letters = (w.match(/[A-Z]/g) ?? []).length
+      return letters >= 3 ? w.toLowerCase() : w
+    })
+    .join(' ')
+  // ⚠ Поднимаем первую БУКВУ, а не первый знак: у «1,2-dichloroethane» первый
+  // знак — цифра, и slice(1) съел бы её, оставив «,2-dichloroethane».
+  return lowered.replace(/[a-z]/, (c) => c.toUpperCase())
+}
+
+export async function getStaticPaths() {
+  // ⚠ getStaticPaths — изолированная область видимости: видны только импорты
+  // верхнего уровня, консты из `---` НЕ видны (compliance-hub-infrastructure.md §9.1).
+  const PAGE = 1000
+
+  /** Постраничная выкачка: PostgREST отдаёт максимум 1000 строк за раз. */
+  async function all<T>(what: string, build: (from: number, to: number) => any): Promise<T[]> {
+    const out: T[] = []
+    for (let from = 0; ; from += PAGE) {
+      const chunk = must(`${what} (from=${from})`, await build(from, from + PAGE - 1)) as T[] | null
+      if (!chunk?.length) break
+      out.push(...chunk)
+      if (chunk.length < PAGE) break
+    }
+    return out
+  }
+
+  type IndexRow = {
+    un_number: string
+    adr_rows: number
+    substance_count: number
+    has_sds_page: boolean
+    classes: string[] | null
+    packing_groups: string[] | null
+    shipping_name: string
+  }
+  type AdrRow = {
+    un_number: string
+    proper_shipping_name: string
+    transport_class: string | null
+    classification_code: string | null
+    packing_group: string | null
+    label_codes: string[] | null
+    sp_codes: string[] | null
+    transport_category: number | null
+    cv_codes: string[] | null
+    hazard_id_number: string | null
+    adr_status: string | null
+    adr_status_note: string | null
+  }
+  type DotRow = {
+    un_number: string
+    id_prefix: string | null
+    row_order: number
+    symbols: string[] | null
+    proper_shipping_name: string
+    hazard_class: string | null
+    packing_group: string | null
+    label_codes: string[] | null
+    sp_codes: string[] | null
+    pkg_exceptions: string | null
+    pkg_non_bulk: string | null
+    pkg_bulk: string | null
+    qty_passenger: string | null
+    qty_cargo: string | null
+    vessel_location: string | null
+    vessel_other: string[] | null
+  }
+  type LinkRow = { cas_number: string; un_number: string; match_type: string }
+  type SubRow = {
+    cas_number: string
+    common_name: string | null
+    display_name_short: string | null
+    iupac_name: string
+    signal_word: string | null
+    h_statement_codes: string[] | null
+    ghs_pictogram_codes: string[] | null
+  }
+
+  // ⚠ Выкачиваем таблицы целиком и фильтруем в JS, а не шлём .in() на 389
+  // значений: строка запроса PostgREST уходит в URL, и такой фильтр на сотни
+  // номеров упирается в предел длины. 15 запросов на всю сборку 389 страниц.
+  const [index, adrAll, dotAll, links, subsAll, sdsAll, adrSpAll, dotSpAll, cvAll, hAll] = await Promise.all([
+    all<IndexRow>('un_page_index', (a, b) =>
+      supabase.from('un_page_index')
+        .select('un_number, adr_rows, substance_count, has_sds_page, classes, packing_groups, shipping_name')
+        .order('un_number').range(a, b)),
+    all<AdrRow>('dg_substances', (a, b) =>
+      supabase.from('dg_substances')
+        .select('un_number, proper_shipping_name, transport_class, classification_code, packing_group, label_codes, sp_codes, transport_category, cv_codes, hazard_id_number, adr_status, adr_status_note')
+        .order('un_number').order('packing_group', { nullsFirst: true }).range(a, b)),
+    all<DotRow>('dot_substances', (a, b) =>
+      supabase.from('dot_substances')
+        .select('un_number, id_prefix, row_order, symbols, proper_shipping_name, hazard_class, packing_group, label_codes, sp_codes, pkg_exceptions, pkg_non_bulk, pkg_bulk, qty_passenger, qty_cargo, vessel_location, vessel_other')
+        .order('un_number').order('row_order').range(a, b)),
+    all<LinkRow>('substance_un_link', (a, b) =>
+      supabase.from('substance_un_link').select('cas_number, un_number, match_type').order('un_number').range(a, b)),
+    all<SubRow>('substances', (a, b) =>
+      supabase.from('substances')
+        .select(`cas_number, ${NAME_COLUMNS}, signal_word, h_statement_codes, ghs_pictogram_codes`)
+        .not('cas_number', 'is', null).order('cas_number').range(a, b)),
+    all<{ slug: string; cas_number: string; status: string }>('sds_pages', (a, b) =>
+      supabase.from('sds_pages').select('slug, cas_number, status').eq('status', 'live').order('slug').range(a, b)),
+    all<{ sp_code: string; text_en: string; applies_to: string | null }>('adr_special_provisions', (a, b) =>
+      supabase.from('adr_special_provisions').select('sp_code, text_en, applies_to').order('sp_code').range(a, b)),
+    all<{ sp_code: string; code_type: string | null; text_en: string | null }>('dot_special_provisions', (a, b) =>
+      supabase.from('dot_special_provisions').select('sp_code, code_type, text_en').order('sp_code').range(a, b)),
+    all<{ cv_code: string; meaning: string; segregation_relevant: boolean }>('dg_cv_codes', (a, b) =>
+      supabase.from('dg_cv_codes').select('cv_code, meaning, segregation_relevant').order('cv_code').range(a, b)),
+    all<{ code: string; text_en: string }>('h_statements', (a, b) =>
+      supabase.from('h_statements').select('code, text_en').order('code').range(a, b)),
+  ])
+
+  const byUn = <T extends { un_number: string }>(rows: T[]) => {
+    const m = new Map<string, T[]>()
+    for (const r of rows) {
+      const k = r.un_number
+      const list = m.get(k)
+      if (list) list.push(r)
+      else m.set(k, [r])
+    }
+    return m
+  }
+
+  const adrByUn = byUn(adrAll)
+  const dotByUn = byUn(dotAll)
+  const linksByUn = byUn(links)
+  const subByCas = new Map(subsAll.map((s) => [s.cas_number, s]))
+  const sdsByCas = new Map(sdsAll.map((p) => [p.cas_number, p.slug]))
+  const adrSpText = new Map(adrSpAll.map((s) => [s.sp_code, s]))
+  const dotSpText = new Map(dotSpAll.map((s) => [s.sp_code, s]))
+  const cvText = new Map(cvAll.map((c) => [c.cv_code, c]))
+  const hText = new Map(hAll.map((h) => [h.code, h.text_en]))
+
+  const CAS_SHAPE = /^\d{2,7}-\d{2}-\d$/
+
+  return index.map((idx) => {
+    const adrRows = adrByUn.get(idx.un_number) ?? []
+    const dotRows = dotByUn.get(idx.un_number) ?? []
+
+    // Вещества под этим номером. ⚠ Только те, у кого CAS строгой формы: адрес
+    // страницы вещества строится из него же, и ссылка на обрезанный CAS ведёт в 404.
+    const substances = (linksByUn.get(idx.un_number) ?? [])
+      .map((l) => {
+        const s = subByCas.get(l.cas_number)
+        if (!s || !CAS_SHAPE.test(s.cas_number)) return null
+        const name = substanceNameFull(s)
+        return {
+          cas: s.cas_number,
+          name,
+          href: substanceHref(name, s.cas_number),
+          sdsSlug: sdsByCas.get(s.cas_number) ?? null,
+          signalWord: s.signal_word,
+          hCodes: s.h_statement_codes ?? [],
+          pictograms: (s.ghs_pictogram_codes ?? []).filter((c) => /^GHS0[1-9]$/.test(c)),
+          matchType: l.match_type,
+        }
+      })
+      .filter((s): s is NonNullable<typeof s> => s !== null)
+      .sort((a, b) => a.name.localeCompare(b.name))
+
+    // Спецположения — ДВА независимых набора. Пересечение кодов здесь ожидаемо
+    // и ничего не значит: одинаковый номер в двух системах — разные требования.
+    // ⚠ Коды ADR не всегда числа: у UN 3295 стоят «640C» и «640D» — варианты
+    // спецположения 640, различающие коды цистерн. Сортировка через Number()
+    // давала бы NaN и произвольный порядок, поэтому сначала число, потом суффикс.
+    const spKey = (c: string) => {
+      const m = /^(\d+)(.*)$/.exec(c)
+      return m ? [Number(m[1]), m[2]] as const : [Number.MAX_SAFE_INTEGER, c] as const
+    }
+    const adrSp = [...new Set(adrRows.flatMap((r) => r.sp_codes ?? []))]
+      .sort((a, b) => {
+        const [na, sa] = spKey(a)
+        const [nb, sb] = spKey(b)
+        return na - nb || sa.localeCompare(sb)
+      })
+      .map((code) => ({ code, text: adrSpText.get(code)?.text_en ?? null }))
+
+    const dotSp = [...new Set(dotRows.flatMap((r) => r.sp_codes ?? []))]
+      .sort()
+      .map((code) => ({
+        code,
+        type: dotSpText.get(code)?.code_type ?? null,
+        text: dotSpText.get(code)?.text_en ?? null,
+      }))
+
+    const cvCodes = [...new Set(adrRows.flatMap((r) => r.cv_codes ?? []))]
+      .sort()
+      .map((code) => ({
+        code,
+        meaning: cvText.get(code)?.meaning ?? null,
+        segregation: cvText.get(code)?.segregation_relevant ?? false,
+      }))
+
+    // Тексты H-кодов только тех, что реально встречаются на этой странице.
+    const usedH = [...new Set(substances.flatMap((s) => s.hCodes))].sort()
+    const hTexts = usedH.map((code) => ({ code, text: hText.get(code) ?? null }))
+
+    return {
+      params: { number: idx.un_number },
+      props: { idx, adrRows, dotRows, substances, adrSp, dotSp, cvCodes, hTexts },
+    }
+  })
+}
+
+const { idx, adrRows, dotRows, substances, adrSp, dotSp, cvCodes, hTexts } = Astro.props as {
+  idx: {
+    un_number: string
+    adr_rows: number
+    substance_count: number
+    has_sds_page: boolean
+    classes: string[] | null
+    packing_groups: string[] | null
+    shipping_name: string
+  }
+  adrRows: any[]
+  dotRows: any[]
+  substances: {
+    cas: string; name: string; href: string; sdsSlug: string | null
+    signalWord: string | null; hCodes: string[]; pictograms: string[]; matchType: string
+  }[]
+  adrSp: { code: string; text: string | null }[]
+  dotSp: { code: string; type: string | null; text: string | null }[]
+  cvCodes: { code: string; meaning: string | null; segregation: boolean }[]
+  hTexts: { code: string; text: string | null }[]
+}
+
+const un = idx.un_number
+const canonical = `${SITE}${unHref(un)}`
+
+const adrPrimary = adrRows[0] ?? null
+const dotPrimary = dotRows[0] ?? null
+const hasAdr = adrRows.length > 0
+const hasDot = dotRows.length > 0
+
+const adrStatus = adrPrimary?.adr_status ?? 'regulated'
+const adrStatusInfo = ADR_STATUS_TEXT[adrStatus] ?? ADR_STATUS_TEXT.regulated
+
+/** Заголовочное имя. ⚠ В таблицах ниже proper shipping name печатается вербатим. */
+const displayName = shippingNameForTitle(adrPrimary?.proper_shipping_name ?? dotPrimary?.proper_shipping_name ?? idx.shipping_name)
+
+/**
+ * ⚠ Заголовок собран под 62 знака ЦЕЛИКОМ (titleIsComplete), суффикса сайта нет.
+ * ⚠⚠ Режем ИМЯ под остаток бюджета, а не готовую строку: обрезка целого
+ * заголовка съедала как раз хвост с ключевыми словами и давала
+ * «UN 1418 Magnesium powder or magnesium… — class, packing…» — многоточие
+ * дважды и ни одного целого слова после тире. Хвост либо влезает целиком,
+ * либо его нет: половина модификатора хуже, чем его отсутствие.
+ */
+const TITLE_MAX = 62
+const titleHead = `UN ${un} — `
+const titleTail = ' · class, packing group'
+const title = (() => {
+  const base = titleHead + truncateName(displayName, TITLE_MAX - titleHead.length)
+  return base.length + titleTail.length <= TITLE_MAX ? base + titleTail : base
+})()
+
+const description = truncateMetaDescription(
+  hasAdr && hasDot
+    ? `UN ${un} (${displayName}): ADR 2025 and 49 CFR 172.101 side by side — hazard class, packing group, label codes, special provisions and the orange plate.`
+    : hasAdr
+      ? `UN ${un} (${displayName}) under ADR 2025: hazard class, packing group, label codes, special provisions, transport category and the orange plate.`
+      : `UN ${un} (${displayName}) in the 49 CFR 172.101 Hazardous Materials Table: hazard class, packing group, labels, packaging and quantity limits.`,
+  165,
+)
+
+/** Номер опасности берём с первой строки, у которой он есть. */
+const hinRow = adrRows.find((r) => r.hazard_id_number) ?? null
+const hin = readHazardIdNumber(hinRow?.hazard_id_number ?? null)
+
+/** Транспортные категории всех вариантов ADR — их может быть несколько. */
+const categories = [...new Set(adrRows.map((r) => r.transport_category).filter((c: number | null) => c !== null))] as number[]
+const categoryFootnote = TRANSPORT_CATEGORY_1_FOOTNOTE_UN.has(un)
+
+/** Символы колонки (1) 49 CFR — именно они различают строки у UN1005 и UN3318. */
+const dotSymbols = [...new Set(dotRows.flatMap((r) => r.symbols ?? []))].sort()
+
+/* ── Сравнение юрисдикций. ⚠ Каждая колонка подписана именем юрисдикции и несёт
+   своё клеймо источника; поля, где сравнение бессмысленно (спецположения),
+   в таблицу НЕ входят. ── */
+const uniq = (v: (string | null)[]) => [...new Set(v.filter(Boolean))] as string[]
+
+const compare = hasAdr && hasDot
+  ? [
+      {
+        field: 'Proper shipping name',
+        adr: uniq(adrRows.map((r) => r.proper_shipping_name)).join(' · '),
+        dot: uniq(dotRows.map((r) => r.proper_shipping_name)).join(' · '),
+      },
+      {
+        field: 'Class or division',
+        adr: uniq(adrRows.map((r) => r.transport_class)).join(', '),
+        dot: uniq(dotRows.map((r) => r.hazard_class)).join(', '),
+      },
+      {
+        field: 'Packing group',
+        adr: uniq(adrRows.map((r) => r.packing_group)).join(', ') || '—',
+        dot: uniq(dotRows.map((r) => r.packing_group)).join(', ') || '—',
+      },
+      {
+        field: 'Label codes',
+        adr: uniq(adrRows.flatMap((r) => r.label_codes ?? [])).join(', ') || '—',
+        dot: uniq(dotRows.flatMap((r) => r.label_codes ?? [])).join(', ') || '—',
+      },
+      {
+        field: 'Rows in the table',
+        adr: String(adrRows.length),
+        dot: String(dotRows.length),
+      },
+    ]
+  : []
+
+const divergent = compare.filter((c) => c.adr.toLowerCase() !== c.dot.toLowerCase())
+
+/* ── Сводка по GHS-стороне: то, чего нет ни в одном справочнике Таблицы A ── */
+const allPictograms = [...new Set(substances.flatMap((s) => s.pictograms))].sort()
+const signalWords = [...new Set(substances.map((s) => s.signalWord).filter(Boolean))] as string[]
+const hWithText = hTexts.filter((h) => h.text)
+const withSds = substances.filter((s) => s.sdsSlug)
+
+/* ── FAQ строится из данных, а не пишется руками ── */
+const faq: { q: string; a: string }[] = []
+if (hasAdr) {
+  faq.push({
+    q: `What is UN ${un}?`,
+    a: `UN ${un} is the United Nations number for ${displayName}. Under ADR 2025 it is assigned to class ${adrPrimary.transport_class}${
+      adrPrimary.transport_class && ADR_CLASS_NAME[adrPrimary.transport_class] ? ` (${ADR_CLASS_NAME[adrPrimary.transport_class].toLowerCase()})` : ''
+    }${adrPrimary.classification_code ? `, classification code ${adrPrimary.classification_code}` : ''}.`,
+  })
+}
+if (hasAdr && adrRows.some((r) => r.packing_group)) {
+  const pgs = uniq(adrRows.map((r) => r.packing_group))
+  faq.push({
+    q: `What packing group is UN ${un}?`,
+    a: pgs.length === 1
+      ? `Under ADR 2025 UN ${un} is packing group ${pgs[0]}.`
+      : `Table A of ADR 2025 lists UN ${un} under ${pgs.length} packing groups — ${pgs.join(', ')} — as separate rows. The packing group follows from the properties of the specific consignment; it is not interchangeable, and each row carries its own transport category.`,
+  })
+}
+if (hasAdr && hasDot) {
+  faq.push({
+    q: `Is UN ${un} classified the same way in the United States and in Europe?`,
+    a: divergent.length === 0
+      ? `On the fields we hold — proper shipping name, class, packing group and label codes — ADR 2025 and the 49 CFR 172.101 table agree for UN ${un}. Special provisions still differ and are never interchangeable between the two systems.`
+      : `No. For UN ${un} the two tables differ on ${divergent.map((d) => d.field.toLowerCase()).join(', ')}. Each panel on this page shows its own source; values from one system must not be carried over into the other.`,
+  })
+} else if (hasAdr && !hasDot) {
+  faq.push({
+    q: `Can UN ${un} be shipped in the United States?`,
+    a: `UN ${un} has no entry in the 49 CFR 172.101 Hazardous Materials Table in the revision we hold (eCFR 2026-08-03). A missing entry is not an authorisation: without a listed proper shipping name the material cannot be offered for transport in the United States under that name.`,
+  })
+} else if (!hasAdr && hasDot) {
+  faq.push({
+    q: `Is UN ${un} covered by ADR?`,
+    a: `UN ${un} has no row in Table A of ADR 2025 in our import, while the 49 CFR 172.101 table does list it. The US panel on this page carries its own source stamp and says nothing about carriage in Europe.`,
+  })
+}
+if (hin) {
+  faq.push({
+    q: `What is the hazard identification number for UN ${un}?`,
+    a: hin.meaning
+      ? `The orange-coloured plate for UN ${un} carries the hazard identification number ${hin.code} above the UN number. Under ADR 5.3.2.3.2 that number means: ${hin.meaning}.`
+      : `The orange-coloured plate for UN ${un} carries the hazard identification number ${hin.code} above the UN number. ${
+          hin.isClassOneCode
+            ? 'For Class 1 the classification code is used as the hazard identification number (ADR 5.3.2.3.1).'
+            : 'This exact combination is not listed in ADR 5.3.2.3.2, so no ready-made wording exists; the figures are explained individually on this page.'
+        }`,
+  })
+}
+if (categories.length === 1) {
+  const c = categories[0]
+  faq.push({
+    q: `What is the transport category of UN ${un}?`,
+    a: `Column (15) of Table A puts UN ${un} in transport category ${c}. Under ADR 1.1.3.6.3 the maximum total quantity per transport unit for that category is ${TRANSPORT_CATEGORY[c].maxQty}${
+      categoryFootnote ? ', except that footnote a to the table caps this UN number at 50 kg' : ''
+    }.`,
+  })
+}
+if (substances.length) {
+  faq.push({
+    q: `Which substances ship under UN ${un}?`,
+    a: `We hold ${substances.length} substance${substances.length === 1 ? '' : 's'} linked to UN ${un} by CAS number${
+      withSds.length ? `, ${withSds.length} of which also has a full safety data sheet on this site` : ''
+    }. Each one has its own reference page with the CLP classification, GHS pictograms and hazard statements that apply on the label — the workplace side of the same material.`,
+  })
+}
+
+/* ── Нумерация секций зависит от того, какие из них на этой странице есть ── */
+let sn = 0
+const pad = () => String(++sn).padStart(2, '0')
+const nCompare = compare.length ? pad() : null
+const nAdr = hasAdr ? pad() : null
+const nDot = hasDot ? pad() : null
+const nPlate = hin ? pad() : null
+const nSubs = substances.length ? pad() : null
+const nGhs = allPictograms.length || hWithText.length ? pad() : null
+const nFaq = faq.length ? pad() : null
+
+const jsonLd: Record<string, unknown>[] = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE}/` },
+      { '@type': 'ListItem', position: 2, name: 'UN numbers', item: `${SITE}/un/` },
+      { '@type': 'ListItem', position: 3, name: `UN ${un}`, item: canonical },
+    ],
+  },
+]
+if (faq.length) {
+  jsonLd.push({
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faq.map((f) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a },
+    })),
+  })
+}
+if (substances.length) {
+  jsonLd.push({
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: `Substances shipped under UN ${un}`,
+    numberOfItems: substances.length,
+    itemListElement: substances.slice(0, 100).map((s, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: s.name,
+      url: `${SITE}${s.href}`,
+    })),
+  })
+}
+---
+
+<Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
+  {jsonLd.map((block) => (
+    <script type="application/ld+json" slot="head" set:html={JSON.stringify(block)} />
+  ))}
+
+  <!-- ═══ HERO ═══ -->
+  <section class="hub-hero">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+    <div class="hub-wrap hub-hero-inner hub-hero-left">
+      <nav class="hub-crumb" aria-label="Breadcrumb">
+        <a href="/">Home</a><span class="sep">/</span>
+        <a href="/un/">UN numbers</a><span class="sep">/</span>
+        <span>UN {un}</span>
+      </nav>
+      <p class="hub-hero-eyebrow">Transport reference</p>
+      <h1>UN {un} — {displayName}</h1>
+      <p class="hub-hero-sub">
+        {hasAdr && hasDot
+          ? `Table A of ADR 2025 and the 49 CFR 172.101 Hazardous Materials Table for this number, kept side by side and never merged, plus the CLP label elements of the substances that ship under it.`
+          : hasAdr
+            ? `Table A of ADR 2025 for this number, plus the CLP label elements of the substances that ship under it.`
+            : `The 49 CFR 172.101 Hazardous Materials Table entry for this number, plus the CLP label elements of the substances that ship under it.`}
+      </p>
+      <div class="hub-hero-chips">
+        {hasAdr && adrPrimary.transport_class && <span class="hub-hero-chip">ADR class {adrPrimary.transport_class}</span>}
+        {hasDot && dotPrimary.hazard_class && <span class="hub-hero-chip">49 CFR {dotPrimary.hazard_class}</span>}
+        {/* ⚠ Тернарник, а не `length &&`: при пустом массиве `0 &&` печатает на
+            странице голый ноль — Astro выводит 0 как значение, а не как «ложь». */}
+        {idx.packing_groups?.length ? <span class="hub-hero-chip">PG {idx.packing_groups.join(', ')}</span> : null}
+        {hin && <span class="hub-hero-chip">Hazard ID {hin.code}</span>}
+        <span class="hub-hero-chip">{substances.length} linked {substances.length === 1 ? 'substance' : 'substances'}</span>
+      </div>
+
+      {hin && (
+        <div style="margin-top:26px">
+          <OrangePlate hazardId={hin.code} unNumber={un} width={230} />
+        </div>
+      )}
+    </div>
+  </section>
+
+  <!-- ═══ ПЕРЕКЛЮЧАТЕЛЬ ЮРИСДИКЦИИ ═══
+       ⚠ По умолчанию активно «Both»: обе панели в HTML и обе видны. Скрипт
+       только сужает вид, он ничего не подгружает. Без JavaScript страница
+       остаётся полной. -->
+  {hasAdr && hasDot && (
+    <section class="hub-sec-white" style="padding-top:28px;padding-bottom:0">
+      <div class="hub-wrap">
+        <div class="juris" role="group" aria-label="Jurisdiction">
+          <button type="button" data-juris="both" aria-pressed="true">Both<span class="sub">side by side</span></button>
+          <button type="button" data-juris="adr" aria-pressed="false">ADR<span class="sub">2025 · Europe</span></button>
+          <button type="button" data-juris="dot" aria-pressed="false">49 CFR<span class="sub">2026-08-03 · US</span></button>
+        </div>
+        <p class="juris-note">
+          <b>The two tables are never merged.</b> The same UN number can carry a different packing group,
+          a different proper shipping name and entirely different special provisions in each system.
+          Every value below sits under the name of the jurisdiction it comes from.
+        </p>
+      </div>
+    </section>
+  )}
+
+  {adrStatus !== 'regulated' && (
+    <section class="hub-sec-white" style="padding-top:24px;padding-bottom:0">
+      <div class="hub-wrap">
+        <div class="hub-note">
+          <strong>{adrStatusInfo.badge}.</strong> {adrStatusInfo.note}
+          {adrPrimary?.adr_status_note && <> {adrPrimary.adr_status_note}</>}
+        </div>
+      </div>
+    </section>
+  )}
+
+  <!-- ═══ 01 · СРАВНЕНИЕ ═══ -->
+  {compare.length > 0 && (
+    <section class="hub-sec-a" data-panel="both">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nCompare} · Two jurisdictions</p>
+        <h2 class="hub-h2">UN {un} in ADR 2025 and in 49 CFR 172.101</h2>
+        <p class="hub-sub">
+          {divergent.length === 0
+            ? `On the fields below the two tables agree for this number. Special provisions are deliberately absent from this comparison: identical code numbers mean different things in the two systems and are never interchangeable.`
+            : `The two systems differ for this number on ${divergent.length} of ${compare.length} fields. Special provisions are deliberately absent from this comparison: identical code numbers mean different things in the two systems.`}
+        </p>
+
+        <div class="hub-table-wrap" style="margin-top:22px">
+          <table class="hub-table">
+            <thead>
+              <tr>
+                <th scope="col">Field</th>
+                <th scope="col">ADR 2025 <span style="display:block;font-weight:500;opacity:.75">Table A, Chapter 3.2</span></th>
+                <th scope="col">49 CFR 172.101 <span style="display:block;font-weight:500;opacity:.75">eCFR 2026-08-03</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {compare.map((c) => (
+                <tr>
+                  <td class="c-code">{c.field}</td>
+                  <td class="c-txt">{c.adr || '—'}</td>
+                  <td class="c-txt">{c.dot || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p class="hub-fine">
+          Sources: <a href={ADR_SOURCE.href} rel="nofollow">{ADR_SOURCE.label}</a> ·
+          <a href={DOT_SOURCE.href} rel="nofollow">{DOT_SOURCE.label}</a>
+        </p>
+      </div>
+    </section>
+  )}
+
+  <!-- ═══ ADR ═══ -->
+  {hasAdr && (
+    <section class="hub-sec-white" data-panel="adr" id="adr">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nAdr} · ADR 2025</p>
+        <h2 class="hub-h2">UN {un} in Table A of ADR 2025</h2>
+        <p class="hub-sub">
+          {adrRows.length === 1
+            ? 'One row in Table A of Chapter 3.2. Every value below comes from that row.'
+            : `${adrRows.length} separate rows in Table A of Chapter 3.2. They are not interchangeable: the packing group follows from the properties of the consignment, and each row carries its own transport category — that is a different multiplier in the 1.1.3.6 calculation.`}
+        </p>
+
+        <div class="hub-table-wrap" style="margin-top:22px">
+          <table class="hub-table">
+            <thead>
+              <tr>
+                <th scope="col">Proper shipping name (3.1.2)</th>
+                <th scope="col">Class</th>
+                <th scope="col">Classification code</th>
+                <th scope="col">PG</th>
+                <th scope="col">Labels</th>
+                <th scope="col">Transport category</th>
+                <th scope="col">Hazard ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {adrRows.map((r) => (
+                <tr>
+                  <td class="c-txt"><span class="verbatim">{r.proper_shipping_name}</span></td>
+                  <td class="c-code">{r.transport_class ?? '—'}</td>
+                  <td class="c-code">{r.classification_code ?? '—'}</td>
+                  <td class="c-code">{r.packing_group ?? '—'}</td>
+                  <td class="c-code">{(r.label_codes ?? []).join(', ') || '—'}</td>
+                  <td class="c-code">{r.transport_category ?? '—'}</td>
+                  <td class="c-code">{r.hazard_id_number ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p class="hub-fine">
+          Source: <a href={ADR_SOURCE.href} rel="nofollow">{ADR_SOURCE.label}</a>.
+          {adrPrimary.transport_class && ADR_CLASS_NAME[adrPrimary.transport_class] && (
+            <> Class {adrPrimary.transport_class} is “{ADR_CLASS_NAME[adrPrimary.transport_class]}” (ADR 2.1.1.1).</>
+          )}
+        </p>
+
+        {categories.length > 0 && (
+          <>
+            <h3 class="sub-h3" id="transport-category">Transport category and the 1 000-point exemption</h3>
+            <p class="hub-sub">
+              Column (15) of Table A decides whether a load stays under the exemption of ADR 1.1.3.6. Quantities of
+              different categories are added with the multipliers below, and the sum must not exceed 1 000.
+            </p>
+            <div class="hub-table-wrap" style="margin-top:18px">
+              <table class="hub-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Category</th>
+                    <th scope="col">Max total quantity per transport unit</th>
+                    <th scope="col">Multiplier in 1.1.3.6.4</th>
+                    <th scope="col">What it means</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {categories.map((c) => (
+                    <tr>
+                      <td class="c-code">{c}</td>
+                      <td class="c-code">{categoryFootnote && c === 1 ? '50' : TRANSPORT_CATEGORY[c].maxQty}</td>
+                      <td class="c-code">{categoryFootnote && c === 1 ? '× 20' : TRANSPORT_CATEGORY[c].multiplier}</td>
+                      <td class="c-txt">{TRANSPORT_CATEGORY[c].meaning}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {categoryFootnote && (
+              <p class="hub-fine">
+                Footnote a to the table in 1.1.3.6.3 applies to UN {un}: the maximum total quantity per transport unit
+                is 50 kg and the multiplier is 20, not 50.
+              </p>
+            )}
+            <p class="hub-fine">
+              Source: <a href={ADR_SOURCE.href} rel="nofollow">ADR 2025, 1.1.3.6.3 and 1.1.3.6.4 · ECE/TRANS/352 Vol. I (UNECE)</a>.
+              {/* ⚠ Пояснение про нулевую категорию — только там, где она есть.
+                  На странице без категории 0 оно объясняет то, чего на экране нет. */}
+              {categories.includes(0) && (
+                <> Category 0 means there is no quantity exemption at all — not that the quantity is zero.</>
+              )}
+            </p>
+          </>
+        )}
+
+        {adrSp.length > 0 && (
+          <>
+            <h3 class="sub-h3" id="adr-special-provisions">Special provisions — ADR 2025, Chapter 3.3</h3>
+            <p class="hub-sub">
+              Codes from column (6) of Table A, with the text of Chapter 3.3.1.
+              <b> These are ADR provisions only.</b> A code with the same number exists in 49 CFR 172.102 and means
+              something else there — the two lists are never combined.
+            </p>
+            {/* ⚠⚠ data-sp="adr" — не украшение, а якорь проверки check:dist.
+                Она сверяет набор кодов в этом теле таблицы с sp_codes из
+                dg_substances и падает, если сюда просочился код 49 CFR. */}
+            <div class="hub-table-wrap" style="margin-top:18px">
+              <table class="hub-table">
+                <tbody data-sp="adr">
+                  {adrSp.map((sp) => (
+                    <tr>
+                      <td class="c-code is-code" data-sp-code={sp.code}>SP {sp.code}</td>
+                      <td class="c-txt">
+                        {sp.text ?? <span style="color:#94a3b8">No text for this code in our import of Chapter 3.3.1 — shown as printed in Table A.</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p class="hub-fine">
+              Source: <a href={ADR_SP_SOURCE.href} rel="nofollow">{ADR_SP_SOURCE.label}</a>
+            </p>
+          </>
+        )}
+
+        {cvCodes.length > 0 && (
+          <>
+            <h3 class="sub-h3" id="cv-codes">Carriage provisions — CV codes</h3>
+            <div class="hub-table-wrap" style="margin-top:18px">
+              <table class="hub-table">
+                <tbody>
+                  {cvCodes.map((cv) => (
+                    <tr>
+                      <td class="c-code is-code">{cv.code}</td>
+                      <td class="c-txt">
+                        {cv.meaning ?? '—'}
+                        {cv.segregation && <span class="clp-hint"> · relevant to segregation on the vehicle</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p class="hub-fine">
+              Source: <a href={ADR_SOURCE.href} rel="nofollow">ADR 2025, 7.5.11 · ECE/TRANS/352 Vol. II (UNECE)</a>
+            </p>
+          </>
+        )}
+
+        <p class="hub-fine">
+          Not imported and therefore not shown for this number: limited quantities (column 7a), excepted quantities
+          (7b), packing instructions (8), tank codes (10–13) and the tunnel restriction code (15). An empty section
+          is more honest than borrowed text.
+        </p>
+      </div>
+    </section>
+  )}
+
+  <!-- ═══ 49 CFR ═══ -->
+  {hasDot && (
+    <section class="hub-sec-b" data-panel="dot" id="us">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow navy">{nDot} · United States</p>
+        <h2 class="hub-h2">UN {un} in the 49 CFR 172.101 Hazardous Materials Table</h2>
+        <p class="hub-sub">
+          {dotRows.length === 1
+            ? 'One row in the Hazardous Materials Table.'
+            : `${dotRows.length} separate rows in the Hazardous Materials Table. Where the rows differ only by the symbol in column (1), that symbol is what tells them apart — “D” is domestic-only, “I” is international.`}
+        </p>
+
+        <div class="hub-table-wrap" style="margin-top:22px">
+          <table class="hub-table">
+            <thead>
+              <tr>
+                <th scope="col">Symbols (1)</th>
+                <th scope="col">Proper shipping name (2)</th>
+                <th scope="col">Class (3)</th>
+                <th scope="col">PG (5)</th>
+                <th scope="col">Labels (6)</th>
+                <th scope="col">Packaging (8)</th>
+                <th scope="col">Quantity limits (9)</th>
+                <th scope="col">Vessel stowage (10)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dotRows.map((r) => (
+                <tr>
+                  <td class="c-code">{(r.symbols ?? []).join(' ') || '—'}</td>
+                  <td class="c-txt"><span class="verbatim">{r.proper_shipping_name}</span></td>
+                  <td class="c-code">{r.hazard_class ?? '—'}</td>
+                  <td class="c-code">{r.packing_group ?? '—'}</td>
+                  <td class="c-code">{(r.label_codes ?? []).join(', ') || '—'}</td>
+                  <td class="c-code">
+                    {[
+                      r.pkg_exceptions ? `§173.${r.pkg_exceptions}` : null,
+                      r.pkg_non_bulk ? `§173.${r.pkg_non_bulk}` : null,
+                      r.pkg_bulk ? `§173.${r.pkg_bulk}` : null,
+                    ].filter(Boolean).join(' · ') || '—'}
+                  </td>
+                  <td class="c-code">
+                    {r.qty_passenger ?? '—'} <span style="opacity:.6">passenger</span><br />
+                    {r.qty_cargo ?? '—'} <span style="opacity:.6">cargo</span>
+                  </td>
+                  <td class="c-code">
+                    {r.vessel_location ?? '—'}
+                    {r.vessel_other?.length ? <span style="opacity:.6"> · {r.vessel_other.join(', ')}</span> : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p class="hub-fine">
+          Source: <a href={DOT_SOURCE.href} rel="nofollow">{DOT_SOURCE.label}</a>.
+          {dotPrimary.hazard_class && dotClassName(dotPrimary.hazard_class) && (
+            <> Class {dotPrimary.hazard_class} is “{dotClassName(dotPrimary.hazard_class)}” (<a href={DOT_CLASS_SOURCE.href} rel="nofollow">49 CFR 173.2</a>){
+              dotCompatibilityGroup(dotPrimary.hazard_class) ? `; the trailing letter is the compatibility group.` : '.'
+            }</>
+          )}
+          {' '}Packaging cells are section references into 49 CFR part 173: exceptions, non-bulk, bulk.
+          {' '}{DOT_STOWAGE_OTHER_NOTE}
+        </p>
+
+        {dotSymbols.length > 0 && (
+          <>
+            <h3 class="sub-h3" id="us-symbols">What the column (1) symbols mean</h3>
+            <div class="hub-table-wrap" style="margin-top:18px">
+              <table class="hub-table">
+                <tbody>
+                  {dotSymbols.map((s: string) => (
+                    <tr>
+                      <td class="c-code is-code">{s}</td>
+                      <td class="c-txt">
+                        <b>{DOT_SYMBOL[s]?.short ?? s}.</b> {DOT_SYMBOL[s]?.text ?? ''}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p class="hub-fine">
+              Source: <a href={DOT_SOURCE.href} rel="nofollow">49 CFR 172.101(b) · eCFR, revision 2026-08-03</a>
+            </p>
+          </>
+        )}
+
+        {[...new Set(dotRows.map((r) => r.vessel_location).filter(Boolean))].length > 0 && (
+          <>
+            <h3 class="sub-h3" id="us-stowage">Vessel stowage categories on this entry</h3>
+            <div class="hub-table-wrap" style="margin-top:18px">
+              <table class="hub-table">
+                <tbody>
+                  {[...new Set(dotRows.map((r) => r.vessel_location).filter(Boolean))].map((loc: any) => (
+                    <tr>
+                      <td class="c-code is-code">{loc}</td>
+                      <td class="c-txt">{DOT_STOWAGE[loc] ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p class="hub-fine">
+              Source: <a href={DOT_SOURCE.href} rel="nofollow">49 CFR 172.101(k) · eCFR, revision 2026-08-03</a>
+            </p>
+          </>
+        )}
+
+        {dotSp.length > 0 && (
+          <>
+            <h3 class="sub-h3" id="us-special-provisions">Special provisions — 49 CFR 172.102</h3>
+            <p class="hub-sub">
+              Codes from column (7) of the Hazardous Materials Table, with the text of § 172.102.
+              <b> These are United States provisions only</b> and have nothing to do with the ADR codes above,
+              even where the number is identical.
+            </p>
+            {/* ⚠⚠ data-sp="dot" — якорь той же проверки со стороны 49 CFR. */}
+            <div class="hub-table-wrap" style="margin-top:18px">
+              <table class="hub-table">
+                <tbody data-sp="dot">
+                  {dotSp.map((sp) => (
+                    <tr>
+                      <td class="c-code is-code" data-sp-code={sp.code}>{sp.code}</td>
+                      <td class="c-txt">
+                        {sp.text ?? (
+                          <span style="color:#94a3b8">
+                            The code is printed in the table, but § 172.102 carries no definition for it in the
+                            revision we hold — shown as printed, with nothing invented in its place.
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p class="hub-fine">
+              Source: <a href={DOT_SP_SOURCE.href} rel="nofollow">{DOT_SP_SOURCE.label}</a>
+            </p>
+          </>
+        )}
+
+        {dotRows.some((r: any) => r.id_prefix && r.id_prefix !== 'UN') && (
+          <p class="hub-fine">
+            Identification number prefix on this entry: {[...new Set(dotRows.map((r: any) => r.id_prefix))].join(', ')} —
+            {' '}{[...new Set(dotRows.map((r: any) => r.id_prefix))].map((p: any) => DOT_ID_PREFIX[p]).filter(Boolean).join(' ')}
+          </p>
+        )}
+      </div>
+    </section>
+  )}
+
+  <!-- ═══ ОРАНЖЕВАЯ ТАБЛИЧКА ═══ -->
+  {hin && (
+    <section class="hub-sec-white" data-panel="adr" id="orange-plate">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nPlate} · Orange plate</p>
+        <h2 class="hub-h2">The orange-coloured plate for UN {un}</h2>
+        <p class="hub-sub">
+          The upper half of the plate carries the hazard identification number, the lower half the UN number.
+          Dimensions follow ADR 5.3.2.2.1: 400 × 300 mm, black border and dividing line 15 mm, figures 100 mm high.
+        </p>
+
+        <div style="display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start;margin-top:24px">
+          <OrangePlate hazardId={hin.code} unNumber={un} width={300} />
+          <div style="flex:1 1 320px;min-width:280px">
+            {hin.meaning ? (
+              <p class="hub-sub" style="margin-top:0">
+                <b>{hin.code}</b> — {hin.meaning}.
+              </p>
+            ) : hin.isClassOneCode ? (
+              <p class="hub-sub" style="margin-top:0">
+                <b>{hin.code}</b> is the classification code of Class 1, used here as the hazard identification
+                number: ADR 5.3.2.3.1 assigns the classification code — division number plus compatibility group
+                letter — to substances of Class 1 instead of a numeric hazard identification number.
+              </p>
+            ) : (
+              <p class="hub-sub" style="margin-top:0">
+                <b>{hin.code}</b> is printed in column (20) of Table A, but this combination is not one of those
+                listed in ADR 5.3.2.3.2. Rather than invent a wording, the figures are read individually below
+                under the general rule of 5.3.2.3.1.
+              </p>
+            )}
+
+            {hin.digits.length > 0 && (
+              <div class="hub-table-wrap" style="margin-top:18px">
+                <table class="hub-table">
+                  <tbody>
+                    {hin.digits.map((d) => (
+                      <tr>
+                        <td class="c-code is-code">{d.figure}</td>
+                        <td class="c-txt">
+                          {d.meaning || '—'}
+                          {d.doubled && <span class="clp-hint"> · doubled figure — intensification of that hazard</span>}
+                        </td>
+                      </tr>
+                    ))}
+                    {hin.reactsWithWater && (
+                      <tr>
+                        <td class="c-code is-code">X</td>
+                        <td class="c-txt">
+                          The substance reacts dangerously with water. Water may only be used by approval of experts.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <p class="hub-fine">
+              Source: <a href={ADR_HIN_SOURCE.href} rel="nofollow">{ADR_HIN_SOURCE.label}</a>.
+              The tunnel restriction code of column (15) is a different value and is not part of our import.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  )}
+
+  <!-- ═══ ВЕЩЕСТВА ═══ -->
+  {substances.length > 0 && (
+    <section class="hub-sec-a" data-panel="both">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nSubs} · Substances</p>
+        <h2 class="hub-h2">Substances shipped under UN {un}</h2>
+        <p class="hub-sub">
+          Linked by CAS number, never by name: a name match once produced “acetone cyanohydrin” for acetone, and
+          a wrong link here would be a wrong classification. Each entry opens its own reference page with the CLP
+          classification and label elements.
+        </p>
+        <ul class="hub-index wide" style="margin-top:22px">
+          {substances.map((s) => (
+            <li>
+              <a href={s.href} class="hub-index-card">
+                <span class="txt">
+                  <span class="name">{substanceTitleName(truncateName(s.name, 62))}</span>
+                  <span class="cas">CAS {s.cas}</span>
+                </span>
+                {s.signalWord && (
+                  <span class={`sig ${s.signalWord === 'Danger' ? 'danger' : 'warning'}`}>{s.signalWord}</span>
+                )}
+              </a>
+            </li>
+          ))}
+        </ul>
+        {withSds.length > 0 && (
+          <p class="hub-meta" style="margin-top:18px">
+            Full 16-section safety data sheets: {withSds.map((s, i) => (
+              <>{i > 0 && ' · '}<a href={`/sds/${s.sdsSlug}/`}>{substanceTitleName(truncateName(s.name, 40))}</a></>
+            ))}
+          </p>
+        )}
+      </div>
+    </section>
+  )}
+
+  <!-- ═══ GHS-СТОРОНА — то, ради чего страница существует ═══ -->
+  {(allPictograms.length > 0 || hWithText.length > 0) && (
+    <section class="hub-sec-white" data-panel="both" id="ghs-side">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nGhs} · The label side</p>
+        <h2 class="hub-h2">What UN {un} looks like on a workplace label</h2>
+        <p class="hub-sub">
+          The tables above are the transport classification. This is the other half of the same material: the CLP
+          label elements of the substances linked to this number — what actually goes on the drum once it has been
+          delivered. Transport marks and supply labels answer different regulations and do not replace one another.
+        </p>
+
+        {allPictograms.length > 0 && (
+          <div class="sub-picts" style="margin-top:22px">
+            {allPictograms.map((code) => (
+              <a class="sub-pict" href={`/ghs/${code.toLowerCase()}/`}>
+                <img src={`/pictograms/${code.toLowerCase()}.svg`} width="88" height="88"
+                     alt={`${code} ${PICTOGRAM_NAME[code]} pictogram`} loading="lazy" />
+                <span>{PICTOGRAM_NAME[code]}</span>
+              </a>
+            ))}
+          </div>
+        )}
+
+        {signalWords.length > 0 && (
+          <p class="hub-meta" style="margin-top:16px">
+            Signal word across the linked substances: {signalWords.join(' · ')}
+          </p>
+        )}
+
+        {hWithText.length > 0 && (
+          <>
+            <h3 class="sub-h3" id="hazard-statements">Hazard statements on the substances under UN {un}</h3>
+            <div class="hub-table-wrap" style="margin-top:18px">
+              <table class="hub-table">
+                <tbody>
+                  {hWithText.map((h) => (
+                    <tr>
+                      <td class="c-code"><a href={hHref(h.code)}>{h.code}</a></td>
+                      <td class="c-txt">{h.text}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p class="hub-fine">
+              Source: harmonised classification, EU CLP Annex VI. Transport classification and supply
+              classification are decided under different rules and do not have to agree.
+            </p>
+          </>
+        )}
+      </div>
+    </section>
+  )}
+
+  <!-- ═══ FAQ + ЗАКРЫТИЕ ═══ -->
+  <section class="hub-sec-b" data-panel="both">
+    <div class="hub-wrap">
+      {faq.length > 0 && (
+        <>
+          <p class="hub-eyebrow navy">{nFaq} · FAQ</p>
+          <h2 class="hub-h2">UN {un} — frequently asked questions</h2>
+          <div class="hub-faq">
+            {faq.map((f) => (
+              <div class="hub-faq-item">
+                <p class="q">{f.q}</p>
+                <p class="a">{f.a}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      <div class="hub-close-panel" style="margin-top:36px">
+        <div class="dots" aria-hidden="true"></div>
+        <h2>Need the plate, the labels or the placards printed?</h2>
+        <p>
+          The orange plate above is a physical article, and so are the class labels in column (5).
+          Our sister site <a href="https://ghslabels.com/">GHSLabels.com</a> covers printing and suppliers.
+          For the workplace label of the same material, use the
+          {' '}<a href="/label-constructor/">GHS label constructor</a>, and browse other numbers in the
+          {' '}<a href="/un/">UN number reference</a>.
+        </p>
+      </div>
+
+      <SdsManagerCard
+        service="management"
+        body={`Transport classification is only half of what a consignment needs: the receiving site still has to hold a current safety data sheet for every product on the shelf, and those change whenever a supplier reissues. For keeping that library central, version-controlled and reachable by QR code, the solution we recommend is SDS Manager. It also offers SDS authoring and a broader EHS suite.`}
+        href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=unpage"
+      />
+
+      <p class="hub-fine">
+        Reference aid only. Values are reproduced from ADR 2025 and the 49 CFR 172.101 table as published; the
+        consignor remains responsible for the classification of a specific consignment. Always verify against the
+        current published regulation and the supplier's safety data sheet.
+      </p>
+    </div>
+  </section>
+
+  {hasAdr && hasDot && (
+    <script is:inline>
+      (function () {
+        var group = document.querySelector('.juris')
+        if (!group) return
+        var panels = document.querySelectorAll('[data-panel]')
+        group.addEventListener('click', function (e) {
+          var b = e.target.closest('button[data-juris]')
+          if (!b) return
+          var want = b.getAttribute('data-juris')
+          group.querySelectorAll('button[data-juris]').forEach(function (x) {
+            x.setAttribute('aria-pressed', String(x === b))
+          })
+          panels.forEach(function (p) {
+            var kind = p.getAttribute('data-panel')
+            p.hidden = !(want === 'both' || kind === 'both' || kind === want)
+          })
+        })
+      })()
+    </script>
+  )}
+</Layout>

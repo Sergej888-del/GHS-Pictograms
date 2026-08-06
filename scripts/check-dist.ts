@@ -1615,7 +1615,12 @@ const CHECKS: Check[] = [
         const html = readPage(`sds/${slug}/index.html`)
         if (!html || !html.includes('id="s14"')) continue
         pages++
-        const cards = rxAll(html, />UN number<[\s\S]{0,240}?>UN (\d{3,4})</g)
+        // ⚠ Окно 320, а не 240: с session 39 номер обёрнут в ссылку на
+        // /un/<номер>/, и между подписью и значением прибавилось ~45 знаков
+        // (замер на /sds/acetone/: было 120, стало ~165). Узкое окно не
+        // покраснело бы — оно просто перестало бы находить карточки, и
+        // проверка молча позеленела бы на пустом множестве.
+        const cards = rxAll(html, />UN number<[\s\S]{0,320}?>UN (\d{3,4})</g)
         const seen = new Map<string, number>()
         for (const un of cards) seen.set(un, (seen.get(un) ?? 0) + 1)
         const dup = [...seen.entries()].filter(([, n]) => n > 1)
@@ -3990,6 +3995,310 @@ const CHECKS: Check[] = [
         ok,
         headline: ok ? `${seen.length} глубокие ссылки сошлись с тем, что читают острова` : `расхождений: ${detail.length}`,
         detail: ok ? seen : detail,
+      }
+    },
+  },
+
+  // ═══════════════════════════ UN — раздел номеров ООН ═══════════════════════════
+  //
+  // ⚠⚠ Инварианты раздела — не косметика, а условие, при котором он вообще имеет
+  // право существовать (claude/un-pages-design.md §3):
+  //   1. страниц ровно столько, сколько строк в un_page_index — ни одной лишней,
+  //      ни одной пропущенной, иначе sitemap зовёт краулера в 404;
+  //   2. под каждой юрисдикционной панелью стоит КЛИКАБЕЛЬНОЕ клеймо источника;
+  //   3. спецположения ADR и 49 CFR не слиты — 73 числовых кода существуют в
+  //      обеих системах и означают разное, и слитый список опаснее пустого.
+
+  {
+    id: 'un-pages',
+    group: 'UN',
+    title: 'Набор страниц /un/ равен un_page_index',
+    run: async () => {
+      const rows = await selectAll<{ un_number: string }>('un_page_index', 'un_number')
+      // ⚠ RLS без политики отдаёт anon пустоту, а не ошибку — без этой строки проверка молча позеленеет.
+      assertNonEmpty('un-pages', 'un_page_index', rows)
+      const expected = new Set(rows.map((r) => r.un_number))
+      const actual = new Set(pageSlugs('un'))
+      const { missing, extra } = diffSets(actual, expected)
+      const detail: string[] = []
+      if (missing.length) detail.push(`есть в un_page_index, но нет в dist (${missing.length}): ${preview(missing)}`)
+      if (extra.length) detail.push(`есть в dist, но нет в un_page_index (${extra.length}): ${preview(extra)}`)
+      if (!readPage('un/index.html')) detail.push('нет хаба dist/un/index.html')
+      return {
+        id: 'un-pages',
+        group: 'UN',
+        ok: detail.length === 0,
+        headline: `${actual.size} страниц в dist, ${expected.size} строк в un_page_index`,
+        detail,
+      }
+    },
+  },
+
+  {
+    id: 'un-source-stamp',
+    group: 'UN',
+    title: 'У каждой юрисдикционной панели есть кликабельное клеймо источника',
+    run: async () => {
+      const ADR_HREF = 'unece.org/adr-2025-files'
+      const DOT_HREF = 'ecfr.gov/current/title-49/section-172.101'
+      const slugs = pageSlugs('un')
+      const detail: string[] = []
+      let withAdr = 0
+      let withDot = 0
+      for (const slug of slugs) {
+        const html = readPage(`un/${slug}/index.html`)
+        if (!html) { detail.push(`${slug}: нет index.html`); continue }
+        const hasAdrPanel = html.includes('data-panel="adr"')
+        const hasDotPanel = html.includes('data-panel="dot"')
+        if (!hasAdrPanel && !hasDotPanel) { detail.push(`${slug}: нет ни одной панели юрисдикции`); continue }
+        if (hasAdrPanel) {
+          withAdr++
+          if (!html.includes(ADR_HREF)) detail.push(`${slug}: панель ADR без ссылки на первоисточник`)
+        }
+        if (hasDotPanel) {
+          withDot++
+          if (!html.includes(DOT_HREF)) detail.push(`${slug}: панель 49 CFR без ссылки на первоисточник`)
+        }
+      }
+      return {
+        id: 'un-source-stamp',
+        group: 'UN',
+        ok: detail.length === 0,
+        headline: `${withAdr} страниц с панелью ADR, ${withDot} с панелью 49 CFR`,
+        detail,
+      }
+    },
+  },
+
+  {
+    id: 'un-special-provisions',
+    group: 'UN',
+    title: 'Спецположения ADR и 49 CFR разведены и совпадают с базой',
+    run: async () => {
+      type SpRow = { un_number: string; sp_codes: string[] | null }
+      const adrRows = await selectAll<SpRow>('dg_substances', 'un_number, sp_codes')
+      const dotRows = await selectAll<SpRow>('dot_substances', 'un_number, sp_codes')
+      assertNonEmpty('un-special-provisions', 'dg_substances', adrRows)
+      assertNonEmpty('un-special-provisions', 'dot_substances', dotRows)
+
+      const gather = (rows: SpRow[]) => {
+        const m = new Map<string, Set<string>>()
+        for (const r of rows) {
+          const s = m.get(r.un_number) ?? new Set<string>()
+          for (const c of r.sp_codes ?? []) s.add(c)
+          m.set(r.un_number, s)
+        }
+        return m
+      }
+      const adrByUn = gather(adrRows)
+      const dotByUn = gather(dotRows)
+
+      // ⚠ Якорь — атрибут data-sp на <tbody>, а не позиция в тексте: разметка
+      // ещё будет меняться, а смысл «это тело таблицы принадлежит ADR» — нет.
+      const bodyRe = /<tbody data-sp="(adr|dot)"[^>]*>([\s\S]*?)<\/tbody>/g
+      const codeRe = /data-sp-code="([^"]+)"/g
+
+      const slugs = pageSlugs('un')
+      const detail: string[] = []
+      let checked = 0
+      for (const slug of slugs) {
+        const html = readPage(`un/${slug}/index.html`)
+        if (!html) continue
+        const found: Record<string, Set<string>> = { adr: new Set<string>(), dot: new Set<string>() }
+        const seenBodies: Record<string, number> = { adr: 0, dot: 0 }
+        for (const m of html.matchAll(bodyRe)) {
+          const kind = m[1]
+          seenBodies[kind]++
+          for (const c of m[2].matchAll(codeRe)) found[kind].add(c[1])
+        }
+        for (const kind of ['adr', 'dot'] as const) {
+          if (seenBodies[kind] > 1) {
+            detail.push(`${slug}: ${seenBodies[kind]} таблиц спецположений ${kind} — должна быть одна`)
+          }
+        }
+        const expAdr = adrByUn.get(slug) ?? new Set<string>()
+        const expDot = dotByUn.get(slug) ?? new Set<string>()
+        if (found.adr.size || expAdr.size) {
+          const d = diffSets(found.adr, expAdr)
+          if (d.missing.length) detail.push(`${slug}: коды ADR есть в базе, но не на странице: ${preview(d.missing)}`)
+          if (d.extra.length) detail.push(`${slug}: коды на странице, которых нет в sp_codes ADR: ${preview(d.extra)}`)
+        }
+        if (found.dot.size || expDot.size) {
+          const d = diffSets(found.dot, expDot)
+          if (d.missing.length) detail.push(`${slug}: коды 49 CFR есть в базе, но не на странице: ${preview(d.missing)}`)
+          if (d.extra.length) detail.push(`${slug}: коды на странице, которых нет в sp_codes 49 CFR: ${preview(d.extra)}`)
+        }
+        checked++
+      }
+      return {
+        id: 'un-special-provisions',
+        group: 'UN',
+        ok: detail.length === 0,
+        headline: `${checked} страниц проверено, наборы кодов ADR и 49 CFR сошлись поимённо`,
+        detail,
+      }
+    },
+  },
+
+  {
+    id: 'un-inspector-retired',
+    group: 'UN',
+    title: 'Старый /inspector/ снят и нигде не проставлен ссылкой',
+    run: async () => {
+      const detail: string[] = []
+      // ⚠ Правило 301 в _redirects работает ТОЛЬКО если статической страницы нет:
+      // у Cloudflare Pages файл сильнее строки редиректа.
+      if (readPage('inspector/index.html')) {
+        detail.push('dist/inspector/index.html собран — 301 на /un/ никогда не сработает')
+      }
+      // ⚠⚠ СКАНИРУЕМ ВЕСЬ dist, А НЕ НЕСКОЛЬКО ПРОБ.
+      // Первая версия проверки брала четыре страницы «шапка и подвал стоят
+      // везде, значит одной пробы хватит». Хватило не всё: ссылка на
+      // /inspector/ сидела ещё в карточке инструмента на главной, в списке
+      // /tools/, в CTA хаба Compliance и в прозе /pictograms/ — то есть в
+      // разметке КОНКРЕТНЫХ страниц, а не в общем каркасе. Проба по выборке
+      // ловит только то, что уже общее; здесь нужен полный обход.
+      const htmlFiles: string[] = []
+      const walk = (rel: string) => {
+        const abs = join(DIST, rel)
+        if (!existsSync(abs)) return
+        for (const d of readdirSync(abs, { withFileTypes: true })) {
+          const next = rel ? `${rel}/${d.name}` : d.name
+          if (d.isDirectory()) {
+            if (d.name === '_astro' || d.name === 'structures' || d.name === 'pictograms') continue
+            walk(next)
+          } else if (d.name.endsWith('.html')) {
+            htmlFiles.push(next)
+          }
+        }
+      }
+      walk('')
+      if (htmlFiles.length === 0) detail.push('в dist не найдено ни одного .html — проверять нечего, и это не «пройдено»')
+      const offenders: string[] = []
+      for (const rel of htmlFiles) {
+        const html = readPage(rel)
+        if (!html) continue
+        if (html.includes('href="/inspector/"') || html.includes('href="/inspector"')) offenders.push(rel)
+      }
+      if (offenders.length) {
+        detail.push(`внутренних ссылок на /inspector/ осталось на ${offenders.length} страницах: ${preview(offenders)}`)
+      }
+
+      const redirects = readPage('_redirects')
+      if (!redirects || !redirects.includes('/inspector/ /un/ 301')) {
+        detail.push('в dist/_redirects нет правила `/inspector/ /un/ 301`')
+      }
+      return {
+        id: 'un-inspector-retired',
+        group: 'UN',
+        ok: detail.length === 0,
+        headline: detail.length === 0
+          ? `страницы нет, 301 на месте, ${htmlFiles.length} страниц dist без единой ссылки на /inspector/`
+          : `нарушений: ${detail.length}`,
+        detail,
+      }
+    },
+  },
+
+  {
+    // ⚠⚠ Проверка ДАННЫХ, а не разметки, и стоит она здесь не случайно.
+    // При импорте Таблицы A колонка (5) у 12 строк (UN 3537-3548) содержала не
+    // код знака, а перекрёстную ссылку «See 5.2.2.1.12», разорванную в PDF на
+    // три строки. Парсер разрезал её по пробелам и положил в массив три
+    // «кода»: {See, 5.2.2.1., 12}. Ни одна проверка этого не видела, потому что
+    // ни один из тех номеров не попал в 389 страниц — мусор просто лежал в базе
+    // и ждал, когда кто-нибудь возьмёт label_codes для нового экрана.
+    //
+    // Словарь закрытый НАРОЧНО: новое издание ADR должно уронить эту проверку,
+    // чтобы человек посмотрел глазами, а не чтобы неизвестный код тихо доехал
+    // до страницы. `None`, `7X`, `7E`, `9A` — настоящие значения Таблицы A,
+    // сверены построчно по ECE/TRANS/352 Vol. I.
+    id: 'un-label-vocabulary',
+    group: 'UN',
+    title: 'Коды знаков в Таблице A — из известного словаря, без мусора разбора',
+    run: async () => {
+      // ⚠⚠ СПИСОК СВЕРЕН ЗАПРОСОМ В ОБЕ СТОРОНЫ, А НЕ ГЛАЗАМИ.
+      // Первая версия была выписана руками и потеряла код `8` — коррозионное
+      // вещество, ТРЕТИЙ по частоте, 586 строк. Проверка честно покраснела на
+      // первом же прогоне. Урок ровно тот же, что с номерами Кемлера: полноту
+      // словаря подтверждает запрос, а не внимательность.
+      //   select distinct unnest(label_codes) from dg_substances  →  22 значения
+      //   разность с этим списком в обе стороны                   →  пусто
+      const KNOWN = new Set([
+        '1', '1.4', '1.5', '1.6',
+        '2.1', '2.2', '2.3',
+        '3', '4.1', '4.2', '4.3',
+        '5.1', '5.2', '6.1', '6.2',
+        '7X', '7E', '8', '9', '9A',
+        'None',              // напечатано словом у UN 2211 и UN 3314
+        'See 5.2.2.1.12',    // перекрёстная ссылка у UN 3537-3548, хранится целиком
+      ])
+      const rows = await selectAll<{ un_number: string; label_codes: string[] | null }>(
+        'dg_substances',
+        'un_number, label_codes',
+      )
+      assertNonEmpty('un-label-vocabulary', 'dg_substances', rows)
+      const bad = new Map<string, string[]>()
+      let values = 0
+      for (const r of rows) {
+        for (const c of r.label_codes ?? []) {
+          values++
+          if (!KNOWN.has(c)) {
+            const list = bad.get(c) ?? []
+            if (list.length < 6) list.push(r.un_number)
+            bad.set(c, list)
+          }
+        }
+      }
+      const detail = [...bad.entries()].map(
+        ([code, uns]) => `неизвестный код знака ${JSON.stringify(code)} — UN ${uns.join(', ')}${uns.length >= 6 ? ' …' : ''}`,
+      )
+      // ⚠ Обратная сторона: код есть в словаре, но пропал из базы. Это не
+      // обязательно дефект (новое издание могло убрать знак), но молчать нельзя:
+      // чаще это значит, что импорт что-то потерял.
+      const seen = new Set(rows.flatMap((r) => r.label_codes ?? []))
+      const vanished = [...KNOWN].filter((c) => !seen.has(c)).sort()
+      if (vanished.length) {
+        detail.push(`в словаре есть, а в базе больше нет: ${preview(vanished)} — проверить импорт Таблицы A`)
+      }
+      return {
+        id: 'un-label-vocabulary',
+        group: 'UN',
+        ok: detail.length === 0,
+        headline: detail.length === 0
+          ? `${values} значений label_codes, все из словаря (${KNOWN.size} кодов)`
+          : `неизвестных кодов: ${bad.size}`,
+        detail,
+      }
+    },
+  },
+
+  {
+    id: 'un-sitemap',
+    group: 'UN',
+    title: 'sitemap объявляет ровно те /un/, что собраны',
+    run: async () => {
+      const xml = readPage('sitemap.xml')
+      if (!xml) {
+        return { id: 'un-sitemap', group: 'UN', ok: false, headline: 'нет dist/sitemap.xml', detail: [] }
+      }
+      const declared = new Set(
+        [...xml.matchAll(/<loc>https:\/\/ghspictograms\.com\/un\/([^<\/]*)\/?<\/loc>/g)].map((m) => m[1]),
+      )
+      const hubDeclared = declared.delete('')
+      const actual = new Set(pageSlugs('un'))
+      const { missing, extra } = diffSets(actual, declared)
+      const detail: string[] = []
+      if (!hubDeclared) detail.push('хаб /un/ не объявлен в sitemap')
+      if (missing.length) detail.push(`объявлены в sitemap, но не собраны (${missing.length}): ${preview(missing)}`)
+      if (extra.length) detail.push(`собраны, но не объявлены в sitemap (${extra.length}): ${preview(extra)}`)
+      if (xml.includes('/inspector/')) detail.push('в sitemap остался /inspector/ — он отдаёт 301')
+      return {
+        id: 'un-sitemap',
+        group: 'UN',
+        ok: detail.length === 0,
+        headline: `${actual.size} страниц в dist, ${declared.size} адресов /un/ в sitemap`,
+        detail,
       }
     },
   },

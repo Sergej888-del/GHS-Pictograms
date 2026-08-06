@@ -30,7 +30,8 @@
 //   §15 regulatory-> Step-4 import (substance_regulatory_status: SVHC, Seveso, TSCA/DSL, precursor flags)
 //   EUH codes     -> ✅ imported session 10 (euh_codes on 148 substances, in-force ATP-state;
 //                    ECHA ATP23 export with 2027 changes excluded — see euh_import_v1.sql)
-//   §14 tunnel/LQ -> tunnel-letter + LQ import (dg tunnel_code holds the KEMLER number, not the letter)
+//   §14 tunnel/LQ -> tunnel-letter + LQ import (column 15 is NOT imported; dg_substances.hazard_id_number
+//                    is the Kemler/HIN number of column 20 — renamed from the misleading `tunnel_code`)
 import Layout from '../../../layouts/Layout.astro'
 import SdsManagerCard from '../../../components/SdsManagerCard.astro'
 import SharePage from '../../../components/SharePage.astro'
@@ -107,6 +108,19 @@ export async function getStaticPaths() {
   )
   const structMap: Record<string, any> = {}
   for (const s of structures ?? []) structMap[s.slug] = s
+
+  // ⚠⚠ Номера, у которых есть своя страница /un/<номер>/. Ссылку в §14 ставим
+  // ТОЛЬКО по этому списку, а не на каждый номер: раздел покрывает 389 номеров
+  // из 2 347, и ссылка на непостроенную страницу — это 404 в своей же разметке.
+  // Сегодня все 80 номеров с SDS-страниц в список входят, но реестр sds_pages
+  // растёт, и первое же вещество без связи «CAS ↔ UN» дало бы битую ссылку.
+  // ⚠ Один запрос на всю сборку, а НЕ по разу на каждую из 109 страниц:
+  // залп одновременных обращений валит пулер Supabase (см. mapLimit).
+  const unPages = must(
+    'un_page_index (ссылки §14)',
+    await supabase.from('un_page_index').select('un_number'),
+  )
+  const unWithPage: string[] = (unPages ?? []).map((r: any) => r.un_number)
 
   // ⚠ 6, а не Promise.all по всем 109: страница делает ~7 запросов, и залп
   // из ~700 одновременных обращений валит пулер Supabase таймаутами.
@@ -194,8 +208,9 @@ export async function getStaticPaths() {
             pRows = (p ?? []).sort((a, b) => a.code.localeCompare(b.code))
           }
 
-          // §14: full ADR row incl. Kemler (dg_substances.tunnel_code holds the
-          // Kemler/HIN number — 33/80/X886 — NOT the ADR tunnel letter).
+          // §14: full ADR row incl. Kemler (dg_substances.hazard_id_number holds
+          // the Kemler/HIN number — 33/80/X886 — NOT the ADR tunnel letter; the
+          // column was called `tunnel_code` until the rename migration).
           // Requires the anon read policy from supabase/rls_dg_read_v1.sql;
           // until it is applied this returns [] and we fall back to verdict.adr
           // (same cards, no Kemler plate) — the build never breaks either way.
@@ -215,7 +230,7 @@ export async function getStaticPaths() {
               `dg_substances for ${page.slug}`,
               await supabase
                 .from('dg_substances')
-                .select('un_number, proper_shipping_name, transport_class, classification_code, packing_group, label_codes, transport_category, tunnel_code, adr_version')
+                .select('un_number, proper_shipping_name, transport_class, classification_code, packing_group, label_codes, transport_category, hazard_id_number, adr_version')
                 .in('un_number', uns),
             )
             dgRows = (dg ?? []).sort((a: any, b: any) => a.un_number.localeCompare(b.un_number))
@@ -235,13 +250,16 @@ export async function getStaticPaths() {
       }
       return {
         params: { slug: page.slug },
-        props: { page, substance, verdict, pictos, hRows, euhRows, pRows, similar, dgRows, liveMap, response, structure },
+        props: { page, substance, verdict, pictos, hRows, euhRows, pRows, similar, dgRows, liveMap, response, structure, unWithPage },
       }
   })
 }
 
-const { page, substance, verdict, pictos, hRows, euhRows, pRows, similar, dgRows, liveMap, response, structure } =
+const { page, substance, verdict, pictos, hRows, euhRows, pRows, similar, dgRows, liveMap, response, structure, unWithPage } =
   Astro.props as any
+
+/** Номера с собственной страницей раздела /un/ — для ссылки в §14. */
+const unPageSet = new Set<string>((unWithPage ?? []) as string[])
 
 // --- CLP hazard class + category labels (fixed CLP assignments, not curation) ---
 const CLP_CLASS: Record<string, string> = {
@@ -336,7 +354,7 @@ const transportRaw =
         code: d.classification_code,
         cat: d.transport_category,
         labels: d.label_codes ?? [],
-        kemler: d.tunnel_code,
+        kemler: d.hazard_id_number,
         ver: d.adr_version,
       }))
     : adr.map((a: any) => ({
@@ -1674,7 +1692,13 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
                     <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                       <div class="rounded-[10px] border border-gray-200 bg-white px-3.5 py-3">
                         <p class={cardLabelCls} style={mono}>UN number</p>
-                        <p class="mt-1 text-[15px] font-semibold text-gray-900" style={mono}>UN {t.un}</p>
+                        {/* ⚠ Ссылка только там, где страница номера построена —
+                            см. unPageSet. Без проверки это была бы ссылка в 404. */}
+                        <p class="mt-1 text-[15px] font-semibold text-gray-900" style={mono}>
+                          {unPageSet.has(String(t.un))
+                            ? <a href={`/un/${t.un}/`} class="text-[#062A78] hover:underline">UN {t.un}</a>
+                            : <>UN {t.un}</>}
+                        </p>
                       </div>
                       {/* Наименование карточкой — только когда под номером ОДНА
                           запись. Когда их несколько, они уходят в список ниже:
@@ -1709,8 +1733,9 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
                         </div>
                       )}
                       {/* Tunnel-restriction letter + Limited Quantity cards join
-                          this grid at their import — tunnel_code in the DB is the
-                          KEMLER number (rendered on the plate), not the letter. */}
+                          this grid at their import. What the DB holds is
+                          `hazard_id_number` — the Kemler number of column 20,
+                          rendered on the plate — not the tunnel letter of column 15. */}
                     </div>
 
                     {/* ⚠ Примечание из колонки группы упаковки — «CARRIAGE PROHIBITED»

@@ -1,0 +1,74 @@
+---
+/**
+ * Оранжевая табличка ADR — SVG, рисуется из данных.
+ *
+ * Верхняя половина — идентификационный номер опасности (номер Кемлера),
+ * нижняя — номер ООН. Пропорции по ADR 5.3.2.2.1: 400 × 300 мм, чёрная рамка и
+ * разделительная линия 15 мм, цифры высотой 100 мм.
+ *
+ * ⚠ Табличка БЕЗ номера опасности не существует: у 714 строк Таблицы A колонка
+ * (20) пуста, и для них нижняя половина рисуется одна, как это и делается на
+ * практике для грузов, которым номер опасности не назначен. Придумывать номер
+ * нельзя — компонент просто рисует то, что есть.
+ *
+ * ⚠ Это же изображение — мост на ghslabels.com: табличка физический товар.
+ */
+interface Props {
+  /** Номер опасности (Кемлер). null — рисуем табличку только с номером ООН. */
+  hazardId?: string | null
+  /** Номер ООН без префикса. */
+  unNumber: string
+  /** Ширина в пикселях. */
+  width?: number
+  /** Подпись для скринридера; по умолчанию собирается из значений. */
+  label?: string
+}
+
+const { hazardId = null, unNumber, width = 260, label } = Astro.props
+
+const height = Math.round((width * 300) / 400)
+const alt =
+  label ??
+  (hazardId
+    ? `ADR orange-coloured plate: hazard identification number ${hazardId} above UN ${unNumber}`
+    : `ADR orange-coloured plate: UN ${unNumber}`)
+---
+
+<svg
+  role="img"
+  aria-label={alt}
+  viewBox="0 0 400 300"
+  width={width}
+  height={height}
+  xmlns="http://www.w3.org/2000/svg"
+  style="display:block;max-width:100%;height:auto;"
+>
+  <title>{alt}</title>
+  <rect x="0" y="0" width="400" height="300" rx="16" fill="#111827" />
+  <rect x="15" y="15" width="370" height="270" rx="6" fill="#F5A623" />
+  {hazardId && <rect x="15" y="142.5" width="370" height="15" fill="#111827" />}
+
+  {hazardId && (
+    <text
+      x="200"
+      y="115"
+      text-anchor="middle"
+      font-family="'Space Grotesk', 'Inter', system-ui, sans-serif"
+      font-size="96"
+      font-weight="700"
+      letter-spacing="4"
+      fill="#111827"
+    >{hazardId}</text>
+  )}
+
+  <text
+    x="200"
+    y={hazardId ? 258 : 195}
+    text-anchor="middle"
+    font-family="'Space Grotesk', 'Inter', system-ui, sans-serif"
+    font-size="96"
+    font-weight="700"
+    letter-spacing="4"
+    fill="#111827"
+  >{unNumber}</text>
+</svg>

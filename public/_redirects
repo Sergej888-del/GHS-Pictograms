@@ -15,6 +15,17 @@
 #       уходил 301 на ghssymbols.com/hazards/ghsNN.svg — картинка была битой на проде.
 #       Файлы вынуты из .gitignore и лежат в репозитории.
 
+# --- Inspector -> UN number reference (session 39) ---
+# `/inspector/` был «GHS vs ADR/DOT Inspector»: поле поиска по имени вещества
+# поверх данных, у которых `dg_substances.cas_number` пуст во всех 2 939 строках.
+# Он честно не мог ответить на девять запросов из десяти, и весь его кластер
+# запросов Semrush показал мёртвым (`ghs vs adr`, `adr vs clp` — без данных).
+# Раздел развёрнут в pSEO: 389 страниц номеров + справочник на 2 347.
+# ⚠ Правило 301 работает только потому, что сама страница УДАЛЕНА из src/pages:
+# у Cloudflare Pages статический файл сильнее строки в _redirects.
+/inspector /un/ 301
+/inspector/ /un/ 301
+
 # --- H-statements: safety net for traffic arriving from ghssymbols.com ---
 # The nine CLP Annex VI suffix codes are mapped on the ghssymbols side already; these
 # rules only catch whatever slips through its wildcard and would land on a 404 here.

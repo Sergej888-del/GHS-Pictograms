@@ -28,7 +28,6 @@ const STATIC_PAGES = [
   // `how many hazard classes are there` 1000 при KD 26. Раздаёт вес на 225 страниц H/P-кодов.
   { url: '/hazard-classes/', changefreq: 'weekly', priority: '0.9' },
   { url: '/substances/', changefreq: 'weekly', priority: '0.8' },
-  { url: '/inspector/', changefreq: 'monthly', priority: '0.8' },
   { url: '/faq/', changefreq: 'monthly', priority: '0.7' },
   { url: '/blog/', changefreq: 'weekly', priority: '0.8' },
   { url: '/tools/', changefreq: 'weekly', priority: '0.85' },
@@ -169,6 +168,36 @@ async function fetchHStatementSitemapEntries(): Promise<
 }
 
 /**
+ * Номера ООН: хаб + по странице на каждый номер из `un_page_index`.
+ *
+ * ⚠⚠ ОТБОР ОБЯЗАН СОВПАДАТЬ СО СТРАНИЦЕЙ. getStaticPaths в
+ * src/pages/un/[number].astro строит пути ровно из этого представления, и второй
+ * критерий здесь означал бы sitemap, зовущий краулера в 404. Представление само
+ * решает, у какого номера есть страница: номер попадает в него, если связан
+ * хотя бы с одним нашим веществом. Сверка в обе стороны — в check:dist.
+ *
+ * ⚠ Пагинация не нужна: строк 389, предел PostgREST — 1000. Если раздел
+ * когда-нибудь перевалит за тысячу, здесь появится тот же цикл, что у веществ,
+ * и check:dist поймает расхождение раньше, чем это заметит Google.
+ */
+async function fetchUnSitemapEntries(): Promise<
+  { url: string; changefreq: string; priority: string }[]
+> {
+  const res = await supabase.from('un_page_index').select('un_number').order('un_number');
+  // ⚠ Падать громко на ошибке, деградировать тихо на пустоте (session 31).
+  if (res.error) throw new Error(`sitemap: un_page_index — ${res.error.message}`);
+  const rows = res.data ?? [];
+  return [
+    { url: '/un/', changefreq: 'weekly', priority: '0.9' },
+    ...rows.map((r: { un_number: string }) => ({
+      url: `/un/${r.un_number}/`,
+      changefreq: 'monthly',
+      priority: '0.7',
+    })),
+  ];
+}
+
+/**
  * Справочник веществ: по странице на каждое вещество с пригодным CAS.
  *
  * ⚠ Хаб /substances/ сюда НЕ входит — он уже стоит в STATIC_PAGES,
@@ -247,6 +276,7 @@ export const GET: APIRoute = async () => {
     sdsSectionPages,
     pStatementPages,
     hStatementPages,
+    unPages,
     substancePages,
   ] = await Promise.all([
     fetchBlogSitemapEntries(),
@@ -255,6 +285,7 @@ export const GET: APIRoute = async () => {
     fetchSdsSectionSitemapEntries(),
     fetchPStatementSitemapEntries(),
     fetchHStatementSitemapEntries(),
+    fetchUnSitemapEntries(),
     fetchSubstanceSitemapEntries(),
   ]);
 
@@ -267,6 +298,7 @@ export const GET: APIRoute = async () => {
     ...sdsSectionPages,
     ...pStatementPages,
     ...hStatementPages,
+    ...unPages,
     ...substancePages,
     ...compliancePages,
     ...blogPages,
