@@ -2686,3 +2686,185 @@ a.sub-alpha-item:hover { border-color: var(--teal-200); background: var(--teal-5
   .sub-pict img { width: 64px; height: 64px; }
   .sub-props .c-code { font-size: 11px; }
 }
+
+/* ── Оглавление страницы вещества (session 41, просьба Сергея) ─────────────
+     Липкая полоска под шапкой сайта. Страница вещества — до тринадцати секций,
+     и на телефоне «storage and handling» лежит на девятом экране.
+
+     ⚠⚠ ЧИСЛО 64px ЗДЕСЬ НЕ СЛУЧАЙНО И НЕ СВОЁ. Это высота .sh-row из
+     SiteHeader.astro: шапка сама `position: sticky; top: 0; z-index: 50`, и она
+     одинаковая на всех ширинах (медиазапрос на 1059px меняет только CTA, не
+     высоту строки). Полоска встаёт РОВНО под неё. Поменяется высота шапки —
+     менять и здесь, иначе появится либо щель, либо наезд.
+
+     ⚠ z-index: 40 — строго меньше 50 у шапки. Выпадающие панели меню обязаны
+     проходить ПОВЕРХ оглавления, иначе они окажутся под ним обрезанными.
+
+     ⚠ Правила ниже намеренно привязаны к `.sub-toc ~ section`, а не к голому
+     `section[id]`: отступ под липкую полоску нужен ТОЛЬКО там, где эта полоска
+     есть. Глобальный scroll-margin-top увёл бы якоря на всех остальных
+     страницах сайта, где никакой второй липкой полосы нет. — */
+.sub-toc {
+  position: sticky;
+  top: 64px;
+  z-index: 40;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.sub-toc-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.sub-toc-label {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+/* ⚠ Горизонтальная прокрутка вместо переноса: на телефоне тринадцать пунктов
+   в три строки съедают треть экрана, ради которого оглавление и делалось.
+   `scrollbar-width: none` прячет полосу — сама прокрутка остаётся. */
+.sub-toc-list {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.sub-toc-list::-webkit-scrollbar { display: none; }
+.sub-toc-list li { flex: none; }
+.sub-toc-list a {
+  display: block;
+  padding: 12px 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ink-2);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+.sub-toc-list a:hover {
+  color: var(--teal-700);
+  border-bottom-color: var(--teal-500);
+}
+/* ⚠ Тонкая полоса слева у секции, на которую читатель только что перешёл.
+   Отметить активный ПУНКТ оглавления одним CSS нельзя: селектора «ссылка, чей
+   якорь сейчас :target» не существует, а вешать ради подсветки скрипт на 3 650
+   страниц — цена выше пользы. Полоса на самой секции отвечает на тот же вопрос
+   «куда меня перенесло» и не стоит ни байта JavaScript. */
+.sub-toc ~ section[id]:target { box-shadow: inset 3px 0 0 var(--teal-500); }
+
+/* Отступ под две липкие полосы: 64 (шапка) + 44 (оглавление) + воздух. */
+.sub-toc ~ section[id] { scroll-margin-top: 120px; }
+.sub-toc ~ section [id] { scroll-margin-top: 120px; }
+
+/* ⚠ Плавность включаем ТОЛЬКО на страницах с оглавлением (`:has`) и ТОЛЬКО
+   если система не просила уменьшить движение. Глобальный smooth поменял бы
+   поведение якорей во всех инструментах сайта разом. */
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.sub-toc) { scroll-behavior: smooth; }
+}
+
+@media (max-width: 640px) {
+  .sub-toc-label { display: none; }
+  .sub-toc-list a { padding: 11px 9px; font-size: 13px; }
+  .sub-toc ~ section[id] { scroll-margin-top: 112px; }
+  .sub-toc ~ section [id] { scroll-margin-top: 112px; }
+}
+
+/* ── Транспортный блок на странице вещества (session 41) ───────────────────
+     Выдержка из Таблицы A ADR и из §172.101, две отдельные панели.
+
+     ⚠⚠ ДВЕ ПАНЕЛИ РАЗДЕЛЕНЫ ВИЗУАЛЬНО НЕ РАДИ КРАСОТЫ. Один номер ООН в Европе
+     и в США метится РАЗНЫМИ знаками, и значения «Class 3, PG II» без имени
+     юрисдикции над ними равны дезинформации. Подпись .sub-un-jur — обязательная
+     часть данных, а не заголовок оформления: убрать её нельзя.
+
+     ⚠ Префикс .sub- — справочник веществ; проверено, что имена .sub-un*
+     в hub.css свободны. — */
+.sub-un {
+  margin-top: 30px;
+  padding-top: 26px;
+  border-top: 1px solid var(--line-b);
+}
+.sub-un:first-of-type { margin-top: 22px; padding-top: 0; border-top: none; }
+.sub-un-panel { margin-top: 16px; }
+.sub-un-jur {
+  margin: 0 0 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teal-700);
+}
+.sub-un-jur.navy { color: var(--navy); }
+/* Имя груза — самая длинная ячейка; отдаём ей всё, что осталось. */
+.sub-un-table .c-txt { min-width: 220px; }
+/* ⚠ Код знака под картинкой — это ЗНАЧЕНИЕ колонки (5)/(6), а не подпись к
+   картинке: у 49 CFR там встречается «Empty» и «None», для которых картинки
+   нет и не будет. Оформляем моноширинным, чтобы одинокая «3» под ромбом не
+   читалась как случайное число в вёрстке. */
+.sub-un-table .un-labels .c-code {
+  display: block;
+  margin-top: 7px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  color: var(--ink-2);
+}
+.sub-un-absent {
+  margin-top: 16px;
+  padding: 10px 14px;
+  background: #fff;
+  border: 1px dashed var(--line-2);
+  border-radius: 8px;
+}
+.sub-un-more { margin: 16px 0 0; }
+.sub-un-more a {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--teal-700);
+  text-decoration: none;
+}
+.sub-un-more a:hover { text-decoration: underline; }
+
+/* ⚠⚠ ПОДПИСИ КОЛОНОК НА ТЕЛЕФОНЕ. hub.css ниже 640px превращает .hub-table в
+   стопку блоков и ПРЯЧЕТ thead целиком (правило на строке 1556). Без подписей
+   транспортная строка на телефоне читается как «3 · F1 · II» — три значения без
+   единого слова о том, что это класс, классификационный код и группа упаковки.
+   Тот же приём уже применён к .pict-adr выше в этом файле. */
+@media (max-width: 640px) {
+  /* ⚠⚠ `width: auto` ОБЯЗАТЕЛЕН, и вот почему. Мобильное правило hub.css
+     (строка 1557) раскладывает `.hub-table td` в блоки с `width: auto`, но
+     специфичность у него ниже, чем у `.hub-table .c-code { width: 1% }`
+     строкой выше (0,1,1 против 0,2,0). Ячейка остаётся шириной в один процент,
+     и «Class · 3» ломается на три строки — «Class», «·», «3». Поймано
+     скриншотом на 390 px; в разметке этого не видно вообще. */
+  .sub-un-table .un-class,
+  .sub-un-table .un-cc,
+  .sub-un-table .un-pg { width: auto; white-space: normal; }
+  .sub-un-table .un-class::before { content: 'Class · '; color: var(--ink-3); }
+  .sub-un-table .un-cc::before { content: 'Classification code · '; color: var(--ink-3); }
+  .sub-un-table .un-pg::before { content: 'Packing group · '; color: var(--ink-3); }
+  .sub-un-table .un-labels::before {
+    content: 'Labels';
+    display: block;
+    margin: 8px 0 4px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-3);
+  }
+  .sub-un-table .c-txt { min-width: 0; }
+}

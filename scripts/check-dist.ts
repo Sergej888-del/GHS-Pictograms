@@ -44,6 +44,12 @@ import { hSlug } from '../src/lib/hStatementSlug'
 // которая разойдётся молча (так уже вышло у pictogramCasPaths.ts).
 import { substanceNameFull, NAME_COLUMNS } from '../src/lib/substanceName'
 import { substanceSlug, casFromSlug } from '../src/lib/substanceSlug'
+// ⚠⚠ Раскладка «код знака → файл» берётся ИЗ ТОГО ЖЕ модуля, что и страница.
+// Списать сюда список кодов — значит завести вторую копию словаря, которая
+// разойдётся молча. Ровно на этом уже спотыкались: список «19 знаков» из
+// передачи сессии 39 был выписан руками и потерял код 8 — 1 218 строк, третий
+// по частоте во всей базе (claude/adr-placard-set-session40.md).
+import { adrLabels, dotLabels } from '../src/lib/transportLabels'
 // ⚠ Те же обёртки, что стоят на сборке: проверка обязана падать на отказе запроса,
 // а не считать пустой ответ фактом о данных. И тот же ограничитель параллелизма —
 // иначе сотня одновременных RPC утопит пулер, и проверка начнёт врать (session 32).
@@ -4299,6 +4305,311 @@ const CHECKS: Check[] = [
         ok: detail.length === 0,
         headline: `${actual.size} страниц в dist, ${declared.size} адресов /un/ в sitemap`,
         detail,
+      }
+    },
+  },
+
+  {
+    id: 'un-transport-labels',
+    group: 'UN',
+    title: 'Каждому коду знака из базы отвечает файл в dist и <img> на странице',
+    run: async () => {
+      // ⚠⚠ СЛОВАРЬ КОДОВ — ЗАПРОСОМ, А НЕ СПИСКОМ В КОДЕ. Это прямое требование
+      // из claude/adr-placard-set-session40.md: список «19 знаков», выписанный
+      // руками в передаче сессии 39, потерял код 8 (1 218 строк). Здесь коды
+      // берутся из dg_substances / dot_substances, а раскладка «код → файл» —
+      // из того же transportLabels.ts, по которому рисует страница.
+      //
+      // ⚠⚠ ПРОВЕРЯЕТСЯ ДВОЕ, И ВТОРОЕ ВАЖНЕЕ. Мало того, что файл лежит в dist:
+      // <img> обязан оказаться НА СТРАНИЦЕ. Знак, который есть на диске и не
+      // попал в разметку, — это ровно тот отказ, который сборка не заметит.
+      const slugs = pageSlugs('un')
+      if (slugs.length === 0) {
+        return {
+          id: 'un-transport-labels', group: 'UN', ok: false,
+          headline: 'в dist/un/ ноль страниц номеров',
+          detail: ['Раздел не собран — зелёный ответ здесь был бы тихим провалом. Собрать и повторить.'],
+        }
+      }
+
+      const adr = await selectAll<{ un_number: string; classification_code: string | null; label_codes: string[] | null }>(
+        'dg_substances', 'un_number, classification_code, label_codes',
+      )
+      const dot = await selectAll<{ un_number: string; label_codes: string[] | null }>(
+        'dot_substances', 'un_number, label_codes',
+      )
+      assertNonEmpty('un-transport-labels', 'dg_substances', adr)
+      assertNonEmpty('un-transport-labels', 'dot_substances', dot)
+
+      /** un → множество путей к файлам знаков, которые страница ОБЯЗАНА показать. */
+      const expected = new Map<string, Set<string>>()
+      const add = (un: string, src: string) => {
+        const set = expected.get(un) ?? new Set<string>()
+        set.add(src)
+        expected.set(un, set)
+      }
+      for (const r of adr) {
+        for (const c of r.label_codes ?? []) {
+          for (const l of adrLabels(c, r.classification_code)) add(r.un_number, l.src)
+        }
+      }
+      for (const r of dot) {
+        for (const c of r.label_codes ?? []) {
+          for (const l of dotLabels(c)) add(r.un_number, l.src)
+        }
+      }
+
+      // 1. Файл на диске — но СПРАШИВАЕМ ТОЛЬКО ПРО СОБРАННЫЕ СТРАНИЦЫ.
+      //
+      // ⚠⚠ ЗАМЕР session 41. В базе 11 кодов 49 CFR разрешаются в файлы,
+      // которых в комплекте нет: 1.2J, 1.2K, 1.4B, 1.4C, 1.4D, 1.4E, 1.4F,
+      // 1.4G, 1.4S, 1.5D, 1.6N — вместе 114 строк §172.101. Ни один из них
+      // сегодня не попадает на 389 собираемых номеров (проверено запросом с
+      // join на un_page_index — пусто), поэтому ломаных картинок в проде нет.
+      // Но дефект отложенный: расширится отбор номеров — и 114 строк начнут
+      // рисовать битые <img>. Он печатается ниже отдельной строкой, а красным
+      // проверка становится только там, где страница РЕАЛЬНО собрана.
+      const built = new Set(slugs)
+      const shipped = [...new Set(
+        [...expected.entries()].filter(([un]) => built.has(un)).flatMap(([, s]) => [...s]),
+      )].sort()
+      const noFile = shipped.filter((src) => !existsSync(join(DIST, src.replace(/^\//, ''))))
+
+      const latent = [...new Set(
+        [...expected.entries()].filter(([un]) => !built.has(un)).flatMap(([, s]) => [...s]),
+      )].filter((src) => !existsSync(join(DIST, src.replace(/^\//, '')))).sort()
+
+      // 2. <img> на странице — и ничего лишнего сверх ожидаемого.
+      const PREFIX = 'src="/pictograms/transport/'
+      assertAscii('un-transport-labels', [PREFIX])
+      const missingOnPage: string[] = []
+      const strayOnPage: string[] = []
+      let pagesWithLabels = 0
+      let imgTotal = 0
+      for (const un of slugs) {
+        const html = readPage(join('un', un, 'index.html'))
+        if (html === null) continue
+        const want = expected.get(un) ?? new Set<string>()
+        const got = new Set(
+          [...html.matchAll(/src="(\/pictograms\/transport\/[^"]+)"/g)].map((m) => m[1]),
+        )
+        imgTotal += got.size
+        if (got.size) pagesWithLabels++
+        for (const src of want) if (!got.has(src)) missingOnPage.push(`UN ${un} → ${src}`)
+        for (const src of got) if (!want.has(src)) strayOnPage.push(`UN ${un} → ${src}`)
+      }
+
+      const detail: string[] = []
+      if (noFile.length) {
+        detail.push(
+          `код из базы разрешается в файл, которого нет в dist (${noFile.length}): ${preview(noFile)}. ` +
+            'Файл не доехал до public/pictograms/transport/ или переименован.',
+        )
+      }
+      if (missingOnPage.length) {
+        detail.push(
+          `знак ожидается, а <img> на странице нет (${missingOnPage.length}): ${preview(missingOnPage)}. ` +
+            'Это тихий отказ: сборка такого не замечает.',
+        )
+      }
+      if (strayOnPage.length) {
+        detail.push(`на странице знак, которого база не требует (${strayOnPage.length}): ${preview(strayOnPage)}`)
+      }
+      return {
+        id: 'un-transport-labels',
+        group: 'UN',
+        ok: detail.length === 0,
+        headline: detail.length === 0
+          ? `${imgTotal} знаков на ${pagesWithLabels} страницах, ${shipped.length} разных файлов — все на месте`
+          : `расхождений: ${detail.length}`,
+        detail: detail.length === 0
+          ? [
+              'словарь кодов снят запросом к dg_substances / dot_substances, не списком в коде',
+              '⚠ коды без картинки (Empty §172.450, See 5.2.2.1.12, None) знака не дают намеренно — они печатаются текстом',
+              ...(latent.length
+                ? [
+                    `⚠⚠ ОТЛОЖЕННЫЙ ДЕФЕКТ: ${latent.length} файлов нет в комплекте, и они нужны кодам, которых ` +
+                      `сегодня нет ни на одной собранной странице: ${preview(latent)}. ` +
+                      'Расширится отбор номеров ООН — это станет ломаными картинками. Дорисовать комплект.',
+                  ]
+                : []),
+            ]
+          : detail,
+      }
+    },
+  },
+
+  {
+    id: 'subs-transport',
+    group: 'subs',
+    title: 'Транспортный блок стоит ровно на веществах со связью CAS → номер ООН',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('subs-transport', slugs)
+      if (miss) return miss
+
+      // ⚠⚠ ОЖИДАНИЕ СТРОИТСЯ ИЗ БАЗЫ, А НЕ ИЗ РАЗМЕТКИ. Связь живёт ТОЛЬКО в
+      // substance_un_link: колонка substances.un_number пуста вся, и
+      // dg_substances.cas_number тоже пуста вся — проверено запросом. Если
+      // мост когда-нибудь заменят другим источником, эта проверка покраснеет
+      // раньше, чем расхождение увидит читатель.
+      const links = await selectAll<{ cas_number: string; un_number: string }>(
+        'substance_un_link', 'cas_number, un_number',
+      )
+      assertNonEmpty('subs-transport', 'substance_un_link', links)
+      const adrUn = new Set((await selectAll<{ un_number: string }>('dg_substances', 'un_number')).map((r) => r.un_number))
+      const dotUn = new Set((await selectAll<{ un_number: string }>('dot_substances', 'un_number')).map((r) => r.un_number))
+
+      // ⚠ Номер без строк в обеих таблицах показывать нечем — страница его и не
+      // рисует (см. buildUnEntriesByCas). Ожидание обязано повторять то же
+      // правило, иначе проверка начнёт требовать пустой заголовок.
+      const wantByCas = new Map<string, Set<string>>()
+      for (const l of links) {
+        if (!adrUn.has(l.un_number) && !dotUn.has(l.un_number)) continue
+        const set = wantByCas.get(l.cas_number) ?? new Set<string>()
+        set.add(l.un_number)
+        wantByCas.set(l.cas_number, set)
+      }
+
+      const BLOCK = 'id="transport"'
+      const MORE = 'sub-un-more'
+      assertAscii('subs-transport', [BLOCK, MORE])
+
+      const shouldHave: string[] = []
+      const shouldNot: string[] = []
+      const linkMismatch: string[] = []
+      const deadLink: string[] = []
+      let shown = 0
+      let linkTotal = 0
+      for (const slug of slugs!) {
+        const html = readPage(join('substances', slug, 'index.html'))
+        if (html === null) continue
+        const cas = casFromSlug(slug)
+        if (!cas) continue
+        const want = wantByCas.get(cas) ?? new Set<string>()
+        const has = html.includes(BLOCK)
+        if (has) shown++
+        if (want.size && !has) { shouldHave.push(`${slug} (ждали UN ${[...want].sort().join(', ')})`); continue }
+        if (!want.size && has) { shouldNot.push(slug); continue }
+        if (!has) continue
+
+        // Ссылки на страницы номеров, вытащенные из САМОЙ страницы.
+        const got = new Set([...html.matchAll(/href="\/un\/([^"\/]+)\/"/g)].map((m) => m[1]))
+        linkTotal += got.size
+        const { missing, extra } = diffSets(got, want)
+        if (missing.length || extra.length) {
+          linkMismatch.push(
+            `${slug}: ${missing.length ? `нет ссылки на UN ${missing.join(', ')}` : ''}` +
+              `${missing.length && extra.length ? '; ' : ''}` +
+              `${extra.length ? `лишняя ссылка на UN ${extra.join(', ')}` : ''}`,
+          )
+        }
+        // ⚠⚠ Ссылка обязана вести в СОБРАННУЮ страницу, а не просто быть
+        // синтаксически верной. Это тот же класс дефекта, что `?cas=` вместо
+        // `?substance=` в калькуляторе: адрес живой, страница пустая, всё
+        // зелёное. Проверяем файлом на диске.
+        for (const un of got) {
+          if (!existsSync(join(DIST, 'un', un, 'index.html'))) deadLink.push(`${slug} → /un/${un}/`)
+        }
+      }
+
+      const detail: string[] = []
+      if (shouldHave.length) detail.push(`связь в базе есть, блока нет (${shouldHave.length}): ${preview(shouldHave)}`)
+      if (shouldNot.length) {
+        detail.push(
+          `блок стоит без связи в базе (${shouldNot.length}): ${preview(shouldNot)}. ` +
+            'Условие секции разошлось с substance_un_link.',
+        )
+      }
+      if (linkMismatch.length) detail.push(`набор ссылок на /un/ не равен базе (${linkMismatch.length}): ${preview(linkMismatch)}`)
+      if (deadLink.length) detail.push(`ссылка ведёт в несобранную страницу (${deadLink.length}): ${preview(deadLink)}`)
+
+      const ok = detail.length === 0
+      return {
+        id: 'subs-transport',
+        group: 'subs',
+        ok,
+        headline: ok
+          ? `${shown} страниц с транспортным блоком, ${linkTotal} ссылок на /un/ — все сошлись с базой`
+          : `расхождений: ${detail.length}`,
+        detail: ok
+          ? [
+              `маркер: ${BLOCK}`,
+              `связей CAS → UN в базе: ${links.length}, из них с данными в Таблице A или §172.101: ${[...wantByCas.values()].reduce((n, s) => n + s.size, 0)}`,
+              `веществ со связью: ${wantByCas.size} (страниц в разделе ${slugs!.length})`,
+            ]
+          : detail,
+      }
+    },
+  },
+
+  {
+    id: 'subs-toc',
+    group: 'subs',
+    title: 'Оглавление страницы вещества совпадает с её секциями в обе стороны',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('subs-toc', slugs)
+      if (miss) return miss
+
+      // ⚠⚠ ЭТО ПРОВЕРКА НА ССЫЛКУ В НИКУДА. Пункт оглавления, ведущий на якорь,
+      // которого на странице нет, не даёт ни ошибки в консоли, ни красноты в
+      // сборке: браузер просто остаётся на месте, и читатель решает, что
+      // сломана страница. Ловится только сверкой множеств.
+      //
+      // ⚠ Секции условные (у 987 веществ нет реактивной группы, у части нет
+      // свойств), поэтому сверять надо КАЖДУЮ страницу со своим набором, а не
+      // с эталонным списком из тринадцати пунктов.
+      const NAV = 'class="sub-toc"'
+      assertAscii('subs-toc', [NAV])
+
+      const noNav: string[] = []
+      const brokenAnchor: string[] = []
+      const orphanSection: string[] = []
+      let itemsTotal = 0
+      for (const slug of slugs!) {
+        const html = readPage(join('substances', slug, 'index.html'))
+        if (html === null) continue
+        if (!html.includes(NAV)) { noNav.push(slug); continue }
+
+        // Оглавление — от <nav class="sub-toc"> до его </nav>.
+        const navStart = html.indexOf('<nav class="sub-toc"')
+        const navEnd = html.indexOf('</nav>', navStart)
+        const nav = navStart >= 0 && navEnd > navStart ? html.slice(navStart, navEnd) : ''
+        const items = [...nav.matchAll(/href="#([^"]+)"/g)].map((m) => m[1])
+        itemsTotal += items.length
+
+        // ⚠ Секции считаем ПОСЛЕ оглавления: у героя id нет, но на будущее.
+        const body = html.slice(navEnd < 0 ? 0 : navEnd)
+        const sections = new Set([...body.matchAll(/<section[^>]*\sid="([^"]+)"/g)].map((m) => m[1]))
+
+        for (const id of items) if (!sections.has(id)) brokenAnchor.push(`${slug} → #${id}`)
+        for (const id of sections) if (!items.includes(id)) orphanSection.push(`${slug} → #${id}`)
+      }
+
+      const detail: string[] = []
+      if (noNav.length) detail.push(`нет оглавления (${noNav.length}): ${preview(noNav)}`)
+      if (brokenAnchor.length) {
+        detail.push(
+          `пункт ведёт на якорь, которого на странице нет (${brokenAnchor.length}): ${preview(brokenAnchor)}. ` +
+            'Условие в массиве toc разошлось с условием у самой секции.',
+        )
+      }
+      if (orphanSection.length) {
+        detail.push(
+          `секция есть, а пункта в оглавлении нет (${orphanSection.length}): ${preview(orphanSection)}. ` +
+            'Новую секцию надо добавлять в toc в том же коммите.',
+        )
+      }
+      const ok = detail.length === 0
+      return {
+        id: 'subs-toc',
+        group: 'subs',
+        ok,
+        headline: ok
+          ? `${slugs!.length} страниц, ${itemsTotal} пунктов оглавления — все якоря на месте`
+          : `расхождений: ${detail.length}`,
+        detail: ok ? [`маркер: ${NAV}`, 'сверка идёт в обе стороны: пункт → секция и секция → пункт'] : detail,
       }
     },
   },

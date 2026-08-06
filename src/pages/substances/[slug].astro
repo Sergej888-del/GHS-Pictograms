@@ -47,6 +47,18 @@ import { splitClpNotation } from '../../lib/clpNotation'
 // проверки группы Affiliate в check:dist проверяют именно её. Ссылка, вписанная
 // руками мимо компонента, — тот самый сценарий отказа, который они ловят.
 import SdsManagerCard from '../../components/SdsManagerCard.astro'
+// ⚠⚠ Транспортный знак ставится ТОЛЬКО этим компонентом. Подложка под ромбом —
+// не украшение: у знаков с белым полем внешнего контура в файле нет вовсе
+// (49 CFR 172.407(b)(2)), и без подложки ромб на белой странице теряет границу.
+// Буква группы совместимости класса 1 тоже рисуется внутри него, по измеренной
+// координате. Прямой <img src="/pictograms/transport/…"> мимо компонента даст
+// знак без границы и без буквы — см. claude/adr-placard-set-session40.md.
+import TransportLabel from '../../components/TransportLabel.astro'
+import { adrLabels, dotLabels } from '../../lib/transportLabels'
+import {
+  ADR_SOURCE, DOT_SOURCE, ADR_CLASS_NAME, dotClassName, unLabel, ADR_STATUS_TEXT,
+} from '../../lib/dangerousGoods'
+import { buildUnEntriesByCas, MULTI_UN_NOTE, type UnEntry } from '../../lib/substanceTransport'
 import lcssValues from '../../data/lcss-values.json'
 import lcssText from '../../data/lcss-text.json'
 
@@ -233,6 +245,71 @@ export async function getStaticPaths() {
       .map((s) => [s.cas_number as string, s.slug])
   )
 
+  // ═══ Транспорт: CAS → номер ООН (session 41) ═══
+  //
+  // ⚠ Постраничная выкачка обязательна: в `dg_substances` 2 939 строк, в
+  // `dot_substances` 3 003, а PostgREST отдаёт максимум 1 000 за раз. Без неё
+  // страница получила бы первую тысячу номеров, а остальные молча остались бы
+  // без транспортного блока — ровно тот сценарий тихого отказа, который
+  // разобран в claude/silent-supabase-failures.md.
+  //
+  // ⚠ Выкачиваем таблицы целиком и раскладываем в JS, а НЕ шлём `.in()` на 389
+  // номеров: фильтр PostgREST уходит в строку запроса URL, и такой список
+  // упирается в предел её длины. Тот же довод записан в un/[number].astro.
+  async function allRows<T>(what: string, build: (from: number, to: number) => any): Promise<T[]> {
+    const out: T[] = []
+    for (let from = 0; ; from += PAGE) {
+      const chunk = must(`${what} (from=${from})`, await build(from, from + PAGE - 1)) as T[] | null
+      if (!chunk?.length) break
+      out.push(...chunk)
+      if (chunk.length < PAGE) break
+    }
+    return out
+  }
+
+  const [unLinks, unPages, adrRowsAll, dotRowsAll] = await Promise.all([
+    allRows<{ cas_number: string; un_number: string; match_type: string }>(
+      'substance_un_link (getStaticPaths)',
+      (a, b) => supabase.from('substance_un_link')
+        .select('cas_number, un_number, match_type').order('un_number').range(a, b)
+    ),
+    allRows<{ un_number: string }>(
+      'un_page_index (getStaticPaths)',
+      (a, b) => supabase.from('un_page_index').select('un_number').order('un_number').range(a, b)
+    ),
+    allRows<{
+      un_number: string; proper_shipping_name: string; transport_class: string | null
+      classification_code: string | null; packing_group: string | null
+      label_codes: string[] | null; adr_status: string | null
+    }>(
+      'dg_substances (getStaticPaths)',
+      // ⚠ Порядок строк ОБЯЗАН совпадать с un/[number].astro: там тот же
+      // `order('packing_group', { nullsFirst: true })`. Разойдутся — и вариант,
+      // показанный первым на странице вещества, окажется вторым на странице
+      // номера, а читатель прочтёт это как разные данные.
+      (a, b) => supabase.from('dg_substances')
+        .select('un_number, proper_shipping_name, transport_class, classification_code, packing_group, label_codes, adr_status')
+        .order('un_number').order('packing_group', { nullsFirst: true }).range(a, b)
+    ),
+    allRows<{
+      un_number: string; row_order: number; id_prefix: string | null
+      proper_shipping_name: string; hazard_class: string | null
+      packing_group: string | null; label_codes: string[] | null
+    }>(
+      'dot_substances (getStaticPaths)',
+      (a, b) => supabase.from('dot_substances')
+        .select('un_number, row_order, id_prefix, proper_shipping_name, hazard_class, packing_group, label_codes')
+        .order('un_number').order('row_order').range(a, b)
+    ),
+  ])
+
+  const unByCas = buildUnEntriesByCas({
+    links: unLinks,
+    adr: adrRowsAll,
+    dot: dotRowsAll,
+    pages: new Set(unPages.map((p) => p.un_number)),
+  })
+
   // ⚠⚠ Соседи по алфавиту (session 37). До этого вещества не были связаны между
   // собой ВООБЩЕ: раздел вёл только «вверх» — на коды и на букву указателя.
   // Цепь prev → next проходит все 3 650 страниц насквозь, и это единственная
@@ -307,6 +384,11 @@ export async function getStaticPaths() {
       hazardClasses: buildHazardClasses(it.row.h_statement_codes, mapRows ?? [], catalogRows ?? []),
       rgroups: rgByCas.get(it.row.cas_number) ?? [],
       sdsSlug: sdsByCas.get(it.row.cas_number) ?? null,
+      // ⚠ Пустой массив у 3 222 страниц из 3 650 — это НЕ ошибка. Мост
+      // `substance_un_link` покрывает 428 веществ: остальные под собственным
+      // номером ООН не едут (их возят как компонент смеси или они вообще не
+      // опасный груз). Секция на такой странице просто не рисуется.
+      unEntries: unByCas.get(it.row.cas_number) ?? [],
       prev: i > 0 ? card(ordered[i - 1]) : null,
       next: i < ordered.length - 1 ? card(ordered[i + 1]) : null,
     },
@@ -337,6 +419,8 @@ type Props = {
   /** Реактивные группы CAMEO из базы — см. комментарий в getStaticPaths. */
   rgroups: string[]
   sdsSlug: string | null
+  /** Номера ООН этого вещества со строками ADR и 49 CFR — lib/substanceTransport.ts. */
+  unEntries: UnEntry[]
   prev: Neighbour | null
   next: Neighbour | null
 }
@@ -344,7 +428,8 @@ type Props = {
 /** Сосед по алфавиту. Считается в getStaticPaths — см. комментарий там. */
 type Neighbour = { name: string; cas: string; href: string; formula: string | null }
 
-const { row, hText, pMeta, euhText, hazardClasses, rgroups, sdsSlug, prev, next } = Astro.props as Props
+const { row, hText, pMeta, euhText, hazardClasses, rgroups, sdsSlug, unEntries, prev, next } =
+  Astro.props as Props
 
 // ⚠ Имя для показа: заглавная первая буква там, где это типографика, а не правка
 // номенклатуры. Разбор и список исключений — в substanceName.ts. На адрес не влияет:
@@ -535,7 +620,56 @@ const nHandling =
   texts?.peroxide || rgroups.length
     ? pad()
     : null
+// ⚠ Номер выдаётся ровно тогда, когда секция рисуется. Условие здесь и условие
+// у <section id="transport"> — одно и то же выражение `unEntries.length`;
+// разойдутся они — и в нумерации появится дырка (02 · … 04 · …).
+const nTransport = unEntries.length ? pad() : null
 const nFaq = faq.length ? pad() : null
+
+/**
+ * ⚠⚠ ОГЛАВЛЕНИЕ СТРАНИЦЫ (session 41, просьба Сергея). Страница вещества — до
+ * тринадцати секций, и на телефоне докрутить до «storage and handling» это
+ * восемь-девять экранов.
+ *
+ * ⚠ Список собирается ИЗ ТЕХ ЖЕ выражений, что и сами секции, а не из отдельного
+ * массива «как надо». Пункт оглавления, ведущий на якорь, которого на странице
+ * нет, — это ссылка в никуда: браузер молча остаётся на месте, и читатель
+ * решает, что сломана страница. Проверка subs-toc-anchors в check:dist держит
+ * равенство «пункт ↔ секция» в обе стороны.
+ *
+ * ⚠ Подписи короткие и БЕЗ имени вещества. Правило «имя в каждом заголовке»
+ * (session 38) касается H2/H3 — это текст, который читает поиск. Здесь же
+ * горизонтальная полоска на ширину экрана: «Acetone hazard classification»
+ * в ней не поместится, а тринадцать таких подписей превратят навигацию в
+ * простыню. У поиска эти ссылки и так не отдельные заголовки.
+ */
+const toc: Array<{ id: string; label: string }> = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'identifiers', label: 'Identifiers' },
+  ...(nClassification ? [{ id: 'hazards', label: 'Hazards' }] : []),
+  { id: 'sds', label: 'SDS' },
+  ...(nPrecautions ? [{ id: 'precautions', label: 'Precautions' }] : []),
+  ...(nLabel ? [{ id: 'label', label: 'Label' }] : []),
+  ...(nHealth ? [{ id: 'health', label: 'Health' }] : []),
+  ...(nProperties ? [{ id: 'properties', label: 'Properties' }] : []),
+  ...(nNotes ? [{ id: 'fire-notes', label: notesAreFire ? 'Fire' : 'Notes' }] : []),
+  ...(nHandling ? [{ id: 'handling', label: 'Storage' }] : []),
+  ...(nTransport ? [{ id: 'transport', label: 'Transport' }] : []),
+  ...(nFaq ? [{ id: 'faq', label: 'FAQ' }] : []),
+  { id: 'nearby', label: 'Nearby' },
+]
+
+/**
+ * Коды знаков строкой — печатаются рядом с картинками и остаются на странице,
+ * даже когда картинки для кода у нас нет.
+ * ⚠ Это не подпись к картинке, а само значение колонки: у 49 CFR встречается
+ * «Empty» (ярлык §172.450, файла у нас пока нет) и «None» (ярлык не требуется).
+ * Молчание вместо кода читалось бы как «знак не нужен» в обоих случаях.
+ */
+const codeList = (codes: string[] | null): string => (codes ?? []).join(', ') || '—'
+
+/** Больше одного номера — читателю надо объяснить, почему. См. MULTI_UN_NOTE. */
+const multiUn = unEntries.length > 1
 ---
 
 <Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
@@ -570,6 +704,28 @@ const nFaq = faq.length ? pad() : null
       )}
     </div>
   </section>
+
+  {/*
+    ⚠⚠ ОГЛАВЛЕНИЕ. Массив `toc` собран в шапке из тех же условий, что и секции.
+    ⚠ Это <nav> со списком, а не строка ссылок: скринридер обязан уметь выйти
+    из него одной командой, иначе на странице с тринадцатью пунктами он читает
+    их перед КАЖДЫМ переходом.
+    ⚠ Полоска липкая и стоит под шапкой сайта (она сама sticky, высота 64 px,
+    z-index 50). Наши значения — top: 64px и z-index: 40, они в hub.css рядом
+    с правилом .sub-toc; менять одно без другого нельзя.
+    ⚠ JavaScript тут не нужен вообще: переход по якорю делает браузер, плавность
+    даёт scroll-behavior, а отступ под шапку — scroll-margin-top у секций.
+  */}
+  <nav class="sub-toc" aria-label="Sections of this page">
+    <div class="hub-wrap sub-toc-wrap">
+      <span class="sub-toc-label" aria-hidden="true">On this page</span>
+      <ul class="sub-toc-list">
+        {toc.map((t) => (
+          <li><a href={`#${t.id}`}>{t.label}</a></li>
+        ))}
+      </ul>
+    </div>
+  </nav>
 
   <section class="hub-sec-a" id="overview">
     <div class="hub-wrap">
@@ -1280,6 +1436,199 @@ const nFaq = faq.length ? pad() : null
             Check {truncateName(name, 25)} in the storage compatibility matrix →
           </a>
         </p>
+      </div>
+    </section>
+  )}
+
+  {/*
+    ═══ ТРАНСПОРТ (session 41) ═══
+
+    ⚠⚠ ЭТО ВЫДЕРЖКА, А НЕ КОПИЯ СТРАНИЦЫ /un/<номер>/. Здесь ровно два вопроса:
+    под каким номером вещество едет и каким знаком метится упаковка. Спецположения,
+    инструкции по упаковке, предельные количества, коды CV, оранжевая табличка,
+    категория перевозки — всё это живёт на странице номера, и переносить их сюда
+    нельзя: две наши собственные страницы под один и тот же запрос — это
+    каннибализация выдачи, а не «больше пользы».
+
+    ⚠⚠ ДВЕ ЮРИСДИКЦИИ — ДВЕ ПАНЕЛИ, И ОНИ НЕ СЛИВАЮТСЯ. Тот же инвариант, что на
+    /un/: у каждой панели своё клеймо источника, свои коды знаков и свои файлы
+    картинок. Один номер в Европе и в США метится РАЗНЫМИ знаками (у 49 CFR на
+    ярлыке напечатано слово, у ADR надписи нет), поэтому строка вида
+    «Class 3, PG II» без имени юрисдикции здесь равна дезинформации.
+
+    ⚠ ВАРИАНТЫ НЕ СХЛОПЫВАЮТСЯ: у номера может быть несколько строк с разной
+    группой упаковки. Печатаются все, выбор — действие читателя.
+  */}
+  {nTransport && (
+    <section class="hub-sec-a" id="transport">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nTransport} · Transport</p>
+        <h2 class="hub-h2">{nm} UN number and transport classification</h2>
+        <p class="hub-sub">
+          Transport classification is a separate system from the GHS classification above. It
+          decides how a package is marked and how a load may be carried; it does not follow from
+          the workplace label, and the workplace label does not follow from it. The entries below
+          are linked by CAS number, never by name.
+        </p>
+
+        {multiUn && <p class="hub-note">{MULTI_UN_NOTE}</p>}
+
+        {unEntries.map((e) => {
+          // ⚠ Первая строка нужна только ради НАЗВАНИЯ класса в подписи под
+          // таблицей. Брать из неё что-то ещё нельзя: у номера бывает несколько
+          // строк с разной группой упаковки, и «первая» из них ничем не главнее.
+          const adrFirst = e.adr[0]
+          const dotFirst = e.dot[0]
+          const adrClassName = adrFirst?.transport_class
+            ? ADR_CLASS_NAME[adrFirst.transport_class] ?? null
+            : null
+          const dotClass = dotFirst?.hazard_class ? dotClassName(dotFirst.hazard_class) : null
+          // ⚠ Плашки статуса схлопываются по значению: у номера с тремя строками
+          // «not accepted for carriage» один и тот же абзац печатался бы трижды.
+          const adrStatuses = [...new Set(
+            e.adr.map((r) => r.adr_status).filter((s): s is string => Boolean(s) && s !== 'regulated'),
+          )].filter((s) => ADR_STATUS_TEXT[s])
+          const foreignPrefixes = [...new Set(
+            e.dot.map((r) => r.id_prefix).filter((p): p is string => Boolean(p) && p !== 'UN'),
+          )]
+          return (
+          <div class="sub-un">
+            <h3 class="sub-h3" id={`un-${e.un}`}>
+              {nm} under {unLabel(e.un)} — shipping name, class and packing group
+            </h3>
+
+            {/* ─── ADR ─── */}
+            {e.adr.length > 0 ? (
+              <div class="sub-un-panel">
+                <p class="sub-un-jur">Europe · ADR 2025, Table A</p>
+                <div class="hub-table-wrap">
+                  <table class="hub-table sub-un-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Proper shipping name (3.1.2)</th>
+                        <th scope="col">Class</th>
+                        <th scope="col">Classification code</th>
+                        <th scope="col">PG</th>
+                        <th scope="col">Labels (column 5)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {e.adr.map((r) => (
+                        <tr>
+                          <td class="c-txt"><span class="verbatim">{r.proper_shipping_name}</span></td>
+                          <td class="c-code un-class">{r.transport_class ?? '—'}</td>
+                          <td class="c-code un-cc">{r.classification_code ?? '—'}</td>
+                          <td class="c-code un-pg">{r.packing_group ?? '—'}</td>
+                          <td class="un-labels">
+                            {/*
+                              ⚠ Буква группы совместимости класса 1 берётся из
+                              колонки (3b): в колонке (5) стоит просто «1».
+                              Компонент рисует её плашкой поверх звёздочки образца.
+                            */}
+                            <TransportLabel
+                              labels={(r.label_codes ?? []).flatMap((c) => adrLabels(c, r.classification_code))}
+                              size={64}
+                              showCaption={false}
+                            />
+                            <span class="c-code">{codeList(r.label_codes)}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {/* ⚠ Плашка статуса — факт ПРО ADR и только про ADR (см. ADR_STATUS_TEXT). */}
+                {adrStatuses.map((s) => (
+                  <p class="hub-note">
+                    <strong>{ADR_STATUS_TEXT[s].badge}.</strong> {ADR_STATUS_TEXT[s].note}
+                  </p>
+                ))}
+                <p class="hub-fine">
+                  Source: <a href={ADR_SOURCE.href} rel="nofollow">{ADR_SOURCE.label}</a>.
+                  {adrClassName && (
+                    <> Class {adrFirst.transport_class} is “{adrClassName}” (ADR 2.1.1.1).</>
+                  )}
+                </p>
+              </div>
+            ) : (
+              <p class="hub-fine sub-un-absent">
+                No entry for {unLabel(e.un)} in Table A of ADR 2025.
+              </p>
+            )}
+
+            {/* ─── 49 CFR ─── */}
+            {e.dot.length > 0 ? (
+              <div class="sub-un-panel">
+                <p class="sub-un-jur navy">United States · 49 CFR 172.101 Hazardous Materials Table</p>
+                <div class="hub-table-wrap">
+                  <table class="hub-table sub-un-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Proper shipping name (column 2)</th>
+                        <th scope="col">Class or division</th>
+                        <th scope="col">PG</th>
+                        <th scope="col">Labels (column 6)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {e.dot.map((r) => (
+                        <tr>
+                          <td class="c-txt"><span class="verbatim">{r.proper_shipping_name}</span></td>
+                          <td class="c-code un-class">{r.hazard_class ?? '—'}</td>
+                          <td class="c-code un-pg">{r.packing_group ?? '—'}</td>
+                          <td class="un-labels">
+                            {/*
+                              ⚠ Знаки США — свой комплект: на ярлыке напечатано
+                              слово («FLAMMABLE LIQUID»), у ADR его нет. Ставить
+                              сюда файл ADR нельзя.
+                            */}
+                            <TransportLabel
+                              labels={(r.label_codes ?? []).flatMap((c) => dotLabels(c))}
+                              size={64}
+                              showCaption={false}
+                            />
+                            <span class="c-code">{codeList(r.label_codes)}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {/*
+                  ⚠ Префикс номера — часть данных, а не оформление. «NA» и «ID»
+                  означают, что номер не международный: NA присвоен США, ID —
+                  ИКАО. Молча печатать их как «UN» нельзя.
+                */}
+                {foreignPrefixes.length > 0 && (
+                  <p class="hub-fine">
+                    Column (4) prefix on this entry: {foreignPrefixes.join(', ')} — not a UN number.
+                    NA numbers are assigned by the United States, ID numbers by ICAO.
+                  </p>
+                )}
+                <p class="hub-fine">
+                  Source: <a href={DOT_SOURCE.href} rel="nofollow">{DOT_SOURCE.label}</a>.
+                  {dotClass && (
+                    <> Class {dotFirst.hazard_class} is “{dotClass}” (49 CFR 173.2).</>
+                  )}
+                </p>
+              </div>
+            ) : (
+              <p class="hub-fine sub-un-absent">
+                No entry for {unLabel(e.un)} in the 49 CFR 172.101 table.
+              </p>
+            )}
+
+            {e.href && (
+              <p class="sub-un-more">
+                <a href={e.href}>
+                  Full {unLabel(e.un)} entry — special provisions, packing instructions, quantity
+                  limits and the orange plate →
+                </a>
+              </p>
+            )}
+          </div>
+          )
+        })}
       </div>
     </section>
   )}
