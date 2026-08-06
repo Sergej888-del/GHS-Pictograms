@@ -33,7 +33,9 @@ export const prerender = true
 
 import Layout from '../../layouts/Layout.astro'
 import OrangePlate from '../../components/OrangePlate.astro'
+import TransportLabel from '../../components/TransportLabel.astro'
 import SdsManagerCard from '../../components/SdsManagerCard.astro'
+import { adrLabels, dotLabels } from '../../lib/transportLabels'
 import { supabase } from '../../lib/supabase'
 import { must } from '../../lib/mustQuery'
 import { truncateMetaDescription } from '../../lib/metaDescription'
@@ -660,7 +662,14 @@ if (substances.length) {
                   <td class="c-code">{r.transport_class ?? '—'}</td>
                   <td class="c-code">{r.classification_code ?? '—'}</td>
                   <td class="c-code">{r.packing_group ?? '—'}</td>
-                  <td class="c-code">{(r.label_codes ?? []).join(', ') || '—'}</td>
+                  <td>
+                    <TransportLabel
+                      labels={(r.label_codes ?? []).flatMap((c) => adrLabels(c, r.classification_code))}
+                      size={68}
+                      showCaption={false}
+                    />
+                    <span class="c-code">{(r.label_codes ?? []).join(', ') || '—'}</span>
+                  </td>
                   <td class="c-code">{r.transport_category ?? '—'}</td>
                   <td class="c-code">{r.hazard_id_number ?? '—'}</td>
                 </tr>
@@ -818,7 +827,14 @@ if (substances.length) {
                   <td class="c-txt"><span class="verbatim">{r.proper_shipping_name}</span></td>
                   <td class="c-code">{r.hazard_class ?? '—'}</td>
                   <td class="c-code">{r.packing_group ?? '—'}</td>
-                  <td class="c-code">{(r.label_codes ?? []).join(', ') || '—'}</td>
+                  <td>
+                    <TransportLabel
+                      labels={(r.label_codes ?? []).flatMap((c) => dotLabels(c))}
+                      size={68}
+                      showCaption={false}
+                    />
+                    <span class="c-code">{(r.label_codes ?? []).join(', ') || '—'}</span>
+                  </td>
                   <td class="c-code">
                     {[
                       r.pkg_exceptions ? `§173.${r.pkg_exceptions}` : null,

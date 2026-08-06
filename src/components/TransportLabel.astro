@@ -1,0 +1,112 @@
+---
+/**
+ * Транспортный знак опасности — ромб на подложке.
+ *
+ * ⚠ ПОДЛОЖКА ЗДЕСЬ НЕ УКРАШЕНИЕ. У знаков с белым полем (2.3, 6.1, 6.2, 7A, 7E,
+ * 8, 9, 9A) внешнего контура в файле нет: пунктирная рамка образца — пояснение
+ * «здесь край», а не элемент знака (49 CFR 172.407(b)(2)). Без слегка
+ * затемнённого фона такой ромб на белой странице теряет границу.
+ *
+ * ⚠⚠ БУКВА ГРУППЫ СОВМЕСТИМОСТИ ЗАКРЫВАЕТ «*», А НЕ СТАВИТСЯ РЯДОМ. На образце
+ * модели 1 напечатана звёздочка — ADR 5.2.2.2.2 говорит прямо, что на её месте
+ * должна стоять буква группы совместимости. Поэтому подпись рисуется плашкой в
+ * цвет фона знака (#fc7e0c) ровно поверх звёздочки.
+ *
+ * ⚠ Координата 0.722 высоты знака — не на глаз. Измерена getBoundingClientRect
+ * по всем шести файлам 1.1…1.6, во всех совпала: центр звёздочки cy = 0.722,
+ * размер ≈ 0.045. Свободная полоса между цифрой подразделения (низ 0.661) и
+ * цифрой класса (верх 0.776) — 0.115, плашка занимает 0.095 и в неё влезает.
+ * Менять число можно только после повторного измерения.
+ *
+ * ⚠ В файлах 49 CFR буква уже впечатана — там `group` не передаётся, и ничего
+ * поверх не рисуется.
+ */
+import type { LabelPick } from '../lib/transportLabels'
+
+interface Props {
+  labels: LabelPick[]
+  /** размер стороны ромба в пикселях */
+  size?: number
+  /** показывать подпись с кодом под знаком */
+  showCaption?: boolean
+}
+
+const { labels, size = 84, showCaption = true } = Astro.props
+---
+
+{labels.length > 0 && (
+  <ul class="tl-row" style={`--tl-size:${size}px`}>
+    {labels.map((l) => (
+      <li class="tl-item">
+        <span class="tl-plate">
+          <img src={l.src} alt={l.alt} width={size} height={size} loading="lazy" decoding="async" />
+          {l.group && <span class="tl-group" aria-hidden="true">{l.group}</span>}
+        </span>
+        {showCaption && <span class="tl-caption">{l.caption}</span>}
+      </li>
+    ))}
+  </ul>
+)}
+
+<style>
+  .tl-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .tl-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+  }
+
+  /* ⚠ Именно эта подложка заменяет снятую пунктирную рамку. */
+  .tl-plate {
+    position: relative;
+    display: block;
+    padding: 7px;
+    border-radius: 6px;
+    background: #eef0f2;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+  }
+
+  .tl-plate img {
+    display: block;
+    width: var(--tl-size);
+    height: var(--tl-size);
+  }
+
+  /* Буква группы совместимости закрывает «*» образца ADR. См. шапку файла. */
+  .tl-group {
+    position: absolute;
+    left: 50%;
+    top: calc(7px + var(--tl-size) * 0.722);
+    transform: translate(-50%, -50%);
+    min-width: calc(var(--tl-size) * 0.11);
+    padding: 0 calc(var(--tl-size) * 0.008);
+    background: #fc7e0c;
+    color: #080400;
+    text-align: center;
+    font: 700 calc(var(--tl-size) * 0.115) / calc(var(--tl-size) * 0.095) ui-sans-serif, system-ui, sans-serif;
+    pointer-events: none;
+  }
+
+  .tl-caption {
+    font: 600 12px / 1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #475569;
+    letter-spacing: 0.02em;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .tl-plate {
+      background: #e5e7eb;
+      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.18);
+    }
+    .tl-caption { color: #94a3b8; }
+  }
+</style>
