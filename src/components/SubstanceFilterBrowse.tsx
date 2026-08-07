@@ -381,23 +381,31 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
                   >
                     {mainBlock}
                   </button>
-                  <a
-                    href={detailHref ?? labelHref}
-                    onClick={e => e.stopPropagation()}
-                    style={{
-                      flexShrink: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '12px 14px',
-                      borderLeft: '1px solid #e2e8f0',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      color: '#062A78',
-                      textDecoration: 'none',
-                    }}
-                  >
-                    {slug ? 'SDS' : detailHref ? 'Details' : 'Label'}
-                  </a>
+                  {/* ⚠ В режиме выбора эта ссылка открывается В НОВОЙ ВКЛАДКЕ.
+                      Иначе она уводит со страницы конструктора, где человек уже
+                      настроил размер, поставщика и логотип, — и всё это теряется. */}
+                  {detailHref && (
+                    <a
+                      href={detailHref}
+                      target="_blank"
+                      rel="noopener"
+                      onClick={e => e.stopPropagation()}
+                      style={{
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '12px 14px',
+                        borderLeft: '1px solid #e2e8f0',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        color: '#64748b',
+                        textDecoration: 'none',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {slug ? 'SDS ↗' : 'Page ↗'}
+                    </a>
+                  )}
                 </li>
               )
             }

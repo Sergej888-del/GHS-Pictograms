@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { substanceNameFull } from '../lib/substanceName'
+import { productNameVariants, defaultProductName } from '../lib/labelProductName'
 import GHSLabelConstructor from './GHSLabelConstructor'
 import SubstanceFilterBrowse from './SubstanceFilterBrowse'
 import type { JurisdictionKey, LabelPurpose } from '../lib/jurisdictions'
@@ -57,7 +58,9 @@ export default function LabelConstructorLoader({ jurisdiction = 'osha', purpose 
   const [allP, setAllP] = useState<PStatement[]>([])
   const [pickedPics, setPickedPics] = useState<string[]>([])
   const [pickedH, setPickedH] = useState<string[]>([])
+  const [pickedP, setPickedP] = useState<string[]>([])
   const [hQuery, setHQuery] = useState('')
+  const [pQuery, setPQuery] = useState('')
   const [refLoading, setRefLoading] = useState(false)
 
   useEffect(() => {
@@ -141,6 +144,16 @@ export default function LabelConstructorLoader({ jurisdiction = 'osha', purpose 
   if (manual) {
     const picked = allPics.filter((p) => pickedPics.includes(p.code))
     const pickedHList = allH.filter((h) => pickedH.includes(h.code))
+    const pickedPList = allP.filter((x) => pickedP.includes(x.code))
+    // ⚠ Отмеченные держатся наверху: иначе выбранная фраза уезжает вниз списка
+    // из ста семнадцати, и человек не видит, что уже набрал.
+    const pMatched = pQuery.trim()
+      ? allP.filter((x) => (x.code + ' ' + x.text_en).toLowerCase().includes(pQuery.trim().toLowerCase()))
+      : allP
+    const pVisible = [
+      ...pMatched.filter((x) => pickedP.includes(x.code)),
+      ...pMatched.filter((x) => !pickedP.includes(x.code)).slice(0, pQuery.trim() ? 60 : 12),
+    ]
     // ⚠ EUH-фразы уходят В КОНЕЦ списка. По алфавиту «EUH001» встаёт впереди
     // «H200», и первым, что видит человек, оказывается «Explosive when dry» —
     // дополнительная европейская фраза, а не обычная H-фраза, которую он ищет.
@@ -261,6 +274,39 @@ export default function LabelConstructorLoader({ jurisdiction = 'osha', purpose 
               })}
             </div>
           </div>
+
+          {/* ⚠⚠ P-фразы выбираются ЗДЕСЬ, вместе с остальной классификацией.
+              Раньше их выбор жил только внутри конструктора, и в ручном режиме
+              человек до него не добирался: он задавал пиктограммы и H-фразы и
+              не понимал, куда делись предупредительные. */}
+          <div>
+            <div className="mb-1 flex items-baseline justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Precautionary statements</p>
+              <span className="text-[11px] text-gray-400">{pickedP.length} selected</span>
+            </div>
+            <p className="mb-2 text-[11px] text-gray-500">
+              Six is the usual maximum on a label — pick the ones that match how the product is actually used.
+            </p>
+            <input
+              type="search" value={pQuery} onChange={(e) => setPQuery(e.target.value)}
+              placeholder="Search by code or text: gloves, P280…"
+              className="mb-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
+              {pVisible.map((x) => {
+                const on = pickedP.includes(x.code)
+                return (
+                  <label key={x.code} className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-xs ${on ? 'border-[#062A78] bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                    <input
+                      type="checkbox" checked={on} className="mt-0.5 accent-[#062A78]"
+                      onChange={() => setPickedP((prev) => on ? prev.filter((c) => c !== x.code) : [...prev, x.code])}
+                    />
+                    <span><span className="font-semibold">{x.code}</span> {x.text_en}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
         </div>
 
         {/* ⚠⚠ Раньше конструктор просто появлялся ниже, когда заполнялось имя, и
@@ -281,8 +327,8 @@ export default function LabelConstructorLoader({ jurisdiction = 'osha', purpose 
                 <p className="text-xs font-medium uppercase tracking-wide text-green-700">Your label</p>
                 <p className="text-sm text-gray-600">
                   {pickedPics.length} pictogram{pickedPics.length === 1 ? '' : 's'} ·{' '}
-                  {mixSignal ?? 'no signal word'} · {pickedH.length} hazard statement{pickedH.length === 1 ? '' : 's'}
-                  {' '}— pick precautionary statements below.
+                  {mixSignal ?? 'no signal word'} · {pickedH.length} hazard statement{pickedH.length === 1 ? '' : 's'} ·{' '}
+                  {pickedP.length} precautionary
                 </p>
               </div>
               <a href="#label" className="shrink-0 rounded-lg bg-[#062A78] px-4 py-2 text-sm font-semibold text-white">
@@ -297,10 +343,10 @@ export default function LabelConstructorLoader({ jurisdiction = 'osha', purpose 
                 signalWord={mixSignal}
                 pictograms={picked}
                 hStatements={pickedHList}
-                pStatements={allP}
+                pStatements={pickedPList}
                 initialJurisdiction={jurisdiction}
                 initialPurpose={purpose}
-                initialSelectedP={[]}
+                initialSelectedP={pickedP}
               />
             </div>
           </>
@@ -366,7 +412,10 @@ export default function LabelConstructorLoader({ jurisdiction = 'osha', purpose 
 
   if (!substance) return null
 
-  const displayName = substanceNameFull(substance)
+  // ⚠ На этикетку идёт ОДНА форма имени, а не вся строка Annex VI: у групповых
+  // записей там пять имён подряд, и они уезжали на этикетку целиком.
+  const nameVariants = productNameVariants(substance)
+  const displayName = defaultProductName(substance) || substanceNameFull(substance)
 
   return (
     <div className="space-y-6">
@@ -396,6 +445,7 @@ export default function LabelConstructorLoader({ jurisdiction = 'osha', purpose 
         pStatements={pStatements}
         initialJurisdiction={jurisdiction}
         initialPurpose={purpose}
+        nameVariants={nameVariants}
       />
     </div>
   )

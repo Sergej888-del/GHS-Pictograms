@@ -11,6 +11,7 @@ import {
   stockFor, stockMm, stockSizeLabel, inchLabel, SHEET_MM, SHEET_NAME, MM_PER_INCH,
   type LabelStockItem,
 } from '../lib/labelStock'
+import type { NameVariant } from '../lib/labelProductName'
 import NewsletterOptIn from './NewsletterOptIn'
 
 interface Pictogram { code: string; name_en: string; svg_content: string | null }
@@ -35,6 +36,11 @@ interface Props {
    * там список общий, все 117, и первые шесть означали бы случайный выбор.
    */
   initialSelectedP?: string[]
+  /**
+   * Варианты имени из записи Annex VI. У групповых записей их пять и больше, и
+   * человек должен выбрать ту форму, которую он на самом деле фасует.
+   */
+  nameVariants?: NameVariant[]
 }
 
 const STORAGE_KEY = 'ghs_supplier_data'
@@ -55,7 +61,7 @@ const CAPACITY_PRESETS = [
 export default function GHSLabelConstructor({
   displayName, casNumber, ecNumber, signalWord,
   pictograms, hStatements, pStatements,
-  initialJurisdiction = 'osha', initialPurpose = 'supplier', initialSelectedP,
+  initialJurisdiction = 'osha', initialPurpose = 'supplier', initialSelectedP, nameVariants,
 }: Props) {
   const [jurisdictionKey, setJurisdictionKey] = useState<JurisdictionKey>(initialJurisdiction)
   const [purpose, setPurpose] = useState<LabelPurpose>(initialPurpose)
@@ -70,6 +76,10 @@ export default function GHSLabelConstructor({
   const [supplierName, setSupplierName] = useState('')
   const [supplierAddress, setSupplierAddress] = useState('')
   const [supplierPhone, setSupplierPhone] = useState('')
+  // ⚠⚠ Имя и CAS на этикетке РЕДАКТИРУЕМЫЕ. У групповых записей Annex VI в
+  // поле имени лежит список из пяти форм, и он целиком уезжал на этикетку.
+  const [productName, setProductName] = useState(displayName)
+  const [casOnLabel, setCasOnLabel] = useState(casNumber)
   const [nominalQty, setNominalQty] = useState('')
   const [ufiCode, setUfiCode] = useState('')
   const [batchNumber, setBatchNumber] = useState('')
@@ -95,6 +105,13 @@ export default function GHSLabelConstructor({
   useEffect(() => {
     setSelectedP(initialSelectedP ?? pStatements.slice(0, 6).map((p) => p.code))
   }, [casNumber, pStatements.length])
+
+  // Смена вещества переустанавливает имя и CAS: иначе на новой этикетке
+  // остаётся имя предыдущего вещества.
+  useEffect(() => {
+    setProductName(displayName)
+    setCasOnLabel(casNumber)
+  }, [displayName, casNumber])
 
   // Смена юрисдикции переключает единицы и набор пресетов, но НЕ трогает уже
   // выбранный физический размер: человек выбирал его под свою пачку наклеек.
@@ -267,8 +284,8 @@ export default function GHSLabelConstructor({
   }
 
   const labelInput: LabelInput = {
-    productName: displayName,
-    casNumber,
+    productName,
+    casNumber: casOnLabel,
     ecNumber,
     nominalQty,
     batchNumber,
@@ -576,14 +593,43 @@ export default function GHSLabelConstructor({
           {/* Продукт */}
           <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
             <p className="font-semibold text-[#062A78]">Product information</p>
+            <div>
+              <label className={labelClass}>Product name <span className="font-normal text-gray-400">as printed on the label</span></label>
+              <input type="text" value={productName} onChange={(e) => setProductName(e.target.value)} className={inputClass} />
+              {nameVariants && nameVariants.length > 1 && (
+                <>
+                  <p className="mt-2 text-[11px] text-gray-500">
+                    This Annex VI entry covers {nameVariants.length} forms. Pick the one you actually package:
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {nameVariants.map((v) => (
+                      <button
+                        key={`${v.index ?? ''}${v.name}`}
+                        type="button"
+                        onClick={() => { setProductName(v.name); if (v.cas) setCasOnLabel(v.cas) }}
+                        className={`cursor-pointer rounded-lg border px-2.5 py-1 text-left text-[11px] transition-colors ${
+                          productName === v.name ? 'border-[#062A78] bg-blue-50 font-semibold text-[#062A78]' : 'border-gray-300 bg-white text-gray-700 hover:border-[#062A78]'
+                        }`}
+                      >
+                        {v.name}{v.cas ? <span className="ml-1 text-gray-400">CAS {v.cas}</span> : null}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className={labelClass}>Nominal quantity</label>
-                <input type="text" value={nominalQty} onChange={(e) => setNominalQty(e.target.value)} placeholder="500 mL" className={inputClass} />
+                <label className={labelClass}>CAS number</label>
+                <input type="text" value={casOnLabel} onChange={(e) => setCasOnLabel(e.target.value)} placeholder="67-64-1" className={inputClass} />
               </div>
               <div>
                 <label className={labelClass}>Batch / Lot number</label>
                 <input type="text" value={batchNumber} onChange={(e) => setBatchNumber(e.target.value)} placeholder="LOT-2026-001" className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Nominal quantity</label>
+                <input type="text" value={nominalQty} onChange={(e) => setNominalQty(e.target.value)} placeholder="500 mL" className={inputClass} />
               </div>
               {j.requiresUfi && (
                 <div className="sm:col-span-2">
