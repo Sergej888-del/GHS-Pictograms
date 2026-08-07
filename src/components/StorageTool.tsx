@@ -44,6 +44,9 @@ import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
 import { shortForCode, urlForCode, familyBadgeForCode } from '../lib/storageClasses'
 import { substanceNameFull, truncateName } from '../lib/substanceName'
+// ⚠ CAS здесь уже брался канонический (display_cas), а EC печатался сырым —
+// та же половинчатая правка, что и на этикетке. Правило формы одно на весь сайт.
+import { ecForDisplay, casForDisplay, casShapeOk } from '../lib/substanceIdentifiers'
 
 // SDS Manager affiliate — the callout already tells the reader to verify against
 // the SDS; this link serves that exact moment. GA separates placements via the
@@ -254,8 +257,13 @@ export default function StorageTool() {
           const page = bySubstanceId.get(r.id) ?? null
           // Bracketed multi-CAS rows only make sense with a canonical CAS from
           // their live page; without one they stay out (as before rev6).
-          if (cas.includes('[') && !page) continue
-          const displayCas = cas.includes('[') ? page!.cas : cas
+          // ⚠⚠ Признак непечатаемого CAS — ФОРМА, а не скобка. Две записи склеены
+          // БЕЗ маркеров («127087-87-09016-45-9», «3811-73-215922-78-8») и
+          // проверку на скобку проходили насквозь; ещё у трёх страниц SDS свой
+          // cas_number тоже не той формы. Правило одно — substanceIdentifiers.ts.
+          if (!casShapeOk(cas) && !page) continue
+          const displayCas = casShapeOk(cas) ? cas : (casForDisplay(page!.cas) || casForDisplay(cas))
+          if (!displayCas) continue
           const displayName = substanceNameFull(r)
           rows.push({
             ...r,
@@ -544,7 +552,7 @@ export default function StorageTool() {
                       <span className="n" title={s.display_name}>{truncateName(s.display_name)}</span>
                       <span className="m">
                         {s.display_cas}
-                        {s.ec_number ? ` · EC ${s.ec_number}` : ''}
+                        {ecForDisplay(s.ec_number) ? ` · EC ${ecForDisplay(s.ec_number)}` : ''}
                         {s.sdsSlug ? ' · report available' : ''}
                       </span>
                     </button>

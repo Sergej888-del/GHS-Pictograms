@@ -43,6 +43,11 @@ import { hSlug } from '../src/lib/hStatementSlug'
 // строится страница. Списать их сюда — значит завести вторую копию,
 // которая разойдётся молча (так уже вышло у pictogramCasPaths.ts).
 import { substanceNameFull, NAME_COLUMNS } from '../src/lib/substanceName'
+// ⚠⚠ Разбор записи Annex VI берётся ИЗ ТОГО ЖЕ модуля, что стоит на этикетке.
+// Списать правило формы сюда — значит завести вторую копию, которая разойдётся
+// с первой молча, и проверка начнёт подтверждать не то, что печатается.
+import { productNameVariants, defaultLabelIdentifiers } from '../src/lib/labelProductName'
+import { casShapeOk, ecShapeOk, indexShapeOk } from '../src/lib/substanceIdentifiers'
 import { substanceSlug, casFromSlug } from '../src/lib/substanceSlug'
 // ⚠⚠ Раскладка «код знака → файл» берётся ИЗ ТОГО ЖЕ модуля, что и страница.
 // Списать сюда список кодов — значит завести вторую копию словаря, которая
@@ -4610,6 +4615,189 @@ const CHECKS: Check[] = [
               `маркер: ${BLOCK}`,
               `связей CAS → UN в базе: ${links.length}, из них с данными в Таблице A или §172.101: ${[...wantByCas.values()].reduce((n, s) => n + s.size, 0)}`,
               `веществ со связью: ${wantByCas.size} (страниц в разделе ${slugs!.length})`,
+            ]
+          : detail,
+      }
+    },
+  },
+
+  {
+    id: 'label-identifiers',
+    group: 'subs',
+    title: 'На этикетку не уходит ни один идентификатор негодной формы',
+    run: async () => {
+      // ⚠⚠ ЭТУ ПРОВЕРКУ НЕЛЬЗЯ СДЕЛАТЬ ПО dist, И В ЭТОМ ВСЁ ДЕЛО. Этикетка
+      // рисуется в браузере, в собранных страницах её нет — ни одна из 95
+      // проверок и ни один прогон check:seo не видели склеенного EC-номера,
+      // который в session 43 уехал в прод и нашёлся глазами на готовом PDF:
+      //
+      //   EC 200-752-1[1]209-526-      (1-pentanol)
+      //
+      // Поэтому здесь проверяется не разметка, а САМА ФУНКЦИЯ, через которую
+      // запись базы превращается в этикетку, — прогоном по всем записям.
+      //
+      // ⚠ Дефект того же рода живёт в базе и сегодня: колонка Annex VI хранит
+      // идентификаторы всех форм в одной ячейке и режет её по длине. Чинить
+      // импорт мы не беремся — проверка следит за тем, что испорченное
+      // значение остановлено ПЕРЕД печатью.
+      type Row = {
+        cas_number: string | null
+        ec_number: string | null
+        index_number: string | null
+        common_name: string | null
+        display_name_short: string | null
+        iupac_name: string | null
+      }
+      const rows = await selectAll<Row>(
+        'substances',
+        'cas_number, ec_number, index_number, common_name, display_name_short, iupac_name',
+      )
+      assertNonEmpty('label-identifiers', 'substances', rows)
+
+      const printedBad: string[] = []
+      const chipBad: string[] = []
+      const indexBad: string[] = []
+      let spoiledCas = 0
+      let spoiledEc = 0
+      let savedCas = 0
+      let savedEc = 0
+      let droppedCas = 0
+      let droppedEc = 0
+
+      for (const r of rows) {
+        const who = r.cas_number ?? r.display_name_short ?? '(запись без CAS)'
+        const casSpoiled = !!r.cas_number && !casShapeOk(r.cas_number)
+        const ecSpoiled = !!r.ec_number && !ecShapeOk(r.ec_number)
+        if (casSpoiled) spoiledCas++
+        if (ecSpoiled) spoiledEc++
+
+        // 1. Что печатается по умолчанию.
+        const ids = defaultLabelIdentifiers(r)
+        if (ids.cas && !casShapeOk(ids.cas)) printedBad.push(`${who} → CAS ${ids.cas}`)
+        if (ids.ec && !ecShapeOk(ids.ec)) printedBad.push(`${who} → EC ${ids.ec}`)
+        if (casSpoiled) {
+          if (ids.cas) savedCas++
+          else droppedCas++
+        }
+        if (ecSpoiled) {
+          if (ids.ec) savedEc++
+          else droppedEc++
+        }
+
+        // 2. Что подставляют чипы форм — это тоже путь на этикетку, в один клик.
+        for (const v of productNameVariants(r)) {
+          if (v.cas && !casShapeOk(v.cas)) chipBad.push(`${who} → «${v.name}»: CAS ${v.cas}`)
+          if (v.ec && !ecShapeOk(v.ec)) chipBad.push(`${who} → «${v.name}»: EC ${v.ec}`)
+        }
+
+        if (r.index_number && !indexShapeOk(r.index_number)) indexBad.push(`${who} → ${r.index_number}`)
+      }
+
+      const detail: string[] = []
+      if (printedBad.length) {
+        detail.push(
+          `на этикетку по умолчанию уходит номер негодной формы (${printedBad.length}): ${preview(printedBad)}. ` +
+            'Предохранитель в labelProductName.ts перестал работать.',
+        )
+      }
+      if (chipBad.length) {
+        detail.push(
+          `чип формы подставляет номер негодной формы (${chipBad.length}): ${preview(chipBad)}. ` +
+            'Это тот же дефект, только в один клик от него.',
+        )
+      }
+      const ok = detail.length === 0
+      return {
+        id: 'label-identifiers',
+        group: 'subs',
+        ok,
+        headline: ok
+          ? `${rows.length} записей: колонка Annex VI испортила CAS у ${spoiledCas} и EC у ${spoiledEc} — на этикетку не ушло ни одного`
+          : `расхождений: ${detail.length}`,
+        detail: ok
+          ? [
+              `разбор форм спасает CAS у ${savedCas} записей и EC у ${savedEc}: номер берётся у той формы, чьё имя печатается`,
+              `остаются без номера ${droppedCas} по CAS и ${droppedEc} по EC — печатать там нечего, ` +
+                'и пустое поле честнее номера, которого не существует',
+              '⚠ контрольная цифра EC НЕ проверяется намеренно: из 3 716 номеров годной формы её не проходят 52, ' +
+                'и все 52 — ELINCS (4xx), где схема другая. Проверка стёрла бы верные номера',
+              indexBad.length
+                ? `⚠⚠ ОТЛОЖЕННЫЙ ДЕФЕКТ: index_number негодной формы у ${indexBad.length} записей: ${preview(indexBad)}. ` +
+                  'На этикетке его сегодня нет, но появление таких значений означает, что импорт поехал и по этой колонке.'
+                : 'index_number цел у всех записей — та же колонка его не портит',
+            ]
+          : detail,
+      }
+    },
+  },
+
+  {
+    id: 'identifiers-in-dist',
+    group: 'subs',
+    title: 'Ни на одной собранной странице нет идентификатора негодной формы',
+    run: async () => {
+      // ⚠⚠ ПАРНАЯ ПРОВЕРКА К label-identifiers, И ОНИ НЕ ДУБЛИРУЮТ ДРУГ ДРУГА.
+      // Та смотрит на функцию — что она отдаёт этикетке; эта смотрит на бумагу —
+      // что реально напечатано в 4 500 файлах. Дефект session 43 прошёл мимо
+      // всех проверок именно потому, что проверяли одно и не проверяли другое.
+      //
+      // Ищем ровно два следа колонки Annex VI, оба однозначные:
+      //   1. склейка   «71-41-0[1]584-02-1» / «200-752-1[1]209-526-»
+      //   2. прочерк   «EC number: -» — не идентификатор, а пустая ячейка
+      const GLUED = /\d{2,7}-\d{2}-\d\[\d\]|\d{3}-\d{3}-\d\[\d\]/
+      const EC_FIELD = /EC number<\/span>\s*<span[^>]*>([^<]*)<|EC number<\/dt>\s*<dd[^>]*>([^<]*)</g
+
+      /** Все *.html в dist, по одному — без кэша: файлов тысячи. */
+      function* walkHtml(dir: string): Generator<string> {
+        for (const e of readdirSync(dir, { withFileTypes: true })) {
+          const full = join(dir, e.name)
+          if (e.isDirectory()) yield* walkHtml(full)
+          else if (e.name.endsWith('.html')) yield full
+        }
+      }
+
+      const glued: string[] = []
+      const badEcField: string[] = []
+      let scanned = 0
+      for (const file of walkHtml(DIST)) {
+        scanned++
+        const html = readFileSync(file, 'utf8')
+        const rel = file.slice(DIST.length + 1).replace(/\\/g, '/')
+        const m = GLUED.exec(html)
+        if (m) glued.push(`${rel}: ${m[0]}`)
+        EC_FIELD.lastIndex = 0
+        for (let f = EC_FIELD.exec(html); f; f = EC_FIELD.exec(html)) {
+          const value = (f[1] ?? f[2] ?? '').trim()
+          if (value && !ecShapeOk(value)) badEcField.push(`${rel}: «${value}»`)
+        }
+      }
+
+      const detail: string[] = []
+      if (glued.length) {
+        detail.push(
+          `склейка форм Annex VI напечатана на странице (${glued.length}): ${preview(glued)}. ` +
+            'Такого номера не существует — значение прошло мимо substanceIdentifiers.ts.',
+        )
+      }
+      if (badEcField.length) {
+        detail.push(
+          `в поле «EC number» стоит не EC-номер (${badEcField.length}): ${preview(badEcField)}. ` +
+            'Чаще всего это прочерк из колонки Annex VI: пустую ячейку печатать не надо вовсе.',
+        )
+      }
+      const ok = detail.length === 0
+      return {
+        id: 'identifiers-in-dist',
+        group: 'subs',
+        ok,
+        headline: ok
+          ? `${scanned} страниц просмотрено — ни склеек Annex VI, ни прочерков в поле EC`
+          : `расхождений: ${detail.length}`,
+        detail: ok
+          ? [
+              'ищется след колонки, а не совпадение с базой: склейка «NNN-NNN-N[1]…» и непустое поле EC не той формы',
+              '⚠ проверка НЕ видит того, что рисует браузер: этикетка конструктора собирается на клиенте, ' +
+                'и её сторожит label-identifiers — прогоном самой функции разбора',
             ]
           : detail,
       }

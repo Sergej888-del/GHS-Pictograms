@@ -28,6 +28,7 @@ import { must } from '../../lib/mustQuery'
 import { truncateMetaDescription } from '../../lib/metaDescription'
 import { substanceNameFull, substanceTitleName, truncateName, NAME_COLUMNS } from '../../lib/substanceName'
 import { substanceSlug, substanceHref } from '../../lib/substanceSlug'
+import { ecForDisplay } from '../../lib/substanceIdentifiers'
 // ⚠ Ссылку на страницу H-кода строит ТОЛЬКО hHref: у девяти суффиксных кодов
 // (H360Fd, H360FD, H361f…) слаг отличается от кода — см. hStatementSlug.ts.
 // Прямая склейка `/h-statements/${code}/` дала 387 страниц со ссылкой в 404.
@@ -436,6 +437,11 @@ const { row, hText, pMeta, euhText, hazardClasses, rgroups, sdsSlug, unEntries, 
 // substanceSlug опускает регистр, поэтому слаги остаются прежними.
 const name = substanceTitleName(substanceNameFull(row))
 const cas = row.cas_number
+// ⚠⚠ EC ЧЕРЕЗ ПРОВЕРКУ ФОРМЫ. У 37 собранных страниц в колонке вместо номера
+// стоит прочерк («-»), и панель печатала «EC number: -», а schema.org отдавала
+// этот прочерк Google как PropertyValue. Склеек тут не бывает: записи со
+// склеенным EC имеют и склеенный CAS, а такие страницы не строятся вовсе.
+const ecShown = ecForDisplay(row.ec_number)
 const formula = row.molecular_formula
 // ⚠⚠ Имя в заголовке обрезается, потому что у 707 некурированных записей оно
 // длиной с абзац («lithium sodium 4-[4-[4-(nitrilotris…»). H2 на всю ширину
@@ -502,7 +508,7 @@ const hasHealth = Boolean(texts?.hazsum || carc || oelRows.length)
 const faq = buildFaq({
   name: nm,
   cas,
-  ec: row.ec_number,
+  ec: ecShown || null,
   formula,
   weight: row.molecular_weight,
   signalWord: row.signal_word,
@@ -571,7 +577,7 @@ const chemicalJson = ld({
   ...(synonymList.length ? { alternateName: synonymList.slice(0, 10) } : {}),
   identifier: [
     { '@type': 'PropertyValue', propertyID: 'CAS', value: cas },
-    ...(row.ec_number ? [{ '@type': 'PropertyValue', propertyID: 'EC', value: row.ec_number }] : []),
+    ...(ecShown ? [{ '@type': 'PropertyValue', propertyID: 'EC', value: ecShown }] : []),
   ],
   description: intro.metaSentence,
   url: canonical,
@@ -753,9 +759,9 @@ const multiUn = unEntries.length > 1
         <div class="hub-panel-row">
           <span class="hub-panel-label">CAS number</span><span>{cas}</span>
         </div>
-        {row.ec_number && (
+        {ecShown && (
           <div class="hub-panel-row">
-            <span class="hub-panel-label">EC number</span><span>{row.ec_number}</span>
+            <span class="hub-panel-label">EC number</span><span>{ecShown}</span>
           </div>
         )}
         {row.index_number && (

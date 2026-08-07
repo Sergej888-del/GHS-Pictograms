@@ -9,6 +9,7 @@
 import Layout from '../../layouts/Layout.astro'
 import { supabase } from '../../lib/supabase'
 import { truncateMetaDescription } from '../../lib/metaDescription'
+import { casForDisplay } from '../../lib/substanceIdentifiers'
 import { splitClpNotation, hasClpNotation } from '../../lib/clpNotation'
 // ⚠ «Падать громко на ОШИБКЕ, деградировать тихо на ПУСТОТЕ» — session 31.
 // До session 32 отказ любого из запросов ниже давал не ошибку, а пропавший блок;
@@ -175,7 +176,8 @@ const items = subs
     return {
       name,
       short: truncateName(name),
-      cas: s.cas_number,
+      // ⚠⚠ CAS через проверку формы — см. h-statements/[code].astro.
+      cas: casForDisplay(s.cas_number) || null,
       index: s.index_number,
       href: hrefOf(s),
     }

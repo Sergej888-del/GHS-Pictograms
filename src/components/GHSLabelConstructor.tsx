@@ -13,6 +13,7 @@ import {
   type LabelStockItem,
 } from '../lib/labelStock'
 import type { NameVariant } from '../lib/labelProductName'
+import { casShapeOk, ecShapeOk } from '../lib/substanceIdentifiers'
 import {
   EU_LANGUAGES, LANGUAGE_BY_CODE, suggestedLanguages, fetchTranslations, EURLEX_ATTRIBUTION,
   type TranslationMap,
@@ -25,8 +26,26 @@ interface PStatement { code: string; text_en: string }
 
 interface Props {
   displayName: string
+  /**
+   * CAS, подставляемый в поле по умолчанию.
+   *
+   * ⚠⚠ СЮДА ПРИХОДИТ УЖЕ РАЗОБРАННОЕ ЗНАЧЕНИЕ, а не колонка базы. У групповых
+   * записей Annex VI в колонке лежит склейка номеров всех форм, обрезанная по
+   * длине поля («71-41-0[1]584-02-1[2»), и она печаталась на этикетке как есть.
+   * Разбор — в `labelProductName.ts`, вызов — в `LabelConstructorLoader`.
+   */
   casNumber: string
+  /** EC, подставляемый по умолчанию. Разобран там же и по тому же правилу. */
   ecNumber?: string | null
+  /**
+   * Чем отличается запись базы — сырой CAS из колонки. Только для сброса
+   * состояния, имени файла и метрик; на этикетку не идёт.
+   *
+   * ⚠ Нужен отдельно от `casNumber`, потому что тот теперь бывает пустым: у
+   * 159 записей склейку печатать нельзя, и завязывать сброс P-фраз на пустую
+   * строку значит не сбрасывать их вовсе при переходе между такими веществами.
+   */
+  entryKey?: string
   signalWord?: string | null
   pictograms: Pictogram[]
   hStatements: HStatement[]
@@ -81,11 +100,16 @@ const CAPACITY_PRESETS = [
 ]
 
 export default function GHSLabelConstructor({
-  displayName, casNumber, ecNumber, signalWord,
+  displayName, casNumber, ecNumber, entryKey, signalWord,
   pictograms, hStatements, pStatements,
   initialJurisdiction = 'osha', initialPurpose = 'supplier', initialSelectedP, nameVariants,
   initialStockId,
 }: Props) {
+  // Чем отличается запись: сырой CAS колонки, если он передан. Идёт в имя
+  // файла и в метрики — там нужна ссылка на запись базы, а не то, что человек
+  // напечатал на бумаге. ⚠ На этикетку это значение не попадает никогда.
+  const entryCas = entryKey ?? casNumber
+
   const [jurisdictionKey, setJurisdictionKey] = useState<JurisdictionKey>(initialJurisdiction)
   const [purpose, setPurpose] = useState<LabelPurpose>(initialPurpose)
   const j = JURISDICTIONS[jurisdictionKey]
@@ -107,10 +131,13 @@ export default function GHSLabelConstructor({
   const [supplierName, setSupplierName] = useState('')
   const [supplierAddress, setSupplierAddress] = useState('')
   const [supplierPhone, setSupplierPhone] = useState('')
-  // ⚠⚠ Имя и CAS на этикетке РЕДАКТИРУЕМЫЕ. У групповых записей Annex VI в
-  // поле имени лежит список из пяти форм, и он целиком уезжал на этикетку.
+  // ⚠⚠ Имя, CAS и EC на этикетке РЕДАКТИРУЕМЫЕ. У групповых записей Annex VI
+  // одна ячейка хранит все формы сразу — и имена, и номера, — а импорт ещё и
+  // режет её по длине. Разбор идёт до компонента (`labelProductName.ts`),
+  // сюда приходит либо годное значение, либо пустая строка.
   const [productName, setProductName] = useState(displayName)
   const [casOnLabel, setCasOnLabel] = useState(casNumber)
+  const [ecOnLabel, setEcOnLabel] = useState(ecNumber ?? '')
   const [nominalQty, setNominalQty] = useState('')
   const [ufiCode, setUfiCode] = useState('')
   const [batchNumber, setBatchNumber] = useState('')
@@ -144,7 +171,7 @@ export default function GHSLabelConstructor({
   // остаются коды, которых у нового нет, и на этикетку не попадает ничего.
   useEffect(() => {
     setSelectedP(initialSelectedP ?? pStatements.slice(0, 6).map((p) => p.code))
-  }, [casNumber, pStatements.length])
+  }, [entryCas, pStatements.length])
 
   // Официальные тексты фраз на втором языке. Грузятся по выбору языка и при
   // смене вещества — набор кодов у нового вещества другой.
@@ -162,14 +189,19 @@ export default function GHSLabelConstructor({
       .catch((e: Error) => { if (!cancelled) { setSecondTexts({}); setSecondError(e.message) } })
       .finally(() => { if (!cancelled) setSecondLoading(false) })
     return () => { cancelled = true }
-  }, [secondLang, casNumber, hStatements.length, pStatements.length])
+  }, [secondLang, entryCas, hStatements.length, pStatements.length])
 
-  // Смена вещества переустанавливает имя и CAS: иначе на новой этикетке
+  // Смена вещества переустанавливает имя, CAS и EC: иначе на новой этикетке
   // остаётся имя предыдущего вещества.
+  //
+  // ⚠⚠ EC СЮДА НЕ ВХОДИЛ, и это был отдельный дефект: у нового вещества EC
+  // приходил новым пропом, а состояния под него не было вовсе — номер шёл на
+  // этикетку прямо из пропа, минуя и сброс, и разбор.
   useEffect(() => {
     setProductName(displayName)
     setCasOnLabel(casNumber)
-  }, [displayName, casNumber])
+    setEcOnLabel(ecNumber ?? '')
+  }, [displayName, casNumber, ecNumber])
 
   // Смена юрисдикции переключает единицы и набор пресетов, но НЕ трогает уже
   // выбранный физический размер: человек выбирал его под свою пачку наклеек.
@@ -211,7 +243,7 @@ export default function GHSLabelConstructor({
         }
       }
     } catch {}
-    track('label_editor_open', { cas: casNumber })
+    track('label_editor_open', { cas: entryCas })
   }, [])
 
   const saveToStorage = () => {
@@ -377,7 +409,7 @@ export default function GHSLabelConstructor({
   const labelInput: LabelInput = {
     productName,
     casNumber: casOnLabel,
-    ecNumber,
+    ecNumber: ecOnLabel,
     nominalQty,
     batchNumber,
     ufiCode,
@@ -405,23 +437,23 @@ export default function GHSLabelConstructor({
   const previewSvg = renderSvg(layout)
   const fit = layout.fit
 
-  const fileBase = `GHS-label-${(casNumber || 'label').replace(/[^\w.-]+/g, '-')}-${j.key}`
+  const fileBase = `GHS-label-${(entryCas || 'label').replace(/[^\w.-]+/g, '-')}-${j.key}`
 
   const confirmDownload = () => {
     if (!agreed) { setSubmitError('Please confirm the disclaimer.'); return }
     setSubmitError('')
     saveToStorage()
     setSubmitted(true)
-    track('label_download_unlocked', { cas: casNumber, jurisdiction: j.key })
+    track('label_download_unlocked', { cas: entryCas, jurisdiction: j.key })
   }
   const handleSvg = () => {
     downloadLabelSvg(layout, `${fileBase}.svg`)
-    track('label_download', { format: 'svg', cas: casNumber, jurisdiction: j.key })
+    track('label_download', { format: 'svg', cas: entryCas, jurisdiction: j.key })
   }
   const handlePdf = async () => {
     try {
       await downloadLabelPdf(layout, `${fileBase}.pdf`)
-      track('label_download', { format: 'pdf', cas: casNumber, jurisdiction: j.key })
+      track('label_download', { format: 'pdf', cas: entryCas, jurisdiction: j.key })
     } catch (e) { console.error('PDF download failed', e) }
   }
   const handleSheet = async () => {
@@ -434,11 +466,11 @@ export default function GHSLabelConstructor({
         `${fileBase}-sheet.pdf`,
       )
       setSheetNote(`${res.perSheet} labels per sheet (${res.cols} × ${res.rows})`)
-      track('label_download', { format: 'sheet_pdf', cas: casNumber, jurisdiction: j.key })
+      track('label_download', { format: 'sheet_pdf', cas: entryCas, jurisdiction: j.key })
     } catch (e) { console.error('Sheet PDF failed', e) }
   }
   const trackSdsAffiliateClick = () =>
-    track('affiliate_click', { partner: 'sds_manager', placement: 'label_constructor', cas: casNumber })
+    track('affiliate_click', { partner: 'sds_manager', placement: 'label_constructor', cas: entryCas })
 
   // ── Логотип ───────────────────────────────────────────────────────────────
   const MAX_LOGO_DIM = 600
@@ -465,7 +497,7 @@ export default function GHSLabelConstructor({
         setLogo({ dataUrl, aspect: cw / ch })
         setLogoName(file.name)
         try { localStorage.setItem(LOGO_STORAGE_KEY, JSON.stringify({ dataUrl, aspect: cw / ch, name: file.name })) } catch {}
-        track('label_logo_added', { cas: casNumber })
+        track('label_logo_added', { cas: entryCas })
       }
       img.onerror = () => setLogoError('Could not read that image.')
       img.src = src
@@ -773,12 +805,18 @@ export default function GHSLabelConstructor({
                       <button
                         key={`${v.index ?? ''}${v.name}`}
                         type="button"
-                        onClick={() => { setProductName(v.name); if (v.cas) setCasOnLabel(v.cas) }}
+                        // ⚠⚠ Номера ставятся ВСЕГДА, в том числе пустые. Было
+                        // `if (v.cas)` — и у формы без своего номера на
+                        // этикетке оставался номер предыдущей формы. Это хуже
+                        // пустого поля: неверный номер читается как верный.
+                        onClick={() => { setProductName(v.name); setCasOnLabel(v.cas ?? ''); setEcOnLabel(v.ec ?? '') }}
                         className={`cursor-pointer rounded-lg border px-2.5 py-1 text-left text-[11px] transition-colors ${
                           productName === v.name ? 'border-[#062A78] bg-blue-50 font-semibold text-[#062A78]' : 'border-gray-300 bg-white text-gray-700 hover:border-[#062A78]'
                         }`}
                       >
-                        {v.name}{v.cas ? <span className="ml-1 text-gray-400">CAS {v.cas}</span> : null}
+                        {v.name}
+                        {v.cas ? <span className="ml-1 text-gray-400">CAS {v.cas}</span> : null}
+                        {v.ec ? <span className="ml-1 text-gray-400">EC {v.ec}</span> : null}
                       </button>
                     ))}
                   </div>
@@ -789,6 +827,29 @@ export default function GHSLabelConstructor({
               <div>
                 <label className={labelClass}>CAS number</label>
                 <input type="text" value={casOnLabel} onChange={(e) => setCasOnLabel(e.target.value)} placeholder="67-64-1" className={inputClass} />
+                {casOnLabel.trim() && !casShapeOk(casOnLabel) && (
+                  <p className="mt-1 text-[11px] text-amber-700">
+                    Not the shape of a CAS number (e.g. 67-64-1). It will still be printed as typed.
+                  </p>
+                )}
+              </div>
+              {/* ⚠⚠ ПОЛЕ EC ПОЯВИЛОСЬ ЗДЕСЬ ПОТОМУ, что до session 44 номер шёл
+                  на этикетку прямо из базы и правке не поддавался. У 189 записей
+                  там склейка форм («200-752-1[1]209-526-»), и человек видел её
+                  на готовом PDF, ничего не в силах сделать. */}
+              <div>
+                <label className={labelClass}>EC number <span className="font-normal text-gray-400">optional</span></label>
+                <input type="text" value={ecOnLabel} onChange={(e) => setEcOnLabel(e.target.value)} placeholder="200-662-2" className={inputClass} />
+                {ecOnLabel.trim() && !ecShapeOk(ecOnLabel) ? (
+                  <p className="mt-1 text-[11px] text-amber-700">
+                    Not the shape of an EC number (three digits, three digits, one check digit — 200-662-2).
+                  </p>
+                ) : !ecOnLabel.trim() && nameVariants && nameVariants.length > 1 ? (
+                  <p className="mt-1 text-[11px] text-gray-500">
+                    This Annex VI entry stores one EC number per form. Pick a form above, or type the number for
+                    the grade you package.
+                  </p>
+                ) : null}
               </div>
               <div>
                 <label className={labelClass}>Batch / Lot number</label>

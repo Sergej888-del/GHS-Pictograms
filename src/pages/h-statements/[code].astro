@@ -15,6 +15,7 @@ import { supabase } from '../../lib/supabase'
 import { truncateMetaDescription } from '../../lib/metaDescription'
 import { splitClpNotation, hasClpNotation } from '../../lib/clpNotation'
 import { hCodeFromSlug, hHref, hSlug } from '../../lib/hStatementSlug'
+import { casForDisplay } from '../../lib/substanceIdentifiers'
 // ⚠ «Падать громко на ОШИБКЕ, деградировать тихо на ПУСТОТЕ» — session 31.
 // До session 32 каждый запрос этой страницы был написан как `const { data } = …`,
 // и отказ сети превращался не в ошибку, а в пропавший блок. Хуже: у `rowRes`
@@ -292,7 +293,11 @@ const items = subs
   .map((s) => {
     const name = nameOf(s)
     // name — полное (сортировка, data-s фильтр, title=); short — подпись в списке
-    return { name, short: truncateName(name), cas: s.cas_number, index: s.index_number, href: hrefOf(s) }
+    // ⚠⚠ CAS ЧЕРЕЗ ПРОВЕРКУ ФОРМЫ. У 156 записей в колонке склейка форм
+    // Annex VI, и подпись печаталась как «CAS 71-41-0[1]584-02-1[2». Пустое
+    // значение здесь не теряет запись: ниже уже есть ветка «Index No», и
+    // групповая запись просто показывается своим индексным номером.
+    return { name, short: truncateName(name), cas: casForDisplay(s.cas_number) || null, index: s.index_number, href: hrefOf(s) }
   })
   .sort((a, b) => a.name.localeCompare(b.name, 'en'))
 const groupEntries = items.filter((s) => !s.cas).length

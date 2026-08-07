@@ -19,6 +19,7 @@ import Fuse from 'fuse.js'
 import ShareResult from './ShareResult'
 import { supabase } from '../lib/supabase'
 import { substanceNameFull, truncateName } from '../lib/substanceName'
+import { casShapeOk, casForDisplay } from '../lib/substanceIdentifiers'
 import {
   resolveRoute, computeRoute, rollUp, tableKey, UNITS, P_TEXT,
   type Route, type InhalForm, type Resolved, type RouteResult,
@@ -137,8 +138,13 @@ export default function AteMixtureCalculator() {
           const cas = r.cas_number?.trim()
           if (!cas || cas === '-') continue
           const page = bySubId.get(r.id) ?? null
-          if (cas.includes('[') && !page) continue
-          const displayCas = cas.includes('[') ? page!.cas : cas
+          // ⚠⚠ Признак непечатаемого CAS — ФОРМА, а не скобка. Две записи склеены
+          // БЕЗ маркеров («127087-87-09016-45-9», «3811-73-215922-78-8») и
+          // проверку на скобку проходили насквозь; ещё у трёх страниц SDS свой
+          // cas_number тоже не той формы. Правило одно — substanceIdentifiers.ts.
+          if (!casShapeOk(cas) && !page) continue
+          const displayCas = casShapeOk(cas) ? cas : (casForDisplay(page!.cas) || casForDisplay(cas))
+          if (!displayCas) continue
           const displayName = substanceNameFull(r)
           rows.push({
             ...r, cas_number: cas,

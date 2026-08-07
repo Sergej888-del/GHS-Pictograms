@@ -44,6 +44,7 @@ import { hHref } from '../../../lib/hStatementSlug'
 // оставались без единой входящей ссылки (списки H- и P-кодов ведут для них в SDS).
 import { substanceHref } from '../../../lib/substanceSlug'
 import { substanceNameFull, NAME_COLUMNS } from '../../../lib/substanceName'
+import { ecForDisplay } from '../../../lib/substanceIdentifiers'
 
 const SITE = 'https://ghspictograms.com'
 const TOOL = '/tools/chemical-storage-compatibility/'
@@ -311,6 +312,9 @@ function clpShort(code: string): string | null {
 const name = page.display_name
 const cap = name.charAt(0).toUpperCase() + name.slice(1)
 const cas = page.cas_number
+// ⚠⚠ EC через проверку формы — то же, что на странице вещества: прочерк из
+// колонки Annex VI не идентификатор и в раздел 1 SDS попадать не должен.
+const ecShown = ecForDisplay(substance?.ec_number)
 const formula = page.formula_display
 const synsDisplay = page.synonyms_display ?? []
 
@@ -319,7 +323,7 @@ const alsoParts = [
   'safety data sheet',
   ...(formula ? [formula] : []),
   ...(cas ? [`CAS ${cas}`] : []),
-  ...(substance?.ec_number ? [`EC ${substance.ec_number}`] : []),
+  ...(ecShown ? [`EC ${ecShown}`] : []),
   ...synsDisplay,
 ]
 
@@ -701,7 +705,7 @@ const suppliers = cas
 // reach_reg_number import fills the column (empty today).
 const identity: { label: string; value: string }[] = []
 if (cas) identity.push({ label: 'CAS number', value: cas })
-if (substance?.ec_number) identity.push({ label: 'EC number', value: substance.ec_number })
+if (ecShown) identity.push({ label: 'EC number', value: ecShown })
 if (substance?.index_number) identity.push({ label: 'CLP Annex VI index', value: substance.index_number })
 // Formula rows (session 25). Two columns hold two DIFFERENT notations, both legitimate:
 //   substances.molecular_formula — Hill/alphabetical form as printed in Annex VI

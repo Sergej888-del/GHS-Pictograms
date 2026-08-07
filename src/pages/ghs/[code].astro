@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase'
 import { hHref } from '../../lib/hStatementSlug'
 import { substanceName, substanceNameFull } from '../../lib/substanceName'
 import { substanceHref } from '../../lib/substanceSlug'
+import { casForDisplay, casShapeOk } from '../../lib/substanceIdentifiers'
 
 export async function getStaticPaths() {
   return [
@@ -934,14 +935,19 @@ const ghsJsonLd = {
           // Без этой проверки check:seo ловил 115 битых адресов.
           const detailHref = slug
             ? `/sds/${slug}/`
-            : /^\d{2,7}-\d{2}-\d$/.test(s.cas_number)
+            : casShapeOk(s.cas_number)
               ? substanceHref(substanceNameFull(s), s.cas_number)
               : null
           const inner = (
             <>
               <div class="min-w-0">
                 <span class="font-semibold text-[#062A78] block truncate" title={substanceNameFull(s)}>{name}</span>
-                <span class="text-xs text-gray-500">CAS {s.cas_number}</span>
+                {/* ⚠⚠ ЧЕРЕЗ ПРОВЕРКУ ФОРМЫ. Здесь печаталась склейка форм Annex VI
+                    («110-45-2[1]35073-27-») у 156 записей: отбор по форме стоял
+                    только на ссылке, а подпись бралась из колонки как есть. */}
+                {casForDisplay(s.cas_number) && (
+                  <span class="text-xs text-gray-500">CAS {casForDisplay(s.cas_number)}</span>
+                )}
               </div>
               <div class="flex items-center gap-2 shrink-0">
                 {s.signal_word && (
@@ -956,8 +962,13 @@ const ghsJsonLd = {
               </div>
             </>
           )
+          // ⚠⚠ У <li> НЕТ key, И ЭТО НАМЕРЕННО. Это .astro, а не React: `key`
+          // здесь не служебный атрибут, а обычный HTML — он печатался в разметку
+          // как key="110-45-2[1]35073-27-" и протаскивал склейку Annex VI на
+          // девять страниц пиктограмм мимо всех проверок формы. Нашла его
+          // проверка identifiers-in-dist; глазами он невидим — атрибут.
           return (
-            <li key={s.cas_number} class="flex items-stretch gap-0">
+            <li class="flex items-stretch gap-0">
               {detailHref ? (
                 <a
                   href={detailHref}

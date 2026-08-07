@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { substanceNameFull } from '../lib/substanceName'
-import { productNameVariants, defaultProductName } from '../lib/labelProductName'
+import { productNameVariants, defaultLabelIdentifiers } from '../lib/labelProductName'
 import GHSLabelConstructor from './GHSLabelConstructor'
 import SubstanceFilterBrowse from './SubstanceFilterBrowse'
 import type { JurisdictionKey, LabelPurpose } from '../lib/jurisdictions'
@@ -459,10 +459,14 @@ export default function LabelConstructorLoader({
 
   if (!substance) return null
 
-  // ⚠ На этикетку идёт ОДНА форма имени, а не вся строка Annex VI: у групповых
-  // записей там пять имён подряд, и они уезжали на этикетку целиком.
+  // ⚠⚠ ЕДИНСТВЕННОЕ МЕСТО, ГДЕ ЗАПИСЬ БАЗЫ ПРЕВРАЩАЕТСЯ В ЭТИКЕТКУ. На печать
+  // идёт ОДНА форма — её имя, её CAS, её EC, — а не строка Annex VI целиком: у
+  // групповых записей там пять имён подряд и склеенные номера всех форм,
+  // обрезанные по длине колонки. Разбор и проверка формы — в
+  // `labelProductName.ts`; номер, не прошедший проверку, не печатается вовсе.
   const nameVariants = productNameVariants(substance)
-  const displayName = defaultProductName(substance) || substanceNameFull(substance)
+  const ids = defaultLabelIdentifiers(substance)
+  const displayName = ids.name || substanceNameFull(substance)
 
   return (
     <div className="space-y-6">
@@ -470,7 +474,9 @@ export default function LabelConstructorLoader({
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-green-700">Selected substance</p>
           <p className="font-bold text-gray-900">{displayName}</p>
-          <p className="text-sm text-gray-500">CAS {substance.cas_number}</p>
+          {/* ⚠ Не `substance.cas_number`: у групповых записей в колонке лежит
+              склейка номеров всех форм, и человеку она показывалась как есть. */}
+          {ids.cas && <p className="text-sm text-gray-500">CAS {ids.cas}</p>}
         </div>
         <button
           type="button"
@@ -484,8 +490,9 @@ export default function LabelConstructorLoader({
 
       <GHSLabelConstructor
         displayName={displayName}
-        casNumber={substance.cas_number}
-        ecNumber={substance.ec_number}
+        casNumber={ids.cas}
+        ecNumber={ids.ec}
+        entryKey={substance.cas_number}
         signalWord={substance.signal_word}
         pictograms={pictograms}
         hStatements={hStatements}

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
 import { substanceName, substanceNameFull } from '../lib/substanceName'
+import { casForDisplay, ecForDisplay, casShapeOk } from '../lib/substanceIdentifiers'
 import { substanceHref } from '../lib/substanceSlug'
 
 interface Substance {
@@ -268,12 +269,19 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
             // ⚠ Остров не попадает в check:seo — здесь битую ссылку поймает только человек.
             const detailHref = slug
               ? `/sds/${slug}/`
-              : /^\d{2,7}-\d{2}-\d$/.test(r.cas_number)
+              : casShapeOk(r.cas_number)
                 ? substanceHref(substanceNameFull(r), r.cas_number)
                 : null
             const labelHref = `/ghs-label-maker/?cas=${casEnc}`
             const pics = r.ghs_pictogram_codes ?? []
-            const casEcLine = `CAS ${r.cas_number}${r.ec_number ? ` · EC ${r.ec_number}` : ''}`
+            // ⚠⚠ Номера ЧЕРЕЗ ПРОВЕРКУ ФОРМЫ. У 156 записей в колонке CAS лежит
+            // склейка форм Annex VI, у 189 — то же в EC; строка списка печатала
+            // её как есть («CAS 71-41-0[1]584-02-1[2»). Правило одно на весь
+            // сайт — src/lib/substanceIdentifiers.ts.
+            const casShown = casForDisplay(r.cas_number)
+            const ecShown = ecForDisplay(r.ec_number)
+            const casEcLine = [casShown && `CAS ${casShown}`, ecShown && `EC ${ecShown}`]
+              .filter(Boolean).join(' · ')
 
             const mainBlock = (
               <>
