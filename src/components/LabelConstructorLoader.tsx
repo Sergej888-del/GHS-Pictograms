@@ -28,7 +28,7 @@ interface Substance {
 
 interface Pictogram { code: string; name_en: string; svg_content: string | null }
 interface HStatement { code: string; text_en: string }
-interface PStatement { code: string; text_en: string }
+interface PStatement { code: string; text_en: string; category?: string | null }
 
 interface Props {
   /** Юрисдикция, с которой открывается инструмент — задаётся страницей раздела. */
@@ -128,7 +128,7 @@ export default function LabelConstructorLoader({ jurisdiction = 'osha', purpose 
       const [picRes, hRes, pRes] = await Promise.all([
         supabase.from('pictograms_signals').select('code, name_en, svg_content').order('code'),
         supabase.from('h_statements').select('code, text_en:text_plain').order('code'),
-        supabase.from('p_statements').select('code, text_en:text_plain').order('code'),
+        supabase.from('p_statements').select('code, text_en:text_plain, category').order('code'),
       ])
       if (cancelled) return
       setAllPics((picRes.data ?? []) as Pictogram[])
@@ -150,10 +150,24 @@ export default function LabelConstructorLoader({ jurisdiction = 'osha', purpose 
     const pMatched = pQuery.trim()
       ? allP.filter((x) => (x.code + ' ' + x.text_en).toLowerCase().includes(pQuery.trim().toLowerCase()))
       : allP
-    const pVisible = [
-      ...pMatched.filter((x) => pickedP.includes(x.code)),
-      ...pMatched.filter((x) => !pickedP.includes(x.code)).slice(0, pQuery.trim() ? 60 : 12),
-    ]
+    // ⚠⚠ Список НЕ обрезается. Прежний срез в двенадцать строк выглядел как
+    // «в базе всего двенадцать P-фраз»: их 117, и нужная человеку почти
+    // наверняка была за срезом. Длину держит прокрутка контейнера.
+    //
+    // Порядок — как в GHS: общие, предупреждение, реагирование, хранение,
+    // утилизация. Внутри каждой группы по коду.
+    const P_ORDER: Record<string, number> = { general: 0, prevention: 1, response: 2, storage: 3, disposal: 4 }
+    const P_TITLE: Record<string, string> = {
+      general: 'General', prevention: 'Prevention', response: 'Response',
+      storage: 'Storage', disposal: 'Disposal', other: 'Other',
+    }
+    const pGroups = Object.entries(
+      pMatched.reduce<Record<string, PStatement[]>>((acc, x) => {
+        const key = x.category && P_ORDER[x.category] !== undefined ? x.category : 'other'
+        ;(acc[key] ??= []).push(x)
+        return acc
+      }, {}),
+    ).sort((a, b) => (P_ORDER[a[0]] ?? 9) - (P_ORDER[b[0]] ?? 9))
     // ⚠ EUH-фразы уходят В КОНЕЦ списка. По алфавиту «EUH001» встаёт впереди
     // «H200», и первым, что видит человек, оказывается «Explosive when dry» —
     // дополнительная европейская фраза, а не обычная H-фраза, которую он ищет.
@@ -252,15 +266,17 @@ export default function LabelConstructorLoader({ jurisdiction = 'osha', purpose 
           <div>
             <div className="mb-1 flex items-baseline justify-between">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Hazard statements</p>
-              <span className="text-[11px] text-gray-400">{pickedH.length} selected</span>
+              <span className="text-[11px] text-gray-400">{pickedH.length} of {allH.length} selected</span>
             </div>
             <input
               type="search" value={hQuery} onChange={(e) => setHQuery(e.target.value)}
               placeholder="Search by code or text: flammable, H225…"
               className="mb-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             />
-            <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
-              {hFiltered.slice(0, 60).map((h) => {
+            <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
+              {/* ⚠ Тоже без среза: H-фраз 108, и нужная почти всегда была за
+                  прежней границей в шестьдесят строк. */}
+              {hFiltered.map((h) => {
                 const on = pickedH.includes(h.code)
                 return (
                   <label key={h.code} className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-xs ${on ? 'border-[#062A78] bg-blue-50' : 'border-gray-200 bg-white'}`}>
@@ -282,7 +298,7 @@ export default function LabelConstructorLoader({ jurisdiction = 'osha', purpose 
           <div>
             <div className="mb-1 flex items-baseline justify-between">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Precautionary statements</p>
-              <span className="text-[11px] text-gray-400">{pickedP.length} selected</span>
+              <span className="text-[11px] text-gray-400">{pickedP.length} of {allP.length} selected</span>
             </div>
             <p className="mb-2 text-[11px] text-gray-500">
               Six is the usual maximum on a label — pick the ones that match how the product is actually used.
@@ -292,19 +308,28 @@ export default function LabelConstructorLoader({ jurisdiction = 'osha', purpose 
               placeholder="Search by code or text: gloves, P280…"
               className="mb-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             />
-            <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
-              {pVisible.map((x) => {
-                const on = pickedP.includes(x.code)
-                return (
-                  <label key={x.code} className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-xs ${on ? 'border-[#062A78] bg-blue-50' : 'border-gray-200 bg-white'}`}>
-                    <input
-                      type="checkbox" checked={on} className="mt-0.5 accent-[#062A78]"
-                      onChange={() => setPickedP((prev) => on ? prev.filter((c) => c !== x.code) : [...prev, x.code])}
-                    />
-                    <span><span className="font-semibold">{x.code}</span> {x.text_en}</span>
-                  </label>
-                )
-              })}
+            <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+              {pGroups.map(([key, list]) => (
+                <div key={key}>
+                  <p className="sticky top-0 bg-slate-50 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                    {P_TITLE[key] ?? key} <span className="font-normal">({list.length})</span>
+                  </p>
+                  <div className="space-y-1">
+                    {list.map((x) => {
+                      const on = pickedP.includes(x.code)
+                      return (
+                        <label key={x.code} className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-xs ${on ? 'border-[#062A78] bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                          <input
+                            type="checkbox" checked={on} className="mt-0.5 accent-[#062A78]"
+                            onChange={() => setPickedP((prev) => on ? prev.filter((c) => c !== x.code) : [...prev, x.code])}
+                          />
+                          <span><span className="font-semibold">{x.code}</span> {x.text_en}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
