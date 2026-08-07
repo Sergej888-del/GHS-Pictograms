@@ -3992,7 +3992,7 @@ const CHECKS: Check[] = [
       const LINKS = [
         { path: '/tools/ate-mixture-calculator/', param: 'substance', page: 'tools/ate-mixture-calculator/index.html', island: 'AteMixtureCalculator' },
         { path: '/tools/chemical-storage-compatibility/', param: 'substance', page: 'tools/chemical-storage-compatibility/index.html', island: 'StorageTool' },
-        { path: '/label-constructor/', param: 'cas', page: 'label-constructor/index.html', island: 'LabelConstructorLoader' },
+        { path: '/ghs-label-maker/', param: 'cas', page: 'ghs-label-maker/index.html', island: 'LabelConstructorLoader' },
       ]
 
       const detail: string[] = []

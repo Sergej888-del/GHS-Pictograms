@@ -55,6 +55,16 @@ interface Page {
   /** путь файла относительно dist */
   rel: string
   html: string
+  /**
+   * ⚠⚠ ЛЕНИВЫЕ КЭШИ РАЗБОРА — не украшение, а причина, по которой проверка
+   * идёт минуты, а не десятки минут. Ссылки со страницы нужны ПЯТИ проверкам
+   * (битые, слэши, сироты, глубина обхода, sitemap), а признак noindex —
+   * одиннадцати. Без кэша регулярка проходила по всему HTML каждый раз заново:
+   * 4 498 страниц, у страниц вещества по ~190 КБ, итого несколько гигабайт
+   * сканирования на ровном месте. Считаем один раз на страницу.
+   */
+  _links?: string[]
+  _noindex?: boolean
 }
 
 /** Все .html рекурсивно. _astro пропускаем — там ассеты, а не страницы. */
@@ -155,6 +165,16 @@ function internalLinks(html: string): string[] {
   return out
 }
 
+/** Ссылки страницы — один разбор на страницу за весь прогон. */
+function linksOf(p: Page): string[] {
+  return (p._links ??= internalLinks(p.html))
+}
+
+/** noindex страницы — один разбор на страницу за весь прогон. */
+function noindexOf(p: Page): boolean {
+  return (p._noindex ??= isNoindex(p.html))
+}
+
 // ─────────────────────────── отчёт ───────────────────────────
 
 type Level = 'error' | 'warn'
@@ -190,7 +210,7 @@ const CHECKS: Check[] = [
       // битую ссылку на /compliance/global-ghs/, которая висит с тех пор.
       const broken = new Map<string, Set<string>>()
       for (const p of PAGES) {
-        for (const href of internalLinks(p.html)) {
+        for (const href of linksOf(p)) {
           const asPage = href.endsWith('/') ? `${href}index.html` : null
           const direct = href.slice(1)
           const okPage = BY_URL.has(href) || (asPage && FILES.has(asPage.slice(1)))
@@ -227,7 +247,7 @@ const CHECKS: Check[] = [
       // — это лишний редирект и раздвоенный адрес для робота.
       const bad = new Map<string, Set<string>>()
       for (const p of PAGES) {
-        for (const href of internalLinks(p.html)) {
+        for (const href of linksOf(p)) {
           if (href.endsWith('/')) continue
           if (FILES.has(href.slice(1))) continue // это файл, ему слэш не нужен
           if (FILES.has(`${href.slice(1)}/index.html`)) {
@@ -256,7 +276,7 @@ const CHECKS: Check[] = [
       const missing: string[] = []
       const wrong: string[] = []
       for (const p of PAGES) {
-        if (isNoindex(p.html)) continue
+        if (noindexOf(p)) continue
         const c = linkHref(p.html, 'canonical')
         if (!c) {
           missing.push(p.url)
@@ -275,7 +295,7 @@ const CHECKS: Check[] = [
         level: 'error',
         headline:
           detail.length === 0
-            ? `canonical на месте у всех ${PAGES.filter((p) => !isNoindex(p.html)).length} индексируемых страниц`
+            ? `canonical на месте у всех ${PAGES.filter((p) => !noindexOf(p)).length} индексируемых страниц`
             : `проблем: ${missing.length + wrong.length}`,
         detail,
       }
@@ -290,7 +310,7 @@ const CHECKS: Check[] = [
       const byTitle = new Map<string, string[]>()
       const empty: string[] = []
       for (const p of PAGES) {
-        if (isNoindex(p.html)) continue
+        if (noindexOf(p)) continue
         const t = tagContent(p.html, 'title')
         if (!t) {
           empty.push(p.url)
@@ -328,7 +348,7 @@ const CHECKS: Check[] = [
       const byDesc = new Map<string, string[]>()
       const empty: string[] = []
       for (const p of PAGES) {
-        if (isNoindex(p.html)) continue
+        if (noindexOf(p)) continue
         const d = metaContent(p.html, 'description')
         if (!d) {
           empty.push(p.url)
@@ -372,7 +392,7 @@ const CHECKS: Check[] = [
       const longD: string[] = []
       const shortD: string[] = []
       for (const p of PAGES) {
-        if (isNoindex(p.html)) continue
+        if (noindexOf(p)) continue
         const t = tagContent(p.html, 'title') ?? ''
         const d = metaContent(p.html, 'description') ?? ''
         if (t.length > 65) longT.push(`${p.url} (${t.length})`)
@@ -450,7 +470,7 @@ const CHECKS: Check[] = [
     run: () => {
       const bad: string[] = []
       for (const p of PAGES) {
-        if (isNoindex(p.html)) continue
+        if (noindexOf(p)) continue
         const n = (p.html.match(/<h1[\s>]/gi) ?? []).length
         if (n !== 1) bad.push(`${p.url} (${n})`)
       }
@@ -491,7 +511,7 @@ const CHECKS: Check[] = [
           .filter((u) => u.startsWith(SITE))
           .map((u) => u.slice(SITE.length) || '/'),
       )
-      const indexable = PAGES.filter((p) => !isNoindex(p.html)).map((p) => p.url)
+      const indexable = PAGES.filter((p) => !noindexOf(p)).map((p) => p.url)
       const missing = indexable.filter((u) => !inMap.has(u)).sort()
       const extra = [...inMap].filter((u) => !BY_URL.has(u)).sort()
       const detail: string[] = []
@@ -514,8 +534,8 @@ const CHECKS: Check[] = [
     level: 'error',
     run: () => {
       const linked = new Set<string>(['/'])
-      for (const p of PAGES) for (const href of internalLinks(p.html)) linked.add(href.endsWith('/') ? href : `${href}/`)
-      const orphans = PAGES.filter((p) => !isNoindex(p.html) && !linked.has(p.url)).map((p) => p.url).sort()
+      for (const p of PAGES) for (const href of linksOf(p)) linked.add(href.endsWith('/') ? href : `${href}/`)
+      const orphans = PAGES.filter((p) => !noindexOf(p) && !linked.has(p.url)).map((p) => p.url).sort()
       return {
         id: 'orphans',
         group: 'Обход',
@@ -541,7 +561,7 @@ const CHECKS: Check[] = [
         for (const url of frontier) {
           const page = BY_URL.get(url)
           if (!page) continue
-          for (const raw of internalLinks(page.html)) {
+          for (const raw of linksOf(page)) {
             const href = raw.endsWith('/') ? raw : `${raw}/`
             if (!BY_URL.has(href) || depth.has(href)) continue
             depth.set(href, depth.get(url)! + 1)
@@ -550,10 +570,10 @@ const CHECKS: Check[] = [
         }
         frontier = next
       }
-      const deep = PAGES.filter((p) => !isNoindex(p.html) && (depth.get(p.url) ?? 99) > 4)
+      const deep = PAGES.filter((p) => !noindexOf(p) && (depth.get(p.url) ?? 99) > 4)
         .map((p) => `${p.url} (${depth.get(p.url) ?? 'не достижима'})`)
         .sort()
-      const unreachable = PAGES.filter((p) => !isNoindex(p.html) && !depth.has(p.url)).map((p) => p.url)
+      const unreachable = PAGES.filter((p) => !noindexOf(p) && !depth.has(p.url)).map((p) => p.url)
       const hist = new Map<number, number>()
       for (const [, d] of depth) hist.set(d, (hist.get(d) ?? 0) + 1)
       const detail = [
@@ -612,10 +632,10 @@ const CHECKS: Check[] = [
       // у страницы нет вовсе, и noindex стоит правильно. Поэтому рядом со словами
       // печатается число внутренних ссылок — «много слов при многих ссылках» это
       // перечень, а не статья, и решать по одному счётчику слов нельзя.
-      const list = PAGES.filter((p) => isNoindex(p.html))
+      const list = PAGES.filter((p) => noindexOf(p))
         .map((p) => {
           const words = p.html.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length
-          const links = internalLinks(p.html).length
+          const links = linksOf(p).length
           return `${p.url} — ${words} слов, ${links} внутр. ссылок`
         })
         .sort()

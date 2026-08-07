@@ -9,9 +9,14 @@ import {
 } from '../lib/jurisdictions'
 import {
   stockFor, stockMm, stockSizeLabel, inchLabel, SHEET_MM, SHEET_NAME, MM_PER_INCH,
+  LABEL_STOCK_ALL,
   type LabelStockItem,
 } from '../lib/labelStock'
 import type { NameVariant } from '../lib/labelProductName'
+import {
+  EU_LANGUAGES, LANGUAGE_BY_CODE, suggestedLanguages, fetchTranslations, EURLEX_ATTRIBUTION,
+  type TranslationMap,
+} from '../lib/labelLanguages'
 import NewsletterOptIn from './NewsletterOptIn'
 
 interface Pictogram { code: string; name_en: string; svg_content: string | null }
@@ -41,6 +46,23 @@ interface Props {
    * человек должен выбрать ту форму, которую он на самом деле фасует.
    */
   nameVariants?: NameVariant[]
+  /**
+   * Формат наклейки, на котором открывается инструмент — `id` из `labelStock.ts`.
+   * Задаётся страницами `/ghs-label-maker/templates/<slug>/`: там в заголовке
+   * обещан конкретный размер, и открываться на размере по умолчанию нельзя.
+   *
+   * ⚠ Неизвестный `id` молча игнорируется и остаётся размер по умолчанию:
+   * страница шаблона в этом случае просто не выполнит обещание, а вот падение
+   * острова унесло бы весь конструктор.
+   */
+  initialStockId?: string
+}
+
+/** Формат по `id` плюс его габариты в мм. `null`, если такого формата нет. */
+function stockById(id: string | undefined): { stock: LabelStockItem; mm: { w: number; h: number } } | null {
+  if (!id) return null
+  const stock = LABEL_STOCK_ALL.find((s) => s.id === id)
+  return stock ? { stock, mm: stockMm(stock) } : null
 }
 
 const STORAGE_KEY = 'ghs_supplier_data'
@@ -62,16 +84,25 @@ export default function GHSLabelConstructor({
   displayName, casNumber, ecNumber, signalWord,
   pictograms, hStatements, pStatements,
   initialJurisdiction = 'osha', initialPurpose = 'supplier', initialSelectedP, nameVariants,
+  initialStockId,
 }: Props) {
   const [jurisdictionKey, setJurisdictionKey] = useState<JurisdictionKey>(initialJurisdiction)
   const [purpose, setPurpose] = useState<LabelPurpose>(initialPurpose)
   const j = JURISDICTIONS[jurisdictionKey]
 
-  const [unit, setUnit] = useState<'mm' | 'in'>(JURISDICTIONS[initialJurisdiction].unit)
+  // Формат, заданный страницей шаблона. Считается один раз: дальше человек
+  // меняет размер сам, и пересчёт затирал бы его выбор на каждой перерисовке.
+  const preset = useMemo(() => stockById(initialStockId), [initialStockId])
+
+  // ⚠ У формата есть РОДНАЯ единица, и она важнее юрисдикции. Страница шаблона
+  // «210 × 148 mm» в режиме OSHA открылась бы в дюймах и показала «8-9/32 × 5-13/16»
+  // — числа, которых нет ни в одном каталоге и которые человек не сопоставит со
+  // своей пачкой наклеек.
+  const [unit, setUnit] = useState<'mm' | 'in'>(preset?.stock.unit ?? JURISDICTIONS[initialJurisdiction].unit)
   const [capacityMl, setCapacityMl] = useState<number>(500)
-  const [sizeW, setSizeW] = useState<number>(101.6) // мм, Avery 4 × 2 in
-  const [sizeH, setSizeH] = useState<number>(50.8)
-  const [stockId, setStockId] = useState<string | null>('us-4x2')
+  const [sizeW, setSizeW] = useState<number>(preset?.mm.w ?? 101.6) // мм, по умолчанию Avery 4 × 2 in
+  const [sizeH, setSizeH] = useState<number>(preset?.mm.h ?? 50.8)
+  const [stockId, setStockId] = useState<string | null>(preset?.stock.id ?? 'us-4x2')
 
   const [supplierName, setSupplierName] = useState('')
   const [supplierAddress, setSupplierAddress] = useState('')
@@ -90,6 +121,15 @@ export default function GHSLabelConstructor({
   const [showAllP, setShowAllP] = useState(false)
   const [pQuery, setPQuery] = useState('')
 
+  // ── Второй язык этикетки ──────────────────────────────────────────────────
+  // ⚠⚠ Для Канады это не удобство: HPR s. 6.2 требует ОБА официальных языка, и
+  // одноязычная этикетка поставщика там незаконна. `checkCompliance` в движке
+  // это уже проверяет — здесь появляется то, чем требование выполняется.
+  const [secondLang, setSecondLang] = useState<string | null>(null)
+  const [secondTexts, setSecondTexts] = useState<TranslationMap>({})
+  const [secondLoading, setSecondLoading] = useState(false)
+  const [secondError, setSecondError] = useState('')
+
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [agreed, setAgreed] = useState(false)
@@ -106,6 +146,24 @@ export default function GHSLabelConstructor({
     setSelectedP(initialSelectedP ?? pStatements.slice(0, 6).map((p) => p.code))
   }, [casNumber, pStatements.length])
 
+  // Официальные тексты фраз на втором языке. Грузятся по выбору языка и при
+  // смене вещества — набор кодов у нового вещества другой.
+  useEffect(() => {
+    if (!secondLang) { setSecondTexts({}); setSecondError(''); return }
+    let cancelled = false
+    const codes = [...hStatements.map((h) => h.code), ...pStatements.map((x) => x.code)]
+    setSecondLoading(true)
+    setSecondError('')
+    fetchTranslations(secondLang, codes)
+      .then((map) => { if (!cancelled) setSecondTexts(map) })
+      // ⚠ Ошибку показываем, а не проглатываем: пустая карта переводов и
+      // закрытый доступ к таблице выглядят на этикетке одинаково — одной
+      // английской строкой, — и без этого сообщения различить их нельзя.
+      .catch((e: Error) => { if (!cancelled) { setSecondTexts({}); setSecondError(e.message) } })
+      .finally(() => { if (!cancelled) setSecondLoading(false) })
+    return () => { cancelled = true }
+  }, [secondLang, casNumber, hStatements.length, pStatements.length])
+
   // Смена вещества переустанавливает имя и CAS: иначе на новой этикетке
   // остаётся имя предыдущего вещества.
   useEffect(() => {
@@ -115,7 +173,15 @@ export default function GHSLabelConstructor({
 
   // Смена юрисдикции переключает единицы и набор пресетов, но НЕ трогает уже
   // выбранный физический размер: человек выбирал его под свою пачку наклеек.
+  //
+  // ⚠⚠ ПЕРВЫЙ ПРОГОН ПРОПУСКАЕТСЯ, КОГДА РАЗМЕР ЗАДАН СТРАНИЦЕЙ. Эффект с
+  // зависимостью [jurisdictionKey] срабатывает и на монтировании, и без этого
+  // предохранителя он затирал единицу формата сразу после первого кадра:
+  // страница «210 × 148 mm» в режиме OSHA моргала миллиметрами и уезжала в
+  // дюймы. Ловится это только глазами — ни типы, ни числа тут ничего не видят.
+  const unitPinned = useRef(Boolean(preset))
   useEffect(() => {
+    if (unitPinned.current) { unitPinned.current = false; return }
     setUnit(j.unit)
   }, [jurisdictionKey])
 
@@ -283,6 +349,31 @@ export default function GHSLabelConstructor({
     notes.push('A safety data sheet for this product is available in the workplace.')
   }
 
+  // ── Второй язык на этикетке ───────────────────────────────────────────────
+  // ⚠⚠ Во второй блок попадают ТОЛЬКО фразы с официальным текстом. Кода нет в
+  // `statement_translations` — строка остаётся одной английской, и панель ниже
+  // называет такие фразы поимённо. Подставить машинный перевод или склеить его
+  // из базовой фразы нельзя: у текста на этикетке есть установленная редакция.
+  //
+  // ⚠ Сигнальное слово во втором блоке — `null`. Его официальные переводы лежат
+  // в Annex I, а не в Annex III/IV, и у нас их пока нет. См. labelLanguages.ts.
+  const secondH = hStatements.filter((h) => secondTexts[h.code])
+  const secondP = shownP.filter((x) => secondTexts[x.code])
+  const missingSecond = secondLang
+    ? [...hStatements, ...shownP].filter((x) => !secondTexts[x.code]).map((x) => x.code)
+    : []
+  const second = secondLang && (secondH.length > 0 || secondP.length > 0)
+    ? {
+        langTag: secondLang,
+        signalWord: null,
+        hStatements: secondH.map((h) => ({ code: h.code, text: secondTexts[h.code] })),
+        pStatements: secondP.map((x) => ({ code: x.code, text: secondTexts[x.code] })),
+        combinedPText: pFormat === 'combined'
+          ? secondP.map((x) => secondTexts[x.code]).join(' ')
+          : undefined,
+      }
+    : undefined
+
   const labelInput: LabelInput = {
     productName,
     casNumber: casOnLabel,
@@ -299,6 +390,7 @@ export default function GHSLabelConstructor({
     hiddenPCount: pStatements.length - shownP.length,
     supplier: { name: supplierName, address: supplierAddress, phone: supplierPhone },
     logo: logo ?? undefined,
+    second,
     notes,
   }
 
@@ -445,6 +537,81 @@ export default function GHSLabelConstructor({
         </div>
 
         <p className="mt-3 text-xs leading-relaxed text-gray-600">{j.languageNote}</p>
+
+        {/* ── ВТОРОЙ ЯЗЫК ──────────────────────────────────────────────────
+            ⚠⚠ Для Канады это не опция: HPR s. 6.2 требует ОБА официальных
+            языка, и одноязычная этикетка поставщика там незаконна. Поэтому у
+            WHMIS блок раскрыт и подписан требованием, а не предложением. */}
+        <div className="mt-3 rounded-lg border border-blue-200 bg-white px-3 py-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+              Second language
+              {j.requiredLanguages.length > 1 && (
+                <span className="ml-2 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">
+                  required
+                </span>
+              )}
+            </p>
+            {secondLoading && <span className="text-[11px] text-gray-400">loading official texts…</span>}
+          </div>
+
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSecondLang(null)}
+              className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                secondLang === null ? 'border-[#062A78] bg-[#062A78] text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-[#062A78]'
+              }`}
+            >none</button>
+            {suggestedLanguages(jurisdictionKey).map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => { setSecondLang(code); track('label_second_language', { lang: code }) }}
+                className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                  secondLang === code ? 'border-[#062A78] bg-[#062A78] text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-[#062A78]'
+                }`}
+              >{LANGUAGE_BY_CODE.get(code)?.native ?? code}</button>
+            ))}
+            <select
+              value={secondLang && !suggestedLanguages(jurisdictionKey).includes(secondLang) ? secondLang : ''}
+              onChange={(e) => { const v = e.target.value; setSecondLang(v || null); if (v) track('label_second_language', { lang: v }) }}
+              aria-label="Second label language"
+              className="cursor-pointer rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700"
+            >
+              <option value="">all 24 EU languages…</option>
+              {EU_LANGUAGES.filter((l) => l.code !== 'EN').map((l) => (
+                <option key={l.code} value={l.code}>{l.native} — {l.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {secondError && (
+            <p className="mt-2 rounded border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] text-rose-800">
+              Official texts could not be loaded: {secondError}
+            </p>
+          )}
+
+          {secondLang && !secondError && (
+            <>
+              <p className="mt-2 text-[11px] leading-relaxed text-gray-500">
+                Hazard and precautionary texts are the official wording from CLP Annex III and Annex IV —
+                not a translation we made. The signal word is printed in English only: its official
+                wording lives in Annex I, which we have not loaded yet.
+              </p>
+              {missingSecond.length > 0 && (
+                <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-relaxed text-amber-900">
+                  No official {LANGUAGE_BY_CODE.get(secondLang)?.name} text exists for{' '}
+                  <span className="font-semibold">{missingSecond.join(', ')}</span> — these stay in English.
+                  Either the statement was removed from CLP by a later adaptation, or it is a UN GHS
+                  statement the EU never adopted, or it is a suffixed form (H360F, H361d and the like)
+                  that the regulation does not publish as its own entry. We will not splice one together.
+                </p>
+              )}
+              <p className="mt-2 text-[10px] leading-relaxed text-gray-400">{EURLEX_ATTRIBUTION}</p>
+            </>
+          )}
+        </div>
         {purpose === 'workplace' && (
           <p className="mt-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs leading-relaxed text-gray-700">{j.workplaceNote}</p>
         )}

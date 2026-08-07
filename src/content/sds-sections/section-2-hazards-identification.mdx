@@ -132,7 +132,7 @@ diffs:
 
 errors:
   - title: "The label elements do not follow from the classification"
-    body: "Both texts derive 2.2 from 2.1 — “based on the classification, provide the appropriate label elements”. A pictogram or signal word that no class in 2.1 produces, or a class in 2.1 with no element under 2.2, means the two halves were written at different times and one of them is stale. The <a href=\"/label-constructor/\">label constructor</a> rebuilds the elements from the classification, which makes the mismatch visible in seconds."
+    body: "Both texts derive 2.2 from 2.1 — “based on the classification, provide the appropriate label elements”. A pictogram or signal word that no class in 2.1 produces, or a class in 2.1 with no element under 2.2, means the two halves were written at different times and one of them is stale. The <a href=\"/ghs-label-maker/\">label constructor</a> rebuilds the elements from the classification, which makes the mismatch visible in seconds."
   - title: "H-codes in section 2 and nothing in section 16"
     body: "Subsection 2.1 permits the classification and hazard statements to be abbreviated <b>only on condition</b> that the sheet refers to section 16, where the full text of each classification and each hazard statement is given. “H225, H319, H336” under a heading in section 2 and an empty <a href=\"/sds-sections/section-16-other-information/\">section 16</a> fails the condition the abbreviation depends on."
   - title: "2.3 filled in as “none known”"
@@ -157,7 +157,7 @@ related:
   - href: "/pictograms/"
     label: "The nine GHS pictograms"
     note: "What each symbol means, and why section 2 may print it in black and white"
-  - href: "/label-constructor/"
+  - href: "/ghs-label-maker/"
     label: "Build the label from the classification"
     note: "Derives signal word, pictograms and statements from the classes in 2.1 — the check 2.2 is supposed to survive"
 
@@ -269,6 +269,6 @@ Item **(c)** is newer. Paragraph (d)(1)(ii) requires the classification to take 
 
 Three tests, answerable by reading the sheet alone:
 
-1. **Does every label element trace back to a class?** Take each pictogram, the signal word and each statement in 2.2, and find the class in 2.1 that generates it. Anything with no parent, and any class with no child, is a defect. The [label constructor](/label-constructor/) runs that check mechanically.
+1. **Does every label element trace back to a class?** Take each pictogram, the signal word and each statement in 2.2, and find the class in 2.1 that generates it. Anything with no parent, and any class with no child, is a defect. The [label constructor](/ghs-label-maker/) runs that check mechanically.
 2. **Is 2.3 answered rather than left?** PBT, vPvB and endocrine-disruption status are questions with three honest answers — meets the criteria, does not meet them, or not assessed. "None known" is not one of them.
 3. **Could a non-expert repeat the hazards back to you?** That is the standard 2.1 sets. A summary that only makes sense to someone already holding the classification criteria satisfies the cross-reference to sections 9 to 12 and fails the requirement written beside it. Compare with [section 2 on a real substance page](/sds/acetone/#s2) to see how short it can be and still pass.

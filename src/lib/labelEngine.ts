@@ -816,6 +816,60 @@ async function rasterisePictogram(svg: string, sizeMm: number, dpi = 600): Promi
  * совпадает с координатой y в нашей раскладке. Менять базовую линию нельзя —
  * разъедется с превью.
  */
+// ── Юникод в PDF ────────────────────────────────────────────────────────────
+//
+// ⚠⚠ СТАНДАРТНЫЕ ШРИФТЫ jsPDF КОДИРУЮТСЯ В WinAnsi (CP1252). Это западная
+// латиница и больше ничего. Ломается НЕ ТОЛЬКО греческий и болгарский:
+// польские «ą ż ł», чешские «ř č ě», венгерские «ő ű», румынские «ș ț»,
+// латышские «ū ģ», мальтийские «ġ ħ» в CP1252 отсутствуют. По нашим 5 712
+// переводам таких знаков 175 из 306 встречающихся.
+//
+// ⚠⚠ И ЛОМАЕТСЯ ОНО МОЛЧА. jsPDF не бросает исключение — он печатает мусор или
+// пустоту, превью в SVG при этом остаётся правильным, потому что его рисует
+// браузер своими шрифтами. То есть автор этикетки видит нормальный текст, а на
+// бумагу выходит дырка. Поэтому шрифт подставляется автоматически, а не по
+// галочке в интерфейсе.
+
+/** Знак укладывается в CP1252 — то есть стандартный шрифт его напечатает. */
+function isWinAnsi(s: string): boolean {
+  // Диапазоны CP1252: ASCII, NBSP…ÿ и горстка знаков в 0x80–0x9F.
+  const EXTRA = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+  for (const ch of s) {
+    const c = ch.codePointAt(0)!;
+    if (c >= 0x20 && c <= 0x7e) continue;
+    if (c >= 0xa0 && c <= 0xff) continue;
+    if (EXTRA.includes(ch)) continue;
+    if (ch === '\n' || ch === '\t') continue;
+    return false;
+  }
+  return true;
+}
+
+/** Нужен ли раскладке юникодный шрифт. */
+export function layoutNeedsUnicodeFont(layout: LabelLayout): boolean {
+  return layout.items.some((it) => it.t === 'text' && !isWinAnsi(it.s));
+}
+
+/**
+ * Регистрирует Noto Sans в документе, если он нужен, и возвращает имя семейства.
+ *
+ * ⚠ Файл на 265 КБ грузится ДИНАМИЧЕСКИМ импортом и только при необходимости:
+ * английская или французская этикетка его не выкачивает вовсе.
+ *
+ * ⚠ Курсива в наборе нет — «italic» отдаётся обычным начертанием. На этикетке
+ * курсив не используется, а падать из-за незарегистрированного стиля нельзя.
+ */
+async function ensureUnicodeFont(pdf: any, layout: LabelLayout): Promise<string | null> {
+  if (!layoutNeedsUnicodeFont(layout)) return null;
+  const { NOTO_SANS_REGULAR_B64, NOTO_SANS_BOLD_B64 } = await import('./fonts/notoSansSubset');
+  pdf.addFileToVFS('NotoSans-Regular.ttf', NOTO_SANS_REGULAR_B64);
+  pdf.addFont('NotoSans-Regular.ttf', 'NotoSans', 'normal');
+  pdf.addFileToVFS('NotoSans-Bold.ttf', NOTO_SANS_BOLD_B64);
+  pdf.addFont('NotoSans-Bold.ttf', 'NotoSans', 'bold');
+  pdf.addFont('NotoSans-Regular.ttf', 'NotoSans', 'italic');
+  return 'NotoSans';
+}
+
 export async function downloadLabelPdf(layout: LabelLayout, filename: string) {
   const { jsPDF } = await import('jspdf');
   const pdf = new jsPDF({
@@ -823,12 +877,22 @@ export async function downloadLabelPdf(layout: LabelLayout, filename: string) {
     format: [layout.widthMm, layout.heightMm],
     orientation: layout.heightMm >= layout.widthMm ? 'portrait' : 'landscape',
   });
-  await drawLayoutToPdf(pdf, layout, 0, 0);
+  const uni = await ensureUnicodeFont(pdf, layout);
+  await drawLayoutToPdf(pdf, layout, 0, 0, uni);
   pdf.save(filename);
 }
 
-/** Отрисовка раскладки в уже созданный документ со сдвигом — нужна для N-up. */
-export async function drawLayoutToPdf(pdf: any, layout: LabelLayout, dx: number, dy: number) {
+/**
+ * Отрисовка раскладки в уже созданный документ со сдвигом — нужна для N-up.
+ *
+ * ⚠ `uniFont` применяется КО ВСЕМУ тексту сразу, а не только к строкам со
+ * знаками вне CP1252. Смешивать Helvetica и Noto Sans на одной этикетке нельзя:
+ * английская строка и её французский перевод встали бы разными шрифтами, и
+ * этикетка выглядела бы собранной из двух разных документов.
+ */
+export async function drawLayoutToPdf(
+  pdf: any, layout: LabelLayout, dx: number, dy: number, uniFont?: string | null,
+) {
   const PT_PER_MM = 72 / 25.4;
   for (const it of layout.items) {
     switch (it.t) {
@@ -853,7 +917,10 @@ export async function drawLayoutToPdf(pdf: any, layout: LabelLayout, dx: number,
         if (it.dash) pdf.setLineDashPattern([], 0);
         break;
       case 'text': {
-        pdf.setFont(it.mono ? 'courier' : 'helvetica', it.bold ? 'bold' : it.italic ? 'italic' : 'normal');
+        // ⚠ Моноширинные строки (коды H/P, партия, UFI) остаются на courier: там
+        // только ASCII, и юникодного начертания у нас моноширинного нет.
+        const family = it.mono ? 'courier' : (uniFont ?? 'helvetica');
+        pdf.setFont(family, it.bold ? 'bold' : it.italic ? 'italic' : 'normal');
         // Кегль в jsPDF задаётся в пунктах, а раскладка считает в миллиметрах.
         pdf.setFontSize(it.size * PT_PER_MM);
         pdf.setTextColor(it.color);
@@ -893,9 +960,12 @@ export async function downloadLabelSheetPdf(
     format: [sheet.widthMm, sheet.heightMm],
     orientation: sheet.heightMm >= sheet.widthMm ? 'portrait' : 'landscape',
   });
+  // ⚠ Шрифт регистрируется ОДИН раз на документ, а не на каждую этикетку сетки:
+  // иначе на листе из тридцати штук файл распухнет на тридцать копий шрифта.
+  const uni = await ensureUnicodeFont(pdf, layout);
   for (let r0 = 0; r0 < rows; r0++) {
     for (let c0 = 0; c0 < cols; c0++) {
-      await drawLayoutToPdf(pdf, layout, marginX + c0 * layout.widthMm, marginY + r0 * layout.heightMm);
+      await drawLayoutToPdf(pdf, layout, marginX + c0 * layout.widthMm, marginY + r0 * layout.heightMm, uni);
     }
   }
   pdf.save(filename);

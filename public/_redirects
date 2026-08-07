@@ -52,3 +52,17 @@
 # Paginated lists from the old site collapse onto the code page.
 /h-statements/:code/page/:n /h-statements/:code/ 301
 /h-statements/:code/page/:n/ /h-statements/:code/ 301
+
+# --- Label constructor -> GHS label maker hub (session 43) ---
+# `/label-constructor/` был одной страницей: заголовок, абзац и React-остров.
+# Для поиска на ней не было ничего — при том, что у конкурента на том же адресе
+# разбор шести элементов этикетки, пять шагов, раздел про печать и FAQ. Адрес
+# развёрнут в раздел: хаб + шесть веток (четыре юрисдикции, вторичная тара,
+# транспорт) + шесть страниц шаблонов размеров. Инструмент стоит на каждой.
+# ⚠⚠ Правило работает только потому, что сама страница ВЫНЕСЕНА из src/pages:
+# у Cloudflare Pages статический файл сильнее строки в _redirects. Ровно на этом
+# стоял и переезд /inspector/ -> /un/ в session 39.
+# ⚠ Параметр ?cas= сохраняется: :splat здесь не нужен, query string Cloudflare
+# переносит сама, а вот без второй строки без слэша адрес без него уйдёт в 404.
+/label-constructor /ghs-label-maker/ 301
+/label-constructor/ /ghs-label-maker/ 301

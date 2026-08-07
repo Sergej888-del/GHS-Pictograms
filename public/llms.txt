@@ -6,7 +6,7 @@
 
 - [Chemical Storage Compatibility](https://ghspictograms.com/tools/chemical-storage-compatibility/): Check GHS storage segregation for any substance — never-store/keep-separate verdicts across 13 hazard classes, with ADR transport data and partner-specific reaction gases
 - [ATE Mixture Calculator](https://ghspictograms.com/tools/ate-mixture-calculator/): Compute the GHS/CLP Acute Toxicity Estimate of a mixture — 5 routes (oral, dermal, inhalation as gas/vapour/dust), automatic ATE from harmonised Annex VI H-codes, the 10% unknown-ingredient rule, and the resulting label outcome (pictogram, signal word, H/P statements)
-- [GHS Label Constructor](https://ghspictograms.com/label-constructor/): Build CLP-compliant chemical labels with pictograms, signal words, H/P-statements across 5 volume tiers
+- [GHS Label Constructor](https://ghspictograms.com/ghs-label-maker/): Build CLP-compliant chemical labels with pictograms, signal words, H/P-statements across 5 volume tiers
 - [Substance Database](https://ghspictograms.com/substances/): Search 4,178 CLP Annex VI substances with full GHS classification, pictograms and signal words
 - [UN Number Reference](https://ghspictograms.com/un/): Every UN number in Table A of ADR 2025 with proper shipping name, class and packing group; 389 numbers have a full page carrying the 49 CFR 172.101 entry beside the ADR one, never merged, each under its own source stamp
 

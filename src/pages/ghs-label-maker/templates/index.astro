@@ -1,0 +1,256 @@
+---
+/**
+ * Хаб шаблонов размеров — /ghs-label-maker/templates/
+ *
+ * ⚠⚠ ЗДЕСЬ ПЕРЕЧИСЛЕНЫ ВСЕ ГЕОМЕТРИИ, А СТРАНИЦ ТОЛЬКО ШЕСТЬ. Это то же решение,
+ * что на `/un/`, где из 2 347 номеров собственный адрес получили 389: отдельный
+ * URL заводится там, где странице есть чем быть непустой. Двадцать пять тонких
+ * страниц про прямоугольники утянули бы вниз уже ранжирующиеся адреса домена.
+ *
+ * ⚠ Хранится ГЕОМЕТРИЯ, а не код вендора: один формат 4 × 2 in — это Avery
+ * 60505, 60525 и 5163, Presta 94207 и OnlineLabels OL3540 и OL125 одновременно.
+ * Коды печатаются в колонке «Also sold as» — по ним ищут, но устаревают они, а
+ * не размер.
+ */
+export const prerender = true
+
+import Layout from '../../../layouts/Layout.astro'
+import LabelConstructorLoader from '../../../components/LabelConstructorLoader'
+import { SITE, TEMPLATES, TEMPLATE_BY_STOCK, breadcrumbJsonLd } from '../../../lib/labelMakerHub'
+import { stockFor, stockSizeLabel, stockMm, SHEET_NAME, type LabelStockItem } from '../../../lib/labelStock'
+import { CLP_SIZE_TIERS } from '../../../lib/jurisdictions'
+
+const canonical = `${SITE}/ghs-label-maker/templates/`
+const title = 'GHS Label Templates — Avery, OnlineLabels & A4 Sizes'
+const description =
+  'Free GHS label templates in the sizes labels are actually sold in: 4 × 2, 4 × 6, 4 × 4 and 2 × 2 inch, full Letter sheet, A4 and A5. Avery and OnlineLabels codes.'
+
+const us = stockFor('us')
+const eu = stockFor('eu')
+
+/**
+ * Самый крупный ярус CLP, которому формат удовлетворяет.
+ *
+ * ⚠⚠ Годность считается ПО ПЛОЩАДИ, а не по обеим сторонам. Иначе привычная
+ * 4 × 2 in (101.6 × 50.8 мм) не проходит ярус «≤ 3 л» — потому что 50.8 меньше
+ * 52, — хотя площади в ней в полтора раза больше, чем в предписанных 52 × 74.
+ * Вторая проверка отсекает узкие ленты: сторона не должна быть меньше половины
+ * короткой стороны яруса.
+ */
+function clpTierFor(s: LabelStockItem): string {
+  const { w, h } = stockMm(s)
+  const area = w * h
+  const short = Math.min(w, h)
+  const fits = CLP_SIZE_TIERS.filter((t) => {
+    const tShort = Math.min(t.labelMinW, t.labelMinH)
+    return area >= t.labelMinW * t.labelMinH && short >= tShort / 2
+  })
+  return fits.length ? fits[fits.length - 1].capacityLabel : '—'
+}
+
+const jsonLd = [
+  breadcrumbJsonLd([
+    { name: 'Home', path: '/' },
+    { name: 'GHS label maker', path: '/ghs-label-maker/' },
+    { name: 'Templates', path: '/ghs-label-maker/templates/' },
+  ]),
+  {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: title,
+    description,
+    url: canonical,
+    mainEntity: {
+      '@type': 'ItemList',
+      numberOfItems: TEMPLATES.length,
+      itemListElement: TEMPLATES.map((t, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: t.h1,
+        url: `${SITE}/ghs-label-maker/templates/${t.slug}/`,
+      })),
+    },
+  },
+]
+---
+
+<Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
+  {jsonLd.map((block) => (
+    <script type="application/ld+json" slot="head" set:html={JSON.stringify(block)} />
+  ))}
+
+  <section class="hub-hero">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+    <div class="hub-wrap hub-hero-inner hub-hero-left">
+      <nav class="hub-crumb" aria-label="Breadcrumb">
+        <a href="/">Home</a><span class="sep">/</span>
+        <a href="/ghs-label-maker/">GHS label maker</a><span class="sep">/</span>
+        <span>Templates</span>
+      </nav>
+      <p class="hub-hero-eyebrow">Label stock · sizes and part numbers</p>
+      <h1>GHS label templates</h1>
+      <p class="hub-hero-sub">
+        The sizes chemical labels are actually sold in, not abstract paper formats. Pick the one that
+        matches the pack of blank labels on your shelf and the tool lays the label out at exactly that
+        geometry — then prints the whole sheet at the right pitch.
+      </p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">{us.length + eu.length} geometries</span>
+        <span class="hub-hero-chip">Avery · OnlineLabels · HERMA</span>
+        <span class="hub-hero-chip">Letter · Legal · A4 · A3 · roll</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">01 · Popular sizes</p>
+      <h2 class="hub-h2">Templates with their own page</h2>
+      <p class="hub-sub">
+        Six sizes cover most of what people actually print. Each page opens the tool preset to that
+        geometry and explains what the size suits — and where it runs out of room.
+      </p>
+      <div class="hub-index wide" style="margin-top:24px">
+        {TEMPLATES.map((t) => (
+          <a class="hub-index-card" href={`/ghs-label-maker/templates/${t.slug}/`}>
+            <span class="txt">
+              <span class="name">{t.h1.replace(' GHS label template', '').replace(' template', '')}</span>
+              <span class="cas">{t.description.slice(0, 74)}…</span>
+            </span>
+            <span class="formula">→</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">02 · United States</p>
+      <h2 class="hub-h2">Letter and Legal sheet stock</h2>
+      <p class="hub-sub">
+        Chemical-resistant film first — that is what a shipped container needs. The plain paper ranges
+        below the divider are listed because people search for them by number and use them on secondary
+        containers, where paper is defensible.
+      </p>
+      <div class="hub-table-wrap">
+        <table class="hub-table">
+          <thead>
+            <tr>
+              <th scope="col">Size</th>
+              <th scope="col">mm</th>
+              <th scope="col">Sheet</th>
+              <th scope="col">Material</th>
+              <th scope="col">Also sold as</th>
+              <th scope="col">CLP tier</th>
+            </tr>
+          </thead>
+          <tbody>
+            {us.map((s) => {
+              const t = TEMPLATE_BY_STOCK.get(s.id)
+              const mm = stockMm(s)
+              return (
+                <tr>
+                  <td class="c-code">
+                    {t ? <a href={`/ghs-label-maker/templates/${t.slug}/`}>{stockSizeLabel(s)}</a> : stockSizeLabel(s)}
+                  </td>
+                  <td class="c-code">{Math.round(mm.w * 10) / 10} × {Math.round(mm.h * 10) / 10}</td>
+                  <td class="c-code">{s.perSheet === null ? 'roll' : `${s.perSheet} · ${SHEET_NAME[s.sheet]}`}</td>
+                  <td class="c-code">{s.chemical ? 'chemical-resistant' : 'paper'}</td>
+                  <td class="c-txt">{s.aliases.join(', ')}</td>
+                  <td class="c-code">{clpTierFor(s)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-b">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">03 · Europe</p>
+      <h2 class="hub-h2">A4, A3 and metric roll stock</h2>
+      <div class="hub-table-wrap">
+        <table class="hub-table">
+          <thead>
+            <tr>
+              <th scope="col">Size</th>
+              <th scope="col">Sheet</th>
+              <th scope="col">Material</th>
+              <th scope="col">Also sold as</th>
+              <th scope="col">CLP tier</th>
+            </tr>
+          </thead>
+          <tbody>
+            {eu.map((s) => {
+              const t = TEMPLATE_BY_STOCK.get(s.id)
+              return (
+                <tr>
+                  <td class="c-code">
+                    {t ? <a href={`/ghs-label-maker/templates/${t.slug}/`}>{stockSizeLabel(s)}</a> : stockSizeLabel(s)}
+                  </td>
+                  <td class="c-code">{s.perSheet === null ? 'roll' : `${s.perSheet} · ${SHEET_NAME[s.sheet]}`}</td>
+                  <td class="c-code">{s.chemical ? 'chemical-resistant' : 'paper'}</td>
+                  <td class="c-txt">{s.aliases.join(', ')}</td>
+                  <td class="c-code">{clpTierFor(s)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p class="hub-fine">
+        The “CLP tier” column is the largest container capacity the format satisfies under CLP Annex I
+        Table 1.3, judged by label <em>area</em> rather than by both sides — otherwise a 4 × 2 in label
+        fails the ≤ 3 L tier on one side while carrying half again the prescribed area. It applies in the
+        EU and Great Britain; OSHA and WHMIS set no numeric minimum, so the column is guidance there.
+        Sizes are as published by the manufacturers; part numbers are for identification only.
+      </p>
+    </div>
+  </section>
+
+  <section class="hub-sec-tool">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">04 · Build it</p>
+      <h2 class="hub-h2" style="margin-bottom:20px">Label builder</h2>
+      <LabelConstructorLoader client:load />
+    </div>
+  </section>
+
+  <section class="hub-sec-deep">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">Next</p>
+      <h2 class="hub-h2">Label rules by jurisdiction</h2>
+      <div class="hub-mini-cards">
+        <a class="hub-mini-card" href="/ghs-label-maker/osha/">
+          <strong>OSHA HazCom</strong>
+          <span>Six required elements, a US address and phone, and the 20 November 2026 deadline.</span>
+        </a>
+        <a class="hub-mini-card" href="/ghs-label-maker/clp-eu/">
+          <strong>EU CLP</strong>
+          <span>The Annex I Table 1.3 size tiers, the UFI and EUH statements.</span>
+        </a>
+        <a class="hub-mini-card" href="/ghs-label-maker/whmis-canada/">
+          <strong>WHMIS Canada</strong>
+          <span>English and French both mandatory on a supplier label.</span>
+        </a>
+        <a class="hub-mini-card" href="/ghs-label-maker/secondary-container/">
+          <strong>Secondary containers</strong>
+          <span>Fewer elements — and one case that needs no label at all.</span>
+        </a>
+        <a class="hub-mini-card" href="/ghs-label-maker/">
+          <strong>Label maker hub</strong>
+          <span>All four jurisdictions, the six label elements, printing and the full FAQ.</span>
+        </a>
+        <a class="hub-mini-card" href="/tools/">
+          <strong>All free GHS tools</strong>
+          <span>Fourteen tools: calculators, selector, storage matrix and this label maker.</span>
+        </a>
+      </div>
+    </div>
+  </section>
+</Layout>

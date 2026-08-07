@@ -6,10 +6,24 @@ import GHSLabelConstructor from './GHSLabelConstructor'
 import SubstanceFilterBrowse from './SubstanceFilterBrowse'
 import type { JurisdictionKey, LabelPurpose } from '../lib/jurisdictions'
 
-const LABEL_BASE = '/label-constructor/'
+/**
+ * Адрес, на котором инструмент сейчас стоит.
+ *
+ * ⚠⚠ БЕРЁТСЯ ИЗ location, А НЕ ЗАШИТ КОНСТАНТОЙ. Раньше здесь был жёсткий
+ * `/ghs-label-maker/` — страница инструмента была одна, и вопросов не
+ * возникало. Теперь их четырнадцать: хаб, шесть веток и шесть шаблонов. С
+ * зашитым адресом выбор вещества на `/ghs-label-maker/whmis-canada/` уводил бы
+ * человека на `/ghs-label-maker/?cas=…` — то есть выкидывал бы его из канадского
+ * режима ровно в тот момент, когда он наконец выбрал вещество.
+ */
+function labelBase(): string {
+  const p = window.location.pathname
+  return p.endsWith('/') ? p : p + '/'
+}
 
 function setLabelConstructorUrl(cas: string | null) {
-  const url = cas === null ? LABEL_BASE : `${LABEL_BASE}?cas=${encodeURIComponent(cas)}`
+  const base = labelBase()
+  const url = cas === null ? base : `${base}?cas=${encodeURIComponent(cas)}`
   window.history.pushState({}, '', url)
 }
 
@@ -34,9 +48,16 @@ interface Props {
   /** Юрисдикция, с которой открывается инструмент — задаётся страницей раздела. */
   jurisdiction?: JurisdictionKey
   purpose?: LabelPurpose
+  /**
+   * Формат наклейки, на котором открывается инструмент — `id` из `labelStock.ts`.
+   * Задаётся страницами `/ghs-label-maker/templates/<slug>/`.
+   */
+  initialStockId?: string
 }
 
-export default function LabelConstructorLoader({ jurisdiction = 'osha', purpose = 'supplier' }: Props) {
+export default function LabelConstructorLoader({
+  jurisdiction = 'osha', purpose = 'supplier', initialStockId,
+}: Props) {
   const [cas, setCas] = useState<string | null>(null)
   const [substance, setSubstance] = useState<Substance | null>(null)
   const [pictograms, setPictograms] = useState<Pictogram[]>([])
@@ -371,6 +392,7 @@ export default function LabelConstructorLoader({ jurisdiction = 'osha', purpose 
                 pStatements={pickedPList}
                 initialJurisdiction={jurisdiction}
                 initialPurpose={purpose}
+                initialStockId={initialStockId}
                 initialSelectedP={pickedP}
               />
             </div>
@@ -470,6 +492,7 @@ export default function LabelConstructorLoader({ jurisdiction = 'osha', purpose 
         pStatements={pStatements}
         initialJurisdiction={jurisdiction}
         initialPurpose={purpose}
+        initialStockId={initialStockId}
         nameVariants={nameVariants}
       />
     </div>

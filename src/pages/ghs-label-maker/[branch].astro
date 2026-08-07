@@ -1,0 +1,310 @@
+---
+/**
+ * Ветка раздела — /ghs-label-maker/<branch>/
+ *
+ * Шесть страниц: четыре юрисдикции, вторичная тара и транспорт. Все берут
+ * содержание из `src/lib/labelMakerHub.ts`.
+ *
+ * ⚠⚠ ИНСТРУМЕНТ НА КАЖДОЙ, И ОТКРЫВАЕТСЯ УЖЕ НАСТРОЕННЫМ. `LabelConstructorLoader`
+ * принимает `jurisdiction` и `purpose`; страница /whmis-canada/ открывает
+ * конструктор в канадском режиме, /secondary-container/ — в цеховом, где из
+ * обязательных элементов уходит блок поставщика. Без этого страницы были бы
+ * шестью статьями с одинаковым виджетом внизу.
+ *
+ * ⚠ Одна разметка на все шесть — сознательно. Содержание у веток разное и лежит
+ * в данных; расходиться должны ТЕКСТЫ, а не вёрстка. Иначе через две сессии
+ * половина страниц будет с хлебными крошками, половина без.
+ *
+ * ⚠ Разделы прозы печатаются из массива блоков, а не из свободного HTML: блок
+ * умеет подзаголовок, абзацы, список, врезку-предупреждение и ссылку на норму —
+ * и ничего больше. Ограничение намеренное, оно и держит шесть страниц похожими.
+ */
+export const prerender = true
+
+import Layout from '../../layouts/Layout.astro'
+import LabelConstructorLoader from '../../components/LabelConstructorLoader'
+import {
+  SITE, BRANCHES, CROSS_LINKS, faqJsonLd, breadcrumbJsonLd,
+} from '../../lib/labelMakerHub'
+import { JURISDICTIONS } from '../../lib/jurisdictions'
+
+export function getStaticPaths() {
+  return BRANCHES.map((b) => ({ params: { branch: b.slug }, props: { branch: b } }))
+}
+
+const { branch } = Astro.props
+const j = JURISDICTIONS[branch.jurisdiction]
+
+const canonical = `${SITE}/ghs-label-maker/${branch.slug}/`
+
+// Соседи по разделу — навигация внизу страницы. ⚠ По кругу: у последней ветки
+// следующей становится первая, иначе на двух страницах из шести половина
+// блока пустая.
+const idx = BRANCHES.findIndex((b) => b.slug === branch.slug)
+const prev = BRANCHES[(idx - 1 + BRANCHES.length) % BRANCHES.length]
+const next = BRANCHES[(idx + 1) % BRANCHES.length]
+
+const related = CROSS_LINKS.filter((l) =>
+  ['/pictogram-selector/', '/h-statements/', '/p-statements/', '/substances/', '/un/', '/tools/'].includes(l.href),
+)
+
+const jsonLd = [
+  breadcrumbJsonLd([
+    { name: 'Home', path: '/' },
+    { name: 'GHS label maker', path: '/ghs-label-maker/' },
+    { name: branch.cardTitle, path: `/ghs-label-maker/${branch.slug}/` },
+  ]),
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: branch.h1,
+    url: canonical,
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Any (web browser)',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    description: branch.description,
+  },
+  faqJsonLd(branch.faq),
+]
+---
+
+<Layout
+  title={branch.title}
+  description={branch.description}
+  canonical={canonical}
+  titleIsComplete={true}
+>
+  {jsonLd.map((block) => (
+    <script type="application/ld+json" slot="head" set:html={JSON.stringify(block)} />
+  ))}
+
+  <section class="hub-hero">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+    <div class="hub-wrap hub-hero-inner hub-hero-left">
+      <nav class="hub-crumb" aria-label="Breadcrumb">
+        <a href="/">Home</a><span class="sep">/</span>
+        <a href="/ghs-label-maker/">GHS label maker</a><span class="sep">/</span>
+        <span>{branch.cardTitle}</span>
+      </nav>
+      <p class="hub-hero-eyebrow">{branch.heroEyebrow}</p>
+      <h1>{branch.h1}</h1>
+      <p class="hub-hero-sub">{branch.heroSub}</p>
+      <div class="hub-hero-chips">
+        {branch.chips.map((c) => <span class="hub-hero-chip">{c}</span>)}
+      </div>
+    </div>
+  </section>
+
+  {branch.alert && (
+    <section class="hub-sec-white" style="padding-top:26px;padding-bottom:0">
+      <div class="hub-wrap">
+        <div class="lm-alert">
+          <p class="lbl">{branch.alert.label}</p>
+          <p class="txt">{branch.alert.text}</p>
+        </div>
+      </div>
+    </section>
+  )}
+
+  <!-- ── ИНСТРУМЕНТ, УЖЕ НАСТРОЕННЫЙ НА ЭТУ ЮРИСДИКЦИЮ ─────────────────────── -->
+  <section class="hub-sec-tool" id="build">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">Build it</p>
+      <h2 class="hub-h2" style="margin-bottom:6px">
+        {branch.purpose === 'workplace' ? 'Workplace label builder' : 'Label builder'}
+      </h2>
+      <p class="hub-sub" style="margin-bottom:22px">
+        Opens set to <strong>{j.tag}</strong>{branch.purpose === 'workplace' ? ' in workplace-container mode' : ''}.
+        You can change the jurisdiction inside the tool at any point — the label is rebuilt against the
+        rules of whichever one is selected.
+      </p>
+      <LabelConstructorLoader
+        client:load
+        jurisdiction={branch.jurisdiction}
+        purpose={branch.purpose}
+      />
+    </div>
+  </section>
+
+  <!-- ── ПРОЗА ─────────────────────────────────────────────────────────────── -->
+  {branch.sections.map((sec, i) => (
+    <section class={i % 2 === 0 ? 'hub-sec-a' : 'hub-sec-white'}>
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{sec.eyebrow}</p>
+        <h2 class="hub-h2">{sec.h2}</h2>
+        {sec.lead && <p class="hub-sub">{sec.lead}</p>}
+
+        <div class="hub-prose">
+          {sec.blocks.map((b) => (
+            <div class="lm-block">
+              {b.h3 && <h3 class="lm-h3">{b.h3}</h3>}
+              {b.warn && (
+                <p class="lm-warn">{b.warn}</p>
+              )}
+              {b.p?.map((para) => <p>{para}</p>)}
+              {b.list && (
+                <ul class="lm-list">
+                  {b.list.map((item) => <li>{item}</li>)}
+                </ul>
+              )}
+              {b.cite && <p class="lm-cite">{b.cite}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  ))}
+
+  <!-- ── ЯЗЫК ЭТИКЕТКИ ─────────────────────────────────────────────────────
+       ⚠ Печатается из `jurisdictions.ts`, а не пересказывается в тексте ветки:
+       движок этикетки берёт правило ОТТУДА, и расхождение между тем, что
+       написано на странице, и тем, что делает инструмент, недопустимо. -->
+  <section class="hub-sec-b">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">Language on this label</p>
+      <h2 class="hub-h2">
+        {j.requiredLanguages.length === 0
+          ? 'Set by the market you sell into'
+          : j.requiredLanguages.length > 1
+            ? `${j.requiredLanguages.map((l) => l.toUpperCase()).join(' + ')} — both mandatory`
+            : `${j.requiredLanguages[0].toUpperCase()} required`}
+      </h2>
+      <div class="hub-prose">
+        <p>{j.languageNote}</p>
+      </div>
+      <p class="hub-fine">
+        The official wording of hazard statements is fixed in CLP Annex III and of precautionary
+        statements in Annex IV, in all 24 EU languages; the United States uses the texts of
+        29 CFR 1910.1200 Appendix C, which are not identical. Statement texts are never paraphrased.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── FAQ ───────────────────────────────────────────────────────────────── -->
+  <section class="hub-sec-white" id="faq">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">Questions</p>
+      <h2 class="hub-h2">Frequently asked</h2>
+      <div class="hub-faq">
+        {branch.faq.map((f) => (
+          <div class="hub-faq-item">
+            <p class="q">{f.q}</p>
+            <p class="a">{f.a}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ── СОСЕДИ И ОСТАЛЬНОЙ САЙТ ───────────────────────────────────────────── -->
+  <section class="hub-sec-deep">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">Elsewhere in this section</p>
+      <h2 class="hub-h2">Other label rules</h2>
+      <div class="hub-prevnext">
+        <a href={`/ghs-label-maker/${prev.slug}/`}>
+          <span class="dir">Previous</span>
+          <span class="code">{prev.badge}</span>
+          <span class="txt">{prev.cardTitle}</span>
+        </a>
+        <a href={`/ghs-label-maker/${next.slug}/`} class="next">
+          <span class="dir">Next</span>
+          <span class="code">{next.badge}</span>
+          <span class="txt">{next.cardTitle}</span>
+        </a>
+      </div>
+
+      <h2 class="hub-h2" style="margin-top:44px">Before you label</h2>
+      <div class="hub-mini-cards">
+        {related.map((l) => (
+          <a class="hub-mini-card" href={l.href}>
+            <strong>{l.title}</strong>
+            <span>{l.desc}</span>
+          </a>
+        ))}
+        <a class="hub-mini-card" href="/ghs-label-maker/templates/">
+          <strong>Label size templates</strong>
+          <span>Avery, OnlineLabels and HERMA geometries with the tool preset to each one.</span>
+        </a>
+        <a class="hub-mini-card" href="/ghs-label-maker/">
+          <strong>Label maker hub</strong>
+          <span>All four jurisdictions, the six label elements, printing and the full FAQ in one place.</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">Sources</p>
+      <ul class="lm-sources">
+        {branch.sources.map((s) => (
+          <li><a href={s.url} rel="nofollow noopener" target="_blank">{s.label}</a></li>
+        ))}
+      </ul>
+      <p class="hub-fine">{j.disclaimer}</p>
+    </div>
+  </section>
+
+  <style is:global>
+    /* Врезка с живым инфоповодом (срок, изменение правила) */
+    .lm-alert {
+      border: 1px solid #fed7aa;
+      border-left: 4px solid #f97316;
+      border-radius: 12px;
+      background: #fff7ed;
+      padding: 16px 20px;
+    }
+    .lm-alert .lbl {
+      margin: 0 0 6px;
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: #c2410c;
+    }
+    .lm-alert .txt { margin: 0; font-size: 14.5px; line-height: 1.62; color: #7c2d12; }
+
+    /* Блок прозы */
+    .lm-block + .lm-block { margin-top: 24px; }
+    .lm-h3 {
+      margin: 0 0 8px;
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -.01em;
+      color: #0f172a;
+    }
+    .lm-block p { margin: 0 0 10px; font-size: 15px; line-height: 1.68; color: #475569; }
+    .lm-block p:last-child { margin-bottom: 0; }
+
+    .lm-list { margin: 4px 0 0; padding-left: 20px; }
+    .lm-list li { margin: 5px 0; font-size: 15px; line-height: 1.6; color: #475569; }
+
+    .lm-warn {
+      margin: 0 0 10px !important;
+      border-left: 3px solid #f43f5e;
+      background: #fff1f2;
+      border-radius: 0 10px 10px 0;
+      padding: 12px 16px;
+      font-size: 14.5px !important;
+      line-height: 1.62 !important;
+      color: #9f1239 !important;
+    }
+
+    .lm-cite {
+      margin-top: 10px !important;
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 11.5px !important;
+      line-height: 1.5 !important;
+      color: #94a3b8 !important;
+    }
+
+    .lm-sources { margin: 14px 0 0; padding-left: 20px; }
+    .lm-sources li { margin: 6px 0; font-size: 14px; line-height: 1.5; }
+    .lm-sources a { color: #0f766e; font-weight: 600; }
+    .lm-sources a:hover { text-decoration: underline; }
+  </style>
+</Layout>

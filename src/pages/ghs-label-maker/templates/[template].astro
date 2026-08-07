@@ -1,0 +1,235 @@
+---
+/**
+ * Страница одного формата — /ghs-label-maker/templates/<slug>/
+ *
+ * ⚠⚠ ИНСТРУМЕНТ ОТКРЫВАЕТСЯ УЖЕ НА ЭТОМ РАЗМЕРЕ. Ради этого в
+ * `LabelConstructorLoader` и `GHSLabelConstructor` добавлен проп `initialStockId`.
+ * Без него страница «шаблон 4 × 2 in» открывала бы конструктор на размере по
+ * умолчанию, и обещание в заголовке не выполнялось бы ни на одной из шести.
+ *
+ * ⚠ Слаг — от размера (`4x2-inch`), а не от `id` формата (`us-4x2`) и не от кода
+ * вендора: `us-4x2` человеку ничего не говорит, а «avery-5163» умрёт вместе с
+ * артикулом. Коды вендоров живут в тексте и в <title>, где их и ищут.
+ */
+export const prerender = true
+
+import Layout from '../../../layouts/Layout.astro'
+import LabelConstructorLoader from '../../../components/LabelConstructorLoader'
+import { SITE, TEMPLATES, faqJsonLd, breadcrumbJsonLd } from '../../../lib/labelMakerHub'
+import { LABEL_STOCK_ALL, stockSizeLabel, stockMm, SHEET_NAME, MM_PER_INCH } from '../../../lib/labelStock'
+import { CLP_SIZE_TIERS, requiredPictogramSideMm } from '../../../lib/jurisdictions'
+
+export function getStaticPaths() {
+  return TEMPLATES.map((t) => {
+    const stock = LABEL_STOCK_ALL.find((s) => s.id === t.stockId)
+    if (!stock) {
+      // ⚠ Молча пропускать нельзя: страница исчезнет, а ссылки на неё с хаба и
+      // из таблицы шаблонов останутся и станут 404.
+      throw new Error(`labelMakerHub: у шаблона «${t.slug}» нет формата ${t.stockId} в labelStock.ts`)
+    }
+    return { params: { template: t.slug }, props: { tpl: t, stock } }
+  })
+}
+
+const { tpl, stock } = Astro.props
+const mm = stockMm(stock)
+const canonical = `${SITE}/ghs-label-maker/templates/${tpl.slug}/`
+
+// Ярусы CLP, которым формат удовлетворяет по площади (см. комментарий в
+// templates/index.astro — по обеим сторонам считать нельзя).
+const area = mm.w * mm.h
+const short = Math.min(mm.w, mm.h)
+const tiers = CLP_SIZE_TIERS.map((t) => ({
+  tier: t,
+  fits: area >= t.labelMinW * t.labelMinH && short >= Math.min(t.labelMinW, t.labelMinH) / 2,
+  pictogramMm: Math.round(requiredPictogramSideMm(t) * 10) / 10,
+}))
+
+const idx = TEMPLATES.findIndex((t) => t.slug === tpl.slug)
+const prev = TEMPLATES[(idx - 1 + TEMPLATES.length) % TEMPLATES.length]
+const next = TEMPLATES[(idx + 1) % TEMPLATES.length]
+
+const r1 = (v: number) => Math.round(v * 10) / 10
+
+const jsonLd = [
+  breadcrumbJsonLd([
+    { name: 'Home', path: '/' },
+    { name: 'GHS label maker', path: '/ghs-label-maker/' },
+    { name: 'Templates', path: '/ghs-label-maker/templates/' },
+    { name: stockSizeLabel(stock), path: `/ghs-label-maker/templates/${tpl.slug}/` },
+  ]),
+  faqJsonLd(tpl.faq),
+]
+---
+
+<Layout title={tpl.title} description={tpl.description} canonical={canonical} titleIsComplete={true}>
+  {jsonLd.map((block) => (
+    <script type="application/ld+json" slot="head" set:html={JSON.stringify(block)} />
+  ))}
+
+  <section class="hub-hero">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+    <div class="hub-wrap hub-hero-inner hub-hero-left">
+      <nav class="hub-crumb" aria-label="Breadcrumb">
+        <a href="/">Home</a><span class="sep">/</span>
+        <a href="/ghs-label-maker/">GHS label maker</a><span class="sep">/</span>
+        <a href="/ghs-label-maker/templates/">Templates</a><span class="sep">/</span>
+        <span>{stockSizeLabel(stock)}</span>
+      </nav>
+      <p class="hub-hero-eyebrow">
+        {stock.chemical ? 'Chemical-resistant stock' : 'Paper stock'} ·
+        {stock.perSheet === null ? ' roll' : ` ${stock.perSheet} per ${SHEET_NAME[stock.sheet]}`}
+      </p>
+      <h1>{tpl.h1}</h1>
+      <p class="hub-hero-sub">{tpl.intro[0]}</p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">{stockSizeLabel(stock)}</span>
+        <span class="hub-hero-chip">{r1(mm.w)} × {r1(mm.h)} mm</span>
+        {stock.perSheet !== null && <span class="hub-hero-chip">{stock.perSheet} per sheet</span>}
+        {stock.use && <span class="hub-hero-chip">{stock.use.split('—')[0].trim()}</span>}
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ИНСТРУМЕНТ НА ЭТОМ РАЗМЕРЕ ────────────────────────────────────────── -->
+  <section class="hub-sec-tool" id="build">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">Build it</p>
+      <h2 class="hub-h2" style="margin-bottom:6px">Label builder, preset to {stockSizeLabel(stock)}</h2>
+      <p class="hub-sub" style="margin-bottom:22px">
+        Size and sheet layout are already set. Change the jurisdiction or the size inside the tool at any
+        point — the label is rebuilt against whatever is selected.
+      </p>
+      <LabelConstructorLoader client:load initialStockId={stock.id} />
+    </div>
+  </section>
+
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">01 · The format</p>
+      <h2 class="hub-h2">What this size is for</h2>
+      <div class="hub-prose">
+        {tpl.intro.map((p) => <p>{p}</p>)}
+      </div>
+
+      <div class="hub-panel" style="margin-top:26px">
+        <div class="hub-panel-label">Geometry</div>
+        <div class="hub-panel-row">
+          <span><strong>{stockSizeLabel(stock)}</strong> · {r1(mm.w)} × {r1(mm.h)} mm · {r1(mm.w / MM_PER_INCH)} × {r1(mm.h / MM_PER_INCH)} in</span>
+        </div>
+        <div class="hub-panel-row">
+          <span>{stock.perSheet === null ? 'Roll stock' : `${stock.perSheet} per ${SHEET_NAME[stock.sheet]}`}</span>
+          <span>{stock.chemical ? 'Chemical-resistant film' : 'Plain paper — not for shipped chemical containers'}</span>
+        </div>
+        <div class="hub-panel-row">
+          <span>Also sold as: {stock.aliases.join(', ')}</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">02 · Where it qualifies</p>
+      <h2 class="hub-h2">Against the CLP size tiers</h2>
+      <p class="hub-sub">
+        CLP Annex I Table 1.3 is the only legally binding table tying label size to container capacity.
+        It applies in the European Union and, word for word, in Great Britain. OSHA and WHMIS set no
+        numeric minimum at all, so this table is guidance rather than a requirement in those two.
+      </p>
+      <div class="hub-table-wrap">
+        <table class="hub-table">
+          <thead>
+            <tr>
+              <th scope="col">Container</th>
+              <th scope="col">Minimum label</th>
+              <th scope="col">Pictogram side</th>
+              <th scope="col">This format</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tiers.map((t) => (
+              <tr>
+                <td class="c-code">{t.tier.capacityLabel}</td>
+                <td class="c-code">{t.tier.labelMinW} × {t.tier.labelMinH} mm</td>
+                <td class="c-code">{t.pictogramMm} mm</td>
+                <td class="c-code">{t.fits ? 'qualifies' : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="hub-fine">
+        Qualification is judged by label <em>area</em>, not by both sides independently — otherwise a
+        4 × 2 in label fails the ≤ 3 L tier because 50.8 mm is under 52 mm, while carrying half again the
+        prescribed area. A second check rejects narrow ribbons. The pictogram column already combines
+        both CLP rules: the side from Table 1.3 and the “at least one fifteenth of the minimum label area,
+        never below 1 cm²” requirement of Annex I §1.2.1, whichever is larger.
+      </p>
+    </div>
+  </section>
+
+  <section class="hub-sec-b" id="faq">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">Questions</p>
+      <h2 class="hub-h2">Frequently asked</h2>
+      <div class="hub-faq">
+        {tpl.faq.map((f) => (
+          <div class="hub-faq-item">
+            <p class="q">{f.q}</p>
+            <p class="a">{f.a}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-deep">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">More templates</p>
+      <h2 class="hub-h2">Other sizes</h2>
+      <div class="hub-prevnext">
+        <a href={`/ghs-label-maker/templates/${prev.slug}/`}>
+          <span class="dir">Previous</span>
+          <span class="code">{prev.h1.replace(' GHS label template', '')}</span>
+          <span class="txt">{prev.intro[0].slice(0, 96)}…</span>
+        </a>
+        <a href={`/ghs-label-maker/templates/${next.slug}/`} class="next">
+          <span class="dir">Next</span>
+          <span class="code">{next.h1.replace(' GHS label template', '')}</span>
+          <span class="txt">{next.intro[0].slice(0, 96)}…</span>
+        </a>
+      </div>
+
+      <h2 class="hub-h2" style="margin-top:44px">Label rules</h2>
+      <div class="hub-mini-cards">
+        <a class="hub-mini-card" href="/ghs-label-maker/templates/">
+          <strong>All label sizes</strong>
+          <span>Every geometry with its Avery, OnlineLabels and HERMA part numbers.</span>
+        </a>
+        <a class="hub-mini-card" href="/ghs-label-maker/osha/">
+          <strong>OSHA HazCom labels</strong>
+          <span>What 29 CFR 1910.1200 requires — and why it sets no minimum size.</span>
+        </a>
+        <a class="hub-mini-card" href="/ghs-label-maker/clp-eu/">
+          <strong>EU CLP labels</strong>
+          <span>The size tiers, the pictogram area rule, the UFI and EUH statements.</span>
+        </a>
+        <a class="hub-mini-card" href="/ghs-label-maker/secondary-container/">
+          <strong>Secondary containers</strong>
+          <span>Where paper stock is defensible and pictograms are not mandatory.</span>
+        </a>
+        <a class="hub-mini-card" href="/ghs-label-maker/">
+          <strong>Label maker hub</strong>
+          <span>Four jurisdictions, the six elements, printing and the full FAQ.</span>
+        </a>
+        <a class="hub-mini-card" href="/substances/">
+          <strong>Substance database</strong>
+          <span>4,178 substances with harmonised CLP Annex VI classification.</span>
+        </a>
+      </div>
+    </div>
+  </section>
+</Layout>

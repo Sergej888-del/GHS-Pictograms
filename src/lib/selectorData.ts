@@ -10,7 +10,25 @@
 import { supabase } from './supabase';
 import type { RefData } from './pictogramSelector';
 
-export type LoadedData = RefData & {
+/**
+ * ⚠⚠ ЗДЕСЬ `Omit`, А НЕ ПРОСТОЕ ПЕРЕСЕЧЕНИЕ С RefData — и это не стиль.
+ *
+ * Было `RefData & { catalog: {...name_en...}[] }`. У пересечения ДВУХ ТИПОВ
+ * МАССИВА свойство `catalog` получает тип
+ *   `{id, class_code}[] & {id, class_code, group_type, name_en, display_order}[]`,
+ * и для `.map()` TypeScript берёт ПЕРВУЮ сигнатуру. То есть элемент видится как
+ * `{id, class_code}`, а `name_en` и `group_type` для системы типов не
+ * существуют — при том, что запрос их выбирает и на экране они печатаются.
+ *
+ * Ошибка была чисто типовой (`PictogramSelector.tsx: Property 'name_en' does not
+ * exist`), рантайм цел. Прожила она так долго потому, что `tsc` в проекте не был
+ * установлен вовсе, а Astro при сборке типы не проверяет — Vite их срезает.
+ * Найдено в session 43, когда typescript наконец появился в devDependencies.
+ *
+ * ⚠ Богатые типы остаются надмножествами RefData-шных, поэтому `LoadedData`
+ * по-прежнему подходит везде, где ждут `RefData` — `resolveSelection` не трогаем.
+ */
+export type LoadedData = Omit<RefData, 'jurisdictions' | 'catalog'> & {
   // richer display fields carried on the same arrays (harmless for the engine)
   jurisdictions: { id: string; code: string; name_en: string }[];
   catalog: { id: string; class_code: string; group_type: string; name_en: string; display_order: number }[];

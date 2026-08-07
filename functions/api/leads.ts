@@ -77,7 +77,7 @@ export async function onRequestPost(
             ? `/ghs/${ghsCode.toLowerCase()}/`
             : source === 'pictogram-selector'
               ? '/pictogram-selector/'
-              : '/label-constructor/',
+              : '/ghs-label-maker/',
         substance_name: substance_name || ghsName || '',
         qualification_notes: notes,
       }),

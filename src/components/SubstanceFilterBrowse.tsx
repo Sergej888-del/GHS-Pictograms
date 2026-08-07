@@ -271,7 +271,7 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
               : /^\d{2,7}-\d{2}-\d$/.test(r.cas_number)
                 ? substanceHref(substanceNameFull(r), r.cas_number)
                 : null
-            const labelHref = `/label-constructor/?cas=${casEnc}`
+            const labelHref = `/ghs-label-maker/?cas=${casEnc}`
             const pics = r.ghs_pictogram_codes ?? []
             const casEcLine = `CAS ${r.cas_number}${r.ec_number ? ` · EC ${r.ec_number}` : ''}`
 

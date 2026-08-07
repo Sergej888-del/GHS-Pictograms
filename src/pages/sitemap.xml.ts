@@ -7,6 +7,10 @@ import { hSlug } from '../lib/hStatementSlug';
 // поздно объявить в sitemap страницу, которой нет.
 import { substanceNameFull, substanceTitleName, NAME_COLUMNS } from '../lib/substanceName';
 import { substanceHref } from '../lib/substanceSlug';
+// ⚠ Ветки и шаблоны раздела /ghs-label-maker/ перечисляются НЕ руками: список
+// ведёт labelMakerHub.ts, и дублировать его здесь значит однажды объявить в
+// sitemap страницу, которой нет, или потерять ту, которая есть.
+import { BRANCHES, TEMPLATES } from '../lib/labelMakerHub';
 
 export const prerender = true;
 
@@ -32,7 +36,8 @@ const STATIC_PAGES = [
   { url: '/blog/', changefreq: 'weekly', priority: '0.8' },
   { url: '/tools/', changefreq: 'weekly', priority: '0.85' },
   { url: '/tools/ate-mixture-calculator/', changefreq: 'weekly', priority: '0.85' },
-  { url: '/label-constructor/', changefreq: 'weekly', priority: '0.85' },
+  { url: '/ghs-label-maker/', changefreq: 'weekly', priority: '0.9' },
+  { url: '/ghs-label-maker/templates/', changefreq: 'monthly', priority: '0.8' },
   { url: '/pictogram-selector/', changefreq: 'weekly', priority: '0.85' },
   { url: '/compliance/', changefreq: 'weekly', priority: '0.9' },
   // ⚠ session 32: юридические страницы отсутствовали в sitemap, хотя индексируются
@@ -40,6 +45,24 @@ const STATIC_PAGES = [
   { url: '/privacy/', changefreq: 'yearly', priority: '0.3' },
   { url: '/terms/', changefreq: 'yearly', priority: '0.3' },
   { url: '/affiliate-disclosure/', changefreq: 'yearly', priority: '0.3' },
+];
+
+/**
+ * Раздел конструктора этикеток: шесть веток и шесть страниц шаблонов размеров.
+ * ⚠ session 43: сюда переехал `/label-constructor/` (301). Старая страница
+ * удалена из src/pages — на Cloudflare Pages файл сильнее строки в _redirects.
+ */
+const LABEL_MAKER_PAGES = [
+  ...BRANCHES.map((b) => ({
+    url: `/ghs-label-maker/${b.slug}/`,
+    changefreq: 'monthly',
+    priority: '0.85',
+  })),
+  ...TEMPLATES.map((t) => ({
+    url: `/ghs-label-maker/templates/${t.slug}/`,
+    changefreq: 'monthly',
+    priority: '0.75',
+  })),
 ];
 
 const GHS_PAGES = GHS_CODES.map(code => ({
@@ -291,6 +314,7 @@ export const GET: APIRoute = async () => {
 
   const allPages = [
     ...STATIC_PAGES,
+    ...LABEL_MAKER_PAGES,
     ...GHS_PAGES,
     ...COMPLIANCE_PILLAR_PAGES,
     ...STORAGE_PAGES,
