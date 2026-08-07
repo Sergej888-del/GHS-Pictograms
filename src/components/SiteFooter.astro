@@ -2,6 +2,11 @@
 // Site-wide footer — design system v2 (navy, gradient bar, 5 columns).
 // Used by Layout.astro (all pages) AND by the standalone homepage.
 // No ghssymbols link — «одна крыша» (Sergej, session 11).
+//
+// ⚠⚠ Колонка «Label maker» ведётся из `labelMakerHub.ts`, а не руками: тот же
+// довод, что в шапке и в sitemap. До session 45 на весь раздел из четырнадцати
+// страниц в подвале стояла одна ссылка — на хаб.
+import { BRANCHES } from '../lib/labelMakerHub'
 ---
 
 <footer class="sf-footer">
@@ -39,6 +44,14 @@
       <a href="/p-statements/">Precautionary statements</a>
       <a href="/pictograms/">GHS pictograms — all 9</a>
       <a href="/storage-compatibility/">Storage classes</a>
+    </div>
+    <div class="sf-col">
+      <p class="head">Label maker</p>
+      <a href="/ghs-label-maker/">GHS Label Maker</a>
+      {BRANCHES.map((b) => (
+        <a href={`/ghs-label-maker/${b.slug}/`}>{b.cardTitle}</a>
+      ))}
+      <a href="/ghs-label-maker/templates/">Label size templates</a>
     </div>
     <div class="sf-col">
       <p class="head">Compliance</p>

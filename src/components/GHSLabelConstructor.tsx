@@ -75,6 +75,15 @@ interface Props {
    * острова унесло бы весь конструктор.
    */
   initialStockId?: string
+  /**
+   * Второй язык этикетки, с которым открывается инструмент — код из
+   * `labelLanguages.ts`. Приходит из адреса (`?lang=de`), чтобы ссылка вида
+   * «немецкая этикетка на это вещество» открывала именно её.
+   *
+   * ⚠ Неизвестный код молча игнорируется: второй язык — не обязательный
+   * элемент нигде, кроме Канады, и падать из-за опечатки в адресе нельзя.
+   */
+  initialSecondLang?: string
 }
 
 /** Формат по `id` плюс его габариты в мм. `null`, если такого формата нет. */
@@ -103,7 +112,7 @@ export default function GHSLabelConstructor({
   displayName, casNumber, ecNumber, entryKey, signalWord,
   pictograms, hStatements, pStatements,
   initialJurisdiction = 'osha', initialPurpose = 'supplier', initialSelectedP, nameVariants,
-  initialStockId,
+  initialStockId, initialSecondLang,
 }: Props) {
   // Чем отличается запись: сырой CAS колонки, если он передан. Идёт в имя
   // файла и в метрики — там нужна ссылка на запись базы, а не то, что человек
@@ -152,7 +161,12 @@ export default function GHSLabelConstructor({
   // ⚠⚠ Для Канады это не удобство: HPR s. 6.2 требует ОБА официальных языка, и
   // одноязычная этикетка поставщика там незаконна. `checkCompliance` в движке
   // это уже проверяет — здесь появляется то, чем требование выполняется.
-  const [secondLang, setSecondLang] = useState<string | null>(null)
+  // ⚠ Код из адреса проверяется по перечню ДО того, как попасть в состояние:
+  // `fetchTranslations` с чужим кодом вернул бы пустоту молча, и человек решил
+  // бы, что официального перевода нет вовсе.
+  const [secondLang, setSecondLang] = useState<string | null>(
+    initialSecondLang && LANGUAGE_BY_CODE.has(initialSecondLang) ? initialSecondLang : null,
+  )
   const [secondTexts, setSecondTexts] = useState<TranslationMap>({})
   const [secondLoading, setSecondLoading] = useState(false)
   const [secondError, setSecondError] = useState('')

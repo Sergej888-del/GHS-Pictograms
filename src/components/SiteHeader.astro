@@ -13,6 +13,20 @@ interface Props {
    */
   animateMark?: boolean
 }
+/**
+ * ⚠⚠ ВЕТКИ РАЗДЕЛА БЕРУТСЯ ИЗ `labelMakerHub.ts`, А НЕ ПЕРЕЧИСЛЯЮТСЯ ЗДЕСЬ.
+ * Причина та же, по которой их не перечисляет и `sitemap.xml.ts`: список,
+ * набранный руками во втором месте, однажды объявит страницу, которой нет, или
+ * потеряет ту, которая есть.
+ *
+ * ⚠ Диагноз session 45: в выпадающем меню «Tools» стояла ОДНА ссылка —
+ * «GHS Label Maker» на хаб. Тринадцать остальных страниц раздела (шесть веток и
+ * семь страниц шаблонов) не имели входа НИОТКУДА, кроме карточек на самом хабе.
+ * Человек, попавший на любую страницу сайта, не мог узнать, что раздел вообще
+ * состоит больше чем из одной страницы.
+ */
+import { BRANCHES } from '../lib/labelMakerHub'
+
 const { sdsCount = '109', animateMark = false } = Astro.props
 ---
 
@@ -58,13 +72,17 @@ const { sdsCount = '109', animateMark = false } = Astro.props
         <a href="/tools/ate-mixture-calculator/" class="primary">ATE Mixture Calculator</a>
       </div>
       <div class="sh-panel-col">
-        <p class="head">Labelling</p>
-        <a href="/ghs-label-maker/">GHS Label Maker</a>
-        <a href="/pictogram-selector/">Pictogram Selector</a>
-        <a href="/tools/">9 per-pictogram calculators</a>
+        <p class="head teal">Label maker</p>
+        <a href="/ghs-label-maker/" class="primary">GHS Label Maker — hub</a>
+        {BRANCHES.map((b) => (
+          <a href={`/ghs-label-maker/${b.slug}/`}>{b.cardTitle}</a>
+        ))}
+        <a href="/ghs-label-maker/templates/">Label size templates</a>
       </div>
       <div class="sh-panel-col">
-        <p class="head">Transport</p>
+        <p class="head">Before the label</p>
+        <a href="/pictogram-selector/">Pictogram Selector</a>
+        <a href="/tools/">9 per-pictogram calculators</a>
         <a href="/un/">UN number reference</a>
         <a href="/tools/">All 14 free tools →</a>
       </div>
@@ -103,6 +121,12 @@ const { sdsCount = '109', animateMark = false } = Astro.props
     <a href="/h-statements/">Hazard statements (H-codes)</a>
     <a href="/pictograms/">GHS pictograms — all 9</a>
     <a href="/substances/">Substance database</a>
+    {/* ⚠ На мобильном все четырнадцать страниц раздела в меню не поместятся —
+        кладём хаб, две самые спрашиваемые юрисдикции и шаблоны, остальное
+        человек берёт карточками на самом хабе. */}
+    <a href="/ghs-label-maker/osha/">OSHA HazCom labels</a>
+    <a href="/ghs-label-maker/clp-eu/">EU CLP labels</a>
+    <a href="/ghs-label-maker/templates/">Label size templates</a>
     <a href="/ghs-label-maker/" class="sh-cta mobile-cta">Build a label</a>
   </div>
 </header>

@@ -10,6 +10,8 @@ import { supabase } from '../lib/supabase'
 import NewsletterCtaBand from '../components/NewsletterCtaBand.astro'
 import SiteHeader from '../components/SiteHeader.astro'
 import SiteFooter from '../components/SiteFooter.astro'
+import { layoutLabel, renderSvg } from '../lib/labelEngine'
+import { JURISDICTION_BRANCHES } from '../lib/labelMakerHub'
 
 /**
  * pictograms_signals: id, code, name_en, svg_content, svg_url
@@ -27,6 +29,60 @@ if (pictogramsError) {
 
 const pictogramsRows = pictogramsRaw ?? []
 const ghs02 = pictogramsRows.find((p) => p.code === 'GHS02')
+
+// ── Флагман «GHS Label Maker»: этикетка на карточке НАСТОЯЩАЯ ───────────────
+//
+// ⚠⚠ SVG НЕ НАРИСОВАН РУКАМИ И НЕ ЛЕЖИТ КАРТИНКОЙ В `public/`. Он считается
+// здесь, на сборке, ТЕМ ЖЕ ДВИЖКОМ (`layoutLabel` + `renderSvg`), которым
+// инструмент рисует этикетку человеку. Нарисованная руками копия макета устарела
+// бы молча: движок бы поменялся, а картинка на главной осталась бы прежней — и
+// главная страница сайта обещала бы то, чего инструмент уже не делает.
+//
+// ⚠ Обе функции чистые: считают в миллиметрах и отдают строку. Ни DOM, ни
+// браузерных API — поэтому они выполняются на сборке, а не в остров.
+//
+// ⚠ Вещество взято из базы, а не выдумано: ацетон, CLP Annex VI 606-001-00-8,
+// Danger, GHS02 + GHS07. Реквизиты поставщика — заведомо примерные, с номером из
+// зарезервированного для примеров диапазона 555-01xx.
+const DEMO_H_CODES = ['H225', 'H319', 'H336']
+const DEMO_P_CODES = ['P210', 'P233', 'P280', 'P403']
+
+const [{ data: demoHRows }, { data: demoPRows }] = await Promise.all([
+  supabase.from('h_statements').select('code, text_plain').in('code', DEMO_H_CODES),
+  supabase.from('p_statements').select('code, text_plain').in('code', DEMO_P_CODES),
+])
+
+const demoHText = new Map((demoHRows ?? []).map((r) => [r.code, r.text_plain as string]))
+const demoPText = new Map((demoPRows ?? []).map((r) => [r.code, r.text_plain as string]))
+
+const demoLabelSvg = renderSvg(
+  layoutLabel(
+    {
+      productName: 'Acetone',
+      casNumber: '67-64-1',
+      ecNumber: '200-662-2',
+      signalWord: 'Danger',
+      pictograms: pictogramsRows
+        .filter((p) => p.code === 'GHS02' || p.code === 'GHS07')
+        .map((p) => ({ code: p.code, svg: p.svg_content ?? '' })),
+      hStatements: DEMO_H_CODES
+        .map((c) => ({ code: c, text: demoHText.get(c) ?? '' }))
+        .filter((s) => s.text),
+      pStatements: DEMO_P_CODES
+        .map((c) => ({ code: c, text: demoPText.get(c) ?? '' }))
+        .filter((s) => s.text),
+      pFormat: 'codes',
+      supplier: {
+        name: 'Your company name',
+        address: '1 Example Street, Springfield IL 62704',
+        phone: '+1 555 0100',
+      },
+    },
+    // 4 × 2 in — самый ходовой формат наклейки (Avery 60505/5163 и ещё четыре
+    // артикула той же геометрии). Ярус CLP считается от литража тары.
+    { jurisdiction: 'osha', purpose: 'supplier', widthMm: 101.6, heightMm: 50.8, containerLitres: 1, containerMl: 1000 },
+  ),
+)
 
 // SDS library — live page count from the registry (falls back to '109').
 const { count: sdsCountRaw } = await supabase
@@ -113,14 +169,14 @@ const sdsRows = [
 ]
 
 // ── The other tools (real routes).
+//
+// ⚠⚠ GHS LABEL MAKER ОТСЮДА УБРАН НАМЕРЕННО (session 45). Он стал флагманом
+// выше, и оставить его ещё и здесь значило бы показать один инструмент на
+// главной дважды — причём второй раз мелкой карточкой в ряду из тринадцати, где
+// он читается как «а вот ещё один, попроще».
+// ⚠ Заголовок «All 14 tools →» не трогать: четырнадцать — это счёт по
+// `/tools/`, а не по этой сетке.
 const otherTools = [
-  {
-    href: '/ghs-label-maker/',
-    accent: '#1e3a8a',
-    tag: 'Labelling',
-    title: 'GHS Label Maker',
-    copy: 'Print-ready labels sized to the container, exported as PDF or SVG at true physical size.',
-  },
   {
     href: '/pictogram-selector/',
     accent: '#2563eb',
@@ -631,6 +687,115 @@ const roles = [
         grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
         gap: 20px;
       }
+      /* ── Флагман · GHS Label Maker ──────────────────────────────────────
+         ⚠⚠ `grid-column: 1 / -1` — карточка занимает ВЕСЬ ряд. Разбор в
+         разметке: третья обычная колонка сжала бы соседние до 320 px. */
+      .hp-card-label {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+        gap: 30px;
+        align-items: center;
+        border: 1px solid #cbd5e1;
+        border-radius: 18px;
+        background: linear-gradient(135deg, #0f2557 0%, #14336f 46%, #1e3a8a 100%);
+        padding: 30px 32px;
+        transition: all 400ms ease-out;
+      }
+      .hp-card-label:hover {
+        transform: translateY(-4px);
+        border-color: #f97316;
+      }
+      .hp-card-label .hp-card-title { color: #ffffff; }
+      .hp-card-label .hp-card-copy { color: #c8d6f2; margin-bottom: 18px; }
+      .hp-badge.orange { background: #f97316; }
+      .hp-card-label .hp-badge-note { color: #93b0e8; }
+      .hp-label-jur {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 9px;
+      }
+      .hp-label-chip {
+        display: block;
+        padding: 10px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.06);
+        text-decoration: none;
+        transition: all 250ms ease-out;
+      }
+      .hp-label-chip:hover {
+        background: rgba(255, 255, 255, 0.13);
+        border-color: #f97316;
+      }
+      .hp-label-chip strong {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: #93b0e8;
+      }
+      .hp-label-chip span {
+        display: block;
+        margin-top: 3px;
+        font-size: 13.5px;
+        font-weight: 600;
+        color: #ffffff;
+      }
+      .hp-label-links {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 20px;
+      }
+      .hp-card-label .hp-card-link { color: #ffb277; }
+      .hp-label-alt {
+        margin-top: 18px;
+        font-size: 13.5px;
+        color: #c8d6f2;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      /* ⚠ Белая «бумага» под этикеткой обязательна: сама этикетка рисуется
+         чёрным по прозрачному, и на тёмной карточке текст исчез бы целиком. */
+      .hp-label-paper {
+        background: #ffffff;
+        border-radius: 8px;
+        padding: 12px;
+        box-shadow: 0 18px 40px rgba(3, 12, 34, 0.45);
+      }
+      /* ⚠ Блок стилей на этой странице объявлен `is:global`, поэтому селектор
+         обычный. `:global(...)` здесь был бы невалидным CSS и правило молча
+         отвалилось бы — а вместе с ним и масштабирование этикетки: SVG выходит
+         из движка шириной «101.6mm» и без этого правила вылез бы за карточку.
+
+         ⚠⚠ ПРЯМОЙ ПОТОМОК (`>`), А НЕ ЛЮБОЙ ВЛОЖЕННЫЙ. Пиктограммы внутри
+         этикетки — тоже элементы `<svg>`, вложенные в неё, и им движок уже
+         проставил width/height в миллиметрах. Правило без `>` перебило бы их на
+         `width:100%`, и два ромба размером с всю этикетку легли бы поверх
+         текста. Проверено рендером: именно так это и выглядит. */
+      .hp-label-paper > svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .hp-label-art figcaption {
+        margin-top: 12px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        line-height: 1.5;
+        color: #93b0e8;
+      }
+      .hp-label-art figure { margin: 0; }
+      @media (max-width: 900px) {
+        .hp-card-label {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 22px;
+          padding: 24px 22px;
+        }
+      }
+
       .hp-card-storage {
         border: 1px solid var(--teal-200);
         border-radius: 16px;
@@ -1252,8 +1417,13 @@ const roles = [
           {sdsLabel} substance safety reports with computed storage-compatibility verdicts, GHS/CLP
           classification tools and the full pictogram library. Cited sources, no registration.
         </p>
+        {/* ⚠ Первой кнопкой — конструктор этикеток: это единственный инструмент
+            сайта, ради которого приходят «сделать», а не «посмотреть». Матрица
+            хранения уходит на вторую позицию, SDS — в призрачную.
+            ⚠ Три кнопки здесь предел; четвёртую не добавлять. */}
         <div class="hp-hero-ctas">
-          <a href="/tools/chemical-storage-compatibility/" class="btn-orange">Check storage compatibility →</a>
+          <a href="/ghs-label-maker/" class="btn-orange">Build a GHS label →</a>
+          <a href="/tools/chemical-storage-compatibility/" class="btn-ghost">Check storage compatibility</a>
           <a href="/sds/" class="btn-ghost">Browse {sdsLabel} SDS reports</a>
         </div>
       </div>
@@ -1264,7 +1434,7 @@ const roles = [
           <div><p class="hp-stat-num teal">{sdsLabel}</p><p class="hp-stat-label">SDS substance reports</p></div>
           <div><p class="hp-stat-num">4,178</p><p class="hp-stat-label">Substances, CLP Annex VI</p></div>
           <div><p class="hp-stat-num">9</p><p class="hp-stat-label">Pictograms, free SVG</p></div>
-          <div><p class="hp-stat-num">7</p><p class="hp-stat-label">Compliance pillars</p></div>
+          <div><p class="hp-stat-num">4</p><p class="hp-stat-label">Label rulebooks</p></div>
         </div>
       </div>
     </section>
@@ -1286,6 +1456,50 @@ const roles = [
         </p>
 
         <div class="hp-flagships">
+          {/* ── ФЛАГМАН · GHS LABEL MAKER ───────────────────────────────────
+              ⚠⚠ Карточка занимает ВЕСЬ РЯД (`grid-column: 1 / -1`), а не встаёт
+              третьей колонкой. Сетка здесь `auto-fit, minmax(320px, 1fr)`:
+              третья обычная карточка сжала бы две существующие до 320 px и
+              разрушила бы и виджет вердиктов, и таблицу ATE.
+              ⚠ Этикетка внутри — настоящая, считается на сборке движком
+              инструмента; разбор в шапке файла. */}
+          <div class="hp-card-label">
+            <div class="hp-label-copy">
+              <div class="hp-badge-row">
+                <span class="hp-badge orange">Flagship tool</span>
+                <span class="hp-badge-note">Vector PDF · no signup</span>
+              </div>
+              <h3 class="hp-card-title">GHS Label Maker</h3>
+              <p class="hp-card-copy">
+                Pick a substance and the pictograms, signal word and hazard statements come from the
+                harmonised CLP Annex VI list. Enter the container volume and the label is sized to the
+                rule that actually applies where you sell — or to the pack of blank labels you already
+                own. The PDF is vector at true physical size, so 4 × 2 in prints 4 × 2 in.
+              </p>
+              <div class="hp-label-jur">
+                {JURISDICTION_BRANCHES.map((b) => (
+                  <a href={`/ghs-label-maker/${b.slug}/`} class="hp-label-chip">
+                    <strong>{b.badge}</strong>
+                    <span>{b.cardTitle}</span>
+                  </a>
+                ))}
+              </div>
+              <div class="hp-label-links">
+                <a href="/ghs-label-maker/" class="hp-card-link">Build a label →</a>
+                <a href="/ghs-label-maker/templates/" class="hp-label-alt">Avery &amp; A4 size templates →</a>
+              </div>
+            </div>
+            <div class="hp-label-art">
+              <figure>
+                <div class="hp-label-paper" set:html={demoLabelSvg} />
+                <figcaption>
+                  Acetone · CLP Annex VI 606-001-00-8 · OSHA HazCom layout on 4 × 2 in stock.
+                  Drawn by the same engine the tool uses.
+                </figcaption>
+              </figure>
+            </div>
+          </div>
+
           <div class="hp-card-storage">
             <div class="hp-badge-row">
               <span class="hp-badge">Signature tool</span>

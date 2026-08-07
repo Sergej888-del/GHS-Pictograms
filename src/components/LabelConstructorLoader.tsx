@@ -1,10 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { substanceNameFull } from '../lib/substanceName'
 import { productNameVariants, defaultLabelIdentifiers } from '../lib/labelProductName'
 import GHSLabelConstructor from './GHSLabelConstructor'
 import SubstanceFilterBrowse from './SubstanceFilterBrowse'
 import type { JurisdictionKey, LabelPurpose } from '../lib/jurisdictions'
+import {
+  LABEL_MAKER_BASE,
+  labelMakerUrlAfterSelect,
+  parseLabelMakerParams,
+  resolveStatementCodes,
+  signalWordFromParam,
+  wantsManualMode,
+  type LabelMakerParams,
+} from '../lib/labelMakerLink'
 
 /**
  * Адрес, на котором инструмент сейчас стоит.
@@ -21,10 +30,22 @@ function labelBase(): string {
   return p.endsWith('/') ? p : p + '/'
 }
 
+/**
+ * Хаб ли это или ветка раздела.
+ *
+ * ⚠⚠ ЗАЧЕМ РАЗЛИЧАТЬ. Ветка `/ghs-label-maker/whmis-canada/` передаёт
+ * `jurisdiction="whmis"` пропом, и весь её текст написан про Канаду. Если
+ * позволить адресу `?jur=osha` перебить проп, страница станет врать: заголовок,
+ * нормы и цитаты — канадские, а инструмент американский. Поэтому `jur`,
+ * `purpose` и `stock` действуют ТОЛЬКО на хабе; на ветках и шаблонах побеждает
+ * страница. `cas`, `lang` и коды классификации работают везде.
+ */
+function isHubRoot(base: string): boolean {
+  return base === LABEL_MAKER_BASE
+}
+
 function setLabelConstructorUrl(cas: string | null) {
-  const base = labelBase()
-  const url = cas === null ? base : `${base}?cas=${encodeURIComponent(cas)}`
-  window.history.pushState({}, '', url)
+  window.history.pushState({}, '', labelMakerUrlAfterSelect(window.location.search, labelBase(), cas))
 }
 
 interface Substance {
@@ -55,10 +76,29 @@ interface Props {
   initialStockId?: string
 }
 
+/**
+ * Что стоит в адресе на ПЕРВОМ рендере.
+ *
+ * ⚠⚠ ЧИТАЕТСЯ СИНХРОННО, А НЕ В `useEffect`, И ЭТО ПРИНЦИПИАЛЬНО.
+ * `GHSLabelConstructor` заводит юрисдикцию, назначение и формат через
+ * `useState(initialJurisdiction)` — то есть берёт проп ОДИН РАЗ, при монтаже, и
+ * на его последующие изменения не реагирует вовсе. Прочитай мы адрес эффектом,
+ * конструктор успел бы смонтироваться с умолчанием `osha`, а `?jur=clp` из
+ * ссылки не подействовал бы никогда — и ссылка «европейская этикетка на это
+ * вещество» молча открывала бы американскую.
+ *
+ * ⚠ На сервере `window` нет — там пусто, и это правильно: адресная строка
+ * существует только у человека в браузере.
+ */
+function urlStateNow(): { params: LabelMakerParams | null; hubRoot: boolean } {
+  if (typeof window === 'undefined') return { params: null, hubRoot: false }
+  return { params: parseLabelMakerParams(window.location.search), hubRoot: isHubRoot(labelBase()) }
+}
+
 export default function LabelConstructorLoader({
   jurisdiction = 'osha', purpose = 'supplier', initialStockId,
 }: Props) {
-  const [cas, setCas] = useState<string | null>(null)
+  const [cas, setCas] = useState<string | null>(() => urlStateNow().params?.cas ?? null)
   const [substance, setSubstance] = useState<Substance | null>(null)
   const [pictograms, setPictograms] = useState<Pictogram[]>([])
   const [hStatements, setHStatements] = useState<HStatement[]>([])
@@ -69,11 +109,17 @@ export default function LabelConstructorLoader({
   // ── Ручной режим: свой продукт или смесь ──────────────────────────────────
   // ⚠ Без него инструмент бесполезен половине посетителей: они маркируют СВОЮ
   // смесь, которой в гармонизированном перечне CLP Annex VI нет и быть не может.
-  const [manual, setManual] = useState(false)
+  const [manual, setManual] = useState(() => {
+    const p = urlStateNow().params
+    return p ? wantsManualMode(p) : false
+  })
   const [mixName, setMixName] = useState('')
   const [mixCas, setMixCas] = useState('')
   const [mixEc, setMixEc] = useState('')
-  const [mixSignal, setMixSignal] = useState<string | null>('Danger')
+  const [mixSignal, setMixSignal] = useState<string | null>(() => {
+    const w = signalWordFromParam(urlStateNow().params?.signal ?? null)
+    return w === undefined ? 'Danger' : w
+  })
   const [allPics, setAllPics] = useState<Pictogram[]>([])
   const [allH, setAllH] = useState<HStatement[]>([])
   const [allP, setAllP] = useState<PStatement[]>([])
@@ -84,18 +130,33 @@ export default function LabelConstructorLoader({
   const [pQuery, setPQuery] = useState('')
   const [refLoading, setRefLoading] = useState(false)
 
+  // ── Что пришло адресом ────────────────────────────────────────────────────
+  // ⚠ Разбор — в `labelMakerLink.ts`, вместе со сборкой ссылок. Один файл на
+  // обе стороны контракта: именно расхождение двух сторон стоило session 38
+  // калькулятора, открывавшегося пустым с 3 650 страниц.
+  const [urlParams, setUrlParams] = useState<LabelMakerParams | null>(() => urlStateNow().params)
+  /** Коды из адреса ждут, пока догрузятся справочники ручного режима. */
+  const pendingRef = useRef<LabelMakerParams | null>(urlStateNow().params)
+
   useEffect(() => {
-    const readCasFromUrl = () => {
-      const params = new URLSearchParams(window.location.search)
-      const casParam = params.get('cas')
-      setCas(casParam)
-      if (!casParam) {
+    // ⚠ Первое чтение уже произошло в инициализаторах состояния — здесь только
+    // кнопка «назад» в браузере.
+    const readFromUrl = () => {
+      const p = parseLabelMakerParams(window.location.search)
+      setUrlParams(p)
+      setCas(p.cas ?? null)
+      if (!p.cas) {
         setSubstance(null); setPictograms([]); setHStatements([]); setPStatements([]); setNotFound(false)
       }
+      if (wantsManualMode(p)) {
+        pendingRef.current = p
+        setManual(true)
+        const w = signalWordFromParam(p.signal ?? null)
+        if (w !== undefined) setMixSignal(w)
+      }
     }
-    readCasFromUrl()
-    window.addEventListener('popstate', readCasFromUrl)
-    return () => window.removeEventListener('popstate', readCasFromUrl)
+    window.addEventListener('popstate', readFromUrl)
+    return () => window.removeEventListener('popstate', readFromUrl)
   }, [])
 
   useEffect(() => {
@@ -160,6 +221,51 @@ export default function LabelConstructorLoader({
     loadRefs()
     return () => { cancelled = true }
   }, [manual])
+
+  /**
+   * Коды из адреса отмечаются, КОГДА СПРАВОЧНИКИ УЖЕ ЗАГРУЖЕНЫ.
+   *
+   * ⚠⚠ Разрешение идёт по загруженному перечню, а не приведением к верхнему
+   * регистру. В перечне живут `H360D`, `H360Df`, `H360FD`, `H361d`, `H361fd`,
+   * `H350i` — регистр суффикса несёт смысл: прописная буква означает доказанное
+   * действие, строчная — предполагаемое. `toUpperCase()` склеил бы `H360Df` и
+   * `H360FD` и поставил бы на этикетку чужую фразу о вреде для потомства.
+   * Неоднозначные коды `resolveStatementCodes` отбрасывает молча — лучше не
+   * напечатать ничего, чем напечатать не ту опасность.
+   */
+  useEffect(() => {
+    const p = pendingRef.current
+    if (!p || allH.length === 0) return
+    pendingRef.current = null
+    const hKnown = allH.map((x) => x.code)
+    const pKnown = allP.map((x) => x.code)
+    const picKnown = allPics.map((x) => x.code)
+    const h = resolveStatementCodes(p.h ?? [], hKnown)
+    const ps = resolveStatementCodes(p.p ?? [], pKnown)
+    const pics = resolveStatementCodes(p.pictograms ?? [], picKnown)
+    if (h.length) setPickedH(h)
+    if (ps.length) setPickedP(ps)
+    if (pics.length) setPickedPics(pics)
+  }, [allH, allP, allPics])
+
+  // ── Умолчания инструмента: страница против адреса ─────────────────────────
+  // ⚠ На ветках и шаблонах побеждает страница — разбор в `isHubRoot`.
+  const [onHubRoot] = useState(() => urlStateNow().hubRoot)
+
+  const effJurisdiction = useMemo<JurisdictionKey>(
+    () => (onHubRoot && urlParams?.jurisdiction ? urlParams.jurisdiction : jurisdiction),
+    [onHubRoot, urlParams, jurisdiction],
+  )
+  const effPurpose = useMemo<LabelPurpose>(
+    () => (onHubRoot && urlParams?.purpose ? urlParams.purpose : purpose),
+    [onHubRoot, urlParams, purpose],
+  )
+  const effStockId = useMemo<string | undefined>(
+    () => (onHubRoot && urlParams?.stock ? urlParams.stock : initialStockId),
+    [onHubRoot, urlParams, initialStockId],
+  )
+  /** Второй язык работает и на ветках: он ничему на странице не противоречит. */
+  const effLang = urlParams?.lang ?? undefined
 
   // ── Ручной режим ──────────────────────────────────────────────────────────
   if (manual) {
@@ -390,9 +496,10 @@ export default function LabelConstructorLoader({
                 pictograms={picked}
                 hStatements={pickedHList}
                 pStatements={pickedPList}
-                initialJurisdiction={jurisdiction}
-                initialPurpose={purpose}
-                initialStockId={initialStockId}
+                initialJurisdiction={effJurisdiction}
+                initialPurpose={effPurpose}
+                initialStockId={effStockId}
+                initialSecondLang={effLang}
                 initialSelectedP={pickedP}
               />
             </div>
@@ -497,9 +604,10 @@ export default function LabelConstructorLoader({
         pictograms={pictograms}
         hStatements={hStatements}
         pStatements={pStatements}
-        initialJurisdiction={jurisdiction}
-        initialPurpose={purpose}
-        initialStockId={initialStockId}
+        initialJurisdiction={effJurisdiction}
+        initialPurpose={effPurpose}
+        initialStockId={effStockId}
+        initialSecondLang={effLang}
         nameVariants={nameVariants}
       />
     </div>
