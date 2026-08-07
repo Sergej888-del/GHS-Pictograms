@@ -1,16 +1,14 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { substanceName, substanceNameFull } from '../lib/substanceName'
+import { substanceNameFull } from '../lib/substanceName'
 import GHSLabelConstructor from './GHSLabelConstructor'
 import SubstanceFilterBrowse from './SubstanceFilterBrowse'
+import type { JurisdictionKey, LabelPurpose } from '../lib/jurisdictions'
 
 const LABEL_BASE = '/label-constructor/'
 
 function setLabelConstructorUrl(cas: string | null) {
-  const url =
-    cas === null
-      ? LABEL_BASE
-      : `${LABEL_BASE}?cas=${encodeURIComponent(cas)}`
+  const url = cas === null ? LABEL_BASE : `${LABEL_BASE}?cas=${encodeURIComponent(cas)}`
   window.history.pushState({}, '', url)
 }
 
@@ -31,9 +29,13 @@ interface Pictogram { code: string; name_en: string; svg_content: string | null 
 interface HStatement { code: string; text_en: string }
 interface PStatement { code: string; text_en: string }
 
-type SearchRow = { cas_number: string; common_name: string | null; display_name_short: string | null; iupac_name: string }
+interface Props {
+  /** Юрисдикция, с которой открывается инструмент — задаётся страницей раздела. */
+  jurisdiction?: JurisdictionKey
+  purpose?: LabelPurpose
+}
 
-export default function LabelConstructorLoader() {
+export default function LabelConstructorLoader({ jurisdiction = 'osha', purpose = 'supplier' }: Props) {
   const [cas, setCas] = useState<string | null>(null)
   const [substance, setSubstance] = useState<Substance | null>(null)
   const [pictograms, setPictograms] = useState<Pictogram[]>([])
@@ -41,22 +43,30 @@ export default function LabelConstructorLoader() {
   const [pStatements, setPStatements] = useState<PStatement[]>([])
   const [loading, setLoading] = useState(false)
   const [notFound, setNotFound] = useState(false)
-  const [searchQ, setSearchQ] = useState('')
-  const [searchResults, setSearchResults] = useState<SearchRow[]>([])
-  const [searching, setSearching] = useState(false)
 
-  // Читаем CAS из URL при загрузке и при навигации назад/вперёд
+  // ── Ручной режим: свой продукт или смесь ──────────────────────────────────
+  // ⚠ Без него инструмент бесполезен половине посетителей: они маркируют СВОЮ
+  // смесь, которой в гармонизированном перечне CLP Annex VI нет и быть не может.
+  const [manual, setManual] = useState(false)
+  const [mixName, setMixName] = useState('')
+  const [mixCas, setMixCas] = useState('')
+  const [mixEc, setMixEc] = useState('')
+  const [mixSignal, setMixSignal] = useState<string | null>('Danger')
+  const [allPics, setAllPics] = useState<Pictogram[]>([])
+  const [allH, setAllH] = useState<HStatement[]>([])
+  const [allP, setAllP] = useState<PStatement[]>([])
+  const [pickedPics, setPickedPics] = useState<string[]>([])
+  const [pickedH, setPickedH] = useState<string[]>([])
+  const [hQuery, setHQuery] = useState('')
+  const [refLoading, setRefLoading] = useState(false)
+
   useEffect(() => {
     const readCasFromUrl = () => {
       const params = new URLSearchParams(window.location.search)
       const casParam = params.get('cas')
       setCas(casParam)
       if (!casParam) {
-        setSubstance(null)
-        setPictograms([])
-        setHStatements([])
-        setPStatements([])
-        setNotFound(false)
+        setSubstance(null); setPictograms([]); setHStatements([]); setPStatements([]); setNotFound(false)
       }
     }
     readCasFromUrl()
@@ -64,7 +74,6 @@ export default function LabelConstructorLoader() {
     return () => window.removeEventListener('popstate', readCasFromUrl)
   }, [])
 
-  // Загружаем данные когда есть CAS
   useEffect(() => {
     if (!cas) return
     async function load() {
@@ -106,97 +115,251 @@ export default function LabelConstructorLoader() {
     load()
   }, [cas])
 
-  // Поиск по имени/CAS
+  // Справочники для ручного режима грузятся один раз и только по требованию:
+  // на обычном пути они не нужны и стоили бы трёх лишних запросов каждому.
   useEffect(() => {
-    if (searchQ.length < 2) { setSearchResults([]); return }
-    const t = setTimeout(async () => {
-      setSearching(true)
-      const casLike = /^[\d[\]/]/.test(searchQ) || searchQ.includes('-')
-      let q = supabase.from('substances').select('cas_number, common_name, display_name_short, iupac_name').not('cas_number', 'is', null).limit(8)
-      q = casLike ? q.ilike('cas_number', `%${searchQ}%`) : q.ilike('iupac_name', `%${searchQ}%`)
-      const { data } = await q
-      setSearchResults((data ?? []) as SearchRow[])
-      setSearching(false)
-    }, 300)
-    return () => clearTimeout(t)
-  }, [searchQ])
+    if (!manual || allPics.length > 0) return
+    let cancelled = false
+    async function loadRefs() {
+      setRefLoading(true)
+      const [picRes, hRes, pRes] = await Promise.all([
+        supabase.from('pictograms_signals').select('code, name_en, svg_content').order('code'),
+        supabase.from('h_statements').select('code, text_en:text_plain').order('code'),
+        supabase.from('p_statements').select('code, text_en:text_plain').order('code'),
+      ])
+      if (cancelled) return
+      setAllPics((picRes.data ?? []) as Pictogram[])
+      setAllH((hRes.data ?? []) as HStatement[])
+      setAllP((pRes.data ?? []) as PStatement[])
+      setRefLoading(false)
+    }
+    loadRefs()
+    return () => { cancelled = true }
+  }, [manual])
 
-  // Пустое состояние — поиск вещества
-  if (!cas && !substance) {
+  // ── Ручной режим ──────────────────────────────────────────────────────────
+  if (manual) {
+    const picked = allPics.filter((p) => pickedPics.includes(p.code))
+    const pickedHList = allH.filter((h) => pickedH.includes(h.code))
+    // ⚠ EUH-фразы уходят В КОНЕЦ списка. По алфавиту «EUH001» встаёт впереди
+    // «H200», и первым, что видит человек, оказывается «Explosive when dry» —
+    // дополнительная европейская фраза, а не обычная H-фраза, которую он ищет.
+    const byCode = (a: HStatement, b: HStatement) => {
+      const ea = a.code.startsWith('EUH'), eb = b.code.startsWith('EUH')
+      if (ea !== eb) return ea ? 1 : -1
+      return a.code.localeCompare(b.code, 'en', { numeric: true })
+    }
+    const hFiltered = (hQuery.trim()
+      ? allH.filter((h) => (h.code + ' ' + h.text_en).toLowerCase().includes(hQuery.toLowerCase()))
+      : allH
+    ).slice().sort(byCode)
+    const ready = mixName.trim().length > 0
+
     return (
       <div className="space-y-6">
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
-          <p className="font-semibold text-[#062A78] mb-3">Search for a substance to begin</p>
-          <input
-            type="search"
-            value={searchQ}
-            onChange={e => setSearchQ(e.target.value)}
-            placeholder="Type CAS number or substance name…"
-            className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 focus:border-[#062A78] focus:ring-2 focus:ring-[#062A78]/20 outline-none"
-          />
-          {searching && <p className="text-sm text-gray-400 mt-2">Searching…</p>}
-          {searchResults.length > 0 && (
-            <ul className="mt-3 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
-              {searchResults.map(r => (
-                <li key={r.cas_number}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCas(r.cas_number)
-                      setSearchQ('')
-                      setSearchResults([])
-                      setLabelConstructorUrl(r.cas_number)
-                    }}
-                    className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors"
-                  >
-                    <span className="font-semibold text-[#062A78]" title={substanceNameFull(r)}>{substanceName(r)}</span>
-                    <span className="block text-sm text-gray-500">CAS {r.cas_number}</span>
-                  </button>
-                </li>
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-5 py-3">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Your own product or mixture</p>
+            <p className="text-sm text-gray-600">You set the classification — it comes from your safety data sheet, not from our database.</p>
+          </div>
+          <button type="button" onClick={() => setManual(false)} className="cursor-pointer text-sm text-gray-500 underline hover:text-gray-700">
+            ← Back to the substance database
+          </button>
+        </div>
+
+        {refLoading && <p className="py-6 text-center text-sm text-gray-500">Loading reference data…</p>}
+
+        <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                Product name <span className="font-normal text-rose-500">required</span>
+              </label>
+              <input
+                type="text" value={mixName} onChange={(e) => setMixName(e.target.value)}
+                placeholder="ACME Degreaser 200"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#062A78]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                CAS <span className="font-normal text-gray-400">optional</span>
+              </label>
+              <input
+                type="text" value={mixCas} onChange={(e) => setMixCas(e.target.value)}
+                placeholder="67-64-1"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#062A78]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
+                EC <span className="font-normal text-gray-400">optional</span>
+              </label>
+              <input
+                type="text" value={mixEc} onChange={(e) => setMixEc(e.target.value)}
+                placeholder="200-662-2"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#062A78]"
+              />
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-600">Signal word</p>
+            <div className="flex gap-2">
+              {[{ v: 'Danger', l: 'Danger' }, { v: 'Warning', l: 'Warning' }, { v: null, l: 'none' }].map((o) => (
+                <button
+                  key={String(o.v)} type="button" onClick={() => setMixSignal(o.v)}
+                  className={`cursor-pointer rounded-lg border-2 px-4 py-1.5 text-sm transition-colors ${
+                    mixSignal === o.v ? 'border-[#062A78] bg-[#062A78] text-white' : 'border-gray-300 bg-white text-gray-800 hover:border-[#062A78]'
+                  }`}
+                >{o.l}</button>
               ))}
-            </ul>
-          )}
-          <p className="mt-6 text-sm font-medium text-gray-700">
-            Or browse and select a substance from the full database
-          </p>
-          <div className="mt-3 -mx-2 sm:mx-0">
-            <SubstanceFilterBrowse
-              onSelectSubstance={c => {
-                setCas(c)
-                setLabelConstructorUrl(c)
-              }}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-600">Pictograms</p>
+            <div className="flex flex-wrap gap-2">
+              {allPics.map((p) => {
+                const on = pickedPics.includes(p.code)
+                return (
+                  <button
+                    key={p.code} type="button" title={p.name_en}
+                    onClick={() => setPickedPics((prev) => on ? prev.filter((c) => c !== p.code) : [...prev, p.code])}
+                    className={`cursor-pointer rounded-lg border-2 p-1.5 transition-colors ${on ? 'border-[#062A78] bg-blue-50' : 'border-gray-200 bg-white opacity-60 hover:opacity-100'}`}
+                  >
+                    <span className="block h-12 w-12 [&>svg]:h-full [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: p.svg_content ?? '' }} />
+                    <span className="mt-0.5 block text-[10px] font-semibold text-gray-600">{p.code}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-1 flex items-baseline justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Hazard statements</p>
+              <span className="text-[11px] text-gray-400">{pickedH.length} selected</span>
+            </div>
+            <input
+              type="search" value={hQuery} onChange={(e) => setHQuery(e.target.value)}
+              placeholder="Search by code or text: flammable, H225…"
+              className="mb-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             />
+            <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
+              {hFiltered.slice(0, 60).map((h) => {
+                const on = pickedH.includes(h.code)
+                return (
+                  <label key={h.code} className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-xs ${on ? 'border-[#062A78] bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                    <input
+                      type="checkbox" checked={on} className="mt-0.5 accent-[#062A78]"
+                      onChange={() => setPickedH((prev) => on ? prev.filter((c) => c !== h.code) : [...prev, h.code])}
+                    />
+                    <span><span className="font-semibold">{h.code}</span> {h.text_en}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* ⚠⚠ Раньше конструктор просто появлялся ниже, когда заполнялось имя, и
+            человек этого не видел: он выбирал пиктограммы и не понимал, где
+            этикетка и что делать дальше. Теперь между классификацией и этикеткой
+            стоит явный рубеж — либо кнопка, либо объяснение, чего не хватает. */}
+        {!ready ? (
+          <div className="rounded-xl border-2 border-dashed border-gray-300 bg-white px-5 py-6 text-center">
+            <p className="text-sm font-medium text-gray-800">Enter a product name to build the label</p>
+            <p className="mt-1 text-xs text-gray-500">
+              It is the product identifier — the one element every jurisdiction requires on every label.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-green-200 bg-green-50 px-5 py-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-green-700">Your label</p>
+                <p className="text-sm text-gray-600">
+                  {pickedPics.length} pictogram{pickedPics.length === 1 ? '' : 's'} ·{' '}
+                  {mixSignal ?? 'no signal word'} · {pickedH.length} hazard statement{pickedH.length === 1 ? '' : 's'}
+                  {' '}— pick precautionary statements below.
+                </p>
+              </div>
+              <a href="#label" className="shrink-0 rounded-lg bg-[#062A78] px-4 py-2 text-sm font-semibold text-white">
+                Go to the label ↓
+              </a>
+            </div>
+            <div id="label" className="scroll-mt-24">
+              <GHSLabelConstructor
+                displayName={mixName}
+                casNumber={mixCas}
+                ecNumber={mixEc || null}
+                signalWord={mixSignal}
+                pictograms={picked}
+                hStatements={pickedHList}
+                pStatements={allP}
+                initialJurisdiction={jurisdiction}
+                initialPurpose={purpose}
+                initialSelectedP={[]}
+              />
+            </div>
+          </>
+        )}
+      </div>
+    )
+  }
+
+  // ── Пустое состояние: выбор вещества ──────────────────────────────────────
+  // ⚠⚠ Поисков здесь было ДВА: свой примитивный сверху (ilike по одному полю) и
+  // полноценный внутри SubstanceFilterBrowse — с нечётким поиском через fuse.js
+  // и фильтрами по пиктограммам и сигнальному слову. Свой убран: два поля ввода
+  // на одном экране заставляют выбирать, каким из них пользоваться.
+  if (!cas && !substance) {
+    return (
+      <div className="space-y-5">
+        <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-5">
+          <p className="text-sm font-semibold text-gray-900">Labelling your own mixture or product?</p>
+          <p className="mt-1 text-sm text-gray-600">
+            Mixtures have no harmonised classification — yours comes from your safety data sheet.
+            Set the pictograms, signal word and hazard statements yourself.
+          </p>
+          <button
+            type="button"
+            onClick={() => setManual(true)}
+            className="mt-3 cursor-pointer rounded-lg bg-[#f97316] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#ea670c]"
+          >
+            Build a label manually →
+          </button>
+        </div>
+
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
+          <p className="font-semibold text-[#062A78]">Or pick a substance from the database</p>
+          <p className="mt-1 text-sm text-gray-600">
+            Search by name or CAS number, or narrow the list by pictogram. Classification,
+            signal word and H/P statements are filled in for you.
+          </p>
+          <div className="-mx-2 mt-4 sm:mx-0">
+            <SubstanceFilterBrowse onSelectSubstance={(c) => { setCas(c); setLabelConstructorUrl(c) }} />
           </div>
           <p className="mt-4 text-sm text-gray-500">
-            Open the catalog in a separate page:{' '}
-            <a href="/substances/" className="text-[#062A78] underline">
-              Substance database →
-            </a>
+            Open the catalogue on its own page: <a href="/substances/" className="text-[#062A78] underline">Substance database →</a>
           </p>
         </div>
       </div>
     )
   }
 
-  if (loading) {
-    return <div className="py-16 text-center text-gray-500 text-sm">Loading substance data…</div>
-  }
+  if (loading) return <div className="py-16 text-center text-sm text-gray-500">Loading substance data…</div>
 
   if (notFound) {
     return (
       <div className="py-16 text-center">
-        <p className="text-gray-600 mb-4">Substance not found for CAS: {cas}</p>
+        <p className="mb-4 text-gray-600">Substance not found for CAS: {cas}</p>
         <button
           type="button"
-          onClick={() => {
-            setCas(null)
-            setSubstance(null)
-            setLabelConstructorUrl(null)
-          }}
-          className="text-[#062A78] underline text-sm"
-        >
-          ← Search again
-        </button>
+          onClick={() => { setCas(null); setSubstance(null); setLabelConstructorUrl(null) }}
+          className="text-sm text-[#062A78] underline"
+        >← Search again</button>
       </div>
     )
   }
@@ -207,30 +370,22 @@ export default function LabelConstructorLoader() {
 
   return (
     <div className="space-y-6">
-      {/* Шапка с выбранным веществом */}
-      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-5 py-3">
+      <div className="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 px-5 py-3">
         <div>
-          <p className="text-xs text-green-700 font-medium uppercase tracking-wide">Selected substance</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-green-700">Selected substance</p>
           <p className="font-bold text-gray-900">{displayName}</p>
           <p className="text-sm text-gray-500">CAS {substance.cas_number}</p>
         </div>
         <button
           type="button"
           onClick={() => {
-            setCas(null)
-            setSubstance(null)
-            setPictograms([])
-            setHStatements([])
-            setPStatements([])
+            setCas(null); setSubstance(null); setPictograms([]); setHStatements([]); setPStatements([])
             setLabelConstructorUrl(null)
           }}
-          className="text-sm text-gray-400 hover:text-gray-600 underline"
-        >
-          Change substance
-        </button>
+          className="text-sm text-gray-400 underline hover:text-gray-600"
+        >Change substance</button>
       </div>
 
-      {/* Label Constructor со всеми данными */}
       <GHSLabelConstructor
         displayName={displayName}
         casNumber={substance.cas_number}
@@ -239,6 +394,8 @@ export default function LabelConstructorLoader() {
         pictograms={pictograms}
         hStatements={hStatements}
         pStatements={pStatements}
+        initialJurisdiction={jurisdiction}
+        initialPurpose={purpose}
       />
     </div>
   )
