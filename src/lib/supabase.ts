@@ -34,11 +34,90 @@ const RETRY_BACKOFF_MS = [900, 2500]
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+/**
+ * ⚠⚠ ЧИТАЮЩИЕ RPC — ИХ ПОВТОРЯТЬ МОЖНО, И БЕЗ ЭТОГО СБОРКА ПАДАЛА.
+ *
+ * Правило «повторяем только GET» верно по причине, но неверно по объёму.
+ * Выборки PostgREST уходят GET-ом, а RPC — POST-ом, и повтор POST после 500
+ * действительно может удвоить запись. Но эти четыре RPC ничего не пишут: они
+ * читают. Отсекая по методу, мы отсекали и их — а `get_storage_verdict` как раз
+ * тот вызов, на котором 2026-08-08 легла сборка Cloudflare:
+ *
+ *     build: get_storage_verdict(111-30-8) for glutaraldehyde
+ *            — canceling statement due to statement timeout
+ *
+ * Ровно тот же код собирался локально дважды в тот же день. Повтора не было не
+ * потому, что мы решили не повторять, а потому, что фильтр по методу задел
+ * читающие вызовы заодно с пишущими.
+ *
+ * ⚠ Список ИМЕНАМИ, а не по префиксу `get_`. Соглашение об именах — не гарантия:
+ * стоит однажды завести пишущую функцию с именем `get_…`, и повтор молча
+ * удвоит запись. Имя в списке — это утверждение «эта функция читает», и его
+ * делает человек, а не регулярка.
+ */
+const READ_ONLY_RPC = new Set([
+  'get_storage_verdict',
+  'get_class_substances',
+  'get_class_compatibility',
+  'get_statement_counts',
+])
+
+/** Адрес запроса — из любой формы первого аргумента `fetch`. */
+function urlOf(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input
+  if (input instanceof URL) return input.toString()
+  return input.url
+}
+
+function isReadOnlyRpc(input: RequestInfo | URL): boolean {
+  const m = /\/rest\/v1\/rpc\/([a-z0-9_]+)/i.exec(urlOf(input))
+  return !!m && READ_ONLY_RPC.has(m[1])
+}
+
+/**
+ * ⭐⭐ ОБЩИЙ ПРЕДЕЛ ОДНОВРЕМЕННЫХ ЗАПРОСОВ — И ОН ОБЯЗАН БЫТЬ ЗДЕСЬ, А НЕ В
+ * МЕСТАХ ВЫЗОВА.
+ *
+ * `mapLimit` в mustQuery.ts ограничивает ОДИН маршрут. Но Astro собирает
+ * маршруты ОДНОВРЕМЕННО, и залп, который видит база, — это СУММА по всем:
+ * `/sds/` держит 6 работников по ~7 запросов, `storage-compatibility/[class]`
+ * стреляет 26 RPC разом, `storage-compatibility/index` ещё 26, и дюжина
+ * страниц шлёт пачки по 5–7. Никакой предел внутри одного маршрута этого не
+ * закрывает — и не закроет, сколько их ни расставляй.
+ *
+ * `statement_timeout` роли `anon` — 3 с (замерено в session 47). Сам
+ * `get_storage_verdict` в тишине идёт 199 мс. Одно с другим не противоречит:
+ * вызов встаёт в очередь и упирается в потолок роли.
+ *
+ * ⚠ Предел ставится ТОЛЬКО на сборке. В браузере конструктор делает единицы
+ * запросов, а семафор там — лишний код на пути к отклику и риск подвиснуть,
+ * если промис по какой-то причине не разрешится.
+ *
+ * ⚠ 10, а не 4: при слишком тесном пределе сборка 4 499 страниц растягивается
+ * без нужды. И не 40: тогда мы возвращаемся к тому, с чего начали.
+ */
+const IS_BUILD = typeof window === 'undefined'
+const INFLIGHT_LIMIT = 10
+let inflight = 0
+const waiting: (() => void)[] = []
+
+async function acquire(): Promise<void> {
+  if (inflight < INFLIGHT_LIMIT) { inflight++; return }
+  await new Promise<void>((resolve) => waiting.push(resolve))
+  inflight++
+}
+
+function release(): void {
+  inflight--
+  // ⚠ Будим ровно одного: разбудить всех — значит снова открыть шлюз целиком.
+  waiting.shift()?.()
+}
+
 /** Длиннее дефолтного undici/HTML timeout — prerender тысяч страниц без обрыва. */
-const customFetch: typeof fetch = async (input, init) => {
+const rawFetch: typeof fetch = async (input, init) => {
   // ⚠ Метод по умолчанию — GET: supabase-js для обычной выборки `method` не ставит.
   const method = (init?.method ?? 'GET').toUpperCase()
-  const canRetry = method === 'GET'
+  const canRetry = method === 'GET' || isReadOnlyRpc(input)
   const attempts = canRetry ? RETRY_BACKOFF_MS.length + 1 : 1
 
   for (let i = 0; ; i++) {
@@ -61,6 +140,25 @@ const customFetch: typeof fetch = async (input, init) => {
     }
   }
 }
+
+/**
+ * Тот же `fetch`, но на сборке — через общий предел одновременных запросов.
+ *
+ * ⚠⚠ `release()` стоит в `finally`, и это не формальность: без него один
+ * упавший запрос навсегда съедает слот, десять таких — и сборка встаёт молча,
+ * без ошибки, до самого таймаута Cloudflare. Отказ должен стоить слота на время
+ * запроса, а не навсегда.
+ */
+const customFetch: typeof fetch = IS_BUILD
+  ? async (input, init) => {
+      await acquire()
+      try {
+        return await rawFetch(input, init)
+      } finally {
+        release()
+      }
+    }
+  : rawFetch
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   global: { fetch: customFetch },
