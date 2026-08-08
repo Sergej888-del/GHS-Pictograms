@@ -15,7 +15,6 @@
 export const prerender = true
 
 import Layout from '../../../layouts/Layout.astro'
-import LabelConstructorLoader from '../../../components/LabelConstructorLoader'
 import { SITE, TEMPLATES, TEMPLATE_BY_STOCK, breadcrumbJsonLd } from '../../../lib/labelMakerHub'
 import { stockFor, stockSizeLabel, stockMm, SHEET_NAME, type LabelStockItem } from '../../../lib/labelStock'
 import { CLP_SIZE_TIERS } from '../../../lib/jurisdictions'
@@ -213,11 +212,23 @@ const jsonLd = [
     </div>
   </section>
 
+  <!-- ── ВХОД В ИНСТРУМЕНТ ─────────────────────────────────────────────────
+       ⚠⚠ Конструктор ОДИН, на `/ghs-label-maker/`. Здесь он стоял копией —
+       четвёртой из четырнадцати на весь раздел. Разбор — в шапке
+       `src/components/LabelConstructorLoader.tsx`. -->
   <section class="hub-sec-tool">
     <div class="hub-wrap">
-      <p class="hub-eyebrow">04 · Build it</p>
-      <h2 class="hub-h2" style="margin-bottom:20px">Label builder</h2>
-      <LabelConstructorLoader client:load />
+      <div class="lm-open">
+        <div>
+          <p class="hub-eyebrow">04 · Build it</p>
+          <h2 class="hub-h2" style="margin-bottom:6px">Label builder</h2>
+          <p class="hub-sub">
+            Pick any size above to open the tool already set to it, or start from a blank label and
+            choose the size inside.
+          </p>
+        </div>
+        <a class="tool-cta" href="/ghs-label-maker/#build">Open the label maker →</a>
+      </div>
     </div>
   </section>
 

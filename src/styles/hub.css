@@ -2947,3 +2947,362 @@ a.sub-alpha-item:hover { border-color: var(--teal-200); background: var(--teal-5
   .hub-table .unt-tcmax::before { content: 'Max per transport unit · '; }
   .hub-table .unt-tcmul::before { content: 'Multiplier · '; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LABEL MAKER — оформление островов конструктора этикетки
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠⚠ ЗАЧЕМ ЭТОТ БЛОК СУЩЕСТВУЕТ. `LabelConstructorLoader` был написан утилитами
+   Tailwind прямо в JSX (`rounded-xl border border-blue-200 bg-blue-50`,
+   `bg-[#062A78]`). На четырнадцати страницах раздела инструмент стал лицом
+   раздела, и Сергей увидел то, что и должно было получиться: «просто белые
+   карточки», рядом с которыми страница оформлена дизайн-системой.
+
+   Правило: у островов НЕТ собственного оформления. Всё, что они рисуют,
+   называется классами отсюда. Эталон — `StorageTool.tsx` (ноль утилит).
+   Полный разбор — `claude/design-system.md`, обязательное чтение.
+
+   ⚠ Цвета — ТОЛЬКО из `design-tokens.css`. Литерал `#062A78` в новой разметке
+   ошибка: цвет действия у инструментов `--teal-600`, цвет ссылки `#1e3a8a`.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Вертикальный ритм состояний инструмента (было `space-y-6` утилитой). */
+.lm-wrap > * + * { margin-top: 20px; }
+
+/* ── ПОЛОСА ИСТОЧНИКА КЛАССИФИКАЦИИ ──────────────────────────────────────
+   ⚠⚠ Стоит НАД конструктором и держит ровно два пути: взять вещество из
+   перечня или задать классификацию самому. Списка веществ здесь нет — он на
+   своей странице `/ghs-label-maker/pick/`. Так решено после того, как Сергей
+   посмотрел собранный сайт: пока подбор стоял перед инструментом, инструмента
+   не было видно вовсе. */
+.lm-source {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--bg-a) 0%, #ffffff 70%);
+  padding: 20px 22px;
+  box-shadow: 0 6px 18px rgba(15, 23, 41, 0.08);
+}
+@media (min-width: 900px) {
+  .lm-source { grid-template-columns: minmax(0, 1fr) minmax(0, 330px); gap: 26px; }
+}
+
+.lm-source-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+/* ⚠ `.tool-search` несёт `margin-top: 16px` — он рассчитан на чипы над полем
+   (так в StorageTool). Здесь над полем подпись, и отступ надо снять. */
+.lm-source-form .tool-search { flex: 1 1 260px; width: auto; margin-top: 0; }
+.lm-source-form .tool-cta { flex: 0 0 auto; margin-top: 0; }
+
+.lm-source-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 20px;
+  margin-top: 12px;
+}
+.lm-source-links .tool-preview-all { margin-top: 0; }
+
+/* Правая половина полосы: что сейчас лежит в инструменте. */
+.lm-source-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border-left: 3px solid var(--teal-500);
+  border-radius: 0 12px 12px 0;
+  background: #ffffff;
+  padding: 14px 16px;
+  border-top: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.lm-source-state .k {
+  margin: 0 0 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.lm-source-state .v {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.lm-source-state .cas { margin: 3px 0 0; font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); }
+.lm-source-state .lm-hint { margin-top: 8px; }
+
+/* ⚠ Сброс обязан быть виден: раз конструктор всегда на экране, человеку нужен
+   способ выйти из набранного состояния, а не перезагружать страницу. */
+.lm-reset {
+  margin-top: auto;
+  padding-top: 12px;
+  border: 0;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.lm-reset:hover { color: #9f1239; }
+
+/* Пояснительная фраза, а не счётчик. ⚠ `.tool-count` — моноширинный верхний
+   регистр: предложение, набранное им, читается как ошибка вёрстки. */
+.lm-hint { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+.lm-hint + .lm-input { margin-top: 8px; }
+
+.lm-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink-3);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.lm-link:hover { color: var(--ink); }
+.tool-blank .lm-link { display: inline-block; margin-top: 14px; }
+
+/* ── ПАНЕЛЬ РУЧНОЙ КЛАССИФИКАЦИИ ─────────────────────────────────────────── */
+.lm-form > * + * { margin-top: 18px; }
+
+.lm-input {
+  width: 100%;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 10px 13px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+.lm-input::placeholder { color: #94a3b8; }
+.lm-input:focus { border-color: var(--teal-500); box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.18); }
+
+.lm-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.lm-head .tool-label { margin: 0; }
+.lm-head .n { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+
+.lm-pics { display: flex; flex-wrap: wrap; gap: 8px; }
+.lm-pic {
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 6px;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: all 200ms ease-out;
+}
+.lm-pic:hover { opacity: 1; border-color: var(--line-2); }
+.lm-pic.on { opacity: 1; border-color: var(--teal-600); background: var(--teal-50); }
+.lm-pic .g { display: block; width: 46px; height: 46px; }
+.lm-pic .g > svg { display: block; width: 100%; height: 100%; }
+.lm-pic .c {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.lm-pic.on .c { color: var(--teal-700); }
+
+/* ⚠ Высота окна фиксирована: H-фраз 108, P-фраз 117, и без окна панель
+   вырастает на четыре экрана. */
+.lm-scroll { margin-top: 8px; max-height: 288px; overflow-y: auto; padding-right: 4px; }
+.lm-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 8px 11px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.lm-opt + .lm-opt { margin-top: 4px; }
+.lm-opt:hover { border-color: var(--teal-200); background: var(--teal-50); }
+.lm-opt.on { border-color: var(--teal-600); background: var(--teal-50); }
+.lm-opt input { margin-top: 2px; width: 14px; height: 14px; accent-color: var(--teal-600); cursor: pointer; }
+.lm-opt b { font-weight: 700; color: var(--ink); }
+
+.lm-group + .lm-group { margin-top: 10px; }
+.lm-group .gt {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 4px;
+  background: #ffffff;
+  padding: 4px 0;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* ── СТРАНИЦА ПОДБОРА ВЕЩЕСТВА · /ghs-label-maker/pick/ ─────────────────────
+   ⚠⚠ Здесь список НЕ в окне: это его собственная страница, и содержание
+   страницы — он и есть. Окно фиксированной высоты нужно там, где список стоит
+   ПОСРЕДИ другого содержания. */
+.lm-facets { margin-top: 16px; }
+.lm-facets .tool-label { margin: 0 0 8px; }
+
+/* Чип с пиктограммой. ⚠ Значок 15 px: `.tool-chip` — моноширинная строка
+   10.5 px, и картинка крупнее ломает высоту ряда чипов. */
+.lm-chip-pic { display: inline-flex; align-items: center; gap: 5px; }
+.lm-chip-pic img { display: block; width: 15px; height: 15px; }
+
+.lm-pick-filters .tool-search { margin-top: 0; }
+.lm-pick-results { margin-top: 20px; }
+.lm-pick-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px 20px;
+  margin-bottom: 10px;
+}
+.lm-pick-head .tool-count { margin: 0; }
+.lm-pick-head .tool-preview-all { margin-top: 0; }
+
+.lm-pick-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #ffffff;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(15, 23, 41, 0.05);
+}
+.lm-pick-list li + li { border-top: 1px solid #f1f5f9; }
+.lm-pick-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 16px;
+  width: 100%;
+  border: 0;
+  border-left: 3px solid transparent;
+  background: none;
+  padding: 11px 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 200ms ease-out;
+}
+.lm-pick-row:hover { background: var(--teal-50); border-left-color: var(--teal-500); }
+.lm-pick-row .n {
+  grid-column: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.lm-pick-row:hover .n { color: var(--teal-700); }
+.lm-pick-row .m { grid-column: 1; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+.lm-pick-row .p {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lm-pick-row .p img { display: block; width: 22px; height: 22px; }
+.lm-pick-row .p .sw {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.lm-pick-row .p .sw.danger { background: var(--verdict-never-bg); color: var(--verdict-never-ink); }
+.lm-pick-row .p .sw.warning { background: var(--verdict-sep-bg); color: var(--verdict-sep-ink); }
+@media (max-width: 560px) {
+  .lm-pick-row .p img { width: 18px; height: 18px; }
+}
+
+/* ── Справочник по режимам: ряд кнопок ПОД конструктором ──────────────────
+   ⚠⚠ Раньше страницы юрисдикций сами несли инструмент — четырнадцать копий
+   одного конструктора на четырнадцати адресах. Теперь инструмент один, а это
+   вход в нормы, которые за ним стоят. */
+.lm-jur { margin-top: 22px; }
+.lm-jur-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+.lm-jur-btn {
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 12px 15px;
+  text-decoration: none;
+  box-shadow: 0 2px 6px rgba(15, 23, 41, 0.05);
+  transition: all 250ms ease-out;
+}
+.lm-jur-btn:hover { border-color: var(--teal-600); transform: translateY(-2px); }
+.lm-jur-btn strong {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+.lm-jur-btn span {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.lm-jur-btn:hover strong { color: var(--teal-700); }
+
+/* ── Вход в инструмент со справочной страницы ветки ──────────────────────── */
+.lm-open {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px 26px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--bg-a) 0%, #ffffff 70%);
+  padding: 22px 24px;
+  box-shadow: 0 6px 18px rgba(15, 23, 41, 0.08);
+}
+.lm-open .hub-sub { margin-top: 8px; }
+.lm-open .tool-cta { flex: 0 0 auto; margin-top: 0; }

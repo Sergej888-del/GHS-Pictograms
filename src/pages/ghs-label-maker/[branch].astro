@@ -5,11 +5,14 @@
  * Шесть страниц: четыре юрисдикции, вторичная тара и транспорт. Все берут
  * содержание из `src/lib/labelMakerHub.ts`.
  *
- * ⚠⚠ ИНСТРУМЕНТ НА КАЖДОЙ, И ОТКРЫВАЕТСЯ УЖЕ НАСТРОЕННЫМ. `LabelConstructorLoader`
- * принимает `jurisdiction` и `purpose`; страница /whmis-canada/ открывает
- * конструктор в канадском режиме, /secondary-container/ — в цеховом, где из
- * обязательных элементов уходит блок поставщика. Без этого страницы были бы
- * шестью статьями с одинаковым виджетом внизу.
+ * ⚠⚠ ИНСТРУМЕНТА ЗДЕСЬ НЕТ — ТОЛЬКО ССЫЛКА В НЕГО, И ЭТО РЕШЕНИЕ.
+ * До session 47 `LabelConstructorLoader` стоял на каждой из шести веток и
+ * открывался уже переключённым (`jurisdiction`, `purpose`). Выглядело это как
+ * шесть копий одного инструмента, а на хабе сам инструмент был не виден вовсе —
+ * его закрывал подбор вещества. Сергей: «ты не видишь инструмент, из-за этого
+ * мало кто доходит до глубоко зарытого инструмента».
+ * Теперь конструктор ОДИН, на `/ghs-label-maker/`, и открывается сразу; ветка —
+ * справочная статья, которая ведёт в него ссылкой `?jur=…#build`.
  *
  * ⚠ Одна разметка на все шесть — сознательно. Содержание у веток разное и лежит
  * в данных; расходиться должны ТЕКСТЫ, а не вёрстка. Иначе через две сессии
@@ -22,11 +25,11 @@
 export const prerender = true
 
 import Layout from '../../layouts/Layout.astro'
-import LabelConstructorLoader from '../../components/LabelConstructorLoader'
 import {
   SITE, BRANCHES, CROSS_LINKS, faqJsonLd, breadcrumbJsonLd,
 } from '../../lib/labelMakerHub'
 import { JURISDICTIONS } from '../../lib/jurisdictions'
+import { labelMakerHref } from '../../lib/labelMakerLink'
 
 export function getStaticPaths() {
   return BRANCHES.map((b) => ({ params: { branch: b.slug }, props: { branch: b } }))
@@ -36,6 +39,15 @@ const { branch } = Astro.props
 const j = JURISDICTIONS[branch.jurisdiction]
 
 const canonical = `${SITE}/ghs-label-maker/${branch.slug}/`
+
+// ⚠⚠ Адрес инструмента строится ТЕМ ЖЕ сборщиком, что и все остальные ссылки в
+// конструктор (`labelMakerLink.ts`). Литерал `?jur=` , набранный здесь руками,
+// был бы второй редакцией контракта — ровно тем дефектом, из-за которого в
+// session 38 калькулятор открывался пустым с 3 650 страниц.
+const toolHref = labelMakerHref({
+  jurisdiction: branch.jurisdiction,
+  purpose: branch.purpose === 'supplier' ? null : branch.purpose,
+}) + '#build'
 
 // Соседи по разделу — навигация внизу страницы. ⚠ По кругу: у последней ветки
 // следующей становится первая, иначе на двух страницах из шести половина
@@ -108,23 +120,36 @@ const jsonLd = [
     </section>
   )}
 
-  <!-- ── ИНСТРУМЕНТ, УЖЕ НАСТРОЕННЫЙ НА ЭТУ ЮРИСДИКЦИЮ ─────────────────────── -->
-  <section class="hub-sec-tool" id="build">
+  <!-- ── ВХОД В ИНСТРУМЕНТ ─────────────────────────────────────────────────
+       ⚠⚠ ИНСТРУМЕНТА НА ЭТОЙ СТРАНИЦЕ БОЛЬШЕ НЕТ, И ЭТО РЕШЕНИЕ, А НЕ ПОТЕРЯ.
+       Один и тот же конструктор стоял на четырнадцати адресах раздела. Человек,
+       попавший на ветку, не понимал, что это тот же инструмент, только заранее
+       переключённый, — а на хабе он тонул под подбором вещества. Сергей:
+       «ты не видишь инструмент, из-за этого мало кто доходит до глубоко
+       зарытого инструмента». Теперь конструктор ОДИН, на `/ghs-label-maker/`,
+       а ветки — справочные статьи с явной кнопкой в него.
+
+       ⚠ Ссылка несёт `?jur=` и якорь `#build`: она обязана открыть инструмент
+       УЖЕ в этом режиме и сразу на нём, а не в начале хаба. Имя параметра — из
+       `labelMakerLink.ts`; руками строку `?jur=` здесь не набирать.
+       ⚠ `purpose` уходит только у веток, у которых он не `supplier`: лишний
+       параметр в адресе — это лишняя редакция умолчания. -->
+  <section class="hub-sec-tool">
     <div class="hub-wrap">
-      <p class="hub-eyebrow">Build it</p>
-      <h2 class="hub-h2" style="margin-bottom:6px">
-        {branch.purpose === 'workplace' ? 'Workplace label builder' : 'Label builder'}
-      </h2>
-      <p class="hub-sub" style="margin-bottom:22px">
-        Opens set to <strong>{j.tag}</strong>{branch.purpose === 'workplace' ? ' in workplace-container mode' : ''}.
-        You can change the jurisdiction inside the tool at any point — the label is rebuilt against the
-        rules of whichever one is selected.
-      </p>
-      <LabelConstructorLoader
-        client:load
-        jurisdiction={branch.jurisdiction}
-        purpose={branch.purpose}
-      />
+      <div class="lm-open">
+        <div>
+          <p class="hub-eyebrow">Build it</p>
+          <h2 class="hub-h2" style="margin-bottom:6px">
+            {branch.purpose === 'workplace' ? 'Workplace label builder' : 'Label builder'}
+          </h2>
+          <p class="hub-sub">
+            The label maker opens set to <strong>{j.tag}</strong>{branch.purpose === 'workplace' ? ' in workplace-container mode' : ''}.
+            You can change the jurisdiction inside the tool at any point — the label is rebuilt
+            against the rules of whichever one is selected.
+          </p>
+        </div>
+        <a class="tool-cta" href={toolHref}>Open the label maker in {j.tag} mode →</a>
+      </div>
     </div>
   </section>
 

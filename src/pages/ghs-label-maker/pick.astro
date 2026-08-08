@@ -1,0 +1,108 @@
+---
+/**
+ * Подбор вещества для конструктора — /ghs-label-maker/pick/
+ *
+ * ⚠⚠ ЗАЧЕМ ЭТА СТРАНИЦА СУЩЕСТВУЕТ. Раньше подбор вещества стоял ВНУТРИ
+ * инструмента и ПЕРЕД ним: пока вещество не выбрано, конструктора на странице
+ * не было вовсе. Сергей, посмотрев собранный сайт: «ты не видишь инструмент,
+ * из-за этого мало кто доходит до глубоко зарытого инструмента». Теперь на
+ * `/ghs-label-maker/` конструктор открыт сразу и пустой, а весь подбор переехал
+ * сюда, где под него есть целый экран: поиск, буквы, пиктограммы, сигнальное
+ * слово и список без потолка.
+ *
+ * ⚠⚠ ЭТА СТРАНИЦА НЕ ДЛЯ ПОИСКОВИКОВ. Она дублирует по смыслу `/substances/`
+ * (каталог, 4 178 записей, собственные страницы у каждой) и существует только
+ * как шаг внутри инструмента. Поэтому `noindex` и `follow`: индексировать её
+ * значит завести второй каталог-конкурента собственному разделу веществ.
+ *
+ * ⚠ Канонический адрес указывает НА СЕБЯ, а не на `/substances/`: canonical на
+ * чужую страницу вместе с noindex — противоречивый сигнал, и Google в таких
+ * случаях выбирает сам.
+ */
+export const prerender = true
+
+import Layout from '../../layouts/Layout.astro'
+import SubstancePicker from '../../components/SubstancePicker'
+import { SITE, JURISDICTION_BRANCHES, breadcrumbJsonLd } from '../../lib/labelMakerHub'
+import { labelMakerHref } from '../../lib/labelMakerLink'
+
+const canonical = `${SITE}/ghs-label-maker/pick/`
+
+// ⚠⚠ Все ссылки в конструктор строятся `labelMakerHref`, а не литералом
+// `?jur=`. Имя параметра — контракт между разметкой и островом, и вторая
+// рукописная редакция этого контракта уже стоила session 38 калькулятора,
+// открывавшегося пустым с 3 650 страниц.
+const jsonLd = breadcrumbJsonLd([
+  { name: 'Home', path: '/' },
+  { name: 'GHS label maker', path: '/ghs-label-maker/' },
+  { name: 'Pick a substance', path: '/ghs-label-maker/pick/' },
+])
+---
+
+<Layout
+  title="Pick a substance for the GHS label maker"
+  description="Search the 4,178 harmonised CLP Annex VI entries by name, CAS or EC number and open the label maker with the classification already filled in."
+  canonical={canonical}
+  titleIsComplete={true}
+>
+  {/* ⚠⚠ `noindex` ставится МЕТА-ТЕГОМ через слот `head`, а не пропом Layout:
+      такого пропа у него нет, и переданный мимо интерфейса он был бы молча
+      проглочен — страница осталась бы в индексе, а мы бы думали, что закрыли её. */}
+  <meta name="robots" content="noindex, follow" slot="head" />
+  <script type="application/ld+json" slot="head" set:html={JSON.stringify(jsonLd)} />
+
+  <section class="hub-hero">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+    <div class="hub-wrap hub-hero-inner hub-hero-left">
+      <nav class="hub-crumb" aria-label="Breadcrumb">
+        <a href="/">Home</a><span class="sep">/</span>
+        <a href="/ghs-label-maker/">GHS label maker</a><span class="sep">/</span>
+        <span>Pick a substance</span>
+      </nav>
+      <p class="hub-hero-eyebrow">Step 1 of 2 · CLP Annex VI</p>
+      <h1>Pick the substance you are labelling</h1>
+      <p class="hub-hero-sub">
+        4,178 harmonised entries. Choose one and the label maker opens with its pictograms,
+        signal word and H/P statements already filled in — you keep whatever jurisdiction and
+        label size you had set.
+      </p>
+    </div>
+  </section>
+
+  <section class="hub-sec-tool">
+    <div class="hub-wrap">
+      <SubstancePicker client:load />
+    </div>
+  </section>
+
+  <!-- ⚠ Выход для тех, кого в перечне нет. Смеси и собственные продукты
+       гармонизированной классификации не имеют и иметь не могут — тупик здесь
+       был бы самой дорогой ошибкой страницы. -->
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">Not in the list?</p>
+      <h2 class="hub-h2">Mixtures and own products are not harmonised</h2>
+      <p class="hub-sub">
+        CLP Annex VI covers substances, not formulations. If you are labelling your own mixture,
+        its classification comes from your safety data sheet and you set it yourself — the label
+        maker builds the label to the same rules either way.
+      </p>
+      <p style="margin-top:22px">
+        <a href={labelMakerHref() + '#build'} class="tool-cta">Back to the label maker →</a>
+      </p>
+
+      <h2 class="hub-h2" style="margin-top:44px">Open the label maker in a set jurisdiction</h2>
+      <div class="hub-mini-cards" style="margin-top:18px">
+        {JURISDICTION_BRANCHES.map((b) => (
+          <a class="hub-mini-card" href={labelMakerHref({ jurisdiction: b.jurisdiction }) + '#build'}>
+            <span class="code">{b.badge}</span>
+            <h4>{b.cardTitle}</h4>
+            <p class="copy">{b.cardDesc}</p>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+</Layout>

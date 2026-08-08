@@ -2,10 +2,14 @@
 /**
  * Страница одного формата — /ghs-label-maker/templates/<slug>/
  *
- * ⚠⚠ ИНСТРУМЕНТ ОТКРЫВАЕТСЯ УЖЕ НА ЭТОМ РАЗМЕРЕ. Ради этого в
- * `LabelConstructorLoader` и `GHSLabelConstructor` добавлен проп `initialStockId`.
- * Без него страница «шаблон 4 × 2 in» открывала бы конструктор на размере по
- * умолчанию, и обещание в заголовке не выполнялось бы ни на одной из шести.
+ * ⚠⚠ ИНСТРУМЕНТА ЗДЕСЬ НЕТ — ТОЛЬКО ССЫЛКА В НЕГО, УЖЕ НА ЭТОМ РАЗМЕРЕ.
+ * До session 47 `LabelConstructorLoader` стоял на каждой странице раздела —
+ * четырнадцать копий одного конструктора. Сергей, посмотрев собранный сайт:
+ * «ты не видишь инструмент, из-за этого мало кто доходит до глубоко зарытого
+ * инструмента». Конструктор теперь ОДИН, на `/ghs-label-maker/`, а размер
+ * приезжает к нему параметром `?stock=` — ради этого проп `initialStockId` в
+ * `LabelConstructorLoader` и `GHSLabelConstructor` и остаётся нужен: адрес
+ * читается на хабе и подставляется в тот же проп.
  *
  * ⚠ Слаг — от размера (`4x2-inch`), а не от `id` формата (`us-4x2`) и не от кода
  * вендора: `us-4x2` человеку ничего не говорит, а «avery-5163» умрёт вместе с
@@ -14,10 +18,10 @@
 export const prerender = true
 
 import Layout from '../../../layouts/Layout.astro'
-import LabelConstructorLoader from '../../../components/LabelConstructorLoader'
 import { SITE, TEMPLATES, faqJsonLd, breadcrumbJsonLd } from '../../../lib/labelMakerHub'
 import { LABEL_STOCK_ALL, stockSizeLabel, stockMm, SHEET_NAME, MM_PER_INCH } from '../../../lib/labelStock'
 import { CLP_SIZE_TIERS, requiredPictogramSideMm } from '../../../lib/jurisdictions'
+import { labelMakerHref } from '../../../lib/labelMakerLink'
 
 export function getStaticPaths() {
   return TEMPLATES.map((t) => {
@@ -34,6 +38,12 @@ export function getStaticPaths() {
 const { tpl, stock } = Astro.props
 const mm = stockMm(stock)
 const canonical = `${SITE}/ghs-label-maker/templates/${tpl.slug}/`
+
+// ⚠⚠ Адрес инструмента строится ТЕМ ЖЕ сборщиком, что и все остальные ссылки в
+// конструктор. Литерал `?stock=`, набранный здесь руками, был бы второй
+// редакцией контракта — тем самым дефектом, из-за которого в session 38
+// калькулятор открывался пустым с 3 650 страниц.
+const toolHref = labelMakerHref({ stock: stock.id }) + '#build'
 
 // Ярусы CLP, которым формат удовлетворяет по площади (см. комментарий в
 // templates/index.astro — по обеим сторонам считать нельзя).
@@ -93,16 +103,23 @@ const jsonLd = [
     </div>
   </section>
 
-  <!-- ── ИНСТРУМЕНТ НА ЭТОМ РАЗМЕРЕ ────────────────────────────────────────── -->
-  <section class="hub-sec-tool" id="build">
+  <!-- ── ВХОД В ИНСТРУМЕНТ, УЖЕ НА ЭТОМ РАЗМЕРЕ ──────────────────────────────
+       ⚠ Ссылка несёт `?stock=` и якорь `#build`: обещание заголовка выполняет
+       она, а не страница. Адрес строится `labelMakerHref` — тем же сборщиком,
+       что и все остальные ссылки в конструктор. -->
+  <section class="hub-sec-tool">
     <div class="hub-wrap">
-      <p class="hub-eyebrow">Build it</p>
-      <h2 class="hub-h2" style="margin-bottom:6px">Label builder, preset to {stockSizeLabel(stock)}</h2>
-      <p class="hub-sub" style="margin-bottom:22px">
-        Size and sheet layout are already set. Change the jurisdiction or the size inside the tool at any
-        point — the label is rebuilt against whatever is selected.
-      </p>
-      <LabelConstructorLoader client:load initialStockId={stock.id} />
+      <div class="lm-open">
+        <div>
+          <p class="hub-eyebrow">Build it</p>
+          <h2 class="hub-h2" style="margin-bottom:6px">Label builder, preset to {stockSizeLabel(stock)}</h2>
+          <p class="hub-sub">
+            Size and sheet layout arrive already set. Change the jurisdiction or the size inside the
+            tool at any point — the label is rebuilt against whatever is selected.
+          </p>
+        </div>
+        <a class="tool-cta" href={toolHref}>Open the label maker at {stockSizeLabel(stock)} →</a>
+      </div>
     </div>
   </section>
 

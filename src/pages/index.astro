@@ -170,12 +170,16 @@ const sdsRows = [
 
 // ── The other tools (real routes).
 //
+// ⚠⚠ ЭТО ПЛИТКИ БЛОКА «ALSO FREE» в правой колонке ряда флагманов. До session 46
+// тот же массив рисовал ряд крупных карточек ОТДЕЛЬНОЙ секцией ниже; ряд убран,
+// потому что после возвращения «Also free» одни и те же три инструмента стояли
+// на одном экране дважды. Массив остался ОДИН — второго списка нет нигде.
+//
 // ⚠⚠ GHS LABEL MAKER ОТСЮДА УБРАН НАМЕРЕННО (session 45). Он стал флагманом
 // выше, и оставить его ещё и здесь значило бы показать один инструмент на
-// главной дважды — причём второй раз мелкой карточкой в ряду из тринадцати, где
-// он читается как «а вот ещё один, попроще».
+// главной дважды.
 // ⚠ Заголовок «All 14 tools →» не трогать: четырнадцать — это счёт по
-// `/tools/`, а не по этой сетке.
+// `/tools/`, а не по этому массиву.
 const otherTools = [
   {
     href: '/pictogram-selector/',
@@ -681,11 +685,101 @@ const roles = [
         padding: clamp(56px, 8vw, 104px) 0;
         background: linear-gradient(180deg, var(--bg-a) 0%, #f8fafc 55%, #f1f5f9 100%);
       }
+      /* ⚠⚠ ДВЕ КОЛОНКИ ЯВНО, А НЕ `auto-fit`. Раньше здесь стояло
+         `repeat(auto-fit, minmax(320px, 1fr))`. При ширине содержимого 1 152 px
+         (`.wrap` — 1 200 минус поля) в ряд помещаются ТРИ колонки по 320 px, а
+         карточек в ряду две: матрица и ATE. Третья колонка оставалась пустой —
+         это и есть «внизу пустое место», на которое показал Сергей. Само число
+         колонок при этом менялось от ширины окна, поэтому на одних экранах дыра
+         была, а на других нет.
+         Эталон Claude Design в этом месте — две колонки: слева матрица, справа
+         столбец «ATE + Also free». Держим так же и не возвращаемся к `auto-fit`:
+         ряд из двух карточек должен быть рядом из двух карточек. */
       .hp-flagships {
         margin-top: 40px;
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 20px;
+        /* ⚠ `start`, а не растягивание по высоте: обе колонки должны быть
+           РОВНО такой высоты, какая у них есть. Именно растягивание и рождало
+           пустоту — карточка ATE тянулась до высоты матрицы, а лишнюю высоту
+           забирал внутренний блок с `justify-content: flex-end`. Замер после
+           правки: 720 px слева и 696 px справа, разница не читается. */
+        align-items: start;
+      }
+      @media (max-width: 900px) {
+        .hp-flagships {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      /* Правая колонка ряда: карточка ATE и под ней блок «Also free».
+         ⚠ Именно ЭТОТ блок был потерян при переносе макета в код. Без него
+         колонка растягивалась по высоте соседней матрицы, а растягивалась она
+         за счёт пустоты внутри карточки ATE — между текстом и таблицей. */
+      .hp-flag-col {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .hp-also {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #f8fafc;
+        padding: 26px;
+      }
+      .hp-also .t {
+        margin: 0 0 16px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      .hp-also-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+      }
+      .hp-also-tile {
+        display: block;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #ffffff;
+        padding: 12px 14px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--ink);
+        transition: all 300ms ease-out;
+      }
+      .hp-also-tile:hover {
+        border-color: #1e3a8a;
+        color: #1e3a8a;
+      }
+      .hp-also-tile .sub {
+        display: block;
+        margin-top: 3px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      /* ⚠ `margin-top: auto` прижимает ссылку к низу карточки — это и есть то,
+         чем блок заполняет колонку до конца. */
+      .hp-also .all {
+        display: inline-block;
+        margin-top: auto;
+        padding-top: 16px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #1e3a8a;
       }
       /* ── Флагман · GHS Label Maker ──────────────────────────────────────
          ⚠⚠ `grid-column: 1 / -1` — карточка занимает ВЕСЬ ряд. Разбор в
@@ -927,7 +1021,10 @@ const roles = [
         padding: 26px;
         box-shadow: 0 2px 6px rgba(15, 23, 41, 0.05);
         transition: all 400ms ease-out;
-        height: 100%;
+        /* ⚠⚠ `height: 100%` ОТСЮДА УБРАН. Карточка тянулась до высоты матрицы
+           слева, а лишнюю высоту забирал внутренний блок с `justify-content:
+           flex-end` — отсюда и провал между текстом и таблицей ATE. Теперь
+           высоту колонки добирает блок «Also free» под карточкой. */
       }
       .hp-card-ate:hover {
         transform: translateY(-4px);
@@ -1051,7 +1148,9 @@ const roles = [
         color: var(--ink-2);
       }
       .hp-calcs {
-        margin-top: 16px;
+        /* ⚠ Ноль: блок стоит в колонке ряда флагманов, отступ даёт `gap: 20px`
+           у `.hp-flag-col`. Раньше он лежал отдельной секцией ниже. */
+        margin-top: 0;
         border: 1px solid var(--line);
         border-radius: 12px;
         background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
@@ -1500,123 +1599,151 @@ const roles = [
             </div>
           </div>
 
-          <div class="hp-card-storage">
-            <div class="hp-badge-row">
-              <span class="hp-badge">Signature tool</span>
-              <span class="hp-badge-note">Computed verdicts</span>
-            </div>
-            <h3 class="hp-card-title">Chemical Storage Compatibility Matrix</h3>
-            <p class="hp-card-copy">
-              Pick a substance and read the verdict per hazard group: never store together, keep
-              separate, or compatible — with the reaction risk named.
-            </p>
+          {/* ── ЛЕВАЯ КОЛОНКА РЯДА ──────────────────────────────────────────
+              Матрица хранения и под ней полоса девяти калькуляторов по
+              пиктограммам. Полоса раньше стояла отдельной секцией НИЖЕ вместе с
+              рядом из трёх карточек инструментов. Ряд карточек убран (он
+              повторял плитки «Also free»), а полоса переехала сюда — и ровно
+              она уравновешивает колонки: 720 px слева против 696 px справа. */}
+          <div class="hp-flag-col">
+            <div class="hp-card-storage">
+              <div class="hp-badge-row">
+                <span class="hp-badge">Signature tool</span>
+                <span class="hp-badge-note">Computed verdicts</span>
+              </div>
+              <h3 class="hp-card-title">Chemical Storage Compatibility Matrix</h3>
+              <p class="hp-card-copy">
+                Pick a substance and read the verdict per hazard group: never store together, keep
+                separate, or compatible — with the reaction risk named.
+              </p>
 
-            <div class="hp-chips" id="sw-chips">
-              {
-                storageDemo.map((s, i) => (
-                  <button type="button" class={i === 0 ? 'hp-chip active' : 'hp-chip'} data-sub={s.key}>
-                    {s.label}
-                  </button>
-                ))
-              }
-            </div>
-
-            {
-              storageDemo.map((s, i) => (
-                <div
-                  class="hp-verdict-table"
-                  id={`sw-${s.key}`}
-                  style={i === 0 ? undefined : 'display:none'}
-                >
-                  {s.rows.map((r) => (
-                    <div class="hp-verdict-row">
-                      <p>{r.group}</p>
-                      <span
-                        class="hp-verdict-pill"
-                        style={`background:${verdictStyle[r.v].bg};color:${verdictStyle[r.v].ink}`}
-                      >
-                        {verdictStyle[r.v].label}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ))
-            }
-            <p class="hp-card-footnote">
-              Extract from the live matrix — verdicts computed from CLP Annex VI and CAMEO
-              reactivity data.
-            </p>
-            <a href="/tools/chemical-storage-compatibility/" class="hp-card-link">Open the matrix →</a>
-          </div>
-
-          <div class="hp-card-ate">
-            <span class="hp-badge-note" style="color:#0d9488">Classification</span>
-            <h3 class="hp-card-title" style="margin-top:10px; font-size:21px">ATE Mixture Calculator</h3>
-            <p class="hp-card-copy" style="margin-bottom:16px">
-              Acute toxicity estimate for a formulation across oral, dermal and inhalation routes
-              under GHS/CLP — with category, H-statements, pictogram and a printable report.
-            </p>
-            <div style="flex:1 1 auto; display:flex; flex-direction:column; justify-content:flex-end">
-              <div class="hp-ate-table">
-                <div class="hp-ate-head"><span>Route</span><span>ATE mix</span><span>Category</span></div>
+              <div class="hp-chips" id="sw-chips">
                 {
-                  ateDemo.map((r) => (
-                    <div class="hp-ate-row">
-                      <p class="route">{r.route}</p>
-                      <p class="val">{r.ate}</p>
-                      <span class="hp-ate-cat">{r.cat}</span>
-                    </div>
+                  storageDemo.map((s, i) => (
+                    <button type="button" class={i === 0 ? 'hp-chip active' : 'hp-chip'} data-sub={s.key}>
+                      {s.label}
+                    </button>
                   ))
                 }
               </div>
+
+              {
+                storageDemo.map((s, i) => (
+                  <div
+                    class="hp-verdict-table"
+                    id={`sw-${s.key}`}
+                    style={i === 0 ? undefined : 'display:none'}
+                  >
+                    {s.rows.map((r) => (
+                      <div class="hp-verdict-row">
+                        <p>{r.group}</p>
+                        <span
+                          class="hp-verdict-pill"
+                          style={`background:${verdictStyle[r.v].bg};color:${verdictStyle[r.v].ink}`}
+                        >
+                          {verdictStyle[r.v].label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ))
+              }
               <p class="hp-card-footnote">
-                Worked example: methanol 40 % w/w in water — CLP additivity formula, converted
-                point estimates from H301 · H311 · H331. Result: Danger, GHS06.
+                Extract from the live matrix — verdicts computed from CLP Annex VI and CAMEO
+                reactivity data.
               </p>
+              <a href="/tools/chemical-storage-compatibility/" class="hp-card-link">Open the matrix →</a>
             </div>
-            <a href="/tools/ate-mixture-calculator/?mix=67-56-1:40&form=vapour" class="hp-card-link navy">Open the calculator →</a>
+
+            <div class="hp-calcs">
+              <div class="hp-calcs-head">
+                <p class="t">9 per-pictogram calculators</p>
+                <p class="d">One per hazard class — enter your data, get the category and label elements.</p>
+              </div>
+              <div class="hp-calcs-strip">
+                {
+                  pictogramsRows.map((p) => (
+                    <a href={`/ghs/${p.code.toLowerCase()}/`} class="hp-calc-pill">
+                      <Fragment set:html={p.svg_content} />
+                      {p.code}
+                      <span class="sub">{pictoTag[p.code] ?? ''}</span>
+                    </a>
+                  ))
+                }
+              </div>
+            </div>
+          </div>
+
+          <div class="hp-flag-col">
+            <div class="hp-card-ate">
+              <span class="hp-badge-note" style="color:#0d9488">Classification</span>
+              <h3 class="hp-card-title" style="margin-top:10px; font-size:21px">ATE Mixture Calculator</h3>
+              <p class="hp-card-copy" style="margin-bottom:16px">
+                Acute toxicity estimate for a formulation across oral, dermal and inhalation routes
+                under GHS/CLP — with category, H-statements, pictogram and a printable report.
+              </p>
+              {/* ⚠ Обёртка БЕЗ `flex: 1 1 auto` и без прижатия к низу. Пока
+                  карточка тянулась до высоты соседней (`height: 100%`), этот
+                  блок забирал всю лишнюю высоту и отодвигал таблицу вниз —
+                  отсюда и провал между текстом и таблицей, на который показал
+                  Сергей. Высоту колонки теперь добирает блок «Also free». */}
+              <div>
+                <div class="hp-ate-table">
+                  <div class="hp-ate-head"><span>Route</span><span>ATE mix</span><span>Category</span></div>
+                  {
+                    ateDemo.map((r) => (
+                      <div class="hp-ate-row">
+                        <p class="route">{r.route}</p>
+                        <p class="val">{r.ate}</p>
+                        <span class="hp-ate-cat">{r.cat}</span>
+                      </div>
+                    ))
+                  }
+                </div>
+                <p class="hp-card-footnote">
+                  Worked example: methanol 40 % w/w in water — CLP additivity formula, converted
+                  point estimates from H301 · H311 · H331. Result: Danger, GHS06.
+                </p>
+              </div>
+              <a href="/tools/ate-mixture-calculator/?mix=67-56-1:40&form=vapour" class="hp-card-link navy">Open the calculator →</a>
+            </div>
+
+            {/* ── ALSO FREE ────────────────────────────────────────────────────
+                ⚠⚠ ЭТО ВОЗВРАЩЁННЫЙ БЛОК ЭТАЛОНА, А НЕ НОВАЯ ВЫДУМКА. В макете
+                Claude Design он стоит ровно здесь — под карточкой ATE, в правой
+                колонке ряда флагманов, — и заполняет её до низа. При переносе
+                макета в код блок потерялся, колонка осталась короче соседней, и
+                разница вылезла пустотой внутри карточки ATE.
+
+                ⚠⚠ GHS LABEL MAKER СЮДА НЕ СТАВИТСЯ. В эталоне он здесь плиткой,
+                но у нас он с session 45 — широкий флагман над этим же рядом.
+                Поставить его ещё и плиткой значило бы показать один инструмент на
+                одном экране дважды. Решение Сергея: флагман остаётся, «Also free»
+                возвращается без него.
+
+                ⚠ Плитки печатаются из `otherTools` — того же массива, который
+                раньше рисовал ряд карточек ниже. Ряд убран: три карточки и четыре
+                плитки об одном и том же на одном экране — это дубль, а не
+                перелинковка. Массив остался ОДИН, второго списка нет. */}
+            <div class="hp-also">
+              <p class="t">Also free</p>
+              <div class="hp-also-grid">
+                {
+                  otherTools.map((t) => (
+                    <a href={t.href} class="hp-also-tile">
+                      {t.title}
+                      <span class="sub">{t.tag}</span>
+                    </a>
+                  ))
+                }
+              </div>
+              <a href="/tools/" class="all">All 14 tools →</a>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <section class="hp-others">
-      <div class="wrap">
-        <div class="hp-others-head">
-          <h3>The other twelve — labelling, transport and reference</h3>
-          <a href="/tools/" class="hp-link-mono">All 14 tools →</a>
-        </div>
-        <div class="hp-others-grid">
-          {
-            otherTools.map((t) => (
-              <a href={t.href} class="hp-tool-card" style={`border-top:3px solid ${t.accent}`}>
-                <p class="tag" style={`color:${t.accent}`}>{t.tag}</p>
-                <h4>{t.title}</h4>
-                <p class="copy">{t.copy}</p>
-              </a>
-            ))
-          }
-        </div>
-
-        <div class="hp-calcs">
-          <div class="hp-calcs-head">
-            <p class="t">9 per-pictogram calculators</p>
-            <p class="d">One per hazard class — enter your data, get the category and label elements.</p>
-          </div>
-          <div class="hp-calcs-strip">
-            {
-              pictogramsRows.map((p) => (
-                <a href={`/ghs/${p.code.toLowerCase()}/`} class="hp-calc-pill">
-                  <Fragment set:html={p.svg_content} />
-                  {p.code}
-                  <span class="sub">{pictoTag[p.code] ?? ''}</span>
-                </a>
-              ))
-            }
-          </div>
-        </div>
-      </div>
-    </section>
 
     <section class="hp-sds" id="sds">
       <div class="wrap">

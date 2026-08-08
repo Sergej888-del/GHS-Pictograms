@@ -111,6 +111,38 @@ const jsonLd = [
   <section class="hub-sec-tool" id="build">
     <div class="hub-wrap">
       <LabelConstructorLoader client:load />
+
+      <!-- ── СПРАВОЧНИК ПО РЕЖИМАМ — ПОД КОНСТРУКТОРОМ ─────────────────────
+           ⚠⚠ РАНЬШЕ ЭТИ СТРАНИЦЫ САМИ НЕСЛИ ИНСТРУМЕНТ, И ЭТО БЫЛА ОШИБКА.
+           Один и тот же конструктор стоял на четырнадцати адресах, а человек,
+           попавший на ветку, не понимал, что это тот же инструмент, только
+           переключённый. Решение Сергея: инструмент ОДИН, живёт здесь; ветки
+           становятся справочными статьями, а вход в них — этот ряд кнопок под
+           конструктором.
+           ⚠ Переключение режима — ВНУТРИ инструмента, в его первой панели.
+           Эти кнопки ведут читать нормы, а не менять режим: два разных способа
+           переключить юрисдикцию на одном экране запутали бы. -->
+      <div class="lm-jur">
+        <p class="tool-label">The rules behind each mode</p>
+        <div class="lm-jur-row">
+          {JURISDICTION_BRANCHES.map((b) => (
+            <a class="lm-jur-btn" href={`/ghs-label-maker/${b.slug}/`}>
+              <strong>{b.cardTitle}</strong>
+              <span>{b.badge}</span>
+            </a>
+          ))}
+          {PURPOSE_BRANCHES.map((b) => (
+            <a class="lm-jur-btn" href={`/ghs-label-maker/${b.slug}/`}>
+              <strong>{b.cardTitle}</strong>
+              <span>{b.badge}</span>
+            </a>
+          ))}
+          <a class="lm-jur-btn" href="/ghs-label-maker/templates/">
+            <strong>Label size templates</strong>
+            <span>Avery · OnlineLabels · HERMA</span>
+          </a>
+        </div>
+      </div>
     </div>
   </section>
 
