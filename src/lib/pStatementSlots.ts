@@ -95,6 +95,17 @@ export const P_SLOTS: Record<string, PSlotKind[]> = {
   'P411': ['required', 'optional'],
   'P413': ['required', 'optional', 'required', 'optional'],
   'P501': ['required'],
+  // ⚠⚠ ПЯТЬ КОДОВ НИЖЕ НАШЛА ПРОВЕРКА `check:label-layout`, ЕЩЁ НЕ ЗАПУСТИВШИСЬ.
+  // Первая версия карты строилась по `statement_translations`, а английский блок
+  // этикетки берёт текст из `p_statements` и `p_statement_combinations` — и там
+  // редакция ДРУГАЯ. P236 и P503 в переводах отсутствуют вовсе, у P280 в
+  // переводах нет хвоста «/…», а комбинированные живут в отдельной таблице,
+  // которую первый замер не смотрел.
+  // ⭐ Урок тот же, что весь session 49: замер по одному источнику — не замер.
+  'P236': ['required'],                 // «Division … in the transport configuration.»
+  'P280': ['optional'],                 // «…/hearing protection/…»
+  'P503': ['optional'],                 // «manufacturer/supplier/… for information…»
+  'P370+P380+P375+P378': ['required'],  // «[Use … to extinguish]» — слот ВНУТРИ скобок
 };
 
 /**
@@ -138,6 +149,9 @@ export function normaliseMarks(text: string, code = '', lang = ''): string {
  */
 export const P_BRACKET_CODES = [
   'P241', 'P284', 'P334', 'P353', 'P302+P335+P334', 'P303+P361+P353',
+  // ⚠ Найдены проверкой `check:label-layout`: комбинированные фразы лежат в
+  // `p_statement_combinations`, а первый замер смотрел только переводы.
+  'P302+P334', 'P370+P380+P375+P378',
 ] as const;
 
 export function hasPBracket(code: string): boolean {
@@ -226,6 +240,12 @@ function tidy(s: string): string {
     .replace(/\(\s+/g, '(')
     .replace(/\s+\)/g, ')')
     .replace(/\s*\/\s*([,.;:!?])/g, '$1')
+    // ⚠⚠ Сдвоенный знак конца предложения после снятия куска в скобках.
+    // «…risk of explosion. [Use … to extinguish].» без скобок давало
+    // «…explosion..» — две точки. Поймано проверкой `containsPMarks`, потому что
+    // две точки — это ЕЩЁ И латышский знак пропуска. ⚠ Схлопывать безопасно:
+    // настоящий латышский «..» к этому месту уже приведён к «…» в normaliseMarks.
+    .replace(/([.!?])[\s]*\1+/g, '$1')
     .trim();
 }
 
