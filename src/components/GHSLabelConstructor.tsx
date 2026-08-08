@@ -16,6 +16,7 @@ import type { NameVariant } from '../lib/labelProductName'
 import { casShapeOk, ecShapeOk } from '../lib/substanceIdentifiers'
 import {
   EU_LANGUAGES, LANGUAGE_BY_CODE, suggestedLanguages, fetchTranslations, EURLEX_ATTRIBUTION,
+  SIGNAL_CODE, signalWordFor,
   type TranslationMap,
 } from '../lib/labelLanguages'
 import {
@@ -203,7 +204,13 @@ export default function GHSLabelConstructor({
   useEffect(() => {
     if (!secondLang) { setSecondTexts({}); setSecondError(''); return }
     let cancelled = false
-    const codes = [...hStatements.map((h) => h.code), ...pStatements.map((x) => x.code)]
+    // ⭐ Сигнальные слова запрашиваются вместе с фразами: они лежат в той же
+    // таблице (annex = 'I'), и отдельный запрос был бы вторым походом в базу
+    // ради двух строк.
+    const codes = [
+      ...hStatements.map((h) => h.code), ...pStatements.map((x) => x.code),
+      SIGNAL_CODE.danger, SIGNAL_CODE.warning,
+    ]
     setSecondLoading(true)
     setSecondError('')
     fetchTranslations(secondLang, codes)
@@ -420,6 +427,17 @@ export default function GHSLabelConstructor({
     ? [...hStatements, ...shownP].filter((x) => !secondTexts[x.code]).map((x) => x.code)
     : []
   /**
+   * ⭐ Сигнальное слово второго языка. Уровень берётся из классификации, а не из
+   * английского слова: `signalLevel` — то же поле, по которому движок красит
+   * рамку.
+   * ⚠ `null` — законный ответ: у ирландского сигнального слова нет источника
+   * вовсе (консолидированного CLP на ирландском не существует), и тогда второй
+   * блок печатается без слова, как было до session 48.
+   */
+  const signalLevel: 'danger' | 'warning' | null =
+    signalWord ? (/danger/i.test(signalWord) ? 'danger' : 'warning') : null
+  const secondSignal = signalWordFor(secondTexts, signalLevel)
+  /**
    * ⚠⚠ Равноправная подача второго языка — решение НОРМЫ, а не пользователя.
    * Правило одно: равноправно там, где рынок требует более одного языка.
    * Канада проходит по `requiredLanguages`, Бельгия и остальные — по таблице
@@ -431,7 +449,7 @@ export default function GHSLabelConstructor({
   const second = secondLang && (secondH.length > 0 || secondP.length > 0)
     ? {
         langTag: secondLang,
-        signalWord: null,
+        signalWord: secondSignal,
         equal: secondEqual,
         hStatements: secondH.map((h) => ({ code: h.code, text: secondTexts[h.code] })),
         pStatements: secondP.map((x) => ({ code: x.code, text: secondTexts[x.code] })),
@@ -456,7 +474,7 @@ export default function GHSLabelConstructor({
      * или «Vaara», и разбор строки отдал бы для немецкого Danger янтарный цвет.
      * Цвет рамки и цвет слова теперь берутся из этого поля.
      */
-    signalLevel: signalWord ? (/danger/i.test(signalWord) ? 'danger' : 'warning') : null,
+    signalLevel,
     pictograms: pictograms.map((p) => ({ code: p.code, svg: p.svg_content ?? '' })),
     hStatements: hStatements.map((h) => ({ code: h.code, text: h.text_en })),
     pStatements: shownP.map((p) => ({ code: p.code, text: p.text_en })),
@@ -736,9 +754,13 @@ export default function GHSLabelConstructor({
           {secondLang && !secondError && (
             <>
               <p className="mt-2 text-[11px] leading-relaxed text-gray-500">
-                Hazard and precautionary texts are the official wording from CLP Annex III and Annex IV —
-                not a translation we made. The signal word is printed in English only: its official
-                wording lives in Annex I, which we have not loaded yet.
+                Hazard and precautionary texts are the official wording from CLP Annex III and Annex IV,
+                and the signal word is the official wording from the Annex I label element tables —
+                none of it is a translation we made.
+                {secondLang && !secondSignal && (
+                  <> ⚠ No official signal word exists for {LANGUAGE_BY_CODE.get(secondLang)?.name} in the
+                  regulation, so the second block is printed without one.</>
+                )}
               </p>
               {missingSecond.length > 0 && (
                 <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-relaxed text-amber-900">
