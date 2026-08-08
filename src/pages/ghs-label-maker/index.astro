@@ -111,38 +111,6 @@ const jsonLd = [
   <section class="hub-sec-tool" id="build">
     <div class="hub-wrap">
       <LabelConstructorLoader client:load />
-
-      <!-- ── СПРАВОЧНИК ПО РЕЖИМАМ — ПОД КОНСТРУКТОРОМ ─────────────────────
-           ⚠⚠ РАНЬШЕ ЭТИ СТРАНИЦЫ САМИ НЕСЛИ ИНСТРУМЕНТ, И ЭТО БЫЛА ОШИБКА.
-           Один и тот же конструктор стоял на четырнадцати адресах, а человек,
-           попавший на ветку, не понимал, что это тот же инструмент, только
-           переключённый. Решение Сергея: инструмент ОДИН, живёт здесь; ветки
-           становятся справочными статьями, а вход в них — этот ряд кнопок под
-           конструктором.
-           ⚠ Переключение режима — ВНУТРИ инструмента, в его первой панели.
-           Эти кнопки ведут читать нормы, а не менять режим: два разных способа
-           переключить юрисдикцию на одном экране запутали бы. -->
-      <div class="lm-jur">
-        <p class="tool-label">The rules behind each mode</p>
-        <div class="lm-jur-row">
-          {JURISDICTION_BRANCHES.map((b) => (
-            <a class="lm-jur-btn" href={`/ghs-label-maker/${b.slug}/`}>
-              <strong>{b.cardTitle}</strong>
-              <span>{b.badge}</span>
-            </a>
-          ))}
-          {PURPOSE_BRANCHES.map((b) => (
-            <a class="lm-jur-btn" href={`/ghs-label-maker/${b.slug}/`}>
-              <strong>{b.cardTitle}</strong>
-              <span>{b.badge}</span>
-            </a>
-          ))}
-          <a class="lm-jur-btn" href="/ghs-label-maker/templates/">
-            <strong>Label size templates</strong>
-            <span>Avery · OnlineLabels · HERMA</span>
-          </a>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -275,7 +243,11 @@ const jsonLd = [
         <a
           href="/ghs-label-maker/templates/"
           class="hub-card"
-          style="--acc:#64748b;--acc-line:#e2e8f0;--acc-soft:#f8fafc;--acc-ink:#475569"
+          {/* ⚠ Нейтральный акцент карточки — ТОКЕНАМИ. У остальных карточек ряда
+              акцент приходит из данных ветки (`labelMakerHub.ts`), и это законно:
+              цвет там — свойство ветки. А здесь он был просто вписан четырьмя
+              литералами, мимо палитры. */}
+          style="--acc:var(--ink-3);--acc-line:var(--line);--acc-soft:#f8fafc;--acc-ink:var(--ink-2)"
         >
           <p class="tag">Templates</p>
           <h3>Label size templates</h3>
@@ -412,87 +384,10 @@ const jsonLd = [
     </div>
   </section>
 
-  <style is:global>
-    /* ── Раздел /ghs-label-maker/ ────────────────────────────────────────────
-       Только то, чего нет в hub.css. Карточки, таблицы, FAQ и секции берутся
-       оттуда — иначе раздел начнёт выглядеть чужим на своём же сайте. */
-
-    /* Пять шагов */
-    .lm-steps { list-style: none; margin: 30px 0 0; padding: 0; display: grid; gap: 14px; }
-    .lm-step {
-      display: flex;
-      gap: 18px;
-      padding: 20px 22px;
-      background: #ffffff;
-      border: 1px solid #e2e8f0;
-      border-radius: 14px;
-      box-shadow: 0 6px 18px rgba(15, 23, 41, .06);
-    }
-    .lm-step .n {
-      flex: 0 0 auto;
-      font-family: ui-monospace, Menlo, monospace;
-      font-size: 13px;
-      font-weight: 700;
-      color: #ea580c;
-      padding-top: 2px;
-    }
-    .lm-step h3 { margin: 0 0 6px; font-size: 16.5px; font-weight: 600; color: #0f172a; letter-spacing: -.01em; }
-    .lm-step p { margin: 0; font-size: 14.5px; line-height: 1.62; color: #475569; }
-
-    /* Шесть элементов */
-    .lm-anatomy {
-      margin-top: 30px;
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 14px;
-    }
-    .lm-el {
-      position: relative;
-      padding: 20px 22px 18px;
-      background: #ffffff;
-      border: 1px solid #e2e8f0;
-      border-radius: 14px;
-      box-shadow: 0 4px 14px rgba(15, 23, 41, .05);
-    }
-    .lm-el .num {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      margin-bottom: 10px;
-      border-radius: 6px;
-      background: #0f172a;
-      color: #ffffff;
-      font-family: ui-monospace, Menlo, monospace;
-      font-size: 12px;
-      font-weight: 700;
-    }
-    .lm-el h3 { margin: 0 0 7px; font-size: 15.5px; font-weight: 600; color: #0f172a; }
-    .lm-el p { margin: 0; font-size: 14px; line-height: 1.6; color: #475569; }
-    .lm-el .cite {
-      margin-top: 11px;
-      padding-top: 10px;
-      border-top: 1px solid #f1f5f9;
-      font-family: ui-monospace, Menlo, monospace;
-      font-size: 11px;
-      line-height: 1.5;
-      color: #94a3b8;
-    }
-
-    /* Подзаголовок внутри .hub-prose */
-    .lm-h3 {
-      margin: 26px 0 8px;
-      font-size: 17px;
-      font-weight: 600;
-      letter-spacing: -.01em;
-      color: #0f172a;
-    }
-    .hub-prose > .lm-h3:first-child { margin-top: 0; }
-    .hub-prose p { margin: 0; font-size: 15px; line-height: 1.68; color: #475569; }
-
-    @media (max-width: 640px) {
-      .lm-step { flex-direction: column; gap: 8px; }
-    }
-  </style>
+  {/* ⚠⚠ СТИЛЕЙ ЗДЕСЬ БОЛЬШЕ НЕТ. Классы `.lm-*` переехали в
+      `src/styles/hub.css` — правило дизайн-системы: компонентные классы живут
+      в системе, а не в разметке страницы. В блоке, который тут стоял, цвета
+      были литералами (`#475569`, `#0f172a`, `#e2e8f0`), а `.lm-h3` объявлялся
+      ещё и на второй странице раздела — с другими отступами.
+      Разбор — `claude/design-system.md`. */}
 </Layout>

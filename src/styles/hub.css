@@ -282,6 +282,40 @@
   color: var(--ink-3);
 }
 
+/* ⚠⚠⚠ ЗАГОЛОВОК И ОПИСАНИЕ КАРТОЧКИ ПРИХОДЯТ ДВУМЯ РАЗНЫМИ НАБОРАМИ ТЕГОВ,
+   И ОБА НАДО ОПИСАТЬ. Разметка `<h4>` + `<p class="copy">` стоит в 2 местах,
+   а `<strong>` + `<span>` — в 27. Правил у `strong` и `span` не было вовсе,
+   поэтому оба оставались СТРОЧНЫМИ, и заголовок слипался с описанием в один
+   абзац: «GHS Pictogram Selector Pick hazard classes and categories…».
+   Так выглядели блоки «Other tools» и «Reference hubs» на всех страницах
+   раздела Label Maker; нашёл Сергей глазами на выкаченном сайте.
+
+   ⚠ Чиним ЗДЕСЬ, а не в двадцати семи местах разметки: одно правило закрывает
+   все, и разойтись им больше негде.
+
+   ⚠⚠ `> span:not([class])` — ПРЯМОЙ безклассовый потомок. Без этого правило
+   перебило бы `.hub-mini-card .code` (это тоже `<span>`, но с классом, и он —
+   моноширинный бейдж `display: inline-block`, а не абзац описания).
+
+   ⭐ Класс дефекта: у контейнера правило есть, у его детей нет. Проверка
+   `mobile-table-labels` ловит это на уровне классов; на уровне потомков не
+   ловит никто, кроме человека. Расширить её — в списке следующей сессии. */
+.hub-mini-card > strong {
+  display: block;
+  margin: 0 0 5px;
+  font-family: var(--font-heading);
+  font-size: 15.5px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+.hub-mini-card > span:not([class]) {
+  display: block;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-3);
+}
+
 /* ── Closing navy panel ── */
 .hub-close-panel {
   position: relative;
@@ -3306,3 +3340,186 @@ a.sub-alpha-item:hover { border-color: var(--teal-200); background: var(--teal-5
 }
 .lm-open .hub-sub { margin-top: 8px; }
 .lm-open .tool-cta { flex: 0 0 auto; margin-top: 0; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   РАЗДЕЛ LABEL MAKER · проза, шаги, элементы этикетки
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠⚠ ЭТИ ПРАВИЛА ПЕРЕЕХАЛИ СЮДА ИЗ `<style is:global>` ДВУХ СТРАНИЦ —
+   `ghs-label-maker/index.astro` и `[branch].astro`. Там они нарушали три
+   правила `claude/design-system.md` сразу:
+
+   1. **компонентные классы жили в разметке страниц**, а не в `hub.css`;
+   2. **цвета стояли литералами** — `#475569`, `#0f172a`, `#e2e8f0`, `#0f766e`
+      и ещё десяток. Причём `#0f172a` в палитре НЕ СУЩЕСТВУЕТ вовсе: у нас
+      `--ink: #0f1729`. Промах на один разряд, который глазом не виден, а
+      в системе означает «цвет мимо палитры»;
+   3. **`.lm-h3` был объявлен ДВАЖДЫ**, в обоих блоках, с разными отступами.
+      Какая редакция победит, решал порядок загрузки — то есть случай.
+
+   ⭐ `!important` у `.lm-warn` и `.lm-cite` снят. Он стоял там, потому что
+   `.lm-block p` (0,1,1) перебивает `.lm-warn` (0,1,0). Лечится не силой, а
+   специфичностью: `.lm-block p.lm-warn` — (0,2,1).
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Врезка с живым инфоповодом (срок, изменение правила).
+   ⚠ Цвета — те же, что у `.tool-note.warn`: у системы уже есть янтарная
+   врезка, и вторая с другим янтарём была бы вторым словарём. */
+.lm-alert {
+  border: 1px solid #fde68a;
+  border-left: 4px solid #f59e0b;
+  border-radius: 12px;
+  background: var(--verdict-sep-bg);
+  padding: 16px 20px;
+}
+.lm-alert .lbl {
+  margin: 0 0 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #b45309;
+}
+.lm-alert .txt { margin: 0; font-size: 14.5px; line-height: 1.62; color: var(--verdict-sep-ink); }
+
+/* Блок прозы на страницах раздела */
+.lm-block + .lm-block { margin-top: 24px; }
+.lm-block p { margin: 0 0 10px; font-size: 15px; line-height: 1.68; color: var(--ink-2); }
+.lm-block p:last-child { margin-bottom: 0; }
+
+/* ⚠ ОДНА редакция подзаголовка на весь раздел. Базовый отступ — нулевой
+   сверху (внутри `.lm-block` разрядку даёт сам блок); в свободной прозе
+   `.hub-prose` подзаголовок отбивается сверху, кроме первого. */
+.lm-h3 {
+  margin: 0 0 8px;
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.hub-prose > .lm-h3 { margin-top: 26px; }
+.hub-prose > .lm-h3:first-child { margin-top: 0; }
+.hub-prose p { margin: 0; font-size: 15px; line-height: 1.68; color: var(--ink-2); }
+
+/* ⚠⚠ `list-style: disc` СТАВИТСЯ ЯВНО. Preflight Tailwind снимает маркеры со
+   ВСЕХ `ul`, а прежнее правило задавало только `padding-left` — и список из
+   шести обязательных элементов этикетки печатался шестью строками с отступом,
+   без единого маркера. Отступ без маркера читается как случайная вёрстка, а не
+   как перечень. Поймано измерением: `list-style-type` был `none`. */
+.lm-list { margin: 4px 0 0; padding-left: 22px; list-style: disc; }
+.lm-list li { margin: 5px 0; font-size: 15px; line-height: 1.6; color: var(--ink-2); }
+.lm-list li::marker { color: var(--teal-600); }
+
+/* Красная врезка «так нельзя». ⚠ Акцент — из `.tool-note.stop`. */
+.lm-warn,
+.lm-block p.lm-warn {
+  margin: 0 0 10px;
+  border-left: 3px solid #e11d48;
+  background: var(--verdict-never-bg);
+  border-radius: 0 10px 10px 0;
+  padding: 12px 16px;
+  font-size: 14.5px;
+  line-height: 1.62;
+  color: var(--verdict-never-ink);
+}
+
+/* Ссылка на норму под абзацем */
+.lm-cite,
+.lm-block p.lm-cite {
+  margin: 10px 0 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+.lm-sources { margin: 14px 0 0; padding-left: 22px; list-style: disc; }
+.lm-sources li { margin: 6px 0; font-size: 14px; line-height: 1.5; }
+.lm-sources li::marker { color: var(--teal-600); }
+.lm-sources a { color: var(--teal-700); font-weight: 600; }
+.lm-sources a:hover { text-decoration: underline; }
+
+/* Пять шагов на хабе */
+.lm-steps { list-style: none; margin: 30px 0 0; padding: 0; display: grid; gap: 14px; }
+.lm-step {
+  display: flex;
+  gap: 18px;
+  padding: 20px 22px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(15, 23, 41, 0.06);
+}
+/* ⚠ Номер шага — БИРЮЗОВЫЙ, а не оранжевый. Оранжевый в системе один и
+   означает главное действие (кнопка «Build a label», бейдж флагмана); номер
+   шага действием не является, и третий оранжевый на экране обесценил бы
+   первые два. Разбор — `claude/design-system.md`, раздел 2.7. */
+.lm-step .n {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--teal-600);
+  padding-top: 2px;
+}
+.lm-step h3 {
+  margin: 0 0 6px;
+  font-family: var(--font-heading);
+  font-size: 16.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.lm-step p { margin: 0; font-size: 14.5px; line-height: 1.62; color: var(--ink-2); }
+
+/* Шесть элементов этикетки */
+.lm-anatomy {
+  margin-top: 30px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+.lm-el {
+  position: relative;
+  padding: 20px 22px 18px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(15, 23, 41, 0.05);
+}
+.lm-el .num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+.lm-el h3 {
+  margin: 0 0 7px;
+  font-family: var(--font-heading);
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.lm-el p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--ink-2); }
+.lm-el .cite {
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+@media (max-width: 640px) {
+  .lm-step { flex-direction: column; gap: 8px; }
+}

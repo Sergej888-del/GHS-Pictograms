@@ -5,14 +5,11 @@
  * Шесть страниц: четыре юрисдикции, вторичная тара и транспорт. Все берут
  * содержание из `src/lib/labelMakerHub.ts`.
  *
- * ⚠⚠ ИНСТРУМЕНТА ЗДЕСЬ НЕТ — ТОЛЬКО ССЫЛКА В НЕГО, И ЭТО РЕШЕНИЕ.
- * До session 47 `LabelConstructorLoader` стоял на каждой из шести веток и
- * открывался уже переключённым (`jurisdiction`, `purpose`). Выглядело это как
- * шесть копий одного инструмента, а на хабе сам инструмент был не виден вовсе —
- * его закрывал подбор вещества. Сергей: «ты не видишь инструмент, из-за этого
- * мало кто доходит до глубоко зарытого инструмента».
- * Теперь конструктор ОДИН, на `/ghs-label-maker/`, и открывается сразу; ветка —
- * справочная статья, которая ведёт в него ссылкой `?jur=…#build`.
+ * ⚠⚠ ИНСТРУМЕНТ НА КАЖДОЙ, И ОТКРЫВАЕТСЯ УЖЕ НАСТРОЕННЫМ. `LabelConstructorLoader`
+ * принимает `jurisdiction` и `purpose`; страница /whmis-canada/ открывает
+ * конструктор в канадском режиме, /secondary-container/ — в цеховом, где из
+ * обязательных элементов уходит блок поставщика. Без этого страницы были бы
+ * шестью статьями с одинаковым виджетом внизу.
  *
  * ⚠ Одна разметка на все шесть — сознательно. Содержание у веток разное и лежит
  * в данных; расходиться должны ТЕКСТЫ, а не вёрстка. Иначе через две сессии
@@ -25,11 +22,11 @@
 export const prerender = true
 
 import Layout from '../../layouts/Layout.astro'
+import LabelConstructorLoader from '../../components/LabelConstructorLoader'
 import {
   SITE, BRANCHES, CROSS_LINKS, faqJsonLd, breadcrumbJsonLd,
 } from '../../lib/labelMakerHub'
 import { JURISDICTIONS } from '../../lib/jurisdictions'
-import { labelMakerHref } from '../../lib/labelMakerLink'
 
 export function getStaticPaths() {
   return BRANCHES.map((b) => ({ params: { branch: b.slug }, props: { branch: b } }))
@@ -39,15 +36,6 @@ const { branch } = Astro.props
 const j = JURISDICTIONS[branch.jurisdiction]
 
 const canonical = `${SITE}/ghs-label-maker/${branch.slug}/`
-
-// ⚠⚠ Адрес инструмента строится ТЕМ ЖЕ сборщиком, что и все остальные ссылки в
-// конструктор (`labelMakerLink.ts`). Литерал `?jur=` , набранный здесь руками,
-// был бы второй редакцией контракта — ровно тем дефектом, из-за которого в
-// session 38 калькулятор открывался пустым с 3 650 страниц.
-const toolHref = labelMakerHref({
-  jurisdiction: branch.jurisdiction,
-  purpose: branch.purpose === 'supplier' ? null : branch.purpose,
-}) + '#build'
 
 // Соседи по разделу — навигация внизу страницы. ⚠ По кругу: у последней ветки
 // следующей становится первая, иначе на двух страницах из шести половина
@@ -120,36 +108,23 @@ const jsonLd = [
     </section>
   )}
 
-  <!-- ── ВХОД В ИНСТРУМЕНТ ─────────────────────────────────────────────────
-       ⚠⚠ ИНСТРУМЕНТА НА ЭТОЙ СТРАНИЦЕ БОЛЬШЕ НЕТ, И ЭТО РЕШЕНИЕ, А НЕ ПОТЕРЯ.
-       Один и тот же конструктор стоял на четырнадцати адресах раздела. Человек,
-       попавший на ветку, не понимал, что это тот же инструмент, только заранее
-       переключённый, — а на хабе он тонул под подбором вещества. Сергей:
-       «ты не видишь инструмент, из-за этого мало кто доходит до глубоко
-       зарытого инструмента». Теперь конструктор ОДИН, на `/ghs-label-maker/`,
-       а ветки — справочные статьи с явной кнопкой в него.
-
-       ⚠ Ссылка несёт `?jur=` и якорь `#build`: она обязана открыть инструмент
-       УЖЕ в этом режиме и сразу на нём, а не в начале хаба. Имя параметра — из
-       `labelMakerLink.ts`; руками строку `?jur=` здесь не набирать.
-       ⚠ `purpose` уходит только у веток, у которых он не `supplier`: лишний
-       параметр в адресе — это лишняя редакция умолчания. -->
-  <section class="hub-sec-tool">
+  <!-- ── ИНСТРУМЕНТ, УЖЕ НАСТРОЕННЫЙ НА ЭТУ ЮРИСДИКЦИЮ ─────────────────────── -->
+  <section class="hub-sec-tool" id="build">
     <div class="hub-wrap">
-      <div class="lm-open">
-        <div>
-          <p class="hub-eyebrow">Build it</p>
-          <h2 class="hub-h2" style="margin-bottom:6px">
-            {branch.purpose === 'workplace' ? 'Workplace label builder' : 'Label builder'}
-          </h2>
-          <p class="hub-sub">
-            The label maker opens set to <strong>{j.tag}</strong>{branch.purpose === 'workplace' ? ' in workplace-container mode' : ''}.
-            You can change the jurisdiction inside the tool at any point — the label is rebuilt
-            against the rules of whichever one is selected.
-          </p>
-        </div>
-        <a class="tool-cta" href={toolHref}>Open the label maker in {j.tag} mode →</a>
-      </div>
+      <p class="hub-eyebrow">Build it</p>
+      <h2 class="hub-h2" style="margin-bottom:6px">
+        {branch.purpose === 'workplace' ? 'Workplace label builder' : 'Label builder'}
+      </h2>
+      <p class="hub-sub" style="margin-bottom:22px">
+        Opens set to <strong>{j.tag}</strong>{branch.purpose === 'workplace' ? ' in workplace-container mode' : ''}.
+        You can change the jurisdiction inside the tool at any point — the label is rebuilt against the
+        rules of whichever one is selected.
+      </p>
+      <LabelConstructorLoader
+        client:load
+        jurisdiction={branch.jurisdiction}
+        purpose={branch.purpose}
+      />
     </div>
   </section>
 
@@ -273,63 +248,10 @@ const jsonLd = [
     </div>
   </section>
 
-  <style is:global>
-    /* Врезка с живым инфоповодом (срок, изменение правила) */
-    .lm-alert {
-      border: 1px solid #fed7aa;
-      border-left: 4px solid #f97316;
-      border-radius: 12px;
-      background: #fff7ed;
-      padding: 16px 20px;
-    }
-    .lm-alert .lbl {
-      margin: 0 0 6px;
-      font-family: ui-monospace, Menlo, monospace;
-      font-size: 10.5px;
-      font-weight: 700;
-      letter-spacing: .1em;
-      text-transform: uppercase;
-      color: #c2410c;
-    }
-    .lm-alert .txt { margin: 0; font-size: 14.5px; line-height: 1.62; color: #7c2d12; }
-
-    /* Блок прозы */
-    .lm-block + .lm-block { margin-top: 24px; }
-    .lm-h3 {
-      margin: 0 0 8px;
-      font-size: 17px;
-      font-weight: 600;
-      letter-spacing: -.01em;
-      color: #0f172a;
-    }
-    .lm-block p { margin: 0 0 10px; font-size: 15px; line-height: 1.68; color: #475569; }
-    .lm-block p:last-child { margin-bottom: 0; }
-
-    .lm-list { margin: 4px 0 0; padding-left: 20px; }
-    .lm-list li { margin: 5px 0; font-size: 15px; line-height: 1.6; color: #475569; }
-
-    .lm-warn {
-      margin: 0 0 10px !important;
-      border-left: 3px solid #f43f5e;
-      background: #fff1f2;
-      border-radius: 0 10px 10px 0;
-      padding: 12px 16px;
-      font-size: 14.5px !important;
-      line-height: 1.62 !important;
-      color: #9f1239 !important;
-    }
-
-    .lm-cite {
-      margin-top: 10px !important;
-      font-family: ui-monospace, Menlo, monospace;
-      font-size: 11.5px !important;
-      line-height: 1.5 !important;
-      color: #94a3b8 !important;
-    }
-
-    .lm-sources { margin: 14px 0 0; padding-left: 20px; }
-    .lm-sources li { margin: 6px 0; font-size: 14px; line-height: 1.5; }
-    .lm-sources a { color: #0f766e; font-weight: 600; }
-    .lm-sources a:hover { text-decoration: underline; }
-  </style>
+  {/* ⚠⚠ СТИЛЕЙ ЗДЕСЬ БОЛЬШЕ НЕТ. Классы `.lm-*` переехали в
+      `src/styles/hub.css` — правило дизайн-системы: компонентные классы живут
+      в системе, а не в разметке страницы. В блоке, который тут стоял, цвета
+      были литералами (`#475569`, `#0f172a`, `#e2e8f0`), а `.lm-h3` объявлялся
+      ещё и на второй странице раздела — с другими отступами.
+      Разбор — `claude/design-system.md`. */}
 </Layout>
