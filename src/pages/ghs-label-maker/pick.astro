@@ -95,8 +95,18 @@ const jsonLd = breadcrumbJsonLd([
 
       <h2 class="hub-h2" style="margin-top:44px">Open the label maker in a set jurisdiction</h2>
       <div class="hub-mini-cards" style="margin-top:18px">
+        {/* ⚠ Здесь акцент приходит НЕ из карты разделов, а из самой ветки:
+            все четыре ссылки ведут в один раздел (в конструктор), и цвет
+            раздела покрасил бы их одинаково — то есть не сказал бы ничего.
+            Различать надо юрисдикции, а цвет юрисдикции — свойство ветки,
+            и он тот же, что у крупных карточек на хабе. Бейдж `.code` уже
+            называет юрисдикцию словом, поэтому `.sect` здесь не нужен. */}
         {JURISDICTION_BRANCHES.map((b) => (
-          <a class="hub-mini-card" href={labelMakerHref({ jurisdiction: b.jurisdiction }) + '#build'}>
+          <a
+            class="hub-mini-card"
+            href={labelMakerHref({ jurisdiction: b.jurisdiction }) + '#build'}
+            style={`--acc:${b.acc};--acc-line:${b.line};--acc-soft:${b.soft};--acc-ink:${b.ink};--acc-strip:3px`}
+          >
             <span class="code">{b.badge}</span>
             <h4>{b.cardTitle}</h4>
             <p class="copy">{b.cardDesc}</p>

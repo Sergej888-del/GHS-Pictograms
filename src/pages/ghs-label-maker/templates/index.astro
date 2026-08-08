@@ -18,6 +18,9 @@ import Layout from '../../../layouts/Layout.astro'
 import { SITE, TEMPLATES, TEMPLATE_BY_STOCK, breadcrumbJsonLd } from '../../../lib/labelMakerHub'
 import { stockFor, stockSizeLabel, stockMm, SHEET_NAME, type LabelStockItem } from '../../../lib/labelStock'
 import { CLP_SIZE_TIERS } from '../../../lib/jurisdictions'
+// ⚠ Цвет карточки перелинковки берётся ИЗ АДРЕСА — одна карта
+// «раздел → цвет» на весь сайт, см. src/lib/sectionAccent.ts.
+import { withAccent, accentBadge } from '../../../lib/sectionAccent'
 
 const canonical = `${SITE}/ghs-label-maker/templates/`
 const title = 'GHS Label Templates — Avery, OnlineLabels & A4 Sizes'
@@ -237,27 +240,32 @@ const jsonLd = [
       <p class="hub-eyebrow navy">Next</p>
       <h2 class="hub-h2">Label rules by jurisdiction</h2>
       <div class="hub-mini-cards">
-        <a class="hub-mini-card" href="/ghs-label-maker/osha/">
+        <a class={withAccent('hub-mini-card', '/ghs-label-maker/osha/')} href="/ghs-label-maker/osha/">
+          <span class="sect">{accentBadge('/ghs-label-maker/osha/')}</span>
           <strong>OSHA HazCom</strong>
           <span>Six required elements, a US address and phone, and the 20 November 2026 deadline.</span>
         </a>
-        <a class="hub-mini-card" href="/ghs-label-maker/clp-eu/">
+        <a class={withAccent('hub-mini-card', '/ghs-label-maker/clp-eu/')} href="/ghs-label-maker/clp-eu/">
+          <span class="sect">{accentBadge('/ghs-label-maker/clp-eu/')}</span>
           <strong>EU CLP</strong>
           <span>The Annex I Table 1.3 size tiers, the UFI and EUH statements.</span>
         </a>
-        <a class="hub-mini-card" href="/ghs-label-maker/whmis-canada/">
+        <a class={withAccent('hub-mini-card', '/ghs-label-maker/whmis-canada/')} href="/ghs-label-maker/whmis-canada/">
+          <span class="sect">{accentBadge('/ghs-label-maker/whmis-canada/')}</span>
           <strong>WHMIS Canada</strong>
           <span>English and French both mandatory on a supplier label.</span>
         </a>
-        <a class="hub-mini-card" href="/ghs-label-maker/secondary-container/">
+        <a class={withAccent('hub-mini-card', '/ghs-label-maker/secondary-container/')} href="/ghs-label-maker/secondary-container/">
+          <span class="sect">{accentBadge('/ghs-label-maker/secondary-container/')}</span>
           <strong>Secondary containers</strong>
           <span>Fewer elements — and one case that needs no label at all.</span>
         </a>
-        <a class="hub-mini-card" href="/ghs-label-maker/">
+        <a class={withAccent('hub-mini-card', '/ghs-label-maker/')} href="/ghs-label-maker/">
+          <span class="sect">{accentBadge('/ghs-label-maker/')}</span>
           <strong>Label maker hub</strong>
           <span>All four jurisdictions, the six label elements, printing and the full FAQ.</span>
         </a>
-        <a class="hub-mini-card" href="/tools/">
+        <a class={withAccent('hub-mini-card', '/tools/')} href="/tools/">
           <strong>All free GHS tools</strong>
           <span>Fourteen tools: calculators, selector, storage matrix and this label maker.</span>
         </a>

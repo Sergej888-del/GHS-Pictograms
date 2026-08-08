@@ -31,6 +31,9 @@ import {
   faqJsonLd, breadcrumbJsonLd,
 } from '../../lib/labelMakerHub'
 import { LABEL_STOCK_ALL, stockSizeLabel, SHEET_NAME } from '../../lib/labelStock'
+// ⚠ Цвет карточки перелинковки берётся ИЗ АДРЕСА, а не пишется в разметке —
+// одна карта «раздел → цвет» на весь сайт, см. src/lib/sectionAccent.ts.
+import { withAccent, accentBadge } from '../../lib/sectionAccent'
 
 const canonical = `${SITE}/ghs-label-maker/`
 const title = 'GHS Label Maker — Free Online Chemical Label Generator'
@@ -200,7 +203,7 @@ const jsonLd = [
         actually requires — including, in two of the four cases, the fact that no minimum label size
         exists at all.
       </p>
-      <div class="hub-cards">
+      <div class="hub-cards four">
         {JURISDICTION_BRANCHES.map((b) => (
           <a
             href={`/ghs-label-maker/${b.slug}/`}
@@ -359,17 +362,27 @@ const jsonLd = [
       </p>
       <div class="hub-mini-cards">
         {tools.map((l) => (
-          <a class="hub-mini-card" href={l.href}>
+          <a class={withAccent('hub-mini-card', l.href)} href={l.href}>
+            {accentBadge(l.href) && <span class="sect">{accentBadge(l.href)}</span>}
             <strong>{l.title}</strong>
             <span>{l.desc}</span>
           </a>
         ))}
       </div>
 
-      <h2 class="hub-h2" style="margin-top:44px">Reference hubs</h2>
+      {/* ⚠ У этого заголовка надзаголовка не было, а у «Other tools» есть —
+          ритм секции по дизайн-системе (надзаголовок → h2 → подзаголовок) на
+          втором блоке обрывался, и заголовок висел без опоры. */}
+      <p class="hub-eyebrow" style="margin-top:44px">Reference</p>
+      <h2 class="hub-h2">Reference hubs</h2>
+      <p class="hub-sub">
+        The sections this tool reads from. Each card carries the colour of the section it opens —
+        the same colour that section uses everywhere else on the site.
+      </p>
       <div class="hub-mini-cards">
         {hubs.map((l) => (
-          <a class="hub-mini-card" href={l.href}>
+          <a class={withAccent('hub-mini-card', l.href)} href={l.href}>
+            {accentBadge(l.href) && <span class="sect">{accentBadge(l.href)}</span>}
             <strong>{l.title}</strong>
             <span>{l.desc}</span>
           </a>

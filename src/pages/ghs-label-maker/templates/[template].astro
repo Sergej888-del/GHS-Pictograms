@@ -22,6 +22,9 @@ import { SITE, TEMPLATES, faqJsonLd, breadcrumbJsonLd } from '../../../lib/label
 import { LABEL_STOCK_ALL, stockSizeLabel, stockMm, SHEET_NAME, MM_PER_INCH } from '../../../lib/labelStock'
 import { CLP_SIZE_TIERS, requiredPictogramSideMm } from '../../../lib/jurisdictions'
 import { labelMakerHref } from '../../../lib/labelMakerLink'
+// ⚠ Цвет карточки перелинковки берётся ИЗ АДРЕСА — одна карта
+// «раздел → цвет» на весь сайт, см. src/lib/sectionAccent.ts.
+import { withAccent, accentBadge } from '../../../lib/sectionAccent'
 
 export function getStaticPaths() {
   return TEMPLATES.map((t) => {
@@ -222,27 +225,33 @@ const jsonLd = [
 
       <h2 class="hub-h2" style="margin-top:44px">Label rules</h2>
       <div class="hub-mini-cards">
-        <a class="hub-mini-card" href="/ghs-label-maker/templates/">
+        <a class={withAccent('hub-mini-card', '/ghs-label-maker/templates/')} href="/ghs-label-maker/templates/">
+          <span class="sect">{accentBadge('/ghs-label-maker/templates/')}</span>
           <strong>All label sizes</strong>
           <span>Every geometry with its Avery, OnlineLabels and HERMA part numbers.</span>
         </a>
-        <a class="hub-mini-card" href="/ghs-label-maker/osha/">
+        <a class={withAccent('hub-mini-card', '/ghs-label-maker/osha/')} href="/ghs-label-maker/osha/">
+          <span class="sect">{accentBadge('/ghs-label-maker/osha/')}</span>
           <strong>OSHA HazCom labels</strong>
           <span>What 29 CFR 1910.1200 requires — and why it sets no minimum size.</span>
         </a>
-        <a class="hub-mini-card" href="/ghs-label-maker/clp-eu/">
+        <a class={withAccent('hub-mini-card', '/ghs-label-maker/clp-eu/')} href="/ghs-label-maker/clp-eu/">
+          <span class="sect">{accentBadge('/ghs-label-maker/clp-eu/')}</span>
           <strong>EU CLP labels</strong>
           <span>The size tiers, the pictogram area rule, the UFI and EUH statements.</span>
         </a>
-        <a class="hub-mini-card" href="/ghs-label-maker/secondary-container/">
+        <a class={withAccent('hub-mini-card', '/ghs-label-maker/secondary-container/')} href="/ghs-label-maker/secondary-container/">
+          <span class="sect">{accentBadge('/ghs-label-maker/secondary-container/')}</span>
           <strong>Secondary containers</strong>
           <span>Where paper stock is defensible and pictograms are not mandatory.</span>
         </a>
-        <a class="hub-mini-card" href="/ghs-label-maker/">
+        <a class={withAccent('hub-mini-card', '/ghs-label-maker/')} href="/ghs-label-maker/">
+          <span class="sect">{accentBadge('/ghs-label-maker/')}</span>
           <strong>Label maker hub</strong>
           <span>Four jurisdictions, the six elements, printing and the full FAQ.</span>
         </a>
-        <a class="hub-mini-card" href="/substances/">
+        <a class={withAccent('hub-mini-card', '/substances/')} href="/substances/">
+          <span class="sect">{accentBadge('/substances/')}</span>
           <strong>Substance database</strong>
           <span>4,178 substances with harmonised CLP Annex VI classification.</span>
         </a>

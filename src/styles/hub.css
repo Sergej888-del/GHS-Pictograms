@@ -176,12 +176,53 @@
   background: #ffffff;
 }
 
+/* ── Section accents: `.acc-<key>` ────────────────────────────────────────────
+   ⭐⭐ ONE class per destination area of the site. The class only rebinds the
+   four card variables to that area's token ladder — it draws nothing itself.
+   That is what makes it CARRIER-AGNOSTIC: the same `.acc-subst` works on
+   `.hub-card`, on `.hub-mini-card`, and on anything added later that reads
+   `--acc` / `--acc-line` / `--acc-soft` / `--acc-ink`.
+
+   ⚠⚠ Which address gets which class is decided in ONE place —
+   `src/lib/sectionAccent.ts`. Do not hand-write `class="acc-reg"` in markup:
+   the point of the map is that `/compliance/` cannot be violet on one page
+   and teal on another. Call `withAccent()` / `accentClass()` instead.
+
+   ⚠ Values come from `design-tokens.css` and nowhere else. A literal hex in
+   this block would be the same defect the tokens were introduced to kill. */
+.acc-subst { --acc: var(--acc-subst); --acc-line: var(--acc-subst-border); --acc-soft: var(--acc-subst-soft); --acc-ink: var(--acc-subst-ink); }
+.acc-class { --acc: var(--acc-class); --acc-line: var(--acc-class-border); --acc-soft: var(--acc-class-soft); --acc-ink: var(--acc-class-ink); }
+.acc-pict { --acc: var(--acc-pict); --acc-line: var(--acc-pict-border); --acc-soft: var(--acc-pict-soft); --acc-ink: var(--acc-pict-ink); }
+.acc-store { --acc: var(--acc-store); --acc-line: var(--acc-store-border); --acc-soft: var(--acc-store-soft); --acc-ink: var(--acc-store-ink); }
+.acc-transport { --acc: var(--acc-transport); --acc-line: var(--acc-transport-border); --acc-soft: var(--acc-transport-soft); --acc-ink: var(--acc-transport-ink); }
+.acc-reg { --acc: var(--acc-reg); --acc-line: var(--acc-reg-border); --acc-soft: var(--acc-reg-soft); --acc-ink: var(--acc-reg-ink); }
+.acc-label { --acc: var(--acc-label); --acc-line: var(--acc-label-border); --acc-soft: var(--acc-label-soft); --acc-ink: var(--acc-label-ink); }
+
+/* ⚠⚠ `--acc-strip` exists so that a card WITHOUT an accent keeps exactly the
+   look it had before accents were introduced. CSS cannot ask «is --acc set?»,
+   and `border-top: 3px solid var(--acc, var(--line))` would put a 3 px GREY
+   rule on every unaccented mini card across the site — a silent restyle of
+   pages nobody asked us to touch. Declaring the width here, next to the only
+   classes that grant an accent, makes «accented» and «3 px rule» one fact. */
+.acc-subst, .acc-class, .acc-pict, .acc-store, .acc-transport, .acc-reg, .acc-label {
+  --acc-strip: 3px;
+}
+
 /* ── v2 cards (accent via CSS vars: --acc / --acc-line / --acc-soft / --acc-ink) ── */
 .hub-cards {
   margin-top: 36px;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 18px;
+}
+/* ⚠ Four cards in a 300 px-minimum grid land as 3 + 1 inside a 1200 px band:
+   the fourth sits alone on its own row and two thirds of that row are empty.
+   The four jurisdictions are ONE set — OSHA, EU CLP, WHMIS, GB CLP — and a set
+   that wraps reads as «three important ones and an afterthought». Lowering the
+   minimum for exactly this case fits all four on one row and still collapses
+   to two, then one, on narrower screens. */
+.hub-cards.four {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
 }
 .hub-card {
   display: flex;
@@ -239,19 +280,46 @@
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 14px;
 }
+/* ⭐⭐ Accent on the small card. This is the asymmetry Sergej named looking at
+   «Other tools»: eight cards in a row, all the same white-and-grey, while
+   `.hub-card` right above them has had `--acc` since day one. The mechanism
+   existed; the small card simply was not wired to it.
+
+   ⚠ The small card is deliberately accented by a DIFFERENT FORM than the big
+   one: a 3 px rule on top and a coloured badge, against `.hub-card`'s fully
+   tinted panel. Inside the Label Maker section colour distinguishes BRANCHES
+   (jurisdictions), and on the same page colour must also say WHERE A LINK
+   LEAVES TO. Seven hues cannot carry nineteen meanings, so form carries the
+   difference — «branch» versus «way out» — and colour carries the topic. */
 .hub-mini-card {
   display: block;
-  border: 1px solid var(--line);
+  border: 1px solid var(--acc-line, var(--line));
+  border-top: var(--acc-strip, 1px) solid var(--acc, var(--line));
   border-radius: 12px;
   padding: 18px 20px;
-  background: #ffffff;
+  background: linear-gradient(180deg, var(--acc-soft, #ffffff) 0%, #ffffff 46%);
   box-shadow: 0 2px 6px rgba(15, 23, 41, 0.06);
   transition: all 400ms ease-out;
 }
 .hub-mini-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 18px 34px rgba(15, 23, 41, 0.14);
-  border-color: var(--line-2);
+  border-color: var(--acc, var(--line-2));
+}
+/* ⚠⚠ Mono badge naming the destination section. NOT decoration — WCAG 2.2
+   §1.4.1: colour may not be the only carrier of meaning. Teal against violet
+   is exactly the pair that collapses for the ~8 % of men with deuteranomaly,
+   so the badge says in a word what the hue says in colour. Text comes from
+   the same map as the hue (`sectionAccent.ts`), so the two cannot disagree. */
+.hub-mini-card > .sect {
+  display: block;
+  margin: 0 0 9px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--acc-ink, var(--ink-3));
 }
 .hub-mini-card .code {
   display: inline-block;
@@ -260,9 +328,11 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #1e3a8a;
-  background: #eff6ff;
-  border: 1px solid #dbeafe;
+  /* ⚠ Fallbacks are the OLD literal blue on purpose: cards on pages that have
+     no accent class yet must not change at all. */
+  color: var(--acc-ink, #1e3a8a);
+  background: var(--acc-soft, #eff6ff);
+  border: 1px solid var(--acc-line, #dbeafe);
   border-radius: 4px;
   padding: 3px 7px;
   margin-bottom: 10px;

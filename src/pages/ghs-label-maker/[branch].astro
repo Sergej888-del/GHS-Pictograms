@@ -27,6 +27,9 @@ import {
   SITE, BRANCHES, CROSS_LINKS, faqJsonLd, breadcrumbJsonLd,
 } from '../../lib/labelMakerHub'
 import { JURISDICTIONS } from '../../lib/jurisdictions'
+// ⚠ Цвет карточки перелинковки берётся ИЗ АДРЕСА — одна карта
+// «раздел → цвет» на весь сайт, см. src/lib/sectionAccent.ts.
+import { withAccent, accentBadge } from '../../lib/sectionAccent'
 
 export function getStaticPaths() {
   return BRANCHES.map((b) => ({ params: { branch: b.slug }, props: { branch: b } }))
@@ -219,16 +222,19 @@ const jsonLd = [
       <h2 class="hub-h2" style="margin-top:44px">Before you label</h2>
       <div class="hub-mini-cards">
         {related.map((l) => (
-          <a class="hub-mini-card" href={l.href}>
+          <a class={withAccent('hub-mini-card', l.href)} href={l.href}>
+            {accentBadge(l.href) && <span class="sect">{accentBadge(l.href)}</span>}
             <strong>{l.title}</strong>
             <span>{l.desc}</span>
           </a>
         ))}
-        <a class="hub-mini-card" href="/ghs-label-maker/templates/">
+        <a class={withAccent('hub-mini-card', '/ghs-label-maker/templates/')} href="/ghs-label-maker/templates/">
+          <span class="sect">{accentBadge('/ghs-label-maker/templates/')}</span>
           <strong>Label size templates</strong>
           <span>Avery, OnlineLabels and HERMA geometries with the tool preset to each one.</span>
         </a>
-        <a class="hub-mini-card" href="/ghs-label-maker/">
+        <a class={withAccent('hub-mini-card', '/ghs-label-maker/')} href="/ghs-label-maker/">
+          <span class="sect">{accentBadge('/ghs-label-maker/')}</span>
           <strong>Label maker hub</strong>
           <span>All four jurisdictions, the six label elements, printing and the full FAQ in one place.</span>
         </a>

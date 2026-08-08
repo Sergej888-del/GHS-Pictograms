@@ -49,4 +49,72 @@
   --verdict-sep-ink: #92400e;
   --verdict-ok-bg: #f0fdfa;
   --verdict-ok-ink: #0f766e;
+
+  /* ── Section accent ladders ───────────────────────────────────────────────
+     Seven hues, each a four-step ladder: line (2px rule / hover border),
+     border (resting card border), soft (tint), ink (readable text on white).
+
+     ⚠⚠ These are NOT decoration. Each hue names ONE destination area of the
+     site, and the map lives in exactly one place: src/lib/sectionAccent.ts.
+     Adding a hue here without adding it there gives a colour that means
+     nothing, which is worse than no colour at all.
+
+     Source: the Claude Design mockup (_active-docs/…/standalone-source.html)
+     colours its seven compliance pillars with a 2px top rule in exactly this
+     kind of set — #f97316, #d97706, #2563eb, #0d9488, #7c3aed, #e11d48. Four
+     of those never existed as tokens; the amber, sky and rose ladders below
+     close that gap.
+
+     ⚠ Before these tokens the same six ladders sat as TWENTY-FOUR hex
+     literals inside labelMakerHub.ts (`acc`/`line`/`soft`/`ink` per branch).
+     That is why they are ladders and not single colours: a card needs all
+     four steps, and picking three of them by eye per call site is how a
+     palette drifts. */
+
+  /* substances and their reports — the harmonised data behind every label */
+  --acc-subst: #0d9488;
+  --acc-subst-border: #99f6e4;
+  --acc-subst-soft: #f0fdfa;
+  --acc-subst-ink: #0f766e;
+
+  /* classification: hazard classes, H- and P-statements, the ATE calculator */
+  --acc-class: #1d4ed8;
+  --acc-class-border: #bfdbfe;
+  --acc-class-soft: #eff6ff;
+  --acc-class-ink: #1d4ed8;
+
+  /* pictograms — the nine marks and the selector that picks them */
+  --acc-pict: #d97706;
+  --acc-pict-border: #fde68a;
+  --acc-pict-soft: #fffbeb;
+  --acc-pict-ink: #92400e;
+
+  /* storage and incompatibility. ⚠ Rose here is not "danger in general": the
+     storage matrix's own headline verdict is rose (`--verdict-never-*`), so
+     the section and its verdict speak with one colour. */
+  --acc-store: #e11d48;
+  --acc-store-border: #fecdd3;
+  --acc-store-soft: #fff1f2;
+  --acc-store-ink: #9f1239;
+
+  /* transport: UN numbers, ADR, 49 CFR */
+  --acc-transport: #0ea5e9;
+  --acc-transport-border: #bae6fd;
+  --acc-transport-soft: #f0f9ff;
+  --acc-transport-ink: #0284c7;
+
+  /* regulatory guides — CLP, REACH, HazCom, SVHC in long form */
+  --acc-reg: #7c3aed;
+  --acc-reg-border: #ddd6fe;
+  --acc-reg-soft: #f5f3ff;
+  --acc-reg-ink: #6d28d9;
+
+  /* the label maker itself. ⚠⚠ Orange stays the ONE colour of the main
+     action (§2.7): the header CTA is orange, the flagship badge is orange,
+     and a link INTO the label maker is the same act. That is why orange is
+     the label-maker accent and is used for nothing else. */
+  --acc-label: #f97316;
+  --acc-label-border: #fed7aa;
+  --acc-label-soft: #fff7ed;
+  --acc-label-ink: #ea580c;
 }
