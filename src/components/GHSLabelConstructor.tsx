@@ -26,11 +26,17 @@ import {
   renderStatement, rolesForCodes, roleIsRequired, ROLE_OBLIGATION,
   type PlaceholderRole, type PlaceholderValues,
 } from '../lib/statementPlaceholders'
+import {
+  renderPStatement, pSlotCount, pSlotKinds, hasPSlots, hasPBracket, inferSlotDefault,
+} from '../lib/pStatementSlots'
+import { supabase } from '../lib/supabase'
 import NewsletterOptIn from './NewsletterOptIn'
 
 interface Pictogram { code: string; name_en: string; svg_content: string | null }
 interface HStatement { code: string; text_en: string }
-interface PStatement { code: string; text_en: string }
+/** ⚠ `text_en` — официальный текст со знаками пропусков; `text_plain` — наш
+ *  прежний, заполненный за поставщика: он идёт предзаполнением поля, не печатью. */
+interface PStatement { code: string; text_en: string; text_plain?: string | null }
 
 interface Props {
   displayName: string
@@ -239,6 +245,57 @@ export default function GHSLabelConstructor({
   // ⚠ Смена вещества обнуляет введённое: органы, названные для анилина, на
   // этикетке следующего вещества были бы прямой ложью.
   useEffect(() => { setPhValues({}); setPhValuesSecond({}) }, [entryCas])
+
+  /**
+   * Заполняемые пропуски P-фраз: по массиву значений на код, отдельно на язык.
+   *
+   * ⚠ Индекс слота считается ВНУТРИ ТЕКСТА КОНКРЕТНОГО ЯЗЫКА, а не общий на все.
+   * У P413 по-английски четыре слота, по-итальянски три (итальянская редакция не
+   * даёт варианта в °F) — и это правильно. Сопоставлять слоты между языками не
+   * нужно вовсе: значение поставщик вводит для каждого языка своё.
+   */
+  const [pValues, setPValues] = useState<Record<string, string[]>>({})
+  const [pValuesSecond, setPValuesSecond] = useState<Record<string, string[]>>({})
+  /** Включён ли необязательный кусок в квадратных скобках. ⚠ По умолчанию нет. */
+  const [pBrackets, setPBrackets] = useState<Record<string, boolean>>({})
+  /** Колонка 5 Annex IV — что регламент велит вписать. Ключ — код фразы. */
+  const [pConditions, setPConditions] = useState<Record<string, string>>({})
+
+  /**
+   * ⭐⭐ ПРЕДЗАПОЛНЕНИЕ ИЗ НАШЕГО ПРЕЖНЕГО ТЕКСТА.
+   *
+   * Сочинённое никуда не девается, но перестаёт быть невидимым утверждением на
+   * таре и становится предложением, которое поставщик видит и принимает.
+   * ⚠ Достаётся только там, где мы и правда подставляли: «hands», «water»,
+   * «local regulations». Где мы пересказывали («not exceeding the specified
+   * temperature»), совпадения нет и поле остаётся пустым — так и надо.
+   */
+  useEffect(() => {
+    const next: Record<string, string[]> = {}
+    for (const p of pStatements) {
+      if (!hasPSlots(p.code)) continue
+      const d = inferSlotDefault(p.text_en, p.text_plain, p.code, 'EN')
+      if (d) next[p.code] = [d]
+    }
+    setPValues(next)
+    setPValuesSecond({})
+    setPBrackets({})
+  }, [entryCas, pStatements.length])
+
+  // Колонка 5 грузится один раз на набор кодов и только если пропуски вообще есть.
+  useEffect(() => {
+    const codes = pStatements.map((p) => p.code).filter((c) => hasPSlots(c) || hasPBracket(c))
+    if (codes.length === 0) { setPConditions({}); return }
+    let cancelled = false
+    supabase.from('p_statement_conditions').select('code, conditions').in('code', codes)
+      .then(({ data, error }) => {
+        if (cancelled || error) return
+        const map: Record<string, string> = {}
+        for (const r of (data ?? []) as { code: string; conditions: string }[]) map[r.code] = r.conditions
+        setPConditions(map)
+      })
+    return () => { cancelled = true }
+  }, [pStatements.map((p) => p.code).join(',')])
 
   // Официальные тексты фраз на втором языке. Грузятся по выбору языка и при
   // смене вещества — набор кодов у нового вещества другой.
@@ -513,6 +570,37 @@ export default function GHSLabelConstructor({
     }
   }
 
+  /**
+   * ⚠⚠ P-ФРАЗЫ ТОЖЕ ПРОХОДЯТ ЧЕРЕЗ ОТРИСОВКУ, И ОБА БЛОКА.
+   *
+   * Знак пропуска здесь не скобка, а многоточие — поэтому проверки на `<` и `>`
+   * его не ловили. Задето 3 221 вещество из 4 178 (77 %), вдвое больше, чем
+   * H-фразами. ⚠ Опущение тут чаще ПОЛОМКА, а не законный вариант: у H-фраз
+   * пропуск был обстоятельством, у P-фраз — дополнением при глаголе или
+   * предлоге («Keep wetted with.», «Use to extinguish.»). Поэтому фраза с
+   * незаполненным обязательным пропуском НЕ ПЕЧАТАЕТСЯ.
+   */
+  const renderedP = shownP.map((p) =>
+    renderPStatement(p.text_en, p.code, 'EN', pValues[p.code] ?? [], pBrackets[p.code] ?? false))
+  const renderedSecondP = shownP
+    .filter((x) => secondTexts[x.code])
+    .map((p) => renderPStatement(
+      secondTexts[p.code], p.code, secondLang ?? 'EN',
+      pValuesSecond[p.code] ?? [], pBrackets[p.code] ?? false))
+
+  /** Коды на этикетке, у которых есть что заполнить или что включить. */
+  const pFillable = shownP.filter((p) => hasPSlots(p.code) || hasPBracket(p.code))
+
+  const pIssues = renderedP
+    .map((r, i) => ({ r, code: shownP[i].code }))
+    .filter((x) => x.r.missing.length > 0)
+    .map((x) => ({
+      level: 'error' as const,
+      text: `${x.code} is not printed: ${pConditions[x.code]
+        ?? 'CLP Annex IV requires the supplier to complete this statement'}`,
+      citation: 'CLP Annex IV, column (5)',
+    }))
+
   const secondH = hStatements.filter((h) => secondTexts[h.code])
   const secondP = shownP.filter((x) => secondTexts[x.code])
   const missingSecond = secondLang
@@ -549,9 +637,14 @@ export default function GHSLabelConstructor({
         hStatements: renderedSecondH
           .filter((r) => !r.suppressed)
           .map((r) => ({ code: r.code, text: r.text })),
-        pStatements: secondP.map((x) => ({ code: x.code, text: secondTexts[x.code] })),
+        // ⚠ Код берётся ДО фильтра: после `filter` индекс уже не совпадает с
+        // исходным массивом, и коды поехали бы относительно текстов.
+        pStatements: secondP
+          .map((x, i) => ({ code: x.code, r: renderedSecondP[i] }))
+          .filter((x) => x.r && !x.r.suppressed)
+          .map((x) => ({ code: x.code, text: x.r.text })),
         combinedPText: pFormat === 'combined'
-          ? secondP.map((x) => secondTexts[x.code]).join(' ')
+          ? renderedSecondP.filter((r) => !r.suppressed).map((r) => r.text).join(' ')
           : undefined,
       }
     : undefined
@@ -576,9 +669,15 @@ export default function GHSLabelConstructor({
     hStatements: renderedH
       .filter((r) => !r.suppressed)
       .map((r) => ({ code: r.code, text: r.text })),
-    pStatements: shownP.map((p) => ({ code: p.code, text: p.text_en })),
+    // ⚠ Пара «код + текст» собирается ДО фильтра — иначе коды съедут.
+    pStatements: shownP
+      .map((p, i) => ({ code: p.code, r: renderedP[i] }))
+      .filter((x) => x.r && !x.r.suppressed)
+      .map((x) => ({ code: x.code, text: x.r.text })),
     pFormat,
-    combinedPText: pFormat === 'combined' ? shownP.map((p) => p.text_en).join(' ') : undefined,
+    combinedPText: pFormat === 'combined'
+      ? renderedP.filter((r) => !r.suppressed).map((r) => r.text).join(' ')
+      : undefined,
     hiddenPCount: pStatements.length - shownP.length,
     supplier: { name: supplierName, address: supplierAddress, phone: supplierPhone },
     logo: logo ?? undefined,
@@ -601,7 +700,7 @@ export default function GHSLabelConstructor({
    * движок видит только готовые строки и о незаполненном знать не может —
    * значения живут здесь, рядом с полями ввода.
    */
-  const allIssues = [...layout.issues, ...phIssues]
+  const allIssues = [...layout.issues, ...phIssues, ...pIssues]
 
   const fileBase = `GHS-label-${(entryCas || 'label').replace(/[^\w.-]+/g, '-')}-${j.key}`
 
@@ -955,6 +1054,103 @@ export default function GHSLabelConstructor({
               Leave a field empty and the instruction is simply dropped from the printed statement —
               that is what the regulation allows where the condition is not met. The compliance check
               below records what was left unnamed.
+            </p>
+          </div>
+        )}
+
+        {/* ── Заполняемые пропуски P-фраз ──────────────────────────────────
+            ⚠⚠ Здесь пропуск чаще ОБЯЗАТЕЛЕН, чем у H-фраз: «Keep wetted with …»
+            без ответа ломается в «Keep wetted with.». Такая фраза на этикетку не
+            попадает вовсе, и панель соответствия говорит об этом прямо. */}
+        {pFillable.length > 0 && (
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+            <p className="text-xs font-semibold text-[#062A78]">
+              These precautionary statements need you to complete them
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-gray-600">
+              CLP Annex IV prints part of these statements as an instruction to the supplier and gives
+              the details in column&nbsp;(5) — quoted under each field below. A statement whose required
+              part is left empty is <span className="font-semibold">not printed on the label</span>.
+            </p>
+            <div className="mt-2.5 space-y-3">
+              {pFillable.map((p) => {
+                const bracketOn = pBrackets[p.code] ?? false
+                const n = pSlotCount(p.text_en, p.code, 'EN', bracketOn)
+                const kinds = pSlotKinds(p.text_en, p.code, 'EN', bracketOn)
+                const nSecond = secondLang && secondTexts[p.code]
+                  ? pSlotCount(secondTexts[p.code], p.code, secondLang, bracketOn) : 0
+                return (
+                  <div key={p.code} className="rounded-md border border-amber-200/70 bg-white p-2.5">
+                    <p className="font-mono text-[11px] font-semibold text-gray-700">{p.code}</p>
+                    {pConditions[p.code] && (
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-gray-500">
+                        {pConditions[p.code]}
+                        <span className="ml-1 text-gray-400">· Annex IV, column (5)</span>
+                      </p>
+                    )}
+                    {hasPBracket(p.code) && (
+                      <label className="mt-1.5 flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={bracketOn}
+                          onChange={(e) => setPBrackets((v) => ({ ...v, [p.code]: e.target.checked }))}
+                        />
+                        {/* ⚠ Выключено по умолчанию: «may be used» — разрешение,
+                            а не указание, и включать его за поставщика нельзя. */}
+                        <span className="text-[11px] text-gray-700">
+                          include the optional part shown in square brackets
+                        </span>
+                      </label>
+                    )}
+                    {Array.from({ length: n }).map((_, i) => (
+                      <div key={i} className={nSecond > 0 ? 'mt-1.5 grid gap-2 sm:grid-cols-2' : 'mt-1.5'}>
+                        <label className="block">
+                          <span className="text-[11px] text-gray-600">
+                            {n > 1 ? `part ${i + 1}` : 'your wording'}
+                            {kinds[i] === 'required' && <span className="ml-1 text-rose-600">required</span>}
+                            {nSecond > 0 && <span className="ml-1 text-gray-400">· English</span>}
+                          </span>
+                          <input
+                            type="text"
+                            value={pValues[p.code]?.[i] ?? ''}
+                            onChange={(e) => setPValues((v) => {
+                              const arr = [...(v[p.code] ?? [])]; arr[i] = e.target.value
+                              return { ...v, [p.code]: arr }
+                            })}
+                            className={inputClass}
+                          />
+                        </label>
+                        {/* ⚠⚠ Отдельное поле на второй язык. Введённое поставщиком
+                            мы не переводим — «hands» внутри немецкой строки такой
+                            же дефект, как непечатаемое многоточие. */}
+                        {i < nSecond && (
+                          <label className="block">
+                            <span className="text-[11px] text-gray-600">
+                              {n > 1 ? `part ${i + 1}` : 'your wording'}
+                              <span className="ml-1 text-gray-400">
+                                · {LANGUAGE_BY_CODE.get(secondLang ?? '')?.name ?? secondLang}
+                              </span>
+                            </span>
+                            <input
+                              type="text"
+                              value={pValuesSecond[p.code]?.[i] ?? ''}
+                              onChange={(e) => setPValuesSecond((v) => {
+                                const arr = [...(v[p.code] ?? [])]; arr[i] = e.target.value
+                                return { ...v, [p.code]: arr }
+                              })}
+                              className={inputClass}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
+            <p className="mt-2 text-[10px] leading-relaxed text-gray-500">
+              Where a field is pre-filled, that wording came from this tool, not from the regulation —
+              check it against your product before printing.
             </p>
           </div>
         )}

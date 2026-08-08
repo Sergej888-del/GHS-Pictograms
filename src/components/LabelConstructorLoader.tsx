@@ -69,7 +69,12 @@ interface Substance {
 
 interface Pictogram { code: string; name_en: string; svg_content: string | null }
 interface HStatement { code: string; text_en: string }
-interface PStatement { code: string; text_en: string; category?: string | null }
+/**
+ * ⚠ `text_en` — официальный текст Annex IV, со знаками пропусков.
+ * `text_plain` — наш прежний текст, где пропуски заполнены за поставщика; он
+ * больше не печатается, а идёт предзаполнением поля ввода.
+ */
+interface PStatement { code: string; text_en: string; text_plain?: string | null; category?: string | null }
 
 interface Props {
   jurisdiction?: JurisdictionKey
@@ -209,9 +214,14 @@ export default function LabelConstructorLoader({
           ? supabase.from('h_statements').select('code, text_en').in('code', hCodes)
           : Promise.resolve({ data: [] as HStatement[] | null }),
         pCodes.length > 0
-          // text_plain — читаемая версия; text_en содержит плейсхолдеры регламента
-          // («Wash … thoroughly after handling»), и на этикетке им не место.
-          ? supabase.from('p_statements').select('code, text_en:text_plain').in('code', pCodes)
+          // ⚠⚠ БЕРЁТСЯ И ОФИЦИАЛЬНЫЙ ТЕКСТ, И НАШ. Раньше на этикетку шёл только
+          // `text_plain`, в котором кем-то дописан ОТВЕТ ЗА ПОСТАВЩИКА: «Keep
+          // wetted with water» вместо «Keep wetted with …». Регламент про
+          // смачивающий агент ничего не утверждает, и для многих веществ вода —
+          // прямо опасный ответ. Теперь печатается официальный текст, а наш
+          // идёт ПРЕДЗАПОЛНЕНИЕМ поля — предложением, а не утверждением.
+          // См. claude/p-statement-ellipsis.md.
+          ? supabase.from('p_statements').select('code, text_en, text_plain').in('code', pCodes)
           : Promise.resolve({ data: [] as PStatement[] | null }),
       ])
 
@@ -236,7 +246,7 @@ export default function LabelConstructorLoader({
         // ⚠ Тот же полный официальный текст, что и на пути вещества: справочник
         // и этикетка обязаны показывать одну и ту же фразу.
         supabase.from('h_statements').select('code, text_en').order('code'),
-        supabase.from('p_statements').select('code, text_en:text_plain, category').order('code'),
+        supabase.from('p_statements').select('code, text_en, text_plain, category').order('code'),
       ])
       if (cancelled) return
       setAllPics((picRes.data ?? []) as Pictogram[])
