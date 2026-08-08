@@ -84,13 +84,47 @@ export type ComplianceIssue = {
 
 export type Statement = { code: string; text: string };
 
-/** Второй язык этикетки — для Канады обязателен, в остальных местах опция. */
+/**
+ * Степень опасности, которую объявляет сигнальное слово.
+ *
+ * ⚠⚠ ЭТО ОТДЕЛЬНОЕ ПОЛЕ, А НЕ РАЗБОР НАПЕЧАТАННОГО СЛОВА, И ВОТ ПОЧЕМУ.
+ * Пока сигнальное слово было только английским, `/danger/i` по строке работал.
+ * С выбором языка на этикетке стоит «Gefahr», «Achtung», «Gevaar», «Vaara» —
+ * и разбор строки отдаёт для немецкого «Gefahr» ЯНТАРНЫЙ, то есть этикетка
+ * уровня Danger печатается цветом предупреждения. Причём молча: слово на месте,
+ * цвет «какой-то есть», и заметить это может только человек, знающий язык.
+ *
+ * Степень приходит из классификации. Слово — только для печати.
+ */
+export type SignalLevel = 'danger' | 'warning';
+
+/**
+ * Второй язык этикетки — для Канады обязателен, в остальных местах опция.
+ *
+ * ⚠ Сигнального слова здесь нет как отдельной степени: степень у этикетки ОДНА
+ * (`LabelInput.signalLevel`), а `signalWord` — то же слово на другом языке.
+ * Двух разных степеней на одной этикетке быть не может.
+ */
 export type SecondLanguageBlock = {
   langTag: string;      // «FR», «ES»
   signalWord: string | null;
   hStatements: Statement[];
   pStatements: Statement[];
   combinedPText?: string;
+  /**
+   * ⚠⚠ РАВНОПРАВНЫЙ, А НЕ ПОДЧИНЁННЫЙ БЛОК.
+   *
+   * По умолчанию второй язык печатается курсивом и приглушённым серым — так
+   * читатель видит пару «фраза и её перевод», и это верно там, где второй язык
+   * добавлен по желанию поставщика.
+   *
+   * Но в Канаде (HPR s. 6.2) английский и французский обязательны ОБА, и в
+   * Бельгии этикетка обязана быть на официальном языке рынка (CLP Art. 17(2)),
+   * а их там три. В таком месте серый курсив — не оформление, а утверждение:
+   * «этот текст второстепенный». Юридически он не второстепенный, и подача
+   * должна это отражать: тот же кегль, тот же цвет, никакого курсива.
+   */
+  equal?: boolean;
 };
 
 export type LabelInput = {
@@ -101,6 +135,12 @@ export type LabelInput = {
   batchNumber?: string;
   ufiCode?: string;
   signalWord: string | null;
+  /**
+   * Степень опасности. ⚠ Необязательное поле только ради обратной совместимости:
+   * когда его нет, степень выводится из английского слова (см. `levelOf`).
+   * У любого нового вызывающего оно должно быть.
+   */
+  signalLevel?: SignalLevel | null;
   pictograms: { code: string; svg: string }[];
   hStatements: Statement[];
   pStatements: Statement[];
@@ -176,9 +216,46 @@ const MIN_BODY_MM = 1.4;
 const PIC_TO_BODY = 8;
 const LINE = 1.32; // межстрочный, доли кегля
 
-function signalColor(word: string | null): string {
-  if (!word) return INK_SOFT;
-  return /danger/i.test(word) ? DANGER : WARNING;
+/**
+ * Степень опасности этикетки.
+ *
+ * ⚠⚠ Возврат к разбору слова оставлен ТОЛЬКО как переходная мера для вызовов,
+ * которые ещё не передают `signalLevel`, и работает он лишь по-английски. Как
+ * только сигнальные слова поедут из Annex I на 24 языках, этот путь надо
+ * закрыть: «Gefahr» он разберёт как warning, и цвет соврёт.
+ */
+function levelOf(input: { signalWord: string | null; signalLevel?: SignalLevel | null }): SignalLevel | null {
+  if (input.signalLevel) return input.signalLevel;
+  if (!input.signalWord) return null;
+  return /danger/i.test(input.signalWord) ? 'danger' : 'warning';
+}
+
+function signalColor(level: SignalLevel | null): string {
+  if (!level) return INK_SOFT;
+  return level === 'danger' ? DANGER : WARNING;
+}
+
+/**
+ * Цвет рамки этикетки.
+ *
+ * ⚠⚠ БЫЛО: `stroke: DANGER` без всякого условия — алая рамка на КАЖДОЙ этикетке.
+ * Пустая заготовка печатала красный прямоугольник; этикетка со словом «Warning»
+ * — тоже красный; вещество без классификации — тоже. То есть цвет заявлял
+ * опасность, о которой движку ещё ничего не сказали.
+ *
+ * Это тот же дефект, что умолчание `signalWord: 'Danger'`, снятое в session 47,
+ * только он выжил на уровень ниже — в рамке, а не в тексте. По дизайн-системе
+ * §2.6 красный означает «нельзя», и больше ничего; красным не подсвечивают
+ * «важное». Теперь рамка — данные: алая при Danger, янтарная при Warning,
+ * нейтральная серая, когда сигнального слова нет.
+ *
+ * ⚠ Серая рамка при отсутствии слова — не «выключенная», а правильная: у
+ * вещества без классификации сигнального слова и не должно быть, и этикетка
+ * такого вещества законна.
+ */
+function frameColor(level: SignalLevel | null): string {
+  if (!level) return RULE;
+  return level === 'danger' ? DANGER : WARNING;
 }
 
 // ── Раскладка ───────────────────────────────────────────────────────────────
@@ -291,7 +368,7 @@ export function layoutLabel(input: LabelInput, opt: LabelOptions): LabelLayout {
     {
       t: 'rect', x: borderW / 2, y: borderW / 2,
       w: W - borderW, h: (fits ? H : chosen.height) - borderW,
-      stroke: DANGER, strokeW: borderW,
+      stroke: frameColor(levelOf(input)), strokeW: borderW,
     },
   ];
 
@@ -401,7 +478,6 @@ function compose(
   const gRight = W - pad - gPad;
   const gInner = gRight - gLeft;
   const picGap = c.picMm * 0.12;
-  const codeW = body * 3.4;
 
   // ⚠ Число столбцов в рейке считается ОТ ВЫСОТЫ ЭТИКЕТКИ, а не берётся числом.
   // На 4 × 2 in две пиктограммы, поставленные друг под друга, дают рейку 47 мм
@@ -416,6 +492,55 @@ function compose(
 
   const textLeft = twoCol ? gLeft + railW + picGap * 2 : gLeft;
   const textWidth = twoCol ? gRight - textLeft : gInner;
+
+  /**
+   * ⚠⚠ ШИРИНА КОЛОНКИ КОДОВ СЧИТАЕТСЯ ПО САМОМУ ДЛИННОМУ ФАКТИЧЕСКОМУ КОДУ,
+   * А НЕ КОНСТАНТОЙ.
+   *
+   * Было `body * 3.4` — мерка под «H225» (четыре знака). Но комбинированные
+   * P-фразы существуют, и «P305+P351+P338» — это ЧЕТЫРНАДЦАТЬ знаков, вдвое
+   * шире отведённой колонки. Код печатался от левого края, текст фразы — от
+   * `textLeft + codeW`, и они НАЛЕЗАЛИ ДРУГ НА ДРУГА. На бумаге это неразборчиво,
+   * и стояло так на каждой этикетке с комбинированной P-фразой, то есть на
+   * большинстве: P305+P351+P338 — одна из самых частых фраз вообще.
+   *
+   * ⭐ Поймано ОТРИСОВКОЙ этикетки, а не чтением кода: в цифрах `codeW` выглядит
+   * безобидно, наложение видно только глазом.
+   *
+   * ⚠ Отдельные мерки для H и для P: длинные коды бывают только у P, и общая
+   * колонка отняла бы у H-фраз ширину без всякой пользы.
+   */
+  const gutterFor = (list: Statement[]): number => {
+    const longest = list.reduce((n, x) => Math.max(n, x.code.length), 4);
+    const wanted = body * (longest * CW_BOLD + 0.8);
+    // ⚠ Потолок обязателен: на этикетке 52 мм колонка под четырнадцать знаков
+    // съела бы половину строки, и фраза печаталась бы по три слова в строку.
+    const cap = Math.max(body * 3.4, textWidth * 0.34);
+    return Math.min(wanted, cap);
+  };
+  const codeWH = gutterFor(input.hStatements);
+  const codeWP = gutterFor(input.pStatements);
+  /**
+   * Влез ли код в свою колонку. ⚠ Если нет — он печатается СВОЕЙ СТРОКОЙ, а
+   * фраза с новой. Так делают и настоящие этикетки: длинный составной код
+   * ставят отдельной строкой, а не втискивают в поле.
+   */
+  const codeFitsIn = (code: string, gutter: number): boolean =>
+    code.length * CW_BOLD * body <= gutter - body * 0.5;
+
+  /**
+   * ⚠ Степень и режим подачи второго языка считаются ОДИН раз на всю раскладку.
+   * Пересчитывать их в каждом месте отрисовки — значит однажды забыть в одном
+   * из пяти и получить этикетку, где сигнальное слово равноправное, а H-фразы
+   * подчинённые. Расхождение подачи внутри одной этикетки читается как ошибка
+   * печати, а не как замысел.
+   */
+  const level = levelOf(input);
+  const altEqual = input.second?.equal === true;
+  /** Стиль второго языка: равноправный или подчинённый. */
+  const altText = altEqual
+    ? { italic: false, color: INK }
+    : { italic: true, color: INK_SOFT };
 
   const contentTop = groupTop + body * 0.6;
   let gy = contentTop;      // курсор текстовой колонки
@@ -445,13 +570,17 @@ function compose(
     gy += body * 0.5 + sw;
     items.push({
       t: 'text', x: textLeft, y: gy, s: input.signalWord.toUpperCase(),
-      size: sw, bold: true, color: signalColor(input.signalWord),
+      size: sw, bold: true, color: signalColor(level),
     });
     if (input.second?.signalWord) {
-      gy += sw * 0.95;
+      gy += altEqual ? sw * 1.06 : sw * 0.95;
       items.push({
         t: 'text', x: textLeft, y: gy, s: input.second.signalWord.toUpperCase(),
-        size: sw * 0.82, bold: true, color: signalColor(input.second.signalWord),
+        // ⚠⚠ В равноправном режиме второе слово того же кегля и того же цвета.
+        // Уменьшенное на 18 % слово читается как подпись к первому, а в Канаде
+        // и Бельгии оба слова — обязательный элемент этикетки в равной мере.
+        size: altEqual ? sw : sw * 0.82,
+        bold: true, color: signalColor(level),
       });
     }
   }
@@ -462,18 +591,22 @@ function compose(
     for (const h of input.hStatements) {
       gy += lh;
       items.push({ t: 'text', x: textLeft, y: gy, s: h.code, size: body, bold: true, color: INK });
-      const lines = wrap(h.text, charsPerLine(textWidth - codeW, body));
+      const own = !codeFitsIn(h.code, codeWH);
+      const tx = own ? textLeft : textLeft + codeWH;
+      const tw = own ? textWidth : textWidth - codeWH;
+      const skip = own ? 1 : 0;   // код занял свою строку — текст начинается ниже
+      const lines = wrap(h.text, charsPerLine(tw, body));
       lines.forEach((ln, i) => {
-        items.push({ t: 'text', x: textLeft + codeW, y: gy + i * lh, s: ln, size: body, color: INK });
+        items.push({ t: 'text', x: tx, y: gy + (i + skip) * lh, s: ln, size: body, color: INK });
       });
-      gy += (lines.length - 1) * lh;
+      gy += (lines.length - 1 + skip) * lh;
       // Второй язык — сразу под фразой, тем же кеглем, но приглушённо, чтобы
       // читатель видел пару, а не два независимых списка.
       const alt = input.second?.hStatements.find((x) => x.code === h.code);
       if (alt) {
-        const altLines = wrap(alt.text, charsPerLine(textWidth - codeW, body));
+        const altLines = wrap(alt.text, charsPerLine(tw, body));
         altLines.forEach((ln, i) => {
-          items.push({ t: 'text', x: textLeft + codeW, y: gy + (i + 1) * lh, s: ln, size: body, italic: true, color: INK_SOFT });
+          items.push({ t: 'text', x: tx, y: gy + (i + 1) * lh, s: ln, size: body, ...altText });
         });
         gy += altLines.length * lh;
       }
@@ -508,7 +641,7 @@ function compose(
       if (input.second?.combinedPText) {
         for (const ln of wrap(input.second.combinedPText, charsPerLine(inner, body))) {
           y += lh;
-          items.push({ t: 'text', x: pad, y, s: ln, size: body, italic: true, color: INK_SOFT });
+          items.push({ t: 'text', x: pad, y, s: ln, size: body, ...altText });
         }
       }
     } else {
@@ -525,27 +658,37 @@ function compose(
       // колонки не делим.
       const MIN_CHARS_PER_COLUMN = 30;
       const twoColP = input.pStatements.length >= 3
-        && charsPerLine(colWP - codeW, body) >= MIN_CHARS_PER_COLUMN;
+        && charsPerLine(colWP - codeWP, body) >= MIN_CHARS_PER_COLUMN;
       const width = twoColP ? colWP : inner;
-      const chars = charsPerLine(width - codeW, body);
 
-      /** Одна фраза со своими строками — и своим переводом, если он есть. */
+      /**
+       * Одна фраза со своими строками — и своим переводом, если он есть.
+       *
+       * ⚠⚠ `own` (код своей строкой) входит в `rows`. Забудь его здесь — и
+       * балансировка колонок посчитает такую фразу на строку короче, чем она
+       * есть: правая колонка окажется длиннее левой, а на узкой этикетке
+       * содержимое перестанет влезать, хотя движок будет уверен, что влезло.
+       */
       const blocks = input.pStatements.map((p) => {
+        const own = !codeFitsIn(p.code, codeWP);
+        const chars = charsPerLine(own ? width : width - codeWP, body);
         const lines = wrap(p.text, chars);
         const alt = input.second?.pStatements.find((x) => x.code === p.code);
         const altLines = alt ? wrap(alt.text, chars) : [];
-        return { p, lines, altLines, rows: lines.length + altLines.length };
+        return { p, own, lines, altLines, rows: lines.length + altLines.length + (own ? 1 : 0) };
       });
 
       const drawBlock = (b: (typeof blocks)[number], x0: number, startY: number): number => {
         let yy = startY + lh;
         items.push({ t: 'text', x: x0, y: yy, s: b.p.code, size: body, bold: true, color: INK });
+        const tx = b.own ? x0 : x0 + codeWP;
+        const skip = b.own ? 1 : 0;
         b.lines.forEach((ln, i) => {
-          items.push({ t: 'text', x: x0 + codeW, y: yy + i * lh, s: ln, size: body, color: INK });
+          items.push({ t: 'text', x: tx, y: yy + (i + skip) * lh, s: ln, size: body, color: INK });
         });
-        yy += (b.lines.length - 1) * lh;
+        yy += (b.lines.length - 1 + skip) * lh;
         b.altLines.forEach((ln, i) => {
-          items.push({ t: 'text', x: x0 + codeW, y: yy + (i + 1) * lh, s: ln, size: body, italic: true, color: INK_SOFT });
+          items.push({ t: 'text', x: tx, y: yy + (i + 1) * lh, s: ln, size: body, ...altText });
         });
         return yy + b.altLines.length * lh;
       };

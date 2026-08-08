@@ -18,6 +18,9 @@ import {
   EU_LANGUAGES, LANGUAGE_BY_CODE, suggestedLanguages, fetchTranslations, EURLEX_ATTRIBUTION,
   type TranslationMap,
 } from '../lib/labelLanguages'
+import {
+  marketsFor, secondLanguageIsEqual, suggestedPairFor, MARKET_BY_CODE,
+} from '../lib/labelMarkets'
 import NewsletterOptIn from './NewsletterOptIn'
 
 interface Pictogram { code: string; name_en: string; svg_content: string | null }
@@ -167,6 +170,14 @@ export default function GHSLabelConstructor({
   const [secondLang, setSecondLang] = useState<string | null>(
     initialSecondLang && LANGUAGE_BY_CODE.has(initialSecondLang) ? initialSecondLang : null,
   )
+  /**
+   * Рынок внутри юрисдикции — нужен ТОЛЬКО там, где официальных языков больше
+   * одного (Бельгия, Люксембург, Финляндия, Ирландия, Мальта).
+   *
+   * ⚠ У Канады рынка не спрашиваем: WHMIS сам по себе двуязычен
+   * (`requiredLanguages = ['en','fr']`), и уточнять там нечего.
+   */
+  const [market, setMarket] = useState<string | null>(null)
   const [secondTexts, setSecondTexts] = useState<TranslationMap>({})
   const [secondLoading, setSecondLoading] = useState(false)
   const [secondError, setSecondError] = useState('')
@@ -408,10 +419,20 @@ export default function GHSLabelConstructor({
   const missingSecond = secondLang
     ? [...hStatements, ...shownP].filter((x) => !secondTexts[x.code]).map((x) => x.code)
     : []
+  /**
+   * ⚠⚠ Равноправная подача второго языка — решение НОРМЫ, а не пользователя.
+   * Правило одно: равноправно там, где рынок требует более одного языка.
+   * Канада проходит по `requiredLanguages`, Бельгия и остальные — по таблице
+   * рынков. Особый случай для Канады, написанный вторым местом, однажды разошёлся
+   * бы с первым, поэтому его здесь нет.
+   */
+  const secondEqual = secondLanguageIsEqual(jurisdictionKey, market, j.requiredLanguages)
+
   const second = secondLang && (secondH.length > 0 || secondP.length > 0)
     ? {
         langTag: secondLang,
         signalWord: null,
+        equal: secondEqual,
         hStatements: secondH.map((h) => ({ code: h.code, text: secondTexts[h.code] })),
         pStatements: secondP.map((x) => ({ code: x.code, text: secondTexts[x.code] })),
         combinedPText: pFormat === 'combined'
@@ -428,6 +449,14 @@ export default function GHSLabelConstructor({
     batchNumber,
     ufiCode,
     signalWord: signalWord ?? null,
+    /**
+     * ⚠⚠ Степень опасности передаётся ОТДЕЛЬНЫМ ПОЛЕМ, а не выводится движком
+     * из напечатанного слова. Здесь слово ещё английское и разбирается верно;
+     * как только основной язык станет выбираемым, на этикетке встанет «Gefahr»
+     * или «Vaara», и разбор строки отдал бы для немецкого Danger янтарный цвет.
+     * Цвет рамки и цвет слова теперь берутся из этого поля.
+     */
+    signalLevel: signalWord ? (/danger/i.test(signalWord) ? 'danger' : 'warning') : null,
     pictograms: pictograms.map((p) => ({ code: p.code, svg: p.svg_content ?? '' })),
     hStatements: hStatements.map((h) => ({ code: h.code, text: h.text_en })),
     pStatements: shownP.map((p) => ({ code: p.code, text: p.text_en })),
@@ -583,6 +612,72 @@ export default function GHSLabelConstructor({
         </div>
 
         <p className="mt-3 text-xs leading-relaxed text-gray-600">{j.languageNote}</p>
+
+        {/* ── РЫНОК ────────────────────────────────────────────────────────
+            ⚠⚠ Спрашиваем ТОЛЬКО там, где официальных языков больше одного.
+            Выпадашка «выберите страну» на 27 стран, из которых у 21 ответ один
+            и тот же, — это вопрос ради вопроса: человек тратит выбор, а на
+            этикетке ничего не меняется. Показываем пять стран, где меняется. */}
+        {marketsFor(jurisdictionKey).length > 0 && (
+          <div className="mt-3 rounded-lg border border-blue-200 bg-white px-3 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+              Market with more than one official language
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setMarket(null)}
+                className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                  market === null ? 'border-[#062A78] bg-[#062A78] text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-[#062A78]'
+                }`}
+              >not specified</button>
+              {marketsFor(jurisdictionKey).map((m) => (
+                <button
+                  key={m.code}
+                  type="button"
+                  onClick={() => {
+                    setMarket(m.code)
+                    // ⚠ Подставляем второй язык из пары рынка, но НЕ англи��ский:
+                    // основной язык этикетки пока всегда английский, и предложить
+                    // его же вторым означало бы напечатать один язык дважды.
+                    const pair = suggestedPairFor(m.code)
+                    const pick = pair?.find((code) => code !== 'EN') ?? null
+                    if (pick) { setSecondLang(pick); track('label_second_language', { lang: pick }) }
+                    track('label_market', { market: m.code })
+                  }}
+                  className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                    market === m.code ? 'border-[#062A78] bg-[#062A78] text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-[#062A78]'
+                  }`}
+                >{m.name} · {m.languages.join('/')}</button>
+              ))}
+            </div>
+            {market && MARKET_BY_CODE.get(market) && (
+              <p className={`mt-2 rounded border px-2 py-1.5 text-[11px] leading-relaxed ${
+                MARKET_BY_CODE.get(market)!.certainty === 'required'
+                  ? 'border-rose-200 bg-rose-50 text-rose-900'
+                  : 'border-amber-200 bg-amber-50 text-amber-900'
+              }`}>
+                {MARKET_BY_CODE.get(market)!.note}{' '}
+                <span className="text-gray-500">{MARKET_BY_CODE.get(market)!.citation}</span>
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* ⚠⚠ ЧЕСТНО ПРО НЕДОДЕЛАННОЕ. Равноправная подача уже работает, но
+            основной язык этикетки пока всегда английский. Для Канады этого
+            достаточно — там и требуются EN + FR. Для Бельгии нет: ей нужны
+            NL + FR, а мы напечатаем EN + NL. Молчать об этом нельзя: человек
+            выбрал «Belgium», увидел два равноправных блока и решил, что
+            инструмент дал ему бельгийскую этикетку. */}
+        {secondEqual && market && !MARKET_BY_CODE.get(market)?.languages.includes('EN') && (
+          <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+            The two blocks are printed as equals, as this market requires. ⚠ But the first block is still
+            English: choosing the primary label language is not built yet. For {MARKET_BY_CODE.get(market)!.name}
+            {' '}that means this label carries EN + {LANGUAGE_BY_CODE.get(secondLang ?? '')?.name ?? 'the second language'},
+            not {MARKET_BY_CODE.get(market)!.languages.slice(0, 2).map((c) => LANGUAGE_BY_CODE.get(c)?.name ?? c).join(' + ')}.
+          </p>
+        )}
 
         {/* ── ВТОРОЙ ЯЗЫК ──────────────────────────────────────────────────
             ⚠⚠ Для Канады это не опция: HPR s. 6.2 требует ОБА официальных
