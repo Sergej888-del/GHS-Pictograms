@@ -17,7 +17,9 @@
     "generate:redirects": "node scripts/generate-pictogram-redirects.mjs",
     "astro": "astro",
     "generate-types": "wrangler types",
-    "import-pubchem": "tsx scripts/import-pubchem.ts"
+    "import-pubchem": "tsx scripts/import-pubchem.ts",
+    "check:label-layout": "node --use-system-ca --import tsx scripts/check-label-layout.ts",
+    "import:substance-names": "node --use-system-ca --import tsx scripts/import-substance-names.ts"
   },
   "dependencies": {
     "@astrojs/mdx": "^5.0.3",

@@ -173,9 +173,28 @@ const CW_REGULAR = 0.52;
 const CW_BOLD = 0.56;
 const CW_MONO = 0.60;
 
+function widthPerChar(kind: 'regular' | 'bold' | 'mono'): number {
+  return kind === 'bold' ? CW_BOLD : kind === 'mono' ? CW_MONO : CW_REGULAR;
+}
+
 function charsPerLine(widthMm: number, sizeMm: number, kind: 'regular' | 'bold' | 'mono' = 'regular'): number {
-  const cw = kind === 'bold' ? CW_BOLD : kind === 'mono' ? CW_MONO : CW_REGULAR;
-  return Math.max(6, Math.floor(widthMm / (sizeMm * cw)));
+  return Math.max(6, Math.floor(widthMm / (sizeMm * widthPerChar(kind))));
+}
+
+/**
+ * Ширина строки в миллиметрах — той же меркой, какой раскладка считает переносы.
+ *
+ * ⚠⚠ Экспортируется РАДИ ПРОВЕРКИ `check:label-layout`, и это не удобство.
+ * Наложение кода на текст фразы (session 48) видно только по координатам, а
+ * проверка, считающая ширину своей формулой, подтверждала бы не то, что
+ * печатается. Списать сюда `0.52` второй раз — значит завести копию, которая
+ * разойдётся молча, ровно как список кодов знаков в session 39.
+ *
+ * ⚠ Мерка приблизительная и одна на SVG и PDF: точную ширину даёт только сам
+ * шрифт, а раскладка обязана совпадать между превью и печатью.
+ */
+export function textWidthMm(s: string, sizeMm: number, kind: 'regular' | 'bold' | 'mono' = 'regular'): number {
+  return String(s ?? '').length * sizeMm * widthPerChar(kind);
 }
 
 /** Перенос по словам с жёстким разрывом слишком длинных слов (IUPAC-имена). */
