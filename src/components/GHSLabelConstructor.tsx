@@ -22,6 +22,10 @@ import {
 import {
   marketsFor, secondLanguageIsEqual, suggestedPairFor, MARKET_BY_CODE,
 } from '../lib/labelMarkets'
+import {
+  renderStatement, rolesForCodes, roleIsRequired, ROLE_OBLIGATION,
+  type PlaceholderRole, type PlaceholderValues,
+} from '../lib/statementPlaceholders'
 import NewsletterOptIn from './NewsletterOptIn'
 
 interface Pictogram { code: string; name_en: string; svg_content: string | null }
@@ -101,6 +105,26 @@ const STORAGE_KEY = 'ghs_supplier_data'
 const LOGO_STORAGE_KEY = 'ghs_logo_data'
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#062A78]'
 const labelClass = 'block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wide'
+
+/**
+ * Подписи полей для заполняемых пропусков H-фраз.
+ *
+ * ⚠ Подсказка — ПРИМЕР из самого регламента, а не выдумка: `H372 (blood)`,
+ * `H373 (liver)`, `H371 (nervous system; oral, inhalation)` стоят в Annex VI.
+ * Человек, увидевший пример из первоисточника, вводит то, что там ожидается.
+ */
+const PH_LABEL: Record<PlaceholderRole, string> = {
+  organs: 'Organs affected',
+  effect: 'Specific effect',
+  route: 'Route of exposure',
+  sensitiser: 'Sensitising substance',
+}
+const PH_HINT: Record<PlaceholderRole, string> = {
+  organs: 'liver, kidneys',
+  effect: 'may damage the unborn child',
+  route: 'inhalation',
+  sensitiser: 'D-limonene',
+}
 
 /** Быстрые объёмы тары. Второе число — литры, ими выбирается ярус CLP. */
 const CAPACITY_PRESETS = [
@@ -198,6 +222,23 @@ export default function GHSLabelConstructor({
   useEffect(() => {
     setSelectedP(initialSelectedP ?? pStatements.slice(0, 6).map((p) => p.code))
   }, [entryCas, pStatements.length])
+
+  /**
+   * Заполняемые пропуски H-фраз: что назвал поставщик.
+   *
+   * ⚠⚠ ДВА НАБОРА ЗНАЧЕНИЙ, А НЕ ОДИН, И ЭТО НЕ ИЗБЫТОЧНОСТЬ. Значение —
+   * это текст, который печатается: «liver, kidneys» по-английски и
+   * «Leber, Nieren» по-немецки. Одно поле на два языка напечатало бы английские
+   * органы внутри немецкой строки — тот же дефект, что непечатаемая скобка,
+   * только незаметнее. Переводить введённое поставщиком мы не можем: мы не
+   * переводим ни фразы регламента, ни тем более чужой текст.
+   */
+  const [phValues, setPhValues] = useState<PlaceholderValues>({})
+  const [phValuesSecond, setPhValuesSecond] = useState<PlaceholderValues>({})
+
+  // ⚠ Смена вещества обнуляет введённое: органы, названные для анилина, на
+  // этикетке следующего вещества были бы прямой ложью.
+  useEffect(() => { setPhValues({}); setPhValuesSecond({}) }, [entryCas])
 
   // Официальные тексты фраз на втором языке. Грузятся по выбору языка и при
   // смене вещества — набор кодов у нового вещества другой.
@@ -421,6 +462,57 @@ export default function GHSLabelConstructor({
   //
   // ⚠ Сигнальное слово во втором блоке — `null`. Его официальные переводы лежат
   // в Annex I, а не в Annex III/IV, и у нас их пока нет. См. labelLanguages.ts.
+  /**
+   * ⚠⚠ ФРАЗЫ ПРОХОДЯТ ЧЕРЕЗ `renderStatement` ПЕРЕД ПЕЧАТЬЮ — ВСЕГДА, ОБА БЛОКА.
+   *
+   * До этого английский блок брал зачищенный `text_plain`, а второй язык —
+   * полный официальный текст, и на живой этикетке анилина немецкая строка
+   * печатала «<Expositionsweg angeben, sofern schlüssig belegt ist…>» дословно.
+   * Угловые скобки — указание поставщику, а не текст на этикетку.
+   *
+   * ⚠ Роль слота, а не его номер: в венгерском H372 пропуск пути воздействия
+   * идёт ПЕРВЫМ, а органов — вторым, наоборот к остальным 23 языкам.
+   */
+  const renderedH = hStatements.map((h) => renderStatement(h.text_en, h.code, 'EN', phValues))
+  const renderedSecondH = hStatements
+    .filter((h) => secondTexts[h.code])
+    .map((h) => renderStatement(secondTexts[h.code], h.code, secondLang ?? 'EN', phValuesSecond))
+
+  /** Какие поля ввода вообще показывать — по кодам этой этикетки. */
+  const phRoles = rolesForCodes(hStatements.map((h) => h.code), 'EN')
+
+  /**
+   * Что панель соответствия говорит про незаполненное.
+   *
+   * ⭐ Зачищенный английский текст молча терял требование регламента: «Causes
+   * damage to organs» вместо «Causes damage to organs <or state all organs
+   * affected, if known>». Этикетка выглядела полной, а обязанность поставщика с
+   * неё исчезала. Панель возвращает её на место — словами про обязанность, а не
+   * про наше действие.
+   */
+  const phIssues = phRoles
+    .filter((role) => !String(phValues[role] ?? '').trim())
+    .map((role) => ({
+      level: (roleIsRequired(role) ? 'error' : 'warning') as 'error' | 'warning',
+      text: ROLE_OBLIGATION[role],
+      citation: 'CLP Annex III',
+    }))
+  // ⚠ Второй язык проверяется ОТДЕЛЬНО: заполнить английское поле и забыть
+  // немецкое — самый вероятный способ ошибиться, и молча это выглядит нормально.
+  if (secondLang && phRoles.some((r) => String(phValues[r] ?? '').trim())) {
+    const missing = phRoles.filter(
+      (r) => String(phValues[r] ?? '').trim() && !String(phValuesSecond[r] ?? '').trim(),
+    )
+    if (missing.length > 0) {
+      phIssues.push({
+        level: 'warning',
+        text: `Named in English but not in ${LANGUAGE_BY_CODE.get(secondLang)?.name ?? secondLang}: `
+          + `${missing.join(', ')}. Both language blocks must say the same thing.`,
+        citation: 'CLP Art. 17(2)',
+      })
+    }
+  }
+
   const secondH = hStatements.filter((h) => secondTexts[h.code])
   const secondP = shownP.filter((x) => secondTexts[x.code])
   const missingSecond = secondLang
@@ -451,7 +543,12 @@ export default function GHSLabelConstructor({
         langTag: secondLang,
         signalWord: secondSignal,
         equal: secondEqual,
-        hStatements: secondH.map((h) => ({ code: h.code, text: secondTexts[h.code] })),
+        // ⚠ Уже отрисованные: без указаний поставщику и с уточнением в коде.
+        // `suppressed` выбрасывается — фраза, у которой не назвали обязательное,
+        // на этикетке не нужна вовсе (EUH208 без имени: «Contains.»).
+        hStatements: renderedSecondH
+          .filter((r) => !r.suppressed)
+          .map((r) => ({ code: r.code, text: r.text })),
         pStatements: secondP.map((x) => ({ code: x.code, text: secondTexts[x.code] })),
         combinedPText: pFormat === 'combined'
           ? secondP.map((x) => secondTexts[x.code]).join(' ')
@@ -476,7 +573,9 @@ export default function GHSLabelConstructor({
      */
     signalLevel,
     pictograms: pictograms.map((p) => ({ code: p.code, svg: p.svg_content ?? '' })),
-    hStatements: hStatements.map((h) => ({ code: h.code, text: h.text_en })),
+    hStatements: renderedH
+      .filter((r) => !r.suppressed)
+      .map((r) => ({ code: r.code, text: r.text })),
     pStatements: shownP.map((p) => ({ code: p.code, text: p.text_en })),
     pFormat,
     combinedPText: pFormat === 'combined' ? shownP.map((p) => p.text_en).join(' ') : undefined,
@@ -497,6 +596,12 @@ export default function GHSLabelConstructor({
   })
   const previewSvg = renderSvg(layout)
   const fit = layout.fit
+  /**
+   * ⚠ Замечания про пропуски встают ПОСЛЕ проверок движка, а не вместо них:
+   * движок видит только готовые строки и о незаполненном знать не может —
+   * значения живут здесь, рядом с полями ввода.
+   */
+  const allIssues = [...layout.issues, ...phIssues]
 
   const fileBase = `GHS-label-${(entryCas || 'label').replace(/[^\w.-]+/g, '-')}-${j.key}`
 
@@ -787,6 +892,71 @@ export default function GHSLabelConstructor({
           <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
             No reduced-label provision applies to a {capacityMl} ml container here — the full set of elements is printed.
           </p>
+        )}
+
+        {/* ── Заполняемые пропуски H-фраз ──────────────────────────────────
+            ⚠⚠ Панель появляется ТОЛЬКО когда среди выбранных фраз есть коды с
+            пропусками (11 кодов из 238, но 1 584 вещества из 4 178). Показывать
+            её всегда — значит просить назвать органы у вещества, у которого
+            поражения органов нет вовсе. */}
+        {phRoles.length > 0 && (
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+            <p className="text-xs font-semibold text-[#062A78]">
+              These statements ask you to name something
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-gray-600">
+              CLP Annex III prints part of these statements as an instruction to the supplier in angle
+              brackets. That instruction is not label text: you either fill it in or leave it out.
+              What you type is printed after the code the way CLP Annex VI does it —{' '}
+              <span className="font-mono">H372 (liver, kidneys; inhalation)</span>.
+            </p>
+            <div className="mt-2.5 space-y-2.5">
+              {phRoles.map((role) => (
+                <div key={role} className={secondLang ? 'grid gap-2 sm:grid-cols-2' : ''}>
+                  <label className="block">
+                    <span className="text-[11px] font-medium text-gray-700">
+                      {PH_LABEL[role]}
+                      {roleIsRequired(role) && <span className="ml-1 text-rose-600">required</span>}
+                      {secondLang && <span className="ml-1 text-gray-400">· English</span>}
+                    </span>
+                    <input
+                      type="text"
+                      value={phValues[role] ?? ''}
+                      onChange={(e) => setPhValues((v) => ({ ...v, [role]: e.target.value }))}
+                      placeholder={PH_HINT[role]}
+                      className={inputClass}
+                    />
+                  </label>
+                  {/* ⚠⚠ ОТДЕЛЬНОЕ ПОЛЕ НА ВТОРОЙ ЯЗЫК, А НЕ КОПИЯ ПЕРВОГО. Мы не
+                      переводим ни фразы регламента, ни то, что ввёл поставщик:
+                      «liver, kidneys» внутри немецкой строки — такой же дефект,
+                      как непечатаемая скобка, только незаметнее. */}
+                  {secondLang && (
+                    <label className="block">
+                      <span className="text-[11px] font-medium text-gray-700">
+                        {PH_LABEL[role]}
+                        <span className="ml-1 text-gray-400">
+                          · {LANGUAGE_BY_CODE.get(secondLang)?.name ?? secondLang}
+                        </span>
+                      </span>
+                      <input
+                        type="text"
+                        value={phValuesSecond[role] ?? ''}
+                        onChange={(e) => setPhValuesSecond((v) => ({ ...v, [role]: e.target.value }))}
+                        placeholder={LANGUAGE_BY_CODE.get(secondLang)?.native ?? ''}
+                        className={inputClass}
+                      />
+                    </label>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[10px] leading-relaxed text-gray-500">
+              Leave a field empty and the instruction is simply dropped from the printed statement —
+              that is what the regulation allows where the condition is not met. The compliance check
+              below records what was left unnamed.
+            </p>
+          </div>
         )}
       </section>
 
@@ -1204,13 +1374,13 @@ export default function GHSLabelConstructor({
               Этого не делает ни один бесплатный генератор в нише. */}
           <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
             <p className="mb-2 text-sm font-semibold text-[#062A78]">Compliance check · {j.tag}</p>
-            {layout.issues.length === 0 ? (
+            {allIssues.length === 0 ? (
               <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
                 All required elements are present.
               </p>
             ) : (
               <ul className="space-y-1.5">
-                {layout.issues.map((iss, i) => (
+                {allIssues.map((iss, i) => (
                   <li
                     key={i}
                     className={`rounded-lg border px-3 py-2 text-xs ${

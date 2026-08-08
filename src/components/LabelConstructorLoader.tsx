@@ -198,7 +198,15 @@ export default function LabelConstructorLoader({
           ? supabase.from('pictograms_signals').select('code, name_en, svg_content').in('code', picCodes)
           : Promise.resolve({ data: [] as Pictogram[] | null }),
         hCodes.length > 0
-          ? supabase.from('h_statements').select('code, text_en:text_plain').in('code', hCodes)
+          // ⚠⚠ БЕРЁТСЯ `text_en`, А НЕ `text_plain`, И ЭТО ВАЖНО.
+          // `text_plain` — английский текст, из которого кем-то вычищены угловые
+          // скобки. Вычищены вместе с ТРЕБОВАНИЕМ: официальный H372 обязывает
+          // назвать затронутые органы, а наш «читаемый» вариант молча этого не
+          // говорит. При этом второй языковой блок шёл из `statement_translations`
+          // с полным текстом — и два блока одной этикетки говорили РАЗНОЕ.
+          // Теперь источник один — полный официальный текст, а указания
+          // поставщику снимает `renderStatement` (src/lib/statementPlaceholders.ts).
+          ? supabase.from('h_statements').select('code, text_en').in('code', hCodes)
           : Promise.resolve({ data: [] as HStatement[] | null }),
         pCodes.length > 0
           // text_plain — читаемая версия; text_en содержит плейсхолдеры регламента
@@ -225,7 +233,9 @@ export default function LabelConstructorLoader({
       setRefLoading(true)
       const [picRes, hRes, pRes] = await Promise.all([
         supabase.from('pictograms_signals').select('code, name_en, svg_content').order('code'),
-        supabase.from('h_statements').select('code, text_en:text_plain').order('code'),
+        // ⚠ Тот же полный официальный текст, что и на пути вещества: справочник
+        // и этикетка обязаны показывать одну и ту же фразу.
+        supabase.from('h_statements').select('code, text_en').order('code'),
         supabase.from('p_statements').select('code, text_en:text_plain, category').order('code'),
       ])
       if (cancelled) return
