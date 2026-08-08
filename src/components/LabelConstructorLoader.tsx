@@ -56,6 +56,12 @@ function setLabelConstructorUrl(cas: string | null) {
 
 interface Substance {
   id: string
+  /**
+   * Индексный номер Annex VI — ключ к именам вещества на 23 языках.
+   * ⚠ Он есть у всех 4 178 записей справочника и цел у всех: в отличие от CAS и
+   * EC, импорт его не портит. Именно поэтому имена привязаны к нему, а не к CAS.
+   */
+  index_number: string | null
   iupac_name: string
   common_name: string | null
   display_name_short: string | null
@@ -186,7 +192,7 @@ export default function LabelConstructorLoader({
       setNotFound(false)
       const { data: sub } = await supabase
         .from('substances')
-        .select('id, iupac_name, common_name, display_name_short, cas_number, ec_number, signal_word, ghs_pictogram_codes, h_statement_codes, p_statement_codes')
+        .select('id, index_number, iupac_name, common_name, display_name_short, cas_number, ec_number, signal_word, ghs_pictogram_codes, h_statement_codes, p_statement_codes')
         .eq('cas_number', cas)
         .single()
 
@@ -568,6 +574,7 @@ export default function LabelConstructorLoader({
         initialSecondLang={effLang}
         initialSelectedP={usingSubstance ? undefined : pickedP}
         nameVariants={nameVariants}
+        indexNumber={substance?.index_number ?? null}
       />
     </div>
   )

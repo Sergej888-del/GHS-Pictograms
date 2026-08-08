@@ -70,6 +70,53 @@ export const EU_LANGUAGES: EuLanguage[] = [
 export const LANGUAGE_BY_CODE = new Map(EU_LANGUAGES.map((l) => [l.code, l]));
 
 /**
+ * ⚠⚠ ЯЗЫК, КОТОРЫЙ НЕ МОЖЕТ БЫТЬ ОСНОВНЫМ.
+ *
+ * Ирландский годится ВТОРЫМ языком и не годится основным, и причина не в объёме
+ * данных: тексты H- и P-фраз на ирландском у нас есть — они напечатаны внутри
+ * многоязычных таблиц Annex III и IV. Нет СИГНАЛЬНОГО СЛОВА: сигнальные слова
+ * стоят в таблицах Annex I, а консолидированного CLP на ирландском не
+ * существует вовсе (все адреса CELLAR отдают 404).
+ *
+ * Сигнальное слово — обязательный элемент этикетки (Art. 17(1)(d)). Этикетка,
+ * у которой основной язык ирландский, вышла бы без него. Написать «Contúirt» от
+ * себя нельзя: это сочинение юридического текста, а не перевод.
+ *
+ * ⚠ Скрывать ирландский молча тоже нельзя. Человек, поставляющий в Ирландию,
+ * обязан узнать ПОЧЕМУ его нет в списке, — иначе он решит, что мы просто чего-то
+ * не доделали, и пойдёт искать инструмент, который «умеет ирландский».
+ */
+export const PRIMARY_LANGUAGE_EXCLUDED = 'GA';
+
+export const PRIMARY_LANGUAGE_EXCLUDED_REASON =
+  'Irish cannot be the primary language here. The H and P statement texts exist in Irish — they are printed '
+  + 'inside the multilingual tables of CLP Annexes III and IV — but the signal word does not: signal words live '
+  + 'in the Annex I tables, and no consolidated CLP text has ever been published in Irish. A signal word is a '
+  + 'mandatory label element under Art. 17(1)(d), so an Irish-primary label would be missing one. '
+  + 'Irish is still available as the second language. For Ireland, English-primary + Irish-second is what this '
+  + 'tool can produce lawfully.';
+
+/**
+ * Языки, доступные ОСНОВНЫМ языком этикетки.
+ * ⚠ Список строится вычитанием, а не переписыванием: новый официальный язык ЕС
+ * попадёт сюда сам, и забыть его будет негде.
+ */
+export const PRIMARY_LANGUAGES: EuLanguage[] =
+  EU_LANGUAGES.filter((l) => l.code !== PRIMARY_LANGUAGE_EXCLUDED);
+
+/**
+ * Языки, которые стоит предложить ОСНОВНЫМ для юрисдикции.
+ *
+ * ⚠ Для OSHA и WHMIS основной язык — английский, и это не предпочтение: 29 CFR
+ * 1910.1200(f) и HPR s. 6.2 написаны про английский текст. Предлагать испанский
+ * первым в US-режиме значит подсказывать незаконную этикетку.
+ */
+export function suggestedPrimaryLanguages(jurisdiction: string): string[] {
+  if (jurisdiction === 'osha' || jurisdiction === 'whmis' || jurisdiction === 'gbclp') return ['EN'];
+  return ['EN', 'DE', 'FR', 'ES', 'IT', 'PL', 'NL'];
+}
+
+/**
  * Языки, которые стоит предложить первыми для выбранной юрисдикции.
  *
  * ⚠ Для Канады это FR, и не по популярности: HPR s. 6.2 требует ОБА официальных

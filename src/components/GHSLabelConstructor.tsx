@@ -17,8 +17,15 @@ import { casShapeOk, ecShapeOk } from '../lib/substanceIdentifiers'
 import {
   EU_LANGUAGES, LANGUAGE_BY_CODE, suggestedLanguages, fetchTranslations, EURLEX_ATTRIBUTION,
   SIGNAL_CODE, signalWordFor,
+  PRIMARY_LANGUAGES, PRIMARY_LANGUAGE_EXCLUDED, PRIMARY_LANGUAGE_EXCLUDED_REASON,
+  suggestedPrimaryLanguages,
   type TranslationMap,
 } from '../lib/labelLanguages'
+import {
+  fetchLocalisedNames, formChoices, nameForLabel, printedNameSuffix, identityHints,
+  unreliableReason,
+  type LocalisedNames,
+} from '../lib/labelNameForms'
 import {
   marketsFor, secondLanguageIsEqual, suggestedPairFor, MARKET_BY_CODE,
 } from '../lib/labelMarkets'
@@ -77,8 +84,22 @@ interface Props {
   /**
    * Варианты имени из записи Annex VI. У групповых записей их пять и больше, и
    * человек должен выбрать ту форму, которую он на самом деле фасует.
+   *
+   * ⚠⚠ ЭТО ЗАПАСНОЙ ПУТЬ, А НЕ ОСНОВНОЙ. Он разбирает колонки `substances`, где
+   * групповая запись до сих пор лежит одной строкой. Основной путь — таблица
+   * `substance_name_translations` по `indexNumber` ниже: она разобрана на формы
+   * и примечания и есть на 23 языках. Пропом пользуемся, только когда строки
+   * переводов нет (3 записи из 4 178) или запись не пришла с индексным номером.
    */
   nameVariants?: NameVariant[]
+  /**
+   * Индексный номер Annex VI — ключ к именам на всех 23 языках.
+   *
+   * ⚠ Без него панель выбора основного языка работает, но имя остаётся тем, что
+   * пришло из `substances`, то есть английским. Пустое значение — законное
+   * состояние: в ручном режиме вещества нет вовсе.
+   */
+  indexNumber?: string | null
   /**
    * Формат наклейки, на котором открывается инструмент — `id` из `labelStock.ts`.
    * Задаётся страницами `/ghs-label-maker/templates/<slug>/`: там в заголовке
@@ -146,7 +167,7 @@ export default function GHSLabelConstructor({
   displayName, casNumber, ecNumber, entryKey, signalWord,
   pictograms, hStatements, pStatements,
   initialJurisdiction = 'osha', initialPurpose = 'supplier', initialSelectedP, nameVariants,
-  initialStockId, initialSecondLang,
+  initialStockId, initialSecondLang, indexNumber,
 }: Props) {
   // Чем отличается запись: сырой CAS колонки, если он передан. Идёт в имя
   // файла и в метрики — там нужна ссылка на запись базы, а не то, что человек
@@ -190,6 +211,36 @@ export default function GHSLabelConstructor({
   )
   const [showAllP, setShowAllP] = useState(false)
   const [pQuery, setPQuery] = useState('')
+
+  // ── ОСНОВНОЙ язык этикетки ────────────────────────────────────────────────
+  /**
+   * ⚠⚠ ОСНОВНОЙ ЯЗЫК — ЭТО НЕ «ПЕРЕВОД ЭТИКЕТКИ», А ВЫБОР РЕДАКЦИИ ТЕКСТА.
+   *
+   * Каждый элемент, который тут меняется, напечатан в самом регламенте на всех
+   * официальных языках: H- и EUH-фразы в Annex III, P-фразы в Annex IV, имя
+   * вещества в Annex VI Part 3, сигнальное слово в таблицах Annex I. Мы их
+   * ДОСТАЁМ, а не переводим — ни здесь, ни где-либо ещё в этом файле.
+   *
+   * ⚠ Английский по умолчанию потому, что он единственный годится всем четырём
+   * юрисдикциям: OSHA и WHMIS написаны про английский текст, у GB CLP язык тоже
+   * английский, а в ЕС английский законен везде, где рынок его принимает.
+   */
+  const [primaryLang, setPrimaryLang] = useState<string>('EN')
+  const [primaryTexts, setPrimaryTexts] = useState<TranslationMap>({})
+  const [primaryLoading, setPrimaryLoading] = useState(false)
+  const [primaryError, setPrimaryError] = useState('')
+  /** Имена вещества на основном языке — из `substance_name_translations`. */
+  const [names, setNames] = useState<LocalisedNames | null>(null)
+  const [namesError, setNamesError] = useState('')
+  /**
+   * Что в поле имени поставили МЫ, а не человек.
+   *
+   * ⚠⚠ Нужно, чтобы смена языка не затирала набранное вручную. Сравнивать с
+   * `displayName` нельзя: он приходит из `substances` и на немецкий не меняется.
+   */
+  const autoNameRef = useRef<string>(displayName)
+  /** Текущее имя, доступное из колбэка загрузки без пересоздания эффекта. */
+  const productNameRef = useRef<string>(displayName)
 
   // ── Второй язык этикетки ──────────────────────────────────────────────────
   // ⚠⚠ Для Канады это не удобство: HPR s. 6.2 требует ОБА официальных языка, и
@@ -270,17 +321,29 @@ export default function GHSLabelConstructor({
    * «local regulations». Где мы пересказывали («not exceeding the specified
    * temperature»), совпадения нет и поле остаётся пустым — так и надо.
    */
+  /**
+   * ⚠⚠ ПРЕДЗАПОЛНЕНИЕ РАБОТАЕТ ТОЛЬКО ПРИ АНГЛИЙСКОМ ОСНОВНОМ ЯЗЫКЕ.
+   *
+   * `text_plain` — НАШ прежний сочинённый текст, и он существует ровно на одном
+   * языке. Подставить «water» или «hands» в поле, значение которого печатается
+   * внутри НЕМЕЦКОЙ P-фразы, значит положить английские слова на немецкую
+   * этикетку — и притом молча: заполненное поле выглядит как заполненное.
+   * Немецких вариантов у нас нет, выдумывать их мы не будем, поэтому при
+   * неанглийском основном языке поля остаются пустыми.
+   */
   useEffect(() => {
     const next: Record<string, string[]> = {}
-    for (const p of pStatements) {
-      if (!hasPSlots(p.code)) continue
-      const d = inferSlotDefault(p.text_en, p.text_plain, p.code, 'EN')
-      if (d) next[p.code] = [d]
+    if (primaryLang === 'EN') {
+      for (const p of pStatements) {
+        if (!hasPSlots(p.code)) continue
+        const d = inferSlotDefault(p.text_en, p.text_plain, p.code, 'EN')
+        if (d) next[p.code] = [d]
+      }
     }
     setPValues(next)
     setPValuesSecond({})
     setPBrackets({})
-  }, [entryCas, pStatements.length])
+  }, [entryCas, pStatements.length, primaryLang])
 
   // Колонка 5 грузится один раз на набор кодов и только если пропуски вообще есть.
   useEffect(() => {
@@ -296,6 +359,71 @@ export default function GHSLabelConstructor({
       })
     return () => { cancelled = true }
   }, [pStatements.map((p) => p.code).join(',')])
+
+  /**
+   * Официальные тексты фраз на ОСНОВНОМ языке.
+   *
+   * ⚠ Для английского запроса нет: `text_en` уже пришёл пропом из
+   * `h_statements`/`p_statements` и является той же официальной редакцией.
+   * Второй поход в базу за тем же самым только замедлил бы первый кадр.
+   */
+  useEffect(() => {
+    if (primaryLang === 'EN') { setPrimaryTexts({}); setPrimaryError(''); return }
+    let cancelled = false
+    const codes = [
+      ...hStatements.map((h) => h.code), ...pStatements.map((x) => x.code),
+      SIGNAL_CODE.danger, SIGNAL_CODE.warning,
+    ]
+    setPrimaryLoading(true)
+    setPrimaryError('')
+    fetchTranslations(primaryLang, codes)
+      .then((map) => { if (!cancelled) setPrimaryTexts(map) })
+      // ⚠⚠ Здесь ошибка ХУЖЕ, чем у второго языка. Там пустая карта означала
+      // «второго блока не будет»; здесь — что ОСНОВНОЙ блок молча уедет на
+      // английском, а человек выбрал немецкий и уверен, что получил немецкий.
+      .catch((e: Error) => { if (!cancelled) { setPrimaryTexts({}); setPrimaryError(e.message) } })
+      .finally(() => { if (!cancelled) setPrimaryLoading(false) })
+    return () => { cancelled = true }
+  }, [primaryLang, entryCas, hStatements.length, pStatements.length])
+
+  /**
+   * Имена вещества на основном языке.
+   *
+   * ⚠⚠ ЗАПРОС ИДЁТ И ДЛЯ АНГЛИЙСКОГО. `substances.display_name_short` и
+   * `substance_name_translations` расходятся у 2 074 записей из 4 178, и почти
+   * всюду вторая лучше: в первой групповая запись до сих пор лежит одной
+   * строкой («isopentyl formate [1] pentyl formate [2]»), а иногда и обрезана
+   * по длине колонки. Английский тут не исключение и исключением быть не должен.
+   */
+  useEffect(() => {
+    if (!indexNumber) { setNames(null); setNamesError(''); return }
+    let cancelled = false
+    setNamesError('')
+    fetchLocalisedNames(indexNumber, primaryLang)
+      .then((n) => {
+        if (cancelled) return
+        setNames(n)
+        /**
+         * ⚠⚠ ИМЯ ПЕРЕКЛЮЧАЕТСЯ НА ЯЗЫК — НО ТОЛЬКО ЕСЛИ ЕГО НЕ ПРАВИЛ ЧЕЛОВЕК.
+         *
+         * Выбрал немецкий — в поле должно встать «Salpetersäure», иначе выбор
+         * языка на имени не сказывается вовсе и панель лжёт. Но человек мог уже
+         * вписать своё торговое название, и затирать его сменой языка нельзя.
+         * Отличаем по `autoNameRef`: там лежит ровно то, что подставили МЫ.
+         *
+         * ⚠ CAS и EC при смене языка НЕ ТРОГАЕМ: номера от языка не зависят, а
+         * человек мог ввести номер той партии, которую фасует.
+         */
+        const first = n ? formChoices(n, nameVariants ?? [])[0] : undefined
+        if (!first) return
+        const cur = productNameRef.current
+        if (cur.trim() && cur !== autoNameRef.current) return
+        autoNameRef.current = first.name
+        setProductName(first.name)
+      })
+      .catch((e: Error) => { if (!cancelled) { setNames(null); setNamesError(e.message) } })
+    return () => { cancelled = true }
+  }, [indexNumber, primaryLang])
 
   // Официальные тексты фраз на втором языке. Грузятся по выбору языка и при
   // смене вещества — набор кодов у нового вещества другой.
@@ -329,6 +457,11 @@ export default function GHSLabelConstructor({
   // этикетку прямо из пропа, минуя и сброс, и разбор.
   useEffect(() => {
     setProductName(displayName)
+    // ⚠ Метка «это подставили мы» переставляется вместе с именем: иначе имя
+    // нового вещества считалось бы набранным вручную и смена языка его не
+    // трогала бы — на немецкой этикетке осталось бы английское имя.
+    autoNameRef.current = displayName
+    productNameRef.current = displayName
     setCasOnLabel(casNumber)
     setEcOnLabel(ecNumber ?? '')
   }, [displayName, casNumber, ecNumber])
@@ -530,13 +663,49 @@ export default function GHSLabelConstructor({
    * ⚠ Роль слота, а не его номер: в венгерском H372 пропуск пути воздействия
    * идёт ПЕРВЫМ, а органов — вторым, наоборот к остальным 23 языкам.
    */
-  const renderedH = hStatements.map((h) => renderStatement(h.text_en, h.code, 'EN', phValues))
+  /**
+   * ⚠⚠ ОФИЦИАЛЬНЫЙ ТЕКСТ ФРАЗЫ НА ОСНОВНОМ ЯЗЫКЕ, С ОТКАТОМ НА АНГЛИЙСКИЙ.
+   *
+   * Откат — не запасной вариант «на всякий случай», а единственный законный
+   * ответ там, где официального текста НЕ СУЩЕСТВУЕТ: суффиксные формы (H350i,
+   * H360F, H361f и прочие) регламент отдельными строками не публикует, они
+   * собираются из базовых по правилам Annex VI. ⚠⚠ Склеить перевод суффиксной
+   * формы из перевода базовой — значит сочинить юридический текст.
+   *
+   * ⚠ Молчать про откат нельзя: панель ниже называет такие коды поимённо.
+   * Одноязычная этикетка, где одна строка вдруг по-английски, выглядит как
+   * недоделка, а является требованием.
+   */
+  const primaryText = (code: string, fallback: string): string =>
+    (primaryLang === 'EN' ? fallback : primaryTexts[code]) ?? fallback
+
+  /** Коды, у которых официального текста на основном языке нет. */
+  /**
+   * Имя основного языка для подписей полей.
+   *
+   * ⚠⚠ ПОДПИСЬ БЫЛА ЗАШИТА СЛОВОМ «English». Пока основной язык был всегда
+   * английским, это было верно; с выбором языка подпись «Organs affected ·
+   * English» встала бы над полем, значение которого печатается в НЕМЕЦКОМ
+   * блоке. Человек ввёл бы «liver, kidneys» туда, где нужно «Leber, Nieren».
+   */
+  const primaryLangName = LANGUAGE_BY_CODE.get(primaryLang)?.name ?? primaryLang
+
+  const primaryMissing = primaryLang === 'EN'
+    ? []
+    : [...hStatements, ...shownP].filter((x) => !primaryTexts[x.code]).map((x) => x.code)
+
+  const renderedH = hStatements.map(
+    (h) => renderStatement(primaryText(h.code, h.text_en), h.code, primaryLang, phValues))
   const renderedSecondH = hStatements
     .filter((h) => secondTexts[h.code])
     .map((h) => renderStatement(secondTexts[h.code], h.code, secondLang ?? 'EN', phValuesSecond))
 
-  /** Какие поля ввода вообще показывать — по кодам этой этикетки. */
-  const phRoles = rolesForCodes(hStatements.map((h) => h.code), 'EN')
+  /**
+   * Какие поля ввода вообще показывать — по кодам этой этикетки.
+   * ⚠ Язык значим: в венгерском H372 пропуск пути воздействия идёт ПЕРВЫМ, а
+   * органов вторым — наоборот к остальным 23 языкам.
+   */
+  const phRoles = rolesForCodes(hStatements.map((h) => h.code), primaryLang)
 
   /**
    * Что панель соответствия говорит про незаполненное.
@@ -580,8 +749,9 @@ export default function GHSLabelConstructor({
    * предлоге («Keep wetted with.», «Use to extinguish.»). Поэтому фраза с
    * незаполненным обязательным пропуском НЕ ПЕЧАТАЕТСЯ.
    */
-  const renderedP = shownP.map((p) =>
-    renderPStatement(p.text_en, p.code, 'EN', pValues[p.code] ?? [], pBrackets[p.code] ?? false))
+  const renderedP = shownP.map((p) => renderPStatement(
+    primaryText(p.code, p.text_en), p.code, primaryLang,
+    pValues[p.code] ?? [], pBrackets[p.code] ?? false))
   const renderedSecondP = shownP
     .filter((x) => secondTexts[x.code])
     .map((p) => renderPStatement(
@@ -618,6 +788,22 @@ export default function GHSLabelConstructor({
     signalWord ? (/danger/i.test(signalWord) ? 'danger' : 'warning') : null
   const secondSignal = signalWordFor(secondTexts, signalLevel)
   /**
+   * ⚠⚠ СИГНАЛЬНОЕ СЛОВО ОСНОВНОГО БЛОКА — ТОЖЕ ИЗ ТАБЛИЦЫ, А НЕ ИЗ ПРОПА.
+   *
+   * `signalWord` приходит английским словом из `substances.signal_word`; на
+   * немецкой этикетке должно стоять «Gefahr». Уровень при этом берётся из
+   * КЛАССИФИКАЦИИ (`signalLevel`), а не разбирается из напечатанного слова —
+   * иначе `/danger/i` на «Gefahr» не сработал бы и рамка ушла бы в янтарный.
+   *
+   * ⚠ `null` здесь означает «официального слова на этом языке у нас нет».
+   * Для основного языка это недопустимо, и панель ниже говорит об этом прямо;
+   * попасть сюда можно только ошибкой загрузки — ирландского в списке основных
+   * нет вовсе.
+   */
+  const primarySignal = primaryLang === 'EN'
+    ? (signalWord ?? null)
+    : signalWordFor(primaryTexts, signalLevel)
+  /**
    * ⚠⚠ Равноправная подача второго языка — решение НОРМЫ, а не пользователя.
    * Правило одно: равноправно там, где рынок требует более одного языка.
    * Канада проходит по `requiredLanguages`, Бельгия и остальные — по таблице
@@ -649,20 +835,53 @@ export default function GHSLabelConstructor({
       }
     : undefined
 
+  // ── Имя вещества на основном языке ────────────────────────────────────────
+  /**
+   * ⚠⚠ ПРИМЕЧАНИЕ КЛАССА `composition` ДОПИСЫВАЕТСЯ К ИМЕНИ ПРИ ПЕЧАТИ, А НЕ
+   * КЛАДЁТСЯ В ПОЛЕ ВВОДА.
+   *
+   * По Annex VI Part 1 п. 1.1.1.4 ссылка на примесь — часть имени и печатается
+   * ОБЯЗАТЕЛЬНО. Положи мы её в редактируемое поле, человек стёр бы её вместе с
+   * остальным текстом, набирая своё торговое название, и обязательный элемент
+   * исчез бы молча. Держи мы её только в движке — поле показывало бы одно, а
+   * PDF печатал другое. Поэтому: дописывается при печати, и панель показывает,
+   * что именно встанет на бумагу.
+   *
+   * ⚠ Защита от удвоения: если человек уже вписал этот текст руками, второй раз
+   * не дописываем.
+   */
+  const compositionSuffix = names ? printedNameSuffix(names.annotations) : ''
+  const compositionText = compositionSuffix.replace(/^\s*\[|\]\s*$/g, '')
+  const productNameOnLabel = compositionSuffix && !productName.includes(compositionText)
+    ? nameForLabel(productName, names?.annotations ?? [])
+    : productName
+
+  /**
+   * Формы имени на основном языке.
+   * ⚠ Откат на `nameVariants` — только когда строки переводов нет вовсе
+   * (3 записи из 4 178) или вещество вообще не из базы.
+   */
+  const localisedForms = names
+    ? formChoices(names, nameVariants ?? [])
+    : (nameVariants ?? []).map((v) => ({ name: v.name, index: v.index, cas: v.cas, ec: v.ec }))
+  const nameHints = names ? identityHints(names.annotations) : []
+  /** Текст, из-за которого разбор этой записи объявлен ненадёжным, или `null`. */
+  const nameNotice = names ? unreliableReason(names.annotations) : null
+
   const labelInput: LabelInput = {
-    productName,
+    productName: productNameOnLabel,
     casNumber: casOnLabel,
     ecNumber: ecOnLabel,
     nominalQty,
     batchNumber,
     ufiCode,
-    signalWord: signalWord ?? null,
+    signalWord: primarySignal,
     /**
      * ⚠⚠ Степень опасности передаётся ОТДЕЛЬНЫМ ПОЛЕМ, а не выводится движком
-     * из напечатанного слова. Здесь слово ещё английское и разбирается верно;
-     * как только основной язык станет выбираемым, на этикетке встанет «Gefahr»
-     * или «Vaara», и разбор строки отдал бы для немецкого Danger янтарный цвет.
-     * Цвет рамки и цвет слова теперь берутся из этого поля.
+     * из напечатанного слова. Основной язык теперь выбирается, на этикетке
+     * стоит «Gefahr» или «Vaara», и разбор строки отдал бы для немецкого Danger
+     * янтарный цвет. Цвет рамки и цвет слова берутся из этого поля.
+     * ⭐ Поле заведено в session 48 заранее, ровно под этот день.
      */
     signalLevel,
     pictograms: pictograms.map((p) => ({ code: p.code, svg: p.svg_content ?? '' })),
@@ -859,12 +1078,22 @@ export default function GHSLabelConstructor({
                   type="button"
                   onClick={() => {
                     setMarket(m.code)
-                    // ⚠ Подставляем второй язык из пары рынка, но НЕ англи��ский:
-                    // основной язык этикетки пока всегда английский, и предложить
-                    // его же вторым означало бы напечатать один язык дважды.
+                    /**
+                     * ⭐ Ставится ПАРА ЦЕЛИКОМ — и основной язык, и второй.
+                     * ⚠⚠ До появления выбора основного языка сюда шёл только
+                     * второй, и притом «любой, кроме английского»: первый блок
+                     * всё равно был английским. Для Бельгии это давало EN + NL
+                     * там, где рынку нужны NL + FR. Теперь пара берётся из
+                     * таблицы рынков как есть.
+                     */
                     const pair = suggestedPairFor(m.code)
-                    const pick = pair?.find((code) => code !== 'EN') ?? null
-                    if (pick) { setSecondLang(pick); track('label_second_language', { lang: pick }) }
+                    if (pair) {
+                      const [first, second] = pair
+                      setPrimaryLang(first)
+                      setSecondLang(second)
+                      track('label_primary_language', { lang: first })
+                      track('label_second_language', { lang: second })
+                    }
                     track('label_market', { market: m.code })
                   }}
                   className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs transition-colors ${
@@ -886,20 +1115,103 @@ export default function GHSLabelConstructor({
           </div>
         )}
 
-        {/* ⚠⚠ ЧЕСТНО ПРО НЕДОДЕЛАННОЕ. Равноправная подача уже работает, но
-            основной язык этикетки пока всегда английский. Для Канады этого
-            достаточно — там и требуются EN + FR. Для Бельгии нет: ей нужны
-            NL + FR, а мы напечатаем EN + NL. Молчать об этом нельзя: человек
-            выбрал «Belgium», увидел два равноправных блока и решил, что
-            инструмент дал ему бельгийскую этикетку. */}
-        {secondEqual && market && !MARKET_BY_CODE.get(market)?.languages.includes('EN') && (
-          <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
-            The two blocks are printed as equals, as this market requires. ⚠ But the first block is still
-            English: choosing the primary label language is not built yet. For {MARKET_BY_CODE.get(market)!.name}
-            {' '}that means this label carries EN + {LANGUAGE_BY_CODE.get(secondLang ?? '')?.name ?? 'the second language'},
-            not {MARKET_BY_CODE.get(market)!.languages.slice(0, 2).map((c) => LANGUAGE_BY_CODE.get(c)?.name ?? c).join(' + ')}.
-          </p>
-        )}
+        {/* ⚠⚠ ЧЕСТНО ПРО НЕСОВПАДЕНИЕ ЯЗЫКОВ С РЫНКОМ.
+            Прежде здесь стояло «выбор основного языка не построен». Он построен,
+            и проверять теперь надо другое: человек мог выбрать рынок, а потом
+            руками поставить языки, которых этот рынок не требует. Молчать об
+            этом нельзя — он выбрал «Belgium», увидел два равноправных блока и
+            решил, что получил бельгийскую этикетку. */}
+        {(() => {
+          const m = market ? MARKET_BY_CODE.get(market) : null
+          if (!m) return null
+          const want = m.languages.slice(0, 2)
+          const have = [primaryLang, secondLang].filter(Boolean) as string[]
+          const missing = want.filter((c) => !have.includes(c))
+          if (missing.length === 0) return null
+          const nameOf = (c: string) => LANGUAGE_BY_CODE.get(c)?.name ?? c
+          return (
+            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+              ⚠ This label carries {have.map(nameOf).join(' + ') || 'one language'}, but {m.name} is listed
+              with {m.languages.map(nameOf).join(', ')}. Missing: {missing.map(nameOf).join(', ')}.{' '}
+              <span className="text-gray-600">{m.citation}</span>
+            </p>
+          )
+        })()}
+
+        {/* ── ОСНОВНОЙ ЯЗЫК ────────────────────────────────────────────────
+            ⚠⚠ Стоит ПЕРЕД вторым языком намеренно: это порядок чтения самой
+            этикетки. Панель второго языка ниже ссылается на выбранный здесь. */}
+        <div className="mt-3 rounded-lg border border-blue-200 bg-white px-3 py-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+              Primary label language
+            </p>
+            {primaryLoading && <span className="text-[11px] text-gray-400">loading official texts…</span>}
+          </div>
+
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {suggestedPrimaryLanguages(jurisdictionKey).map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => { setPrimaryLang(code); track('label_primary_language', { lang: code }) }}
+                className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                  primaryLang === code ? 'border-[#062A78] bg-[#062A78] text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-[#062A78]'
+                }`}
+              >{LANGUAGE_BY_CODE.get(code)?.native ?? code}</button>
+            ))}
+            <select
+              value={suggestedPrimaryLanguages(jurisdictionKey).includes(primaryLang) ? '' : primaryLang}
+              onChange={(e) => { const v = e.target.value; if (v) { setPrimaryLang(v); track('label_primary_language', { lang: v }) } }}
+              aria-label="Primary label language"
+              className="cursor-pointer rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700"
+            >
+              <option value="">all 23 EU languages…</option>
+              {PRIMARY_LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>{l.native} — {l.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* ⚠⚠ ИРЛАНДСКИЙ ОБЪЯСНЯЕТСЯ, А НЕ ПРЯЧЕТСЯ. Список из 23 языков там,
+              где официальных 24, — это утверждение, и оно требует основания на
+              экране. Иначе человек решит, что мы просто чего-то не доделали. */}
+          <details className="mt-2">
+            <summary className="cursor-pointer text-[11px] text-gray-500 hover:text-[#062A78]">
+              Why is Irish not in this list?
+            </summary>
+            <p className="mt-1 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-[11px] leading-relaxed text-gray-700">
+              {PRIMARY_LANGUAGE_EXCLUDED_REASON}
+            </p>
+          </details>
+
+          {primaryError && (
+            <p className="mt-2 rounded border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] text-rose-800">
+              ⚠ Official texts could not be loaded, so this label is still in English: {primaryError}
+            </p>
+          )}
+
+          {/* ⚠⚠ Откат на английский называется ПОИМЁННО. Одна английская строка
+              внутри немецкой этикетки выглядит как недоделка, а является
+              требованием: суффиксных форм H350i, H360F, H361f регламент
+              отдельными строками не публикует, и склеить их перевод из базовой
+              фразы значит сочинить юридический текст. */}
+          {primaryMissing.length > 0 && !primaryError && (
+            <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-relaxed text-amber-900">
+              No official {LANGUAGE_BY_CODE.get(primaryLang)?.name ?? primaryLang} wording exists for{' '}
+              {primaryMissing.join(', ')} — {primaryMissing.length === 1 ? 'it stays' : 'they stay'} in English.
+              The regulation does not publish these as separate rows, and building the wording from the base
+              statement would mean inventing legal text.
+            </p>
+          )}
+
+          {primaryLang !== 'EN' && !primarySignal && !primaryLoading && (
+            <p className="mt-2 rounded border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] text-rose-800">
+              ⚠⚠ No signal word could be loaded for {LANGUAGE_BY_CODE.get(primaryLang)?.name ?? primaryLang}.
+              A signal word is a mandatory label element — do not print this label.
+            </p>
+          )}
+        </div>
 
         {/* ── ВТОРОЙ ЯЗЫК ──────────────────────────────────────────────────
             ⚠⚠ Для Канады это не опция: HPR s. 6.2 требует ОБА официальных
@@ -926,7 +1238,10 @@ export default function GHSLabelConstructor({
                 secondLang === null ? 'border-[#062A78] bg-[#062A78] text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-[#062A78]'
               }`}
             >none</button>
-            {suggestedLanguages(jurisdictionKey).map((code) => (
+            {/* ⚠ Из предложений вычитается ОСНОВНОЙ язык, а не английский:
+                один и тот же текст двумя блоками — это не двуязычная этикетка,
+                а вдвое меньше места под обязательные элементы. */}
+            {suggestedLanguages(jurisdictionKey).filter((c) => c !== primaryLang).map((code) => (
               <button
                 key={code}
                 type="button"
@@ -942,8 +1257,11 @@ export default function GHSLabelConstructor({
               aria-label="Second label language"
               className="cursor-pointer rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700"
             >
+              {/* ⭐ Здесь ирландский ЕСТЬ: вторым языком он законен — тексты
+                  H- и P-фраз на нём напечатаны в Annex III и IV. Не хватает
+                  только сигнального слова, а его во втором блоке не требуется. */}
               <option value="">all 24 EU languages…</option>
-              {EU_LANGUAGES.filter((l) => l.code !== 'EN').map((l) => (
+              {EU_LANGUAGES.filter((l) => l.code !== primaryLang).map((l) => (
                 <option key={l.code} value={l.code}>{l.native} — {l.name}</option>
               ))}
             </select>
@@ -969,7 +1287,8 @@ export default function GHSLabelConstructor({
               {missingSecond.length > 0 && (
                 <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-relaxed text-amber-900">
                   No official {LANGUAGE_BY_CODE.get(secondLang)?.name} text exists for{' '}
-                  <span className="font-semibold">{missingSecond.join(', ')}</span> — these stay in English.
+                  <span className="font-semibold">{missingSecond.join(', ')}</span> — these are left out of the
+                  second block; the primary block still carries them.
                   Either the statement was removed from CLP by a later adaptation, or it is a UN GHS
                   statement the EU never adopted, or it is a suffixed form (H360F, H361d and the like)
                   that the regulation does not publish as its own entry. We will not splice one together.
@@ -1008,6 +1327,15 @@ export default function GHSLabelConstructor({
               brackets. That instruction is not label text: you either fill it in or leave it out.
               What you type is printed after the code the way CLP Annex VI does it —{' '}
               <span className="font-mono">H372 (liver, kidneys; inhalation)</span>.
+              {/* ⚠⚠ ПРИМЕР АНГЛИЙСКИЙ, И ЭТО НАДО СКАЗАТЬ. Он взят из английской
+                  редакции Annex VI и показывает ФОРМУ записи, а не то, какими
+                  словами заполнять поле. Человек, выбравший немецкий, увидев
+                  «liver, kidneys», впишет английские органы в немецкую строку. */}
+              {primaryLang !== 'EN' && (
+                <> That example is the regulation’s English wording — it shows the format, not the words.
+                Type your entry in <b>{primaryLangName}</b>: it is printed inside the{' '}
+                {primaryLangName} statement as typed, and nothing here is translated.</>
+              )}
             </p>
             <div className="mt-2.5 space-y-2.5">
               {phRoles.map((role) => (
@@ -1016,13 +1344,22 @@ export default function GHSLabelConstructor({
                     <span className="text-[11px] font-medium text-gray-700">
                       {PH_LABEL[role]}
                       {roleIsRequired(role) && <span className="ml-1 text-rose-600">required</span>}
-                      {secondLang && <span className="ml-1 text-gray-400">· English</span>}
+                      {/* ⚠ Подпись нужна и БЕЗ второго языка: одноязычная
+                          немецкая этикетка — ровно тот случай, где поле легче
+                          всего заполнить не тем языком. */}
+                      {(secondLang || primaryLang !== 'EN') && (
+                        <span className="ml-1 text-gray-400">· {primaryLangName}</span>
+                      )}
                     </span>
+                    {/* ⚠⚠ Английская подсказка внутри немецкого поля — это
+                        приглашение ошибиться. Пример из регламента остаётся в
+                        тексте выше, где он прямо назван английским, а в самом
+                        поле стоит только название языка, на котором писать. */}
                     <input
                       type="text"
                       value={phValues[role] ?? ''}
                       onChange={(e) => setPhValues((v) => ({ ...v, [role]: e.target.value }))}
-                      placeholder={PH_HINT[role]}
+                      placeholder={primaryLang === 'EN' ? PH_HINT[role] : (LANGUAGE_BY_CODE.get(primaryLang)?.native ?? '')}
                       className={inputClass}
                     />
                   </label>
@@ -1075,8 +1412,16 @@ export default function GHSLabelConstructor({
             <div className="mt-2.5 space-y-3">
               {pFillable.map((p) => {
                 const bracketOn = pBrackets[p.code] ?? false
-                const n = pSlotCount(p.text_en, p.code, 'EN', bracketOn)
-                const kinds = pSlotKinds(p.text_en, p.code, 'EN', bracketOn)
+                /**
+                 * ⚠⚠ ЧИСЛО ПРОПУСКОВ СЧИТАЕТСЯ ПО ТЕКСТУ ОСНОВНОГО ЯЗЫКА.
+                 * У P413 по-английски четыре пропуска, по-итальянски три —
+                 * итальянская редакция не даёт варианта в °F. Считать по
+                 * английскому и нарисовать четыре поля над итальянской фразой
+                 * значит просить заполнить пропуск, которого в ней нет.
+                 */
+                const pText = primaryText(p.code, p.text_en)
+                const n = pSlotCount(pText, p.code, primaryLang, bracketOn)
+                const kinds = pSlotKinds(pText, p.code, primaryLang, bracketOn)
                 const nSecond = secondLang && secondTexts[p.code]
                   ? pSlotCount(secondTexts[p.code], p.code, secondLang, bracketOn) : 0
                 return (
@@ -1108,7 +1453,10 @@ export default function GHSLabelConstructor({
                           <span className="text-[11px] text-gray-600">
                             {n > 1 ? `part ${i + 1}` : 'your wording'}
                             {kinds[i] === 'required' && <span className="ml-1 text-rose-600">required</span>}
-                            {nSecond > 0 && <span className="ml-1 text-gray-400">· English</span>}
+                            {/* ⚠ Подпись языка нужна и без второго блока — см. панель H-фраз. */}
+                            {(nSecond > 0 || primaryLang !== 'EN') && (
+                              <span className="ml-1 text-gray-400">· {primaryLangName}</span>
+                            )}
                           </span>
                           <input
                             type="text"
@@ -1291,14 +1639,63 @@ export default function GHSLabelConstructor({
             <p className="font-semibold text-[#062A78]">Product information</p>
             <div>
               <label className={labelClass}>Product name <span className="font-normal text-gray-400">as printed on the label</span></label>
-              <input type="text" value={productName} onChange={(e) => setProductName(e.target.value)} className={inputClass} />
-              {nameVariants && nameVariants.length > 1 && (
+              <input
+                type="text"
+                value={productName}
+                onChange={(e) => { productNameRef.current = e.target.value; setProductName(e.target.value) }}
+                className={inputClass}
+              />
+              {/* ⚠⚠ ОБЯЗАТЕЛЬНОЕ ПРИМЕЧАНИЕ ПОКАЗЫВАЕТСЯ ЗДЕСЬ, А НЕ ПРЯЧЕТСЯ.
+                  Оно печатается на этикетке независимо от того, что человек
+                  набрал в поле, и увидеть это он должен ДО того, как скачает
+                  PDF, а не после. */}
+              {compositionSuffix && (
+                <p className="mt-1 rounded border border-[#062A78]/30 bg-blue-50 px-2 py-1.5 text-[11px] leading-relaxed text-[#062A78]">
+                  Printed on the label as <b>{productNameOnLabel}</b>.{' '}
+                  <span className="font-normal text-gray-600">
+                    Annex VI Part 1, 1.1.1.4: a reference to an impurity is part of the name and must be on the
+                    label, whichever designation you pick.
+                  </span>
+                </p>
+              )}
+
+              {namesError && (
+                <p className="mt-1 rounded border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] text-rose-800">
+                  Official names could not be loaded: {namesError}
+                </p>
+              )}
+
+              {/* ⚠⚠ РАЗБОР НЕНАДЁЖЕН — ФОРМЫ НЕ ПРЕДЛАГАЕМ ВОВСЕ.
+                  У трёх записей Annex VI языковые версии не согласны между собой
+                  в том, какой член какой, а у 607-718-00-9 имён в ячейке нет
+                  совсем: между маркерами лежат куски предложения, и разрез даёт
+                  «and its sodium». Предложить такое кнопкой хуже, чем не
+                  предложить ничего: явный мусор человек сотрёт, а
+                  правдоподобный примет за имя. Показываем первоисточник. */}
+              {nameNotice ? (
+                <div className="mt-2 rounded border border-amber-300 bg-amber-50 px-2 py-2 text-[11px] leading-relaxed text-amber-900">
+                  <p>
+                    ⚠ This Annex VI entry cannot be split into names reliably, so no ready-made forms are offered.
+                    The regulation writes it as one running phrase{nameNotice ? ` (“…${nameNotice}”)` : ''}, and
+                    picking a fragment out of it would put something on the label that is not a name.
+                  </p>
+                  <p className="mt-1 text-gray-700">
+                    The entry as printed in Annex VI:{' '}
+                    <span className="font-mono text-[10px] text-gray-900">{names?.cell}</span>
+                  </p>
+                  <p className="mt-1 text-gray-700">Type the name of the substance you actually package.</p>
+                </div>
+              ) : localisedForms.length > 1 ? (
                 <>
                   <p className="mt-2 text-[11px] text-gray-500">
-                    This Annex VI entry covers {nameVariants.length} forms. Pick the one you actually package:
+                    {/* ⚠ «На этом языке» — не пустая вежливость: число форм между
+                        языками законно разное («Kohlenstoffmonoxid; Kohlenmonoxid;
+                        Kohlenoxid» против одного «carbon monoxide»). */}
+                    This Annex VI entry has {localisedForms.length} designations in{' '}
+                    {LANGUAGE_BY_CODE.get(primaryLang)?.name ?? primaryLang}. Pick the one you actually package:
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1.5">
-                    {nameVariants.map((v) => (
+                    {localisedForms.map((v) => (
                       <button
                         key={`${v.index ?? ''}${v.name}`}
                         type="button"
@@ -1306,7 +1703,11 @@ export default function GHSLabelConstructor({
                         // `if (v.cas)` — и у формы без своего номера на
                         // этикетке оставался номер предыдущей формы. Это хуже
                         // пустого поля: неверный номер читается как верный.
-                        onClick={() => { setProductName(v.name); setCasOnLabel(v.cas ?? ''); setEcOnLabel(v.ec ?? '') }}
+                        onClick={() => {
+                          autoNameRef.current = v.name
+                          productNameRef.current = v.name
+                          setProductName(v.name); setCasOnLabel(v.cas ?? ''); setEcOnLabel(v.ec ?? '')
+                        }}
                         className={`cursor-pointer rounded-lg border px-2.5 py-1 text-left text-[11px] transition-colors ${
                           productName === v.name ? 'border-[#062A78] bg-blue-50 font-semibold text-[#062A78]' : 'border-gray-300 bg-white text-gray-700 hover:border-[#062A78]'
                         }`}
@@ -1318,6 +1719,19 @@ export default function GHSLabelConstructor({
                     ))}
                   </div>
                 </>
+              ) : null}
+
+              {/* ⚠⚠ ПОДСКАЗКА «ЭТО ТА САМАЯ ЗАПИСЬ», А НЕ УКРАШЕНИЕ.
+                  У 10 пар индексных номеров скобочное примечание — ЕДИНСТВЕННОЕ
+                  различие между РАЗНЫМИ классификациями: `piperazine [solid]` и
+                  `piperazine [liquid]` дают одно имя и разные наборы H-фраз.
+                  Без этой строки человек не отличит свою запись от чужой. */}
+              {nameHints.length > 0 && (
+                <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
+                  Annex VI notes this entry as{' '}
+                  <b className="font-semibold text-gray-700">{nameHints.map((a) => a.text).join(', ')}</b>
+                  {' '}— not printed on the label, but it is how you tell this entry from its neighbours.
+                </p>
               )}
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
