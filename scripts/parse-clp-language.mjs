@@ -30,6 +30,10 @@
 
 import { readFile, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+// ⚠⚠ Разбор имени на формы и скобочные примечания вынесен целиком: правило взято
+// из Annex VI Part 1 п. 1.1.1.4, а таблица классов закрыта и проверена поимённо
+// по всем 23 языкам. Держать её здесь, посреди разбора HTML, значило бы прятать.
+import { splitName, PRINTED_ON_LABEL } from './clp-name-annotations.mjs';
 
 const TMP = '.tmp-eurlex';
 
@@ -316,12 +320,21 @@ function signalWords(lang, html, refRows) {
 
 // ── Annex VI Part 3: имена веществ ──────────────────────────────────────────
 
-const MARKER = /\[(\d{1,2})\]/g;
-
 /**
- * Разбор ячейки имени на формы.
+ * ⚠⚠ РАЗБОР ЯЧЕЙКИ ИМЕНИ ПЕРЕЕХАЛ В ./clp-name-annotations.mjs.
  *
- * ⚠⚠ ДВА СОВЕРШЕННО РАЗНЫХ СЛУЧАЯ, И ПУТАТЬ ИХ НЕЛЬЗЯ.
+ * Здесь он был неверен трижды, и каждый раз молча:
+ *  · резал по «;» ВНУТРИ скобок — 1 594 лишних куска у 1 284 записей;
+ *  · брал номенклатурную цифру `spiro[[1]benzopyrano…` за маркер группы и
+ *    ОБРЕЗАЛ имя по ней — 606-094-00-5 и 606-112-00-1 во всех 23 языках;
+ *  · клал в «синонимы» скобочные примечания, не отличая их от имён.
+ *
+ * ⭐ Причина переезда не в объёме, а в том, что там лежит ЗАКРЫТАЯ ТАБЛИЦА
+ * классов по индексному номеру, выведенная из первоисточника (Annex VI Part 1,
+ * п. 1.1.1.4) и проверенная по всем 23 языковым версиям. Такую таблицу нельзя
+ * прятать посреди разбора HTML: её читают и правят отдельно от него.
+ *
+ * Ниже — только то, что осталось: два случая, которые путать нельзя.
  *
  * 1. ЕСТЬ МАРКЕРЫ `[1] [2] [3]` — это ГРУППОВАЯ ЗАПИСЬ: под одним индексным
  *    номером идут РАЗНЫЕ вещества, и номер маркера привязывает имя к своей
@@ -343,24 +356,7 @@ const MARKER = /\[(\d{1,2})\]/g;
  * ⚠ Квадратные скобки с ТЕКСТОМ (`[komplexe Kombination von Kohlenwasserstoffen…]`)
  * — описание записи, а не маркер: маркер состоит только из цифр.
  */
-function splitName(cellRaw) {
-  const cell = cellRaw.trim();
-  MARKER.lastIndex = 0;
-  if (MARKER.test(cell)) {
-    MARKER.lastIndex = 0;
-    const members = {};
-    let pos = 0, m;
-    while ((m = MARKER.exec(cell)) !== null) {
-      const chunk = cell.slice(pos, m.index).trim().replace(/;+$/, '').trim();
-      if (chunk) members[Number(m[1])] = chunk;
-      pos = m.index + m[0].length;
-    }
-    const keys = Object.keys(members).map(Number).sort((a, b) => a - b);
-    return { kind: 'group', members, forms: keys.map((k) => members[k]), synonyms: [] };
-  }
-  const parts = cell.split(';').map((x) => x.trim()).filter(Boolean);
-  return { kind: 'single', members: {}, forms: parts.slice(0, 1), synonyms: parts };
-}
+/* splitName импортируется из ./clp-name-annotations.mjs — см. комментарий выше. */
 
 /**
  * {index_number: {...}} из Table 3.
@@ -400,7 +396,9 @@ function annex6Names(html) {
         name,
         ec: cells[2] ? normNumber(cells[2]) : null,
         cas: cells[3] ? normNumber(cells[3]) : null,
-        ...splitName(name),
+        // ⚠ Индексный номер передаётся ВНУТРЬ разбора: класс скобочного
+        // материала закреплён за записью, а не выводится из её текста.
+        ...splitName(name, idx),
       });
     }
   }
@@ -440,6 +438,31 @@ function compareNames(lang, mine, ref) {
   if (markerMismatch.length) console.log(`    ✖ НАБОР МАРКЕРОВ РАЗОШЁЛСЯ: ${markerMismatch.length} — ${head(markerMismatch)}`);
   if (!kindMismatch.length && !markerMismatch.length) console.log('    ✔ у всех групповых записей набор маркеров совпал с английским');
   console.log(`    разное число синонимов у одиночных записей: ${synDiff.length} — это содержание регламента, не ошибка`);
+
+  /**
+   * ⭐⭐ ОТЧЁТ О СКОБОЧНОМ МАТЕРИАЛЕ — ГЛАВНОЕ, ЧТО ЗДЕСЬ ПЕЧАТАЕТСЯ.
+   *
+   * Session 49 закончилась выводом «отчёт обязан называть предмет поимённо».
+   * Здесь предмета два, и оба надо называть:
+   *  1. что снято с имени и по какому классу — иначе снятие молчаливое;
+   *  2. ⚠⚠ ГДЕ СКОБКИ НЕ СХОДЯТСЯ. У таких ячеек разрез по «;» откатывается к
+   *     наивному, и это единственное место, где старый дефект ещё жив.
+   */
+  const byKind = new Map();
+  const unbalanced = [];
+  for (const [idx, v] of mine) {
+    for (const a of v.annotations ?? []) byKind.set(a.kind, (byKind.get(a.kind) ?? 0) + 1);
+    if (v.unbalanced) unbalanced.push(idx);
+  }
+  const kinds = [...byKind.entries()].sort((a, b) => b[1] - a[1]);
+  if (kinds.length) {
+    const printed = kinds.filter(([k]) => PRINTED_ON_LABEL.has(k)).reduce((n, [, c]) => n + c, 0);
+    console.log(`    скобочных примечаний снято: ${kinds.map(([k, c]) => `${k} ${c}`).join(' · ')}`);
+    console.log(`      из них печатаются на этикетке (п. 1.1.1.4): ${printed}`);
+  }
+  if (unbalanced.length) {
+    console.log(`    ⚠ скобки не сходятся у ${unbalanced.length} записей — разрез по «;» наивный: ${head(unbalanced, 8)}`);
+  }
   const share = both.length ? (100 * identical.length) / both.length : 0;
   console.log(`    имён, дословно равных английскому: ${identical.length} (${share.toFixed(1)} %)`);
   if (lang !== 'en' && share > 90) {
@@ -452,6 +475,8 @@ function compareNames(lang, mine, ref) {
     kind_mismatch: kindMismatch,
     marker_mismatch: markerMismatch,
     synonym_count_differs: synDiff.length,
+    annotations_by_kind: Object.fromEntries(kinds),
+    unbalanced_brackets: unbalanced,
     identical_to_english: identical.length,
     identical_share_pct: Math.round(share * 10) / 10,
   };
@@ -517,6 +542,9 @@ async function main() {
         substance_names: [...names.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([i, v]) => ({
           index_number: i, lang: lang.toUpperCase(), name: v.name,
           kind: v.kind, forms: v.forms, members: v.members, synonyms: v.synonyms,
+          // ⚠ `name` остаётся ЯЧЕЙКОЙ РЕГЛАМЕНТА КАК ЕСТЬ — это единственный
+          // след, по которому потом видно, что именно разбор снял и почему.
+          annotations: v.annotations, unbalanced: v.unbalanced,
         })),
         report,
       };

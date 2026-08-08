@@ -60,6 +60,14 @@ if (!supabaseUrl || !serviceKey) {
 }
 const supabase: SupabaseClient = createClient(supabaseUrl, serviceKey)
 
+/**
+ * ⚠ `annotations` — скобочный материал, СНЯТЫЙ с имени: примесь, физическая
+ * форма, определение EINECS, примечание, аббревиатура. Правило — Annex VI
+ * Part 1 п. 1.1.1.4, таблица классов — scripts/clp-name-annotations.mjs.
+ * ⭐ Печатается на этикетке только `composition`.
+ */
+type Annotation = { kind: string; text: string }
+
 type ParsedName = {
   index_number: string
   lang: string
@@ -68,6 +76,7 @@ type ParsedName = {
   forms: string[]
   members: Record<string, string>
   synonyms: string[]
+  annotations?: Annotation[]
 }
 type ParsedFile = { lang: string; source: string; substance_names: ParsedName[] }
 
@@ -79,7 +88,73 @@ type Row = {
   forms: string[]
   members: Record<string, string>
   synonyms: string[]
+  annotations: Annotation[]
   source_ref: string
+}
+
+/**
+ * ⭐⭐ ЧТО УЖЕ ЛЕЖИТ В БАЗЕ ПО ЭТОМУ ЯЗЫКУ — для ПОСТРОЧНОЙ СВЕРКИ.
+ *
+ * Повторная заливка без сверки — это заливка вслепую: upsert одинаково молча
+ * пройдёт и когда изменилась одна запись, и когда разбор сломался и переписал
+ * четыре тысячи. Session 49 сверила правку меток построчно (4418 → 4419,
+ * добавилась ровно одна, потеряно ноль) и только поэтому знала, что чинила.
+ */
+async function existingRows(lang: string): Promise<Map<string, Partial<Row>>> {
+  const out = new Map<string, Partial<Row>>()
+  const page = 1000
+  for (let from = 0; ; from += page) {
+    const { data, error } = await supabase
+      .from('substance_name_translations')
+      .select('index_number,name,kind,forms,members,synonyms,annotations')
+      .eq('lang', lang.toUpperCase())
+      .range(from, from + page - 1)
+    // ⚠ Колонки annotations может ещё не быть — тогда сверка не должна валить
+    // заливку, но обязана сказать об этом вслух, а не притвориться пустой базой.
+    if (error) {
+      console.log(`  ⚠ сверку сделать не удалось (${error.message}) — заливаю без неё`)
+      return new Map()
+    }
+    const rows = (data ?? []) as Partial<Row>[]
+    for (const r of rows) if (r.index_number) out.set(r.index_number, r)
+    if (rows.length < page) break
+  }
+  return out
+}
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+
+/**
+ * ⚠⚠ ОТЧЁТ НАЗЫВАЕТ ПРЕДМЕТ ПОИМЁННО, а не только количество.
+ * «Изменилось 137 записей» заставляет читателя делать работу заново; «forms 137,
+ * первые пять — вот эти» позволяет проверить глазами за минуту.
+ */
+function compareToDb(lang: string, rows: Row[], before: Map<string, Partial<Row>>): void {
+  if (!before.size) { console.log(`    сверка: в базе по ${lang.toUpperCase()} ничего не было — всё ниже добавляется впервые`); return }
+  const now = new Set(rows.map((r) => r.index_number))
+  const added = rows.filter((r) => !before.has(r.index_number)).map((r) => r.index_number)
+  const lost = [...before.keys()].filter((i) => !now.has(i))
+  const fields: (keyof Row)[] = ['name', 'kind', 'forms', 'members', 'synonyms', 'annotations']
+  const changed = new Map<string, string[]>()
+  for (const r of rows) {
+    const b = before.get(r.index_number)
+    if (!b) continue
+    for (const f of fields) {
+      if (f in b && !same(r[f], b[f])) {
+        if (!changed.has(f)) changed.set(f, [])
+        changed.get(f)!.push(r.index_number)
+      }
+    }
+  }
+  const head = (l: string[], n = 5) => l.slice(0, n).join(', ') + (l.length > n ? ` … +${l.length - n}` : '')
+  console.log(`    сверка с базой: было ${before.size} · станет ${rows.length}`
+    + ` · добавляется ${added.length} · ${lost.length ? '⚠⚠ ' : ''}пропадает ${lost.length}`)
+  if (added.length) console.log(`      + ${head(added)}`)
+  // ⚠⚠ Пропажа — это НЕ норма: языковые версии Annex VI перечисляют одни и те же
+  // вещества, и запись, которая была и исчезла, означает сломанный разбор.
+  if (lost.length) console.log(`      ⚠⚠ ПРОПАДАЮТ (upsert их НЕ удалит, но разбор их больше не видит): ${head(lost, 10)}`)
+  for (const [f, list] of changed) console.log(`      изменилось «${f}»: ${list.length} — ${head(list)}`)
+  if (!added.length && !lost.length && !changed.size) console.log('      ничего не изменилось')
 }
 
 /** Все индексные номера нашего справочника — по ним и меряется покрытие. */
@@ -117,6 +192,7 @@ async function main(): Promise<void> {
   let grandTotal = 0
   let grandX = 0
   const coverage: { lang: string; rows: number; covered: number }[] = []
+  const annByKind = new Map<string, number>()
   /** Индексные номера, встреченные ХОТЯ БЫ В ОДНОМ языке. */
   const seenAnywhere = new Set<string>()
 
@@ -141,6 +217,7 @@ async function main(): Promise<void> {
       forms: n.forms ?? [],
       members: n.members ?? {},
       synonyms: n.synonyms ?? [],
+      annotations: n.annotations ?? [],
       source_ref: SOURCE_REF,
     }))
 
@@ -164,6 +241,18 @@ async function main(): Promise<void> {
     grandX += xEnding
     coverage.push({ lang, rows: rows.length, covered })
 
+    for (const a of rows.flatMap((r) => r.annotations)) {
+      annByKind.set(a.kind, (annByKind.get(a.kind) ?? 0) + 1)
+    }
+
+    const pctHead = ((covered / Math.max(1, ours.size)) * 100).toFixed(1)
+    console.log(`${lang.toUpperCase().padEnd(3)} ${String(rows.length).padStart(5)} строк`
+      + `  ·  на «X» ${String(xEnding).padStart(4)}`
+      + `  ·  покрыто нашего справочника: ${String(covered).padStart(5)} (${pctHead} %)`)
+
+    // ⚠ Сверка ДО записи: после upsert сравнивать уже не с чем.
+    compareToDb(lang, rows, await existingRows(lang))
+
     if (!DRY) {
       for (let i = 0; i < rows.length; i += BATCH) {
         const chunk = rows.slice(i, i + BATCH)
@@ -179,14 +268,15 @@ async function main(): Promise<void> {
       }
     }
 
-    const pct = ((covered / Math.max(1, ours.size)) * 100).toFixed(1)
-    console.log(`${lang.toUpperCase().padEnd(3)} ${String(rows.length).padStart(5)} строк`
-      + `  ·  на «X» ${String(xEnding).padStart(4)}`
-      + `  ·  покрыто нашего справочника: ${String(covered).padStart(5)} (${pct} %)`)
   }
 
   console.log('')
   console.log(`Всего строк: ${grandTotal.toLocaleString('ru')} · из них с контрольным знаком X: ${grandX.toLocaleString('ru')}`)
+  if (annByKind.size) {
+    const printed = [...annByKind.entries()].filter(([k]) => k === 'composition').reduce((n, [, c]) => n + c, 0)
+    console.log(`Скобочных примечаний: ${[...annByKind.entries()].sort((a, b) => b[1] - a[1]).map(([k, c]) => `${k} ${c}`).join(' · ')}`)
+    console.log(`  ⭐ из них ПЕЧАТАЮТСЯ на этикетке (Annex VI Part 1, п. 1.1.1.4): ${printed}`)
+  }
 
   /**
    * ⚠⚠ ПОКРЫТИЕ ОБЯЗАНО БЫТЬ ОДИНАКОВЫМ У ВСЕХ ЯЗЫКОВ.
