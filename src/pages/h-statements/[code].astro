@@ -25,6 +25,16 @@ import { casForDisplay } from '../../lib/substanceIdentifiers'
 import { must, mustSingle } from '../../lib/mustQuery'
 import { substanceNameFull, truncateName } from '../../lib/substanceName'
 import { substanceHref } from '../../lib/substanceSlug'
+// A4 плана claude/label-maker-hub-plan.md: блок в конструктор. ⚠⚠ Текст и
+// параметры адреса собираются ОДНОЙ функцией из данных самой фразы — руками
+// здесь не набирается ни строка адреса, ни имя пиктограммы.
+import LabelMakerCta from '../../components/LabelMakerCta.astro'
+import { categoryElements, categoryElementsDiffer, hStatementCta, PICTOGRAM_NAME } from '../../lib/labelMakerCta'
+// Секция «фраза на 24 языках». ⚠ У H-страниц тот же дефицит веса, что у P:
+// H221 — 485 слов, H281 — 497 при 1 025 у H226. Официальные формулировки —
+// цитата регламента, а не наш текст, поэтому их можно ставить не думая.
+import StatementTranslations from '../../components/StatementTranslations.astro'
+import { missingTranslationReason } from '../../lib/statementTranslations'
 
 const SITE = 'https://ghspictograms.com'
 const COLLAPSE_AT = 100
@@ -44,7 +54,7 @@ const isEuh = code.startsWith('EUH')
 const subsColumn = isEuh ? 'euh_codes' : 'h_statement_codes'
 const countsKind = isEuh ? 'EUH' : 'H'
 
-const [rowRes, jurisRes, linkRes, comboRes, revRes, mapRes, allCodesRes, countsRes, sdsRes] =
+const [rowRes, jurisRes, linkRes, comboRes, revRes, mapRes, allCodesRes, countsRes, sdsRes, trRes] =
   await Promise.all([
     supabase
       .from('h_statements')
@@ -71,6 +81,9 @@ const [rowRes, jurisRes, linkRes, comboRes, revRes, mapRes, allCodesRes, countsR
     supabase.from('h_statements').select('code, category, text_plain, text_en').order('code'),
     supabase.rpc('get_statement_counts'),
     supabase.from('sds_pages').select('slug, cas_number').eq('status', 'live'),
+    // ⚠ Через `must` ниже: упавший запрос и «переводов нет» — разные ответы
+    // читателю, а на экране они выглядели бы одинаково.
+    supabase.from('statement_translations').select('lang, text, source_ref').eq('code', code),
   ])
 
 // ⚠ Отказ запроса и «кода нет в реестре» — РАЗНЫЕ вещи, и раньше они сливались
@@ -131,32 +144,63 @@ type MapRow = {
   signal_word: string | null
 }
 const maps = (must('hazard_category_mapping', mapRes) ?? []) as MapRow[]
-let hazardClass: { name_en: string; ghs_chapter: string | null } | null = null
-if (maps.length) {
-  const cls = mustSingle(
-    `hazard_class_catalog(${maps[0].hazard_class_id})`,
-    await supabase
-      .from('hazard_class_catalog')
-      .select('id, name_en, ghs_chapter')
-      .eq('id', maps[0].hazard_class_id)
-      .maybeSingle(),
-  )
-  hazardClass = (cls as { name_en: string; ghs_chapter: string | null } | null) ?? null
-}
-const categories = [...new Set(maps.map((m) => m.category_code))]
-const pictogram = maps.find((m) => m.pictogram_code)?.pictogram_code ?? null
-const signalWord = maps.find((m) => m.signal_word)?.signal_word ?? null
-const PICT_NAME: Record<string, string> = {
-  GHS01: 'exploding bomb',
-  GHS02: 'flame',
-  GHS03: 'flame over circle',
-  GHS04: 'gas cylinder',
-  GHS05: 'corrosion',
-  GHS06: 'skull and crossbones',
-  GHS07: 'exclamation mark',
-  GHS08: 'health hazard',
-  GHS09: 'environment',
-}
+
+/**
+ * ⚠⚠ КЛАССОВ У КОДА БЫВАЕТ ДВА, А ПОКАЗЫВАЛСЯ ОДИН — дефект, найденный в
+ * session 52. Здесь стоял запрос по `maps[0].hazard_class_id`, то есть по
+ * ПЕРВОЙ попавшейся строке отображения. Замер по базе: у шести кодов из 108
+ * классов два —
+ *   H240, H241, H242 — Self-reactive substances and mixtures И Organic peroxides;
+ *   H250             — Pyrophoric liquids И Pyrophoric solids;
+ *   H271, H272       — Oxidising liquids И Oxidising solids.
+ * Строка «Organic peroxides» на странице H250 выглядела бы неправдоподобно и
+ * её бы заметили; «Pyrophoric liquids» вместо «Pyrophoric liquids и Pyrophoric
+ * solids» — совершенно правдоподобна, и потому прожила до этой сессии.
+ * ⚠ Порядок задаётся `.order('name_en')`, иначе одна и та же страница пишет
+ * классы в разном порядке от сборки к сборке.
+ */
+const classIds = [...new Set(maps.map((m) => m.hazard_class_id))]
+const hazardClasses = classIds.length
+  ? ((must(
+      `hazard_class_catalog(${classIds.length} ids for ${code})`,
+      await supabase.from('hazard_class_catalog').select('id, name_en, ghs_chapter').in('id', classIds).order('name_en'),
+    ) ?? []) as { name_en: string; ghs_chapter: string | null }[])
+  : []
+
+const categories = [...new Set(maps.map((m) => m.category_code))].sort()
+
+/**
+ * ⚠⚠ И ТО ЖЕ САМОЕ С ПИКТОГРАММОЙ И СИГНАЛЬНЫМ СЛОВОМ. Здесь стояло
+ * `maps.find((m) => m.signal_word)` — ПЕРВОЕ непустое значение. У шести кодов
+ * (H207, H221, H228, H242, H261, H272) слово ЗАВИСИТ ОТ КАТЕГОРИИ: категория 2
+ * берёт Danger, категория 3 — Warning. Страница печатала одно из двух как
+ * единственное. У H241 то же с пиктограммой наоборот: категория одна, а
+ * пиктограмм две (GHS01 и GHS02), и вторая не показывалась.
+ * Разбор согласия категорий — в `src/lib/labelMakerCta.ts`, там же, откуда его
+ * берёт ссылка в конструктор: показанное на странице и подставленное в
+ * инструмент обязаны быть одним фактом.
+ */
+/** Все пиктограммы кода — для показа. ⚠ Не то же, что набор для подстановки. */
+const allPictograms = [...new Set(maps.map((m) => m.pictogram_code).filter((c): c is string => !!c))].sort()
+/** Все сигнальные слова кода. Больше одного — значит зависит от категории. */
+const allSignals = [...new Set(maps.map((m) => m.signal_word).filter((w): w is string => !!w))].sort()
+const PICT_NAME = PICTOGRAM_NAME
+
+/**
+ * Разбор по категориям — показывается ТОЛЬКО когда элементы расходятся.
+ * ⚠ Пустой массив у согласного кода: у H314 три категории (1A, 1B, 1C) с
+ * одинаковыми GHS05 и Danger, и строка «1A — GHS05, Danger; 1B — GHS05,
+ * Danger; 1C — GHS05, Danger» не сообщала бы ничего, кроме шума.
+ */
+const perCategory = categoryElementsDiffer(maps) ? categoryElements(maps) : []
+
+/** Блок «собрать этикетку» — A4. Текст и параметры из данных выше. */
+const lmCta = hStatementCta({
+  code,
+  hazardClasses: hazardClasses.map((c) => c.name_en),
+  categories,
+  rows: maps,
+})
 
 // ── История ревизий ─────────────────────────────────────────────────────────
 const REVISIONS: [number, number][] = [
@@ -349,8 +393,30 @@ const breadcrumbJson = JSON.stringify({
 
 // Номера секций считаем заранее: блок комбинаций есть не у всех кодов,
 // а вычислять номер побочным эффектом внутри разметки — напрашиваться на сюрприз.
-const SEC_COMBO = '03'
-const SEC_SUBS = combos.length > 0 ? '04' : '03'
+// ── Официальные формулировки на 24 языках ───────────────────────────────────
+const trRows = (must(`statement_translations(${code})`, trRes) ?? []) as {
+  lang: string
+  text: string
+  source_ref: string | null
+}[]
+/**
+ * ⚠⚠ Причина отсутствия — ИЗ СТАТУСА В EU CLP, а не из списка кодов в коде.
+ * Замер session 52: без переводов сидят 28 H-кодов, и у большинства причина в
+ * самом регламенте — EUH001/006/059 изъяты, H209–H211, H227, H282–H284,
+ * H303/H305/H313/H316/H320/H333, H401/H402, H421 в CLP не входят вовсе.
+ * ⚠ Но девять суффиксных (H350i, H360D, H360Df, H360F, H360Fd, H360FD, H361d,
+ * H361f, H361fd) в CLP CURRENT и стоят по всему Annex VI — там текст нужен, и
+ * его отсутствие честно называется нашим пробелом, а не фактом о регламенте.
+ */
+const trReason = missingTranslationReason(code, jStatus.get('EU_CLP')?.status)
+/** ⚠ EUH-фразы живут в Annex II, H-фразы — в Annex III. */
+const trAnnex = isEuh ? 'II' : 'III'
+
+// Номера секций сдвинулись: языки встали вторыми, сразу после формулировки.
+const SEC_LANG = '02'
+const SEC_LEGAL = '03'
+const SEC_COMBO = '04'
+const SEC_SUBS = combos.length > 0 ? '05' : '04'
 ---
 
 <Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
@@ -370,7 +436,7 @@ const SEC_SUBS = combos.length > 0 ? '04' : '03'
       </nav>
       <p class="hub-hero-eyebrow">
         {CAT_LABEL[h.category] ?? h.category}
-        {hazardClass ? <> · {hazardClass.name_en}</> : null}
+        {hazardClasses.map((c) => <> · {c.name_en}</>)}
       </p>
       <h1>{h.code} — {plain.replace(/\.$/, '')}</h1>
       <p class="hub-hero-sub">
@@ -436,34 +502,71 @@ const SEC_SUBS = combos.length > 0 ? '04' : '03'
           </p>
         </div>
 
-        {hazardClass && (
+        {hazardClasses.length > 0 && (
           <div class="hub-panel-row">
             <span class="hub-panel-label">Classification</span>
             <div class="hcls">
-              {pictogram && (
+              {allPictograms.map((pc) => (
                 <img
-                  src={`/pictograms/${pictogram.toLowerCase()}.svg`}
-                  alt={`${pictogram} pictogram — ${PICT_NAME[pictogram] ?? ''}`}
+                  src={`/pictograms/${pc.toLowerCase()}.svg`}
+                  alt={`${pc} pictogram — ${PICT_NAME[pc] ?? ''}`}
                   width="64"
                   height="64"
                   loading="lazy"
                   decoding="async"
                 />
-              )}
+              ))}
               <div class="hcls-txt">
                 <p class="hcls-class">
-                  {hazardClass.name_en}
-                  {hazardClass.ghs_chapter && <span class="hcls-ch">GHS chapter {hazardClass.ghs_chapter}</span>}
+                  {hazardClasses.map((c, i) => <>{i > 0 && ' · '}{c.name_en}</>)}
+                  {hazardClasses[0].ghs_chapter && (
+                    <span class="hcls-ch">GHS chapter {hazardClasses[0].ghs_chapter}</span>
+                  )}
                 </p>
                 <p class="hcls-cat">
+                  {/* ⚠⚠ ПРОБЕЛ ЗДЕСЬ — `{' '}`, А НЕ ПРОБЕЛ В РАЗМЕТКЕ.
+                      Найдено скриншотом Сергея: печаталось «Category3»,
+                      «Categories1B, 2», «CategoryRefrigerated liquefied gas».
+                      Астро выбрасывает текстовый узел, состоящий ТОЛЬКО из
+                      пробела, если он стоит между двумя выражениями. До этой
+                      сессии здесь был литерал `Category ` — текстовый узел с
+                      содержимым, и пробел выживал; замена слова на тернарник
+                      превратила его в пробел между `}` и `{`. ⚠ Соседние
+                      строки уцелели по той же причине: « · pictogram » и
+                      « · signal word » — текст, а не один пробел. */}
                   {categories.length > 0 && (
-                    <>Category {categories.join(', ')}</>
+                    <>{categories.length > 1 ? 'Categories' : 'Category'}{' '}{categories.join(', ')}</>
                   )}
-                  {pictogram && (
-                    <> · pictogram <a href={`/ghs/${pictogram.toLowerCase()}/`}>{pictogram}</a> ({PICT_NAME[pictogram] ?? ''})</>
+                  {allPictograms.length > 0 && (
+                    <>
+                      {' '}· pictogram{allPictograms.length > 1 ? 's' : ''}{' '}
+                      {allPictograms.map((pc, i) => (
+                        <>
+                          {i > 0 && ', '}
+                          <a href={`/ghs/${pc.toLowerCase()}/`}>{pc}</a> ({PICT_NAME[pc] ?? ''})
+                        </>
+                      ))}
+                    </>
                   )}
-                  {signalWord && <> · signal word <b>{signalWord}</b></>}
+                  {allSignals.length > 0 && (
+                    <> · signal word <b>{allSignals.join(' or ')}</b></>
+                  )}
                 </p>
+                {/* ⚠⚠ Одной строкой сказано, ЧТО зависит от категории. Без неё
+                    «signal word Danger or Warning» читается как «одно из двух на
+                    выбор», а это не выбор: категорию определяет классификация. */}
+                {perCategory.length > 0 && (
+                  <p class="hcls-cat">
+                    <b>By category:</b>{' '}
+                    {perCategory.map((g, i) => (
+                      <>
+                        {i > 0 && '; '}
+                        {g.category} — {g.pictograms.length ? g.pictograms.join(' + ') : 'no pictogram'},{' '}
+                        {g.signals.length ? g.signals.join('/') : 'no signal word'}
+                      </>
+                    ))}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -524,13 +627,22 @@ const SEC_SUBS = combos.length > 0 ? '04' : '03'
           </p>
         </div>
       )}
+
+      {/* A4: единственный контекстный вход в конструктор с этой страницы.
+          ⚠ Место выбрано не наугад: он стоит СРАЗУ ПОСЛЕ того, как читатель
+          узнал формулировку, класс, пиктограмму и сигнальное слово, то есть в
+          тот момент, когда у него на руках весь набор элементов этикетки. */}
+      <LabelMakerCta title={lmCta.title} copy={lmCta.copy} cta={lmCta.cta} note={lmCta.note} params={lmCta.params} />
     </div>
   </section>
+
+  <!-- LANGUAGES -->
+  <StatementTranslations code={h.code} rows={trRows} reason={trReason} annex={trAnnex} sectionNo={SEC_LANG} />
 
   <!-- JURISDICTIONS -->
   <section class="hub-sec-b">
     <div class="hub-wrap">
-      <p class="hub-eyebrow navy">02 · Legal status</p>
+      <p class="hub-eyebrow navy">{SEC_LEGAL} · Legal status</p>
       <h2 class="hub-h2">Where {h.code} is current</h2>
       <p class="hub-sub">
         GHS is a United Nations model text, revised every two years, and each jurisdiction adopts a

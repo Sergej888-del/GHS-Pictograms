@@ -3593,3 +3593,131 @@ a.sub-alpha-item:hover { border-color: var(--teal-200); background: var(--teal-5
 @media (max-width: 640px) {
   .lm-step { flex-direction: column; gap: 8px; }
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   .lmc-* — блок «собрать этикетку», компонент LabelMakerCta.astro (session 52)
+
+   ЗАЧЕМ ОТДЕЛЬНАЯ СЕМЬЯ, А НЕ .hub-mini-card. Мини-карточка — это ссылка в
+   сетке однородных ссылок: маленькая, без кнопки, без оговорок. Здесь другое
+   назначение: ОДИН блок посреди текста, который просит совершить действие,
+   несёт кнопку и иногда — мелкую оговорку о том, чего мы намеренно НЕ
+   подставили. Растянуть мини-карточку до этой роли значило бы завести у неё
+   второй облик, а класс с двумя обликами перестаёт что-либо означать.
+
+   ⚠ Оранжевый приходит из карты разделов классом `.acc-label`, а не вписан
+   здесь: design-system.md §2.7 и design-system-accents.md. Литералов цвета в
+   этом блоке нет ни одного.
+   ⚠ Полоса 3 px слева объявлена БЕЗ фолбэка на `--line`: блок всегда идёт с
+   `.acc-label`, потому что он всегда ведёт в один и тот же раздел. Это не тот
+   случай, что у `.hub-mini-card`, где 29 мест и лишь 5 акцентированы.
+   ──────────────────────────────────────────────────────────────────────────── */
+.lmc {
+  display: block;
+  position: relative;
+  border: 1px solid var(--acc-line, var(--line));
+  border-left: 3px solid var(--acc, var(--line));
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--acc-soft, #ffffff) 0%, #ffffff 62%);
+  padding: 22px 24px 24px;
+  box-shadow: 0 2px 6px rgba(15, 23, 41, 0.05);
+}
+.lmc-wide { margin-top: 28px; }
+.lmc-inline { margin-top: 0; }
+
+.lmc-badge {
+  display: inline-block;
+  margin-bottom: 10px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--acc-ink, var(--ink-3));
+}
+.lmc-title {
+  margin: 0 0 8px;
+  font-family: var(--font-heading);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.lmc-copy {
+  margin: 0;
+  max-width: 760px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+/* Кнопка повторяет .sh-cta из шапки: это одно и то же действие, и выглядеть
+   оно обязано одинаково — иначе оранжевый перестаёт быть одним сигналом. */
+.lmc-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  border-radius: 10px;
+  background: var(--acc, var(--teal-600));
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  text-decoration: none;
+  /* ⚠ Тень НЕЙТРАЛЬНАЯ, из таблицы §4, а не подкрашенная оранжевым, как у
+     .sh-cta и .tool-cta. Подкрашенная тень — это тот же цвет литералом ещё
+     раз: сменится токен `--acc-label` — тень останется старой и соврёт. */
+  box-shadow: 0 8px 20px rgba(15, 23, 41, 0.14);
+  transition: background 200ms ease, transform 200ms ease;
+}
+.lmc-cta:hover {
+  background: var(--acc-ink, var(--teal-700));
+  color: #ffffff;
+  transform: translateY(-2px);
+}
+
+/* Оговорка. ⚠ Она появляется ровно тогда, когда мы чего-то НЕ подставили в
+   конструктор, и объясняет почему — молчаливый пропуск читался бы как
+   недоработка, а это решение. */
+.lmc-note {
+  margin: 14px 0 0;
+  max-width: 760px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+
+@media (max-width: 640px) {
+  .lmc { padding: 18px 18px 20px; }
+  .lmc-cta { width: 100%; justify-content: center; }
+}
+
+/* ── .stx — таблица «фраза на 24 языках», StatementTranslations.astro (s52) ──
+   Только то, чего нет у .hub-table: колонка языка несёт три вещи сразу — код,
+   самоназвание и английское имя, — и без своих правил они слипаются в строку.
+   ⚠ Ширина первой колонки задана, иначе двадцать четыре строки «пляшут»: у
+   `Deutsch` и `português` разная длина, и таблица дёргает вторую колонку. */
+.hub-table.stx td.c-code { width: 190px; }
+.hub-table.stx .stx-name {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.hub-table.stx .stx-en {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+/* ⚠ Текст фразы — основной вес строки: он и есть содержание секции. */
+.hub-table.stx td.c-txt { font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+
+@media (max-width: 640px) {
+  .hub-table.stx td.c-code { width: auto; }
+}

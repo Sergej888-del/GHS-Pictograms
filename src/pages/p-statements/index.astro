@@ -12,6 +12,14 @@ import Layout from '../../layouts/Layout.astro'
 import { supabase } from '../../lib/supabase'
 import { truncateMetaDescription } from '../../lib/metaDescription'
 import { splitClpNotation, hasClpNotation } from '../../lib/clpNotation'
+// A4: до session 52 на этом хабе не было НИ ОДНОЙ ссылки в конструктор, кроме
+// навигационных из шапки и подвала. Замер Bing: 17 показов против 475 у хаба
+// H-фраз, при том что спрос на «precautionary statements» ВТРОЕ больше
+// (claude/statements-keyword-list.md).
+import LabelMakerCta from '../../components/LabelMakerCta.astro'
+// ⚠ Число языков берётся из СПИСКА, а не набирается цифрой: список один, и
+// когда в ЕС появится двадцать пятый официальный язык, цифра поедет сама.
+import { EU_LANGUAGES } from '../../lib/labelLanguages'
 
 const SITE = 'https://ghspictograms.com'
 
@@ -280,6 +288,14 @@ const CARDS = [
           </div>
         ))}
       </div>
+
+      {/* A4. ⚠⚠ До session 52 на этом хабе не было ни одной ссылки в
+          конструктор, кроме навигационных из шапки и подвала. */}
+      <LabelMakerCta
+        title="Put these codes on a label"
+        copy={`The label maker carries all ${TOTAL} precautionary statements in the verbatim CLP Annex IV wording, in ${EU_LANGUAGES.length} EU languages, and lays them out to the size rule of the jurisdiction you pick. Tick the ones your classification calls for, add a product name and a size, and it prints a vector PDF at full scale — no sign-up.`}
+        cta="Open the label maker →"
+      />
     </div>
   </section>
 

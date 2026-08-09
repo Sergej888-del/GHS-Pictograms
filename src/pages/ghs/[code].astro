@@ -9,6 +9,8 @@ import { hHref } from '../../lib/hStatementSlug'
 import { substanceName, substanceNameFull } from '../../lib/substanceName'
 import { substanceHref } from '../../lib/substanceSlug'
 import { casForDisplay, casShapeOk } from '../../lib/substanceIdentifiers'
+// ⚠ Ссылки в конструктор строятся ТОЛЬКО этим сборщиком — см. session 38.
+import { labelMakerHref } from '../../lib/labelMakerLink'
 
 export async function getStaticPaths() {
   return [
@@ -927,7 +929,6 @@ const ghsJsonLd = {
         {substances.map(s => {
           const name = substanceName(s)
           const pics = s.ghs_pictogram_codes ?? []
-          const casEnc = encodeURIComponent(s.cas_number)
           const slug = sdsSlug.get(s.cas_number)
           // ⚠ Ссылка только туда, где страница действительно есть. Отбор по форме CAS
           // обязан совпадать с getStaticPaths в src/pages/substances/[slug].astro:
@@ -984,8 +985,21 @@ const ghsJsonLd = {
                   {inner}
                 </span>
               )}
+              {/* ⚠⚠ ЗДЕСЬ БЫЛ ЖИВОЙ ДЕФЕКТ, найден в session 52. Стояло
+                  href={`/ghs-label-maker/?cas=${casEnc}`} — БЕЗ проверки формы,
+                  хотя строкой выше та же проверка стоит у detailHref. В собранном
+                  dist это давало адреса `?cas=110-45-2%5B1%5D35073-27-`:
+                  конструктор ищет вещество запросом .eq('cas_number', …), не
+                  находит ничего и открывается пустым. Тот же класс, что
+                  session 38 — ссылка живая, параметр синтаксически безупречен,
+                  результат пустой.
+                  ⚠ Адрес строится labelMakerHref, а не склейкой строк: имя
+                  параметра обязано приходить из контракта, а не набираться здесь. */}
               <a
-                href={`/ghs-label-maker/?cas=${casEnc}`}
+                href={labelMakerHref({ cas: casShapeOk(s.cas_number) ? s.cas_number : null }) + '#build'}
+                title={casShapeOk(s.cas_number)
+                  ? undefined
+                  : 'Multi-component Annex VI entry — no single CAS, so the label maker opens empty and you classify by hand'}
                 class="shrink-0 px-4 py-3.5 border-l border-gray-200 text-xs font-semibold text-[#062A78] hover:bg-blue-50 transition-colors flex items-center"
               >
                 Label

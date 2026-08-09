@@ -18,6 +18,19 @@ import { splitClpNotation, hasClpNotation } from '../../lib/clpNotation'
 import { must, mustSingle } from '../../lib/mustQuery'
 import { substanceNameFull, truncateName } from '../../lib/substanceName'
 import { substanceHref } from '../../lib/substanceSlug'
+// A4 плана claude/label-maker-hub-plan.md. ⚠⚠ Замер Bing за 7 дней: хаб
+// /h-statements/ дал 475 показов, хаб /p-statements/ — 17, а в индексе видна
+// ОДНА P-страница из 117. При этом единственная попавшая туда P391 дала CTR
+// 8,3 % — ровно как у H-страниц. То есть 116 готовых страниц просто не имели
+// ни одной контекстной ссылки, а не «хуже искались».
+import LabelMakerCta from '../../components/LabelMakerCta.astro'
+import { pStatementCta } from '../../lib/labelMakerCta'
+// Секция «фраза на 24 языках». ⚠⚠ Замер session 52: страницы P-кодов без
+// веществ и без комбинаций весят 380–470 слов (P407 — 378, P422 — 377) при
+// 1 025 у H226. Официальные формулировки — единственное, чем их можно утолстить,
+// не сочинив ни строки: это цитата регламента, а не наш текст.
+import StatementTranslations from '../../components/StatementTranslations.astro'
+import { missingTranslationReason } from '../../lib/statementTranslations'
 
 const SITE = 'https://ghspictograms.com'
 const COLLAPSE_AT = 100
@@ -31,7 +44,7 @@ export async function getStaticPaths() {
 
 const code = decodeURIComponent(Astro.params.code ?? '')
 
-const [rowRes, jurisRes, linkRes, comboRes, allCodesRes, countsRes, sdsRes] = await Promise.all([
+const [rowRes, jurisRes, linkRes, comboRes, allCodesRes, countsRes, sdsRes, trRes] = await Promise.all([
   supabase
     .from('p_statements')
     .select('code, category, text_en, text_plain, status, replaced_by, ghs_revision, placeholder_hint')
@@ -50,6 +63,10 @@ const [rowRes, jurisRes, linkRes, comboRes, allCodesRes, countsRes, sdsRes] = aw
   supabase.from('p_statements').select('code, text_plain, text_en').order('code'),
   supabase.rpc('get_statement_counts'),
   supabase.from('sds_pages').select('slug, cas_number').eq('status', 'live'),
+  // ⚠ Отказ этого запроса не должен выглядеть как «переводов нет»: пустой
+  // ответ и упавший запрос сказали бы читателю прямо противоположные вещи,
+  // а на экране выглядели бы одинаково. Оборачивается `must` ниже.
+  supabase.from('statement_translations').select('lang, text, source_ref').eq('code', code),
 ])
 
 // ⚠ Отказ запроса и «кода нет в реестре» — разные вещи; раньше они сливались.
@@ -200,6 +217,29 @@ const CAT_BLURB: Record<string, string> = {
   disposal: 'Disposal statements cover the leftover product and the empty container.',
 }
 
+/** Блок «собрать этикетку» — A4. Текст собирается из данных самой фразы. */
+const lmCta = pStatementCta({ code: p.code, category: p.category, total })
+
+// ── Официальные формулировки на 24 языках ───────────────────────────────────
+const trRows = (must(`statement_translations(${code})`, trRes) ?? []) as {
+  lang: string
+  text: string
+  source_ref: string | null
+}[]
+/**
+ * ⚠⚠ Причина отсутствия берётся ИЗ СТАТУСА В EU CLP, уже загруженного выше, а
+ * не из списка кодов в коде. Замер session 52: у 20 кодов из 117 переводов нет,
+ * и у девятнадцати причина — сам регламент (10 не приняты ЕС, 8 изъяты, 1 мёртв
+ * с Rev.3). Список, набранный руками, разошёлся бы с базой на первой же ATP.
+ */
+const trReason = missingTranslationReason(p.code, jStatus.get('EU_CLP')?.status)
+
+// Номера секций сдвинулись: языки встали вторыми, сразу после формулировки.
+const SEC_LANG = '02'
+const SEC_LEGAL = '03'
+const SEC_COMBO = '04'
+const SEC_SUBS = combos.length > 0 ? '05' : '04'
+
 const title = `${p.code} Precautionary Statement — ${plain.replace(/\.$/, '')} | GHS/CLP`
 const description = truncateMetaDescription(
   `${p.code}: ${plain} Official CLP wording, status under EU CLP, OSHA HazCom and UN GHS, and the ${total} harmonised substances that carry it.`
@@ -323,13 +363,19 @@ const breadcrumbJson = JSON.stringify({
           </p>
         )}
       </div>
+
+      {/* A4: единственный контекстный вход в конструктор с этой страницы. */}
+      <LabelMakerCta title={lmCta.title} copy={lmCta.copy} cta={lmCta.cta} note={lmCta.note} params={lmCta.params} />
     </div>
   </section>
+
+  <!-- LANGUAGES -->
+  <StatementTranslations code={p.code} rows={trRows} reason={trReason} annex="IV" sectionNo={SEC_LANG} />
 
   <!-- JURISDICTIONS -->
   <section class="hub-sec-b">
     <div class="hub-wrap">
-      <p class="hub-eyebrow navy">02 · Legal status</p>
+      <p class="hub-eyebrow navy">{SEC_LEGAL} · Legal status</p>
       <h2 class="hub-h2">Where {p.code} is current</h2>
       <p class="hub-sub">
         GHS is a United Nations model text, revised every two years, and each jurisdiction adopts a
@@ -402,7 +448,7 @@ const breadcrumbJson = JSON.stringify({
   {combos.length > 0 && (
     <section class="hub-sec-white">
       <div class="hub-wrap">
-        <p class="hub-eyebrow">03 · On a label</p>
+        <p class="hub-eyebrow">{SEC_COMBO} · On a label</p>
         <h2 class="hub-h2">{p.code} usually appears combined</h2>
         <p class="hub-sub">
           CLP Annex IV defines combined statements as single label elements. {p.code} is a component
@@ -445,7 +491,7 @@ const breadcrumbJson = JSON.stringify({
   <!-- SUBSTANCES -->
   <section class="hub-sec-b">
     <div class="hub-wrap">
-      <p class="hub-eyebrow navy">{combos.length > 0 ? '04' : '03'} · Substances</p>
+      <p class="hub-eyebrow navy">{SEC_SUBS} · Substances</p>
       <h2 class="hub-h2">Substances carrying {p.code}</h2>
       <p class="hub-sub">
         {items.length > 0

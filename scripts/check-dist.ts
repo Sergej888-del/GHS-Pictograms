@@ -59,6 +59,11 @@ import { adrLabels, dotLabels } from '../src/lib/transportLabels'
 // а не считать пустой ответ фактом о данных. И тот же ограничитель параллелизма —
 // иначе сотня одновременных RPC утопит пулер, и проверка начнёт врать (session 32).
 import { must, mapLimit } from '../src/lib/mustQuery'
+// ⚠⚠ Разбор адресов конструктора берётся ТЕМ ЖЕ файлом, который их и строит.
+// Проверка, знающая имена параметров по своему списку, сверяла бы наше ожидание
+// с нашим же ожиданием — ровно так и прожил дефект session 38.
+import { labelMakerHrefProblems, LABEL_MAKER_BASE } from '../src/lib/labelMakerLink'
+import { BRANCHES, TEMPLATES } from '../src/lib/labelMakerHub'
 
 config({ path: resolve(process.cwd(), '.env.local') })
 config()
@@ -441,6 +446,11 @@ function unescapeHtml(s: string): string {
     .replace(/&#39;/g, "'")
     .replace(/&#x27;/gi, "'")
     .replace(/&quot;/g, '"')
+    // ⚠ Astro печатает амперсанд в атрибуте числовой ссылкой, а не `&amp;`.
+    // Без этих двух строк адрес `?h=H226&pic=GHS02` разбирался как ОДИН
+    // параметр с именем `h` и значением `H226&#38;pic=GHS02`.
+    .replace(/&#38;/g, '&')
+    .replace(/&#x26;/gi, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&')
@@ -5053,6 +5063,130 @@ const CHECKS: Check[] = [
               'классы собраны из разметки собранных страниц, не списком в коде',
             ]
           : detail,
+      }
+    },
+  },
+
+  // ── Label maker: входы и адреса (session 52, A4/A8 плана) ─────────────────
+  {
+    id: 'label-maker-href',
+    group: 'Label maker',
+    title: 'Все ссылки в конструктор разбираются его же разборщиком',
+    run: async () => {
+      // ⚠⚠ ЗАЧЕМ ЭТА ПРОВЕРКА ВООБЩЕ. Session 38: со всех 3 650 страниц веществ
+      // стояла ссылка на ATE-калькулятор с `?cas=`, а калькулятор читал
+      // `?substance=`. Ссылка вела на живую страницу, параметр был синтаксически
+      // безупречен, сборка и все проверки зелёные — и калькулятор открывался
+      // ПУСТЫМ. Такое ловится либо глазами на конкретной странице, либо здесь.
+      const known = [
+        LABEL_MAKER_BASE,
+        ...BRANCHES.map((b) => `${LABEL_MAKER_BASE}${b.slug}/`),
+        `${LABEL_MAKER_BASE}templates/`,
+        ...TEMPLATES.map((t) => `${LABEL_MAKER_BASE}templates/${t.slug}/`),
+        `${LABEL_MAKER_BASE}pick/`,
+      ]
+      // ⚠ Ищем именно `href="…"`: строка `/ghs-label-maker/` встречается ещё и в
+      // JSON-LD, и в текстах — разбирать их этим разборщиком бессмысленно.
+      const re = /href="(\/ghs-label-maker\/[^"]*)"/g
+      const bad = new Map<string, { problems: string[]; pages: Set<string> }>()
+      let seen = 0
+      const hrefs = new Set<string>()
+      for (const { rel, html } of allPages()) {
+        for (const m of html.matchAll(re)) {
+          const href = unescapeHtml(m[1])
+          seen++
+          hrefs.add(href)
+          const problems = labelMakerHrefProblems(href, known)
+          // ⚠⚠ ФОРМУ CAS РАЗБОРЩИК НЕ ПРОВЕРЯЕТ, И ЭТО ПРАВИЛЬНО: в браузере
+          // адрес пишет человек, и падать на опечатке нельзя. А вот в СОБРАННЫХ
+          // страницах `?cas=` пишем МЫ, и склейка форм Annex VI там — дефект.
+          // Замер session 52: на девяти страницах пиктограмм стояли адреса
+          // `?cas=110-45-2%5B1%5D35073-27-` — конструктор открывался пустым.
+          const rawCas = new URLSearchParams(href.split('#')[0].split('?')[1] ?? '').get('cas')
+          if (rawCas && !casShapeOk(rawCas)) problems.push(`CAS не той формы: «${rawCas}»`)
+          if (!problems.length) continue
+          const got = bad.get(href)
+          if (got) got.pages.add(rel)
+          else bad.set(href, { problems, pages: new Set([rel]) })
+        }
+      }
+      const detail: string[] = []
+      for (const [href, v] of bad) {
+        detail.push(`${href} — ${v.problems.join('; ')} (страниц: ${v.pages.size}, напр. ${[...v.pages][0]})`)
+      }
+      return {
+        id: 'label-maker-href',
+        group: 'Label maker',
+        ok: bad.size === 0,
+        headline:
+          bad.size === 0
+            ? `${seen} ссылок, ${hrefs.size} различных — все разобрались, ${known.length} известных страниц раздела`
+            : `${bad.size} различных негодных адресов из ${hrefs.size}`,
+        detail: bad.size === 0 ? [] : detail.slice(0, 20),
+      }
+    },
+  },
+  {
+    id: 'label-maker-statements',
+    group: 'Label maker',
+    title: 'У каждой страницы H- и P-фразы есть контекстный вход в конструктор',
+    run: async () => {
+      // ⚠⚠ ПОРОГ НЕ КОНСТАНТА. Строка `/ghs-label-maker/` есть на ВСЕХ 4 499
+      // страницах — её дают шапка и подвал, и именно это обмануло замер в
+      // session 45. Порог берётся с заведомо «пустых» страниц; если шапка
+      // поменяется, он поедет сам. ⚠ Их две, и они обязаны совпасть: если нет,
+      // «пустая страница» перестала быть пустой, и проверка честно падает.
+      const NEEDLE = '/ghs-label-maker/'
+      const baselinePages = ['privacy/index.html', 'terms/index.html']
+      const baselines = baselinePages.map((rel) => {
+        const html = readPage(rel)
+        return html === null ? null : countOccurrences(html, NEEDLE)
+      })
+      if (baselines.some((b) => b === null)) {
+        return {
+          id: 'label-maker-statements',
+          group: 'Label maker',
+          ok: false,
+          headline: 'не из чего взять порог: нет одной из служебных страниц',
+          detail: [`искали ${baselinePages.join(', ')} — порог берётся оттуда, а не цифрой в коде`],
+        }
+      }
+      if (baselines[0] !== baselines[1]) {
+        return {
+          id: 'label-maker-statements',
+          group: 'Label maker',
+          ok: false,
+          headline: `служебные страницы разошлись: ${baselinePages[0]} — ${baselines[0]}, ${baselinePages[1]} — ${baselines[1]}`,
+          detail: [
+            'Порог «сколько вхождений даёт одна навигация» больше не определён однозначно.',
+            'Либо на одну из этих страниц добавили ссылку в конструктор, либо шапка/подвал',
+            'рендерятся по-разному. Пока не сойдётся, проверка не может отличить',
+            'контекстную ссылку от навигационной.',
+          ],
+        }
+      }
+      const nav = baselines[0] as number
+      const empty: string[] = []
+      let checked = 0
+      for (const dir of ['h-statements', 'p-statements']) {
+        for (const rel of [`${dir}/index.html`, ...pageSlugs(dir).map((s) => `${dir}/${s}/index.html`)]) {
+          const html = readPage(rel)
+          if (html === null) continue
+          checked++
+          if (countOccurrences(html, NEEDLE) <= nav) empty.push(rel)
+        }
+      }
+      return {
+        id: 'label-maker-statements',
+        group: 'Label maker',
+        ok: empty.length === 0 && checked > 0,
+        headline:
+          checked === 0
+            ? 'ни одной страницы фраз в dist — сборка вернула пустой список'
+            : empty.length === 0
+              ? `${checked} страниц фраз, у каждой больше ${nav} вхождений (${nav} даёт навигация)`
+              : `${empty.length} из ${checked} страниц без контекстной ссылки`,
+        detail: empty.length ? [preview(empty, 20)] : [`порог ${nav} измерен по ${baselinePages.join(' и ')}`],
       }
     },
   },

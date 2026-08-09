@@ -1,0 +1,62 @@
+---
+// src/components/LabelMakerCta.astro
+//
+// ОДИН блок «собрать этикетку» на весь сайт. Пункт A7 плана
+// `claude/label-maker-hub-plan.md`.
+//
+// ⚠⚠ ЗАЧЕМ ОДИН КОМПОНЕНТ, А НЕ ВОСЕМЬ РЕДАКЦИЙ. Разойдётся не текст — с текстом
+// ещё можно жить, — а ФОРМАТ АДРЕСА. Восемь мест, набирающих `/ghs-label-maker/?h=…`
+// руками, — это восемь шансов повторить session 38, где ссылка со всех 3 650
+// страниц веществ вела в калькулятор с чужим именем параметра и открывала его
+// пустым. Здесь адрес строит `ctaHref` → `labelMakerHref`, и набрать его руками
+// негде.
+//
+// ⚠ Компонент `.astro`, а не `.tsx`: он статический, острова здесь не нужны.
+// ⚠⚠ И `key` в `.map()` в нём не появится: в Astro это обычный HTML-атрибут,
+// который честно печатается в разметку (session 44, `key="110-45-2[1]35073-27-"`
+// на девяти страницах пиктограмм).
+//
+// Цвет — из карты разделов (`sectionAccent.ts`), а не вписан классом: оранжевый
+// принадлежит разделу label maker и больше ничему (design-system.md §2.7 и
+// design-system-accents.md).
+import { LABEL_MAKER_BASE, type LabelMakerParams } from '../lib/labelMakerLink';
+import { ctaHref } from '../lib/labelMakerCta';
+import { accentClass, accentBadge } from '../lib/sectionAccent';
+
+interface Props {
+  /** Заголовок блока — «Put H226 on a label». */
+  title: string;
+  /** Один абзац: что даст переход. Собирается из данных страницы, а не пишется руками. */
+  copy: string;
+  /** Надпись на кнопке. */
+  cta: string;
+  /** Мелкая оговорка под кнопкой — появляется только когда есть что оговорить. */
+  note?: string;
+  /** Параметры конструктора. Пусто — ссылка на голый хаб, это законно. */
+  params?: LabelMakerParams;
+  /** Хаб или его ветка/шаблон. */
+  base?: string;
+  /**
+   * ⚠ Ширина блока. `wide` — во всю колонку (страницы фраз, статей);
+   * `inline` — внутри панели, без внешнего отступа сверху.
+   */
+  variant?: 'wide' | 'inline';
+}
+
+const { title, copy, cta, note, params = {}, base = LABEL_MAKER_BASE, variant = 'wide' } = Astro.props;
+
+const href = ctaHref(params, base);
+// ⚠ Ключ акцента берётся ПО АДРЕСУ НАЗНАЧЕНИЯ, а не по странице, на которой
+// блок стоит: карточка на `/h-statements/h226/` уводит в label maker, значит она
+// оранжевая, а не синяя.
+const acc = accentClass(base);
+const badge = accentBadge(base);
+---
+
+<aside class={`lmc lmc-${variant}${acc ? ` ${acc}` : ''}`}>
+  {badge && <span class="lmc-badge">{badge}</span>}
+  <h3 class="lmc-title">{title}</h3>
+  <p class="lmc-copy">{copy}</p>
+  <a class="lmc-cta" href={href}>{cta}</a>
+  {note && <p class="lmc-note">{note}</p>}
+</aside>

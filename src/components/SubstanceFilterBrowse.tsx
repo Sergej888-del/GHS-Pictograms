@@ -5,6 +5,12 @@ import { supabase } from '../lib/supabase'
 import { substanceName, substanceNameFull } from '../lib/substanceName'
 import { casForDisplay, ecForDisplay, casShapeOk } from '../lib/substanceIdentifiers'
 import { substanceHref } from '../lib/substanceSlug'
+// ⚠⚠ Ссылка в конструктор строится СБОРЩИКОМ, а не склейкой строк. Session 52:
+// ровно здесь и на девяти страницах пиктограмм стоял `?cas=${casEnc}` без
+// проверки формы, и у 156 записей Annex VI в адрес уезжала склейка
+// `110-45-2[1]35073-27-`; конструктор ищет `.eq('cas_number', …)`, не находит
+// ничего и открывается пустым.
+import { labelMakerHref } from '../lib/labelMakerLink'
 
 interface Substance {
   cas_number: string
@@ -261,7 +267,6 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
         <ul className="divide-y divide-gray-200 border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
           {results.map(r => {
             const name = substanceName(r)
-            const casEnc = encodeURIComponent(r.cas_number)
             const slug = sdsSlug.get(r.cas_number)
             // ⚠ Ссылка только туда, где страница есть. Отбор по форме CAS обязан
             // совпадать с getStaticPaths в src/pages/substances/[slug].astro:
@@ -272,7 +277,11 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
               : casShapeOk(r.cas_number)
                 ? substanceHref(substanceNameFull(r), r.cas_number)
                 : null
-            const labelHref = `/ghs-label-maker/?cas=${casEnc}`
+            // ⚠ Та же проверка формы, что у detailHref строкой выше. Раньше её
+            // здесь не было, хотя комментарий над detailHref прямо говорит зачем
+            // она нужна. У записи без годного CAS ссылка ведёт в пустой
+            // конструктор — это честно, а адрес с обрезанной склейкой лгал.
+            const labelHref = labelMakerHref({ cas: casShapeOk(r.cas_number) ? r.cas_number : null }) + '#build'
             const pics = r.ghs_pictogram_codes ?? []
             // ⚠⚠ Номера ЧЕРЕЗ ПРОВЕРКУ ФОРМЫ. У 156 записей в колонке CAS лежит
             // склейка форм Annex VI, у 189 — то же в EC; строка списка печатала
