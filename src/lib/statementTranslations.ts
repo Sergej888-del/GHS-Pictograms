@@ -27,7 +27,13 @@
 import { EU_LANGUAGES, type EuLanguage } from './labelLanguages';
 
 /** Строка `statement_translations`. */
-export type TranslationRow = { lang: string; text: string; source_ref: string | null };
+export type TranslationRow = {
+  lang: string;
+  text: string;
+  source_ref: string | null;
+  /** `II` · `III` · `IV` · `VI` — где в регламенте напечатана эта формулировка. */
+  annex?: string | null;
+};
 
 export type TranslationLine = { language: EuLanguage; text: string };
 
@@ -54,6 +60,59 @@ export function orderedTranslations(rows: readonly TranslationRow[]): Translatio
   return out;
 }
 
+/**
+ * Как называется место в регламенте, откуда взята формулировка.
+ *
+ * ⚠⚠ ЭТО НЕ КОСМЕТИКА ПОДПИСИ. Девять суффиксных кодов (H350i, H360F, H360D,
+ * H361f, H361d, H360FD, H361fd, H360Fd, H360Df) напечатаны НЕ в Annex III, а в
+ * Annex VI Part 1, п. 1.1.2.1.2 — отдельным списком «дополнительных кодов».
+ * Страница до session 53 подписывала их «Annex III», потому что номер аннекса
+ * вычислялся из ВИДА КОДА (`H…` → III), а не брался из строки базы. Читатель,
+ * пошедший сверять текст с Annex III, не нашёл бы там ни одного из девяти.
+ *
+ * ⭐ То же правило, что с причиной отсутствия перевода: факт о регламенте
+ * берётся из данных, а не выводится из формы кода.
+ */
+export function annexLabel(annex: string | null | undefined): string {
+  const a = (annex ?? '').trim().toUpperCase();
+  if (a === 'VI') return 'Annex VI, Part 1, section 1.1.2.1.2';
+  if (a === 'II' || a === 'III' || a === 'IV') return `Annex ${a}`;
+  // ⚠ Неизвестное значение не выдумываем: подпись обязана быть проверяемой.
+  return a ? `Annex ${a}` : 'the consolidated regulation';
+}
+
+/**
+ * Почему ирландского в таблице либо нет, либо он есть, но основным быть не может.
+ *
+ * ⚠⚠ ПРИЧИНА РАЗНАЯ У РАЗНЫХ АННЕКСОВ, И ОДНИМ ТЕКСТОМ ЕЁ НЕ ОПИСАТЬ.
+ *
+ * · Annex III и IV печатают фразы МНОГОЯЗЫЧНЫМИ таблицами — ирландская строка
+ *   там есть, и в нашей таблице языков 24. Ирландский всё равно не может быть
+ *   ОСНОВНЫМ языком этикетки, но по другой причине: сигнальное слово стоит в
+ *   Annex I, а консолидированного CLP на ирландском не публиковали никогда.
+ *
+ * · Annex VI Part 1 — не многоязычная таблица, а обычный текст раздела. Он
+ *   существует только внутри языковой версии сводного регламента, а её на
+ *   ирландском нет. Значит, у девяти суффиксных кодов ирландской формулировки
+ *   нет НИГДЕ, и языков в таблице 23.
+ *
+ * ⚠ Пустая строка вместо объяснения читалась бы как «мы не доделали» — ровно то,
+ * ради чего заведён этот файл.
+ */
+export function irishCoverageNote(hasIrish: boolean, annex: string | null | undefined): string {
+  if (hasIrish) {
+    return 'Irish is one of the 24 official languages and its H and P texts are printed inside the '
+      + 'multilingual Annex tables, but no consolidated CLP has ever been published in Irish — which is '
+      + 'why an Irish-primary label cannot be built here.';
+  }
+  return `Irish is the 24th official language and it is missing from this table, which is a fact about the `
+    + `regulation rather than a gap on our side. The wording of this code is set out in ${annexLabel(annex)}, `
+    + `a section of running text rather than one of the multilingual tables — and section text exists only `
+    + `inside a language version of the consolidated regulation. None has ever been published in Irish, so no `
+    + `Irish wording of this code exists anywhere. The same absence is why an Irish-primary label cannot be `
+    + `built here.`;
+}
+
 export type MissingReason = {
   /** Короткая причина для подзаголовка секции. */
   headline: string;
@@ -70,7 +129,18 @@ export type MissingReason = {
  * для `EU_CLP`: `current` | `withdrawn` | `absent` (или `undefined`, если строки нет).
  */
 export function missingTranslationReason(code: string, euStatus: string | undefined): MissingReason {
-  const annex = code.startsWith('P') ? 'Annex IV' : code.startsWith('EUH') ? 'Annex II' : 'Annex III';
+  // ⚠ Здесь строк базы НЕТ, поэтому аннекс приходится выводить из вида кода —
+  // единственное место, где это допустимо. ⚠⚠ Суффиксная форма (`H360FD`,
+  // `H350i`) названа отдельно: она стоит в Annex VI Part 1, а не в Annex III, и
+  // без этой ветки объяснение отправляло бы читателя не в тот раздел.
+  const isSuffix = /^H\d{3}[A-Za-z]{1,2}$/.test(code);
+  const annex = isSuffix
+    ? annexLabel('VI')
+    : code.startsWith('P') ? 'Annex IV' : code.startsWith('EUH') ? 'Annex II' : 'Annex III';
+  // ⚠⚠ Языковых версий у Annex VI Part 1 не 24, а 23: сводного CLP на ирландском
+  // нет, а раздел существует только внутри сводной редакции. Написать «во всех
+  // 24 языковых версиях» про эти коды значило бы пообещать текст, которого нет.
+  const versions = isSuffix ? '23 language versions' : 'all 24 language versions';
 
   if (euStatus === 'absent' || euStatus === undefined) {
     return {
@@ -105,7 +175,7 @@ export function missingTranslationReason(code: string, euStatus: string | undefi
     ours: true,
     headline: `We do not yet hold the official translations of ${code}`,
     body:
-      `This code is current under EU CLP, so the wording does exist in all 24 language versions of ${annex} — we simply have not imported it correctly yet. `
+      `This code is current under EU CLP, so the wording does exist in ${versions} of ${annex} — we simply have not imported it correctly yet. `
       + `This is a gap on our side, not in the regulation. Until it is filled, take the wording from the language version of the regulation itself rather than translating the English sentence above: `
       + `the official text is a legal wording, not a translation choice.`,
   };

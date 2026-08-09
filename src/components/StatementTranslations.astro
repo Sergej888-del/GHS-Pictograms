@@ -13,7 +13,10 @@
 // ⚠ Атрибут `lang` на ячейке с текстом — не украшение: без него экранный
 // диктор читает немецкую фразу английской фонетикой, а поисковик не понимает,
 // что на странице делает чужой язык. WCAG 2.2, 3.1.2 «Language of Parts».
-import { orderedTranslations, type MissingReason, type TranslationRow } from '../lib/statementTranslations';
+import {
+  orderedTranslations, annexLabel, irishCoverageNote,
+  type MissingReason, type TranslationRow,
+} from '../lib/statementTranslations';
 import { EURLEX_ATTRIBUTION } from '../lib/labelLanguages';
 
 interface Props {
@@ -22,7 +25,11 @@ interface Props {
   rows: TranslationRow[];
   /** Почему их нет. Обязателен, когда `rows` пуст. */
   reason?: MissingReason;
-  /** `III` · `IV` · `II` — для подписи источника. */
+  /**
+   * Аннекс НА СЛУЧАЙ ПУСТОГО `rows`. ⚠⚠ Когда строки есть, значение берётся
+   * ИЗ НИХ, а не отсюда: session 53 показала, что вычисленный страницей аннекс
+   * («H… → III») врёт на девяти суффиксных кодах, напечатанных в Annex VI.
+   */
   annex: string;
   /** Номер секции на странице: `02` и т. п. */
   sectionNo: string;
@@ -33,19 +40,35 @@ const lines = orderedTranslations(rows);
 // ⚠ Ссылка на источник берётся из данных, а не набирается: у разных импортов
 // разные редакции CELEX, и подпись обязана называть ту, что реально в базе.
 const sourceRef = rows.find((r) => r.source_ref)?.source_ref ?? null;
+// ⚠⚠ И аннекс — тоже из данных. Это ровно то же правило, по которому причина
+// отсутствия перевода берётся из статуса кода, а не из списка в коде.
+const annexCode = rows.find((r) => r.annex)?.annex ?? annex;
+const whereInRegulation = annexLabel(annexCode);
+// ⚠ Ирландский либо есть в таблице, либо его нет, и причины разные. Считается по
+// самой таблице, а не по номеру аннекса: так подпись не разойдётся с тем, что
+// читатель видит строками выше.
+const hasIrish = lines.some((l) => l.language.code === 'GA');
+const langCount = lines.length;
 ---
 
 <section class="hub-sec-white">
   <div class="hub-wrap">
     <p class="hub-eyebrow">{sectionNo} · Languages</p>
-    <h2 class="hub-h2">{code} in the 24 official EU languages</h2>
+    {/* ⚠⚠ Число в заголовке — из таблицы, а не константа. У девяти суффиксных
+        кодов языков 23, и заголовок «в 24 языках» над таблицей из 23 строк
+        читался бы как потерянная строка. */}
+    <h2 class="hub-h2">
+      {langCount === 24 || langCount === 0
+        ? `${code} in the 24 official EU languages`
+        : `${code} in ${langCount} of the 24 official EU languages`}
+    </h2>
 
     {lines.length > 0 ? (
       <>
         <p class="hub-sub">
           A label put on the market in an EU country must carry the wording of that country's own
-          language version of CLP — not a translation of the English one. These {lines.length} lines are
-          quoted from the consolidated regulation, Annex {annex}, and are the text to print.
+          language version of CLP — not a translation of the English one. These {langCount} lines are
+          quoted from the consolidated regulation, {whereInRegulation}, and are the text to print.
         </p>
 
         <div class="hub-table-wrap">
@@ -69,11 +92,11 @@ const sourceRef = rows.find((r) => r.source_ref)?.source_ref ?? null;
         </div>
 
         <p class="hub-fine">
-          {sourceRef ? <>Source: {sourceRef}, Annex {annex}. </> : <>Source: consolidated CLP, Annex {annex}. </>}
+          {sourceRef
+            ? <>Source: {sourceRef}, {whereInRegulation}. </>
+            : <>Source: consolidated CLP, {whereInRegulation}. </>}
           {EURLEX_ATTRIBUTION}
-          {' '}Irish is one of the 24 official languages and its H and P texts are printed inside the
-          multilingual Annex tables, but no consolidated CLP has ever been published in Irish — which is
-          why an Irish-primary label cannot be built here.
+          {' '}{irishCoverageNote(hasIrish, annexCode)}
         </p>
       </>
     ) : (

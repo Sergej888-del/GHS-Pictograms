@@ -83,7 +83,9 @@ const [rowRes, jurisRes, linkRes, comboRes, revRes, mapRes, allCodesRes, countsR
     supabase.from('sds_pages').select('slug, cas_number').eq('status', 'live'),
     // ⚠ Через `must` ниже: упавший запрос и «переводов нет» — разные ответы
     // читателю, а на экране они выглядели бы одинаково.
-    supabase.from('statement_translations').select('lang, text, source_ref').eq('code', code),
+    // ⚠⚠ `annex` берётся ОТСЮДА, а не вычисляется из вида кода: девять
+    // суффиксных H-кодов напечатаны в Annex VI Part 1, а не в Annex III.
+    supabase.from('statement_translations').select('lang, text, source_ref, annex').eq('code', code),
   ])
 
 // ⚠ Отказ запроса и «кода нет в реестре» — РАЗНЫЕ вещи, и раньше они сливались
@@ -398,18 +400,25 @@ const trRows = (must(`statement_translations(${code})`, trRes) ?? []) as {
   lang: string
   text: string
   source_ref: string | null
+  annex: string | null
 }[]
 /**
  * ⚠⚠ Причина отсутствия — ИЗ СТАТУСА В EU CLP, а не из списка кодов в коде.
  * Замер session 52: без переводов сидят 28 H-кодов, и у большинства причина в
  * самом регламенте — EUH001/006/059 изъяты, H209–H211, H227, H282–H284,
  * H303/H305/H313/H316/H320/H333, H401/H402, H421 в CLP не входят вовсе.
- * ⚠ Но девять суффиксных (H350i, H360D, H360Df, H360F, H360Fd, H360FD, H361d,
- * H361f, H361fd) в CLP CURRENT и стоят по всему Annex VI — там текст нужен, и
- * его отсутствие честно называется нашим пробелом, а не фактом о регламенте.
+ * ⭐ Девять суффиксных (H350i, H360D, H360Df, H360F, H360Fd, H360FD, H361d,
+ * H361f, H361fd) были ровно таким случаем: current в CLP, а переводов нет.
+ * Session 53 их залила из Annex VI Part 1 §1.1.2.1.2 — 23 языка, 207 строк.
  */
 const trReason = missingTranslationReason(code, jStatus.get('EU_CLP')?.status)
-/** ⚠ EUH-фразы живут в Annex II, H-фразы — в Annex III. */
+/**
+ * ⚠⚠ ЗАПАСНОЕ значение, и только оно. Когда строки перевода есть, аннекс берёт
+ * компонент ИЗ НИХ. Вычислять его из вида кода нельзя: `H…` даёт «Annex III», а
+ * девять суффиксных форм напечатаны в Annex VI Part 1, и подпись отправляла бы
+ * читателя сверять текст в раздел, где этих кодов нет вовсе.
+ * ⚠ EUH-фразы живут в Annex II, обычные H-фразы — в Annex III.
+ */
 const trAnnex = isEuh ? 'II' : 'III'
 
 // Номера секций сдвинулись: языки встали вторыми, сразу после формулировки.

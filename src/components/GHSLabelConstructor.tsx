@@ -667,10 +667,16 @@ export default function GHSLabelConstructor({
    * ⚠⚠ ОФИЦИАЛЬНЫЙ ТЕКСТ ФРАЗЫ НА ОСНОВНОМ ЯЗЫКЕ, С ОТКАТОМ НА АНГЛИЙСКИЙ.
    *
    * Откат — не запасной вариант «на всякий случай», а единственный законный
-   * ответ там, где официального текста НЕ СУЩЕСТВУЕТ: суффиксные формы (H350i,
-   * H360F, H361f и прочие) регламент отдельными строками не публикует, они
-   * собираются из базовых по правилам Annex VI. ⚠⚠ Склеить перевод суффиксной
-   * формы из перевода базовой — значит сочинить юридический текст.
+   * ответ там, где официального текста НЕ СУЩЕСТВУЕТ: у кодов, которых нет в
+   * CLP вовсе (изъятые прежними ATP и принятые UN GHS, но не ЕС), языковые
+   * версии не печатают ничего ни на одном языке.
+   *
+   * ⚠⚠ ЗДЕСЬ ПРИМЕРОМ СТОЯЛИ СУФФИКСНЫЕ ФОРМЫ — И ЭТО БЫЛО НЕВЕРНО. H350i,
+   * H360F, H361f и остальные шесть регламент публикует отдельными строками, в
+   * Annex VI Part 1 §1.1.2.1.2. Session 53 залила все девять на 23 языках, и
+   * откат на английский у них больше не срабатывает.
+   * ⚠⚠ Правило же остаётся: склеить перевод суффиксной формы из перевода
+   * базовой — значит сочинить юридический текст, и делать этого нельзя.
    *
    * ⚠ Молчать про откат нельзя: панель ниже называет такие коды поимённо.
    * Одноязычная этикетка, где одна строка вдруг по-английски, выглядит как
@@ -1193,22 +1199,62 @@ export default function GHSLabelConstructor({
 
           {/* ⚠⚠ Откат на английский называется ПОИМЁННО. Одна английская строка
               внутри немецкой этикетки выглядит как недоделка, а является
-              требованием: суффиксных форм H350i, H360F, H361f регламент
-              отдельными строками не публикует, и склеить их перевод из базовой
-              фразы значит сочинить юридический текст. */}
+              требованием.
+
+              ⚠⚠ ПРИЧИНА ЗДЕСЬ БЫЛА НАЗВАНА НЕВЕРНО. Стояло: «The regulation does
+              not publish these as separate rows» — и подразумевались суффиксные
+              формы H350i, H360F, H361f. Регламент их публикует, в Annex VI
+              Part 1 §1.1.2.1.2; session 53 залила все девять на 23 языках.
+              Настоящая причина у оставшихся кодов другая и куда проще: этих
+              фраз НЕТ В CLP ВООБЩЕ — они либо изъяты прежними ATP (EUH001,
+              EUH006, EUH059), либо приняты UN GHS, но не ЕС (H303, H305, H313,
+              H316, H320, H333, H401, H402, H421 и другие). Языковые версии
+              печатают то, что в регламенте есть. */}
           {primaryMissing.length > 0 && !primaryError && (
             <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-relaxed text-amber-900">
               No official {LANGUAGE_BY_CODE.get(primaryLang)?.name ?? primaryLang} wording exists for{' '}
               {primaryMissing.join(', ')} — {primaryMissing.length === 1 ? 'it stays' : 'they stay'} in English.
-              The regulation does not publish these as separate rows, and building the wording from the base
-              statement would mean inventing legal text.
+              {primaryMissing.length === 1 ? ' That code is' : ' Those codes are'} not part of EU CLP: either
+              deleted by an earlier ATP or adopted by UN GHS but not by the Union. The 24 language versions
+              print what the regulation contains, so translating the English sentence would mean inventing
+              legal text.
             </p>
           )}
 
-          {primaryLang !== 'EN' && !primarySignal && !primaryLoading && (
+          {/* ⚠⚠ КРАСНАЯ ПОЛОСА — ТОЛЬКО ПРО СБОЙ ЗАГРУЗКИ, И НИКОГДА ПРО ВЫБОР
+              ЧЕЛОВЕКА ИЛИ ПРО КЛАССИФИКАЦИЮ.
+
+              До session 53 условием было `!primarySignal`, то есть «слова нет».
+              Но «слова нет» бывает по трём разным причинам, и только одна из них
+              — наша беда:
+
+                1. человек выбрал «No signal word» в панели над конструктором;
+                2. ⚠⚠ классификация вещества сигнального слова НЕ ДАЁТ. Это не
+                   редкость и не край: **282 записи из 4 178 (6,8 %)** в
+                   гармонизированном списке идут без сигнального слова —
+                   Pyrimethanil (CAS 53112-28-0, H411), все H412 и H413. Aquatic
+                   Chronic 2–4 по Annex I сигнального слова не назначают вовсе;
+                3. уровень задан, а официальной формулировки на этом языке мы не
+                   отдали.
+
+              Полоса говорила «A signal word is a mandatory label element — do not
+              print this label» во ВСЕХ трёх, и в первых двух это прямая
+              неправда: этикетка Pyrimethanil без сигнального слова — законная
+              этикетка, а мы запрещали её печатать.
+
+              ⚠ И то же, что в session 51: дефект был НЕВИДИМ, пока основной язык
+              оставался английским — условие начиналось с `primaryLang !== 'EN'`.
+              Английская этикетка тех же 282 веществ не показывала ничего, то
+              есть вела себя ВЕРНО, и потому расхождение никого не настораживало.
+
+              Теперь условие — `signalLevel`: слово ожидается ровно тогда, когда
+              классификация его назначила. */}
+          {primaryLang !== 'EN' && signalLevel !== null && !primarySignal && !primaryLoading && (
             <p className="mt-2 rounded border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] text-rose-800">
-              ⚠⚠ No signal word could be loaded for {LANGUAGE_BY_CODE.get(primaryLang)?.name ?? primaryLang}.
-              A signal word is a mandatory label element — do not print this label.
+              ⚠⚠ The classification assigns the signal word “{signalLevel === 'danger' ? 'Danger' : 'Warning'}”,
+              but its official {LANGUAGE_BY_CODE.get(primaryLang)?.name ?? primaryLang} wording could not be
+              loaded. A signal word that the classification assigns is a mandatory label element under
+              Art. 17(1)(d) — do not print this label until it appears.
             </p>
           )}
         </div>
@@ -1279,9 +1325,18 @@ export default function GHSLabelConstructor({
                 Hazard and precautionary texts are the official wording from CLP Annex III and Annex IV,
                 and the signal word is the official wording from the Annex I label element tables —
                 none of it is a translation we made.
-                {secondLang && !secondSignal && (
-                  <> ⚠ No official signal word exists for {LANGUAGE_BY_CODE.get(secondLang)?.name} in the
-                  regulation, so the second block is printed without one.</>
+                {/* ⚠⚠ ТОТ ЖЕ ДЕФЕКТ, ЧТО У ОСНОВНОГО БЛОКА, И ТОГО ЖЕ ВИДА.
+                    Условие было `!secondSignal`, а текст утверждал «No official
+                    signal word exists for Italian IN THE REGULATION». У 282
+                    веществ без сигнального слова и при выборе «No signal word»
+                    это ложь про регламент: итальянское слово в Annex I есть,
+                    его не назначает КЛАССИФИКАЦИЯ. Утверждение о чужом
+                    документе, сделанное из нашего пустого поля. */}
+                {signalLevel !== null && !secondSignal && (
+                  <> ⚠ The classification assigns “{signalLevel === 'danger' ? 'Danger' : 'Warning'}”, but no
+                  official {LANGUAGE_BY_CODE.get(secondLang)?.name} wording for it exists in the regulation —
+                  Irish is the one case, since no consolidated CLP has ever been published in it. The second
+                  block is printed without a signal word.</>
                 )}
               </p>
               {missingSecond.length > 0 && (

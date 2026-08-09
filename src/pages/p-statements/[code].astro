@@ -66,7 +66,7 @@ const [rowRes, jurisRes, linkRes, comboRes, allCodesRes, countsRes, sdsRes, trRe
   // ⚠ Отказ этого запроса не должен выглядеть как «переводов нет»: пустой
   // ответ и упавший запрос сказали бы читателю прямо противоположные вещи,
   // а на экране выглядели бы одинаково. Оборачивается `must` ниже.
-  supabase.from('statement_translations').select('lang, text, source_ref').eq('code', code),
+  supabase.from('statement_translations').select('lang, text, source_ref, annex').eq('code', code),
 ])
 
 // ⚠ Отказ запроса и «кода нет в реестре» — разные вещи; раньше они сливались.
@@ -225,6 +225,7 @@ const trRows = (must(`statement_translations(${code})`, trRes) ?? []) as {
   lang: string
   text: string
   source_ref: string | null
+  annex: string | null
 }[]
 /**
  * ⚠⚠ Причина отсутствия берётся ИЗ СТАТУСА В EU CLP, уже загруженного выше, а
