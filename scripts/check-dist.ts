@@ -64,6 +64,11 @@ import { must, mapLimit } from '../src/lib/mustQuery'
 // с нашим же ожиданием — ровно так и прожил дефект session 38.
 import { labelMakerHrefProblems, LABEL_MAKER_BASE } from '../src/lib/labelMakerLink'
 import { BRANCHES, TEMPLATES } from '../src/lib/labelMakerHub'
+// ⚠⚠ Таблица составных записей берётся ИЗ ТОГО ЖЕ файла, которым разбирается
+// ячейка Annex VI. Выписать список номеров сюда — значит завести вторую копию,
+// которая разойдётся с разбором молча, и проверка начнёт подтверждать не то,
+// что лежит в базе.
+import { COMPOSITE_HEAD } from './clp-name-annotations.mjs'
 
 config({ path: resolve(process.cwd(), '.env.local') })
 config()
@@ -5383,8 +5388,131 @@ const CHECKS: Check[] = [
       }
     },
   },
-]
+  {
+    /**
+     * ⚠⚠ ЭТА ПРОВЕРКА ЗАВЕДЕНА ВМЕСТО ПРЕДУПРЕЖДЕНИЯ В ДОКУМЕНТЕ.
+     *
+     * Дефект «reaction mass of: A; B» был описан ДОСЛОВНО в
+     * claude/substance-display-name-plan.md §3.3 — и всё равно приехал в базу и
+     * прожил в проде до session 55. Документ не удерживает; удерживает проверка,
+     * которая падает.
+     *
+     * ⭐⭐ СЧЁТ ПРИСУТСТВИЯ, БЕЗ ПОРОГА. Проверка вида «всё найденное верно» не
+     * скажет, что искать было негде: если таблица переводов опустеет, проверка
+     * без счёта останется зелёной. Поэтому ожидание — «каждая запись таблицы
+     * лежит в базе на 23 языках», а число берётся из самой базы.
+     *
+     * ⚠ Второе направление не менее важно первого. Регламент правят, и в новой
+     * редакции появится реакционная масса, которой в таблице нет. Признак тот
+     * же, которым таблица выведена: двоеточие, вводящее список компонентов, не
+     * меньше чем у 13 языковых редакций одной записи.
+     */
+    id: 'substance-name-composite',
+    group: 'subs',
+    title: 'Составная запись Annex VI — одно имя, а не имя плюс компонент',
+    run: async () => {
+      type NameRow = { index_number: string; lang: string; name: string; kind: string; synonyms: string[] | null }
+      /**
+       * ⚠⚠ ПОРЯДОК В ЗАПРОСЕ ОБЯЗАТЕЛЕН, И ЭТО НЕ ПРИДИРКА.
+       *
+       * `selectAll` читает постранично через `range()`. Без ORDER BY Postgres
+       * не обязан отдавать страницы в одном и том же порядке: физический
+       * порядок строк меняется после записи, и соседние страницы начинают
+       * перекрываться. Часть строк ПРОПАДАЕТ из выборки, часть приходит ДВАЖДЫ.
+       *
+       * ⚠⚠ Поймано на первом же прогоне этой проверки, сразу после пересчёта
+       * 4 527 строк: она сказала «записей таблицы нет в базе вовсе: 9» у
+       * таблицы, ВЫВЕДЕННОЙ ИЗ ЭТОЙ ЖЕ БАЗЫ, и одновременно насчитала лишние
+       * языки у трёх записей. Оба симптома — одна причина.
+       *
+       * ⚠ Это первая проверка, читающая 101 654 строки, поэтому здесь и
+       * проявилось. Прочие таблицы меньше и умещаются в одну-две страницы —
+       * но риск у них тот же, просто ещё не выстрелил.
+       */
+      const rows = await selectAll<NameRow>(
+        'substance_name_translations',
+        'index_number,lang,name,kind,synonyms',
+        (q) => q.order('index_number', { ascending: true }).order('lang', { ascending: true }),
+      )
 
+      const byIndex = new Map<string, NameRow[]>()
+      for (const r of rows) {
+        const list = byIndex.get(r.index_number)
+        if (list) list.push(r)
+        else byIndex.set(r.index_number, [r])
+      }
+
+      const problems: string[] = []
+      const seen: string[] = []
+
+      // ── 1. Записи таблицы: designations не больше объявленного ────────────
+      let checkedRows = 0
+      let missingEntries = 0
+      for (const [index, head] of COMPOSITE_HEAD) {
+        const langRows = byIndex.get(index)
+        if (!langRows?.length) { missingEntries++; continue }
+        for (const r of langRows) {
+          checkedRows++
+          const n = r.synonyms?.length ?? 0
+          if (n > head) {
+            problems.push(
+              `${index} ${r.lang}: designations ${n}, а по таблице их ${head} — ` +
+              `компонент смеси лежит отдельным именем: ${JSON.stringify(r.synonyms?.[head] ?? '')}`)
+          }
+        }
+      }
+      if (missingEntries) {
+        problems.push(
+          `записей таблицы нет в базе вовсе: ${missingEntries} — ` +
+          'либо заливка не прошла, либо номер в таблице набран с опечаткой',
+          `⚠ прочитано строк: ${rows.length}. Если их меньше, чем в таблице базы, ` +
+          'дело не в номерах, а в постраничном чтении — см. комментарий про ORDER BY выше.')
+      }
+
+      // ── 2. Обратное направление: составная запись ВНЕ таблицы ─────────────
+      /**
+       * ⚠ Тот же признак, которым таблица выведена: двоеточие, вводящее список.
+       * Ищется в куске имени, а не в ячейке целиком, — иначе двоеточие из
+       * соседнего синонима считалось бы признаком этого.
+       * ⚠⚠ Порог 13 языков взят из замеренного разрыва: записей с двоеточием
+       * ровно у 12 языков нет ни одной, а ниже порога лежат опечатки редакции.
+       */
+      const LIST_COLON = /[^0-9]:[ \u00a0]+[^ \u00a0]/
+      const NEW_COMPOSITE_MIN_LANGS = 13
+      const strangers: string[] = []
+      for (const [index, langRows] of byIndex) {
+        if (COMPOSITE_HEAD.has(index)) continue
+        const withColon = langRows.filter((r) => (r.synonyms ?? []).some((seg) => LIST_COLON.test(seg)))
+        if (withColon.length >= NEW_COMPOSITE_MIN_LANGS) {
+          strangers.push(`${index}: двоеточие-список у ${withColon.length} языков, в таблице записи нет`)
+        }
+      }
+      if (strangers.length) {
+        problems.push(...strangers)
+        problems.push(
+          'Так выглядит новая редакция Annex VI: реакционная масса, которой у нас ещё нет.',
+          'Смотреть глазами и дописывать в COMPOSITE_HEAD в scripts/clp-name-annotations.mjs,',
+          'а не подгонять порог.')
+      }
+
+      const langs = new Set(rows.map((r) => r.lang)).size
+      seen.push(`таблица составных записей: ${COMPOSITE_HEAD.size} номеров, проверено строк ${checkedRows} на ${langs} языках`)
+      seen.push(`всего строк переводов имён: ${rows.length}`)
+      seen.push(`записей вне таблицы, у которых признак составной не сработал: ${byIndex.size - COMPOSITE_HEAD.size}`)
+
+      const ok = problems.length === 0
+      return {
+        id: 'substance-name-composite',
+        group: 'subs',
+        ok,
+        headline: ok
+          ? `${COMPOSITE_HEAD.size} составных записей целы на ${langs} языках`
+          : `проблем: ${problems.length}`,
+        detail: ok ? seen : problems,
+      }
+    },
+  },
+]
 // ─────────────────────────── прогон ───────────────────────────
 
 async function main(): Promise<void> {
