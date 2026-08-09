@@ -20,7 +20,7 @@
 // принадлежит разделу label maker и больше ничему (design-system.md §2.7 и
 // design-system-accents.md).
 import { LABEL_MAKER_BASE, type LabelMakerParams } from '../lib/labelMakerLink';
-import { ctaHref } from '../lib/labelMakerCta';
+import { ctaHref, LMC_CLASS } from '../lib/labelMakerCta';
 import { accentClass, accentBadge } from '../lib/sectionAccent';
 
 interface Props {
@@ -53,10 +53,10 @@ const acc = accentClass(base);
 const badge = accentBadge(base);
 ---
 
-<aside class={`lmc lmc-${variant}${acc ? ` ${acc}` : ''}`}>
-  {badge && <span class="lmc-badge">{badge}</span>}
-  <h3 class="lmc-title">{title}</h3>
-  <p class="lmc-copy">{copy}</p>
-  <a class="lmc-cta" href={href}>{cta}</a>
-  {note && <p class="lmc-note">{note}</p>}
+<aside class={`${LMC_CLASS.root} ${variant === 'wide' ? LMC_CLASS.wide : LMC_CLASS.inline}${acc ? ` ${acc}` : ''}`}>
+  {badge && <span class={LMC_CLASS.badge}>{badge}</span>}
+  <h3 class={LMC_CLASS.title}>{title}</h3>
+  <p class={LMC_CLASS.copy}>{copy}</p>
+  <a class={LMC_CLASS.cta} href={href}>{cta}</a>
+  {note && <p class={LMC_CLASS.note}>{note}</p>}
 </aside>

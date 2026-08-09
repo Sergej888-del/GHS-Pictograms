@@ -24,6 +24,8 @@ import {
   resolveRoute, computeRoute, rollUp, tableKey, UNITS, P_TEXT,
   type Route, type InhalForm, type Resolved, type RouteResult,
 } from '../lib/ate'
+import { ateMixtureCta } from '../lib/labelMakerCta'
+import LabelMakerCtaBlock from './LabelMakerCtaBlock'
 
 const ROUTES: Route[] = ['oral', 'dermal', 'inhalation']
 const ROUTE_LABEL: Record<Route, string> = { oral: 'Oral', dermal: 'Dermal', inhalation: 'Inhalation' }
@@ -219,6 +221,25 @@ export default function AteMixtureCalculator() {
   const shareTitle = result?.signalWord
     ? `GHS/CLP acute toxicity: ${result.signalWord}${result.hCodes.length ? ' · ' + result.hCodes.join(', ') : ''} — ATE Mixture Calculator`
     : 'ATE Mixture Calculator — GHS/CLP acute toxicity classification'
+
+  // ⚠⚠ БЛОК-ПЕРЕДАЧА В КОНСТРУКТОР — ИЗ `result`, а не из введённых компонентов:
+  // элементы этикетки появляются только после `rollUp`, и до нажатия «Classify
+  // mixture» передавать нечего. ⚠ При «not classified» (`worstCategory === null`)
+  // сборщик возвращает `null`, и блок не рисуется вовсе — приглашение печатать
+  // этикетку на неклассифицированную смесь читалось бы как наш недосчёт.
+  const labelMakerCta = useMemo(
+    () =>
+      result
+        ? ateMixtureCta({
+            worstCategory: result.worstCategory,
+            signalWord: result.signalWord,
+            pictogram: result.pictogram,
+            hCodes: result.hCodes,
+            pCodes: result.pCodes,
+          })
+        : null,
+    [result],
+  )
 
   const fuse = useMemo(
     () => new Fuse(all, {
@@ -581,6 +602,14 @@ export default function AteMixtureCalculator() {
             </button>
             <ShareResult url={shareUrl} title={shareTitle} />
           </div>
+
+          {/* ⭐⭐ Вход в конструктор — ВЫШЕ партнёрской карточки (решение
+              session 53: бесплатный инструмент прежде платного партнёра).
+              Замер session 45: ATE считают ровно затем, чтобы напечатать
+              этикетку на смесь, а в блоке «дальше» предлагали SDS-библиотеку и
+              матрицу хранения. 20 780 запросов за сутки против 133 у главной —
+              это второй по стоимости вход на сайте. */}
+          <LabelMakerCtaBlock content={labelMakerCta} variant="wide" />
 
           {/* SDS Manager affiliate slot — the classification result belongs in SDS section 2. */}
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">

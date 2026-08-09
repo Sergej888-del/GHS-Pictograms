@@ -2690,6 +2690,109 @@ const CHECKS: Check[] = [
     },
   },
 
+  // ⚠⚠ ТРЕТЬЯ ПРОВЕРКА ГРУППЫ — И ОНА ЗАВЕДЕНА ПОТОМУ, ЧТО ДВУХ ПЕРВЫХ НЕ
+  // ХВАТИЛО. Обе они были ЗЕЛЁНЫМИ всё то время, пока 236 страниц не несли ни
+  // одной партнёрской ссылки, и это не сбой: `affiliate-marking` спрашивает
+  // «размечена ли НАЙДЕННАЯ ссылка», `affiliate-subid` — «есть ли у НАЙДЕННОЙ
+  // ссылки fp_sid». Ни та ни другая не может сказать, что искать было негде.
+  //
+  // ⭐⭐ ПРАВИЛО, КОТОРОЕ ИЗ ЭТОГО СЛЕДУЕТ: рядом с инвариантом «всё найденное
+  // правильно» обязан стоять СЧЁТ ПРИСУТСТВИЯ. У страниц веществ он был заведён
+  // отдельно (`subs-affiliate-placement`) и потому дыры там не было; у трёх
+  // соседних разделов его не было, и дыру нашёл Сергей глазами (session 53).
+  //
+  // ⚠⚠ ПОРОГА ЗДЕСЬ НЕТ И БЫТЬ НЕ ДОЛЖНО. Ожидание — «на КАЖДОЙ построенной
+  // странице раздела», а число берётся из самого dist. Порог, назначенный из
+  // головы, был бы вреден: session 52 уже показала, чего стоит «22 вместо 4».
+  {
+    id: 'affiliate-placement',
+    group: 'Affiliate',
+    title: 'Партнёрская карточка стоит там, где должна — счёт присутствия по разделам',
+    run: async () => {
+      // Разделы: у страницы свой subid, у хаба свой. ⚠⚠ `hubSid: null` означает
+      // «у хаба раздела карточки нет», и это состояние ВЫВОДИТСЯ ОТДЕЛЬНОЙ
+      // строкой, а не молчится: если это пропуск, а не решение, он виден.
+      const SECTIONS: { dir: string; pageSid: string; hubSid: string | null }[] = [
+        { dir: 'h-statements', pageSid: 'hstat', hubSid: 'hstathub' },
+        { dir: 'p-statements', pageSid: 'pstat', hubSid: 'pstathub' },
+        { dir: 'ghs', pageSid: 'ghscode', hubSid: null },
+        { dir: 'sds-sections', pageSid: 'sdssec', hubSid: 'sdssechub' },
+        { dir: 'storage-compatibility', pageSid: 'stclass', hubSid: 'sthub' },
+        { dir: 'un', pageSid: 'unpage', hubSid: null },
+        { dir: 'sds', pageSid: 'sdspage', hubSid: 'sdshub' },
+      ]
+      // Одиночные страницы — у них нет «раздела», но карточка на них тоже
+      // обязана быть, и потерять её так же легко.
+      const SINGLES: { rel: string; sid: string }[] = [
+        { rel: 'tools/ate-mixture-calculator/index.html', sid: 'gpmgmt' },
+        { rel: 'tools/chemical-storage-compatibility/index.html', sid: 'sttool' },
+      ]
+
+      const problems: string[] = []
+      const notes: string[] = []
+      const detail: string[] = []
+      let pages = 0
+
+      for (const s of SECTIONS) {
+        const marker = `fp_sid=${s.pageSid}`
+        assertAscii('affiliate-placement', [marker])
+        const slugs = pageSlugs(s.dir)
+        if (slugs.length === 0) {
+          problems.push(`${s.dir}: в dist нет ни одной страницы раздела`)
+          continue
+        }
+        const missing: string[] = []
+        for (const slug of slugs) {
+          const html = readPage(join(s.dir, slug, 'index.html'))
+          pages++
+          if (html === null || !html.includes(marker)) missing.push(`${s.dir}/${slug}`)
+        }
+        if (missing.length) {
+          problems.push(`${s.dir}: ${missing.length} из ${slugs.length} страниц без ${marker} -> ${preview(missing)}`)
+        } else {
+          detail.push(`${s.dir}: ${slugs.length} страниц, у каждой ${marker}`)
+        }
+
+        const hub = readPage(join(s.dir, 'index.html'))
+        if (s.hubSid) {
+          const hubMarker = `fp_sid=${s.hubSid}`
+          assertAscii('affiliate-placement', [hubMarker])
+          pages++
+          if (hub === null) problems.push(`${s.dir}/: хаба нет в dist, а карточка с ${hubMarker} ожидается`)
+          else if (!hub.includes(hubMarker)) problems.push(`${s.dir}/: хаб без ${hubMarker}`)
+          else detail.push(`${s.dir}/: хаб несёт ${hubMarker}`)
+        } else if (hub !== null) {
+          notes.push(`${s.dir}/: хаб построен, партнёрской карточки на нём нет`)
+        }
+      }
+
+      for (const one of SINGLES) {
+        const marker = `fp_sid=${one.sid}`
+        assertAscii('affiliate-placement', [marker])
+        const html = readPage(one.rel)
+        pages++
+        if (html === null) problems.push(`${one.rel}: страницы нет в dist`)
+        else if (!html.includes(marker)) problems.push(`${one.rel}: нет ${marker}`)
+        else detail.push(`${one.rel}: ${marker}`)
+      }
+
+      // ⚠ Карточка селектора живёт ВНУТРИ React-острова и в HTML не попадает
+      // вовсе — искать её здесь значило бы объявить пропажу там, где всё цело.
+      notes.push('карточки внутри React-островов (селектор, ATE) лежат в _astro/*.js — их держит affiliate-subid')
+
+      const ok = problems.length === 0
+      return {
+        id: 'affiliate-placement',
+        group: 'Affiliate',
+        ok,
+        headline: ok
+          ? `${pages} страниц ${SECTIONS.length} разделов — карточка на каждой`
+          : `разделов с пропусками: ${problems.length}`,
+        detail: ok ? [...detail, ...notes] : [...problems, ...notes],
+      }
+    },
+  },
+
   // ─────────────── SDS sections: /sds-sections/ (session 31) ───────────────
   // Раздел построен из контент-коллекции, а выпадашка веществ — из живой базы.
   // Поэтому проверок две породы: набор страниц сверяется с прозой на диске,
@@ -5187,6 +5290,96 @@ const CHECKS: Check[] = [
               ? `${checked} страниц фраз, у каждой больше ${nav} вхождений (${nav} даёт навигация)`
               : `${empty.length} из ${checked} страниц без контекстной ссылки`,
         detail: empty.length ? [preview(empty, 20)] : [`порог ${nav} измерен по ${baselinePages.join(' и ')}`],
+      }
+    },
+  },
+
+  // ⚠⚠ У `label-maker-statements` ЕСТЬ СЛЕПАЯ ЗОНА, И ЭТА ПРОВЕРКА ЗАКРЫВАЕТ
+  // ЕЁ КРАЙ. Ссылки, которые рисует React-остров, в `dist/*.html` не попадают:
+  // их собирает браузер после гидратации. Значит вход в конструктор с
+  // `/pictogram-selector/` и с ATE-калькулятора (пункты A2 и A3) не виден НИ
+  // ОДНОЙ проверке, читающей разметку, — включая ту, что стоит выше.
+  //
+  // ⭐ Ищем в `dist/_astro/*.js` — там же, где `affiliate-subid` находит
+  // партнёрские ссылки инструментов. Маркер — заголовок блока: он приходит из
+  // `labelMakerCta.ts` строковым литералом и переживает минификацию.
+  // ⚠ База адреса проверяется ОТДЕЛЬНО от заголовка: сборщик волен развести
+  // `labelMakerCta` и `labelMakerLink` по разным кускам, и требование «оба
+  // литерала в одном файле» падало бы на ровном месте.
+  {
+    id: 'label-maker-island-cta',
+    group: 'Label maker',
+    title: 'Блок-передача в конструктор доехал до бандлов селектора и ATE',
+    run: async () => {
+      // ⚠⚠ Бандл ищется по `component-url` НА САМОЙ СТРАНИЦЕ, а не по угаданному
+      // имени файла — так же, как в `subs-deeplink-params` и `storage-tool`.
+      // Разметка знает адрес своего острова точно; список имён в проверке был бы
+      // вторым источником правды.
+      const BASE = '/ghs-label-maker/'
+      const BLOCKS: { page: string; island: string; title: string }[] = [
+        { page: 'pictogram-selector/index.html', island: 'PictogramSelector', title: 'Now put it on a label' },
+        {
+          page: 'tools/ate-mixture-calculator/index.html',
+          island: 'AteMixtureCalculator',
+          title: 'Put this classification on a label',
+        },
+      ]
+      assertAscii('label-maker-island-cta', [BASE, ...BLOCKS.map((b) => b.title)])
+
+      const seen: string[] = []
+      const problems: string[] = []
+
+      for (const b of BLOCKS) {
+        const html = readPage(b.page)
+        if (html === null) {
+          problems.push(`нет ${b.page} — страница инструмента не собралась`)
+          continue
+        }
+        const m = html.match(new RegExp(`component-url="(/_astro/${b.island}\\.[A-Za-z0-9_-]+\\.js)"`))
+        if (!m) {
+          problems.push(
+            `на ${b.page} нет component-url острова ${b.island}. Поправить карту BLOCKS, а не выключать ` +
+              'проверку: без неё вход в конструктор с этой страницы не виден вообще ничему.',
+          )
+          continue
+        }
+        const entry = m[1].replace(/^\//, '')
+        const entryText = existsSync(join(DIST, entry)) ? readFileSync(join(DIST, entry), 'utf8') : null
+        if (entryText === null) {
+          problems.push(`${entry} объявлен в разметке, но файла в dist нет`)
+          continue
+        }
+
+        // Заголовок блока приходит из `labelMakerCta.ts` строковым литералом и
+        // переживает минификацию. ⚠ Rollup волен вынести его в общий чанк — это
+        // законно, поэтому ищем шире, но ГДЕ нашли, печатаем.
+        const findIn = (needle: string): string | null => {
+          if (entryText.includes(needle)) return entry
+          const other = assetFiles().find((f) => f.text.includes(needle))
+          return other ? `${other.name} (общий чанк, не входной)` : null
+        }
+        const whereTitle = findIn(b.title)
+        const whereBase = findIn(BASE)
+        if (!whereTitle) {
+          problems.push(`${b.island}: заголовка блока «${b.title}» нет ни в ${entry}, ни в одном _astro/*.js`)
+          continue
+        }
+        if (!whereBase) {
+          problems.push(`${b.island}: базы ${BASE} нет ни в ${entry}, ни в одном _astro/*.js — ссылку строить нечем`)
+          continue
+        }
+        seen.push(`${b.page}: блок в ${whereTitle}, база адреса в ${whereBase}`)
+      }
+
+      const ok = problems.length === 0
+      return {
+        id: 'label-maker-island-cta',
+        group: 'Label maker',
+        ok,
+        headline: ok ? `${seen.length} блока доехали до бандлов инструментов` : `проблем: ${problems.length}`,
+        detail: ok
+          ? [...seen, 'в dist/*.html этих блоков нет вовсе — их рисует браузер, и разметочные проверки их не видят']
+          : problems,
       }
     },
   },

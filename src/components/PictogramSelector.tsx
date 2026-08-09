@@ -9,8 +9,10 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { loadSelectorData, type LoadedData } from '../lib/selectorData';
 import { resolveSelection, type Selection } from '../lib/pictogramSelector';
 import { buildLabelElementsSvg, downloadSvg, downloadPdf } from '../lib/labelArtifact';
+import { pictogramSelectorCta } from '../lib/labelMakerCta';
 import ShareResult from './ShareResult';
 import NewsletterOptIn from './NewsletterOptIn';
+import LabelMakerCtaBlock from './LabelMakerCtaBlock';
 
 // --- shareable-link state codec (URL-safe base64) ---
 function encodeState(obj: unknown): string {
@@ -145,6 +147,29 @@ export default function PictogramSelector() {
   );
 
   const result = useMemo(() => (data ? resolveSelection(data, jurisdiction, selection) : null), [data, jurisdiction, selection]);
+
+  // ⚠⚠ БЛОК-ПЕРЕДАЧА В КОНСТРУКТОР СТРОИТСЯ ИЗ `result`, А НЕ ИЗ `picked`.
+  // Между выбором человека и результатом лежит CLP Art. 26: он снимает часть
+  // пиктограмм (GHS07 под GHS06 и так далее). Ссылка, собранная из галочек,
+  // увела бы в конструктор набор, который регламент отменил в соседней колонке
+  // этого же экрана, — и человек увидел бы на этикетке не то, что мы ему только
+  // что показали.
+  //
+  // ⚠ Имя юрисдикции берётся ИЗ СТРОКИ БАЗЫ — той самой, что подписывает
+  // кнопку выбора, а не из `JTAG`. Урок session 53: подпись, снятая с вида
+  // ключа, а не с данных, врёт молча.
+  const labelMakerCta = useMemo(() => {
+    if (!data || !result) return null;
+    const row = data.jurisdictions.find((j) => j.code === jurisdiction);
+    return pictogramSelectorCta({
+      jurisdictionCode: jurisdiction,
+      jurisdictionName: row?.name_en ?? JTAG[jurisdiction] ?? jurisdiction,
+      pictograms: result.pictograms,
+      signalWord: result.signal_word,
+      hCodes: result.h_codes,
+      appliedRuleCount: result.applied_rules.length,
+    });
+  }, [data, result, jurisdiction]);
 
   // Build a shareable link that re-creates this selection.
   // SSR-safe: empty string on the server, real URL after hydration.
@@ -367,6 +392,14 @@ export default function PictogramSelector() {
               </div>
             )}
           </div>
+
+          {/* ⭐⭐ Вход в конструктор — СРАЗУ ПОД ЭЛЕМЕНТАМИ ЭТИКЕТКИ и ВЫШЕ
+              партнёрской карточки. Замер session 45: селектор выдаёт ровно тот
+              набор, который конструктор принимает на вход, а ссылки не было
+              вовсе — человек проходил инструмент до конца и упирался в тупик.
+              Порядок «бесплатный инструмент выше платного партнёра» — решение
+              session 53. */}
+          <LabelMakerCtaBlock content={labelMakerCta} />
 
           {selectedCount > 0 && <ShareResult url={shareUrl} title="My GHS pictogram selection" />}
 

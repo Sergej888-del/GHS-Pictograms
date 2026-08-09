@@ -21,7 +21,35 @@
 // а пиктограмм у неё две — GHS01 и GHS02, и обе обязательны. Поэтому согласие
 // считается ПО НАБОРУ пиктограмм у категории, а не по отдельной пиктограмме.
 
-import { labelMakerHref, LABEL_MAKER_BASE, type LabelMakerParams, type SignalParam } from './labelMakerLink';
+import {
+  labelMakerHref,
+  isPStatementParam,
+  normalizeJurisdiction,
+  LABEL_MAKER_BASE,
+  type LabelMakerParams,
+  type SignalParam,
+} from './labelMakerLink';
+
+/**
+ * Имена классов блока — В ОДНОМ МЕСТЕ, как `LM_PARAM` для имён параметров.
+ *
+ * ⚠⚠ ЗАЧЕМ. Блок рисуют ДВА файла: `LabelMakerCta.astro` на статических
+ * страницах и `LabelMakerCtaBlock.tsx` внутри React-островов, где адрес
+ * известен только после пересчёта. Разойдись у них имена классов — один из двух
+ * блоков потерял бы оформление целиком и остался бы голым текстом, а увидеть это
+ * можно было бы только глазами на конкретной странице. Стили при этом
+ * по-прежнему живут в `hub.css` в единственном экземпляре.
+ */
+export const LMC_CLASS = {
+  root: 'lmc',
+  wide: 'lmc-wide',
+  inline: 'lmc-inline',
+  badge: 'lmc-badge',
+  title: 'lmc-title',
+  copy: 'lmc-copy',
+  cta: 'lmc-cta',
+  note: 'lmc-note',
+} as const;
 
 /**
  * Имена девяти пиктограмм. ⚠ Раньше эта таблица лежала прямо в
@@ -311,6 +339,198 @@ export function pStatementCta(input: PCtaInput): CtaContent {
     copy: sentences.join(' '),
     cta: `Build a label with ${code} →`,
     params: { p: [code] },
+  };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Блоки для ДВУХ ИНСТРУМЕНТОВ — пункты A2 и A3 плана.
+//
+// ⚠⚠ ОТЛИЧИЕ ОТ БЛОКОВ ВЫШЕ, И ОНО ГЛАВНОЕ. Страница фразы знает свой код на
+// сборке; инструмент знает свой ответ ТОЛЬКО ПОСЛЕ ПЕРЕСЧЁТА. Поэтому обе
+// функции ниже принимают СОСТОЯНИЕ РЕЗУЛЬТАТА, а не выбор человека: на
+// селекторе между ними лежит CLP Art. 26, который часть пиктограмм снимает, и
+// ссылка, собранная из галочек, увела бы в конструктор набор, уже отменённый
+// регламентом на экране рядом.
+//
+// ⚠⚠ И ОБЕ ВОЗВРАЩАЮТ `null`, КОГДА ПЕРЕДАВАТЬ НЕЧЕГО. Блок «соберите этикетку»
+// над пустым результатом — приглашение напечатать пустоту.
+// ────────────────────────────────────────────────────────────────────────────
+
+/** `Danger` → `danger`; `null` (слова НЕТ) → `none`; чужая строка → `null`. */
+function signalParamFromWord(word: string | null): SignalParam | null {
+  if (word === null) return 'none';
+  const w = word.trim().toLowerCase();
+  return w === 'danger' ? 'danger' : w === 'warning' ? 'warning' : null;
+}
+
+/**
+ * `the hazard statements H226 and H319` до трёх кодов, дальше — счётом словами.
+ * ⚠ Артикль внутри, а не у вызывающего: у формы со счётом его быть не должно
+ * («the four hazard statements» обещает читателю определённый, уже названный
+ * набор, а мы их как раз не назвали).
+ */
+function statementPhrase(codes: readonly string[]): string {
+  if (codes.length === 0) return '';
+  if (codes.length <= 3) return `the hazard statement${codes.length > 1 ? 's' : ''} ${listAnd([...codes])}`;
+  return `${numWord(codes.length)} hazard statements`;
+}
+
+export type SelectorCtaInput = {
+  /** Код юрисдикции СЕЛЕКТОРА: `UN_GHS` | `EU_CLP` | `GB_CLP` | `OSHA_HCS`. */
+  jurisdictionCode: string;
+  /**
+   * Имя юрисдикции ИЗ СТРОКИ БАЗЫ — той самой, что подписывает кнопку выбора.
+   * ⚠ Не из константы в коде: session 53 показала, чем кончается подпись,
+   * взятая из вида ключа, а не из данных.
+   */
+  jurisdictionName: string;
+  /** Пиктограммы РЕЗУЛЬТАТА — после Art. 26, с пометкой «необязательна». */
+  pictograms: readonly { code: string; optional: boolean }[];
+  /** Сигнальное слово результата. ⚠⚠ `null` — классификация его НЕ НАЗНАЧАЕТ. */
+  signalWord: string | null;
+  hCodes: readonly string[];
+  /** Сколько правил старшинства сработало. 0 — набор ничем не урезан. */
+  appliedRuleCount: number;
+};
+
+/** Блок под результатом пиктограммного селектора. `null` — передавать нечего. */
+export function pictogramSelectorCta(input: SelectorCtaInput): CtaContent | null {
+  const { jurisdictionCode, jurisdictionName, pictograms, signalWord, hCodes, appliedRuleCount } = input;
+
+  const required = pictograms.filter((p) => !p.optional).map((p) => p.code);
+  const optional = pictograms.filter((p) => p.optional).map((p) => p.code);
+
+  // ⚠ Порог показа — «есть ли на этикетке хоть один элемент», а не «нажал ли
+  // человек хоть что-нибудь». Выбор, который в этой юрисдикции не даёт ни
+  // пиктограммы, ни фразы, передавать в конструктор нечем.
+  if (pictograms.length === 0 && hCodes.length === 0) return null;
+
+  const jur = normalizeJurisdiction(jurisdictionCode);
+  const signal = signalParamFromWord(signalWord);
+
+  const carried: string[] = [];
+  if (required.length) {
+    carried.push(`the ${pictogramPhrase(required)} pictogram${required.length > 1 ? 's' : ''}`);
+  }
+  if (signalWord) carried.push(`the signal word ${signalWord}`);
+  if (hCodes.length) carried.push(statementPhrase(hCodes));
+
+  const sentences = [`Opening the label maker from here carries over ${listAnd(carried)}.`];
+  sentences.push(
+    jur
+      ? `Add a product name and a label size, and it lays them out to the label rules of ${jurisdictionName} and prints a vector PDF at full scale — no sign-up.`
+      : `Add a jurisdiction, a product name and a label size, and it prints a vector PDF at full scale — no sign-up.`,
+  );
+  // ⚠⚠ «Правила старшинства», а НЕ «CLP Article 26». Правила в базе универсальны
+  // (`jurisdiction_id` пуст у всех восьми), и блок этот стоит в том числе в
+  // режиме OSHA HCS — сослаться там на статью регламента ЕС значит соврать про
+  // регламент из своего же поля, ровно как в session 53.
+  if (appliedRuleCount > 0) {
+    sentences.push(
+      `The pictograms are the set that survives the ${numWord(appliedRuleCount)} precedence ` +
+        `rule${appliedRuleCount > 1 ? 's' : ''} applied above, not the raw selection.`,
+    );
+  }
+
+  // ⚠⚠ Оговорки — ровно про то, чего мы НЕ подставили, и почему. Молчаливый
+  // пропуск читался бы как недоработка, а каждый из трёх — решение.
+  const notes: string[] = [];
+  if (!jur) {
+    notes.push(
+      `UN GHS is the model regulation and the label maker builds to a national one — OSHA HazCom, EU CLP, ` +
+        `GB CLP or WHMIS. The link therefore carries no jurisdiction: pick one there, because the model and ` +
+        `the national rules differ on the environmental hazards and on the EUH statements.`,
+    );
+  }
+  if (optional.length) {
+    notes.push(
+      `${listAnd(optional)} ${optional.length > 1 ? 'are' : 'is'} optional in ${jurisdictionName} for this ` +
+        `classification, so ${optional.length > 1 ? 'they are' : 'it is'} shown above but not ticked — that ` +
+        `choice stays yours.`,
+    );
+  }
+  if (signalWord === null) {
+    notes.push(
+      `This classification assigns no signal word, and the link says exactly that rather than leaving the ` +
+        `field untouched — the label is built without one.`,
+    );
+  }
+
+  return {
+    title: 'Now put it on a label',
+    copy: sentences.join(' '),
+    cta: 'Open in the GHS Label Maker →',
+    note: notes.length ? notes.join(' ') : undefined,
+    params: {
+      jurisdiction: jur,
+      pictograms: required,
+      signal,
+      h: [...hCodes],
+    },
+  };
+}
+
+export type AteCtaInput = {
+  /** Худшая категория по маршрутам. ⚠⚠ `null` — смесь НЕ КЛАССИФИЦИРОВАНА. */
+  worstCategory: number | null;
+  signalWord: string | null;
+  pictogram: string | null;
+  hCodes: readonly string[];
+  pCodes: readonly string[];
+};
+
+/** Блок под результатом ATE-калькулятора. `null` — классификации нет. */
+export function ateMixtureCta(input: AteCtaInput): CtaContent | null {
+  const { worstCategory, signalWord, pictogram, hCodes, pCodes } = input;
+
+  // ⚠⚠ «Не классифицировано по острой токсичности» — законный ответ
+  // калькулятора, а не пустой результат. Звать с него на этикетку не за чем:
+  // передавать нечего, и приглашение читалось бы как «мы что-то не досчитали».
+  if (worstCategory === null) return null;
+
+  // ⚠⚠ Комбинированные коды отсеиваются ТОЙ ЖЕ функцией, которой их отсеивает
+  // сборщик адреса, — иначе оговорка ниже однажды соврёт о том, что потеряно.
+  const carriedP = pCodes.filter(isPStatementParam);
+  const droppedP = pCodes.filter((c) => !isPStatementParam(c));
+
+  const carried: string[] = [];
+  if (pictogram) carried.push(`the ${pictogramPhrase([pictogram])} pictogram`);
+  if (signalWord) carried.push(`the signal word ${signalWord}`);
+  if (hCodes.length) carried.push(statementPhrase(hCodes));
+  if (carriedP.length) {
+    carried.push(`${numWord(carriedP.length)} precautionary statement${carriedP.length > 1 ? 's' : ''}`);
+  }
+
+  const sentences = [
+    `Category ${worstCategory} is the acute-toxicity outcome of this mixture, and the label maker takes it as it stands: ${listAnd(carried)}.`,
+    'Add a product name, pick a label size, and it prints a vector PDF at full scale — no sign-up.',
+  ];
+
+  const notes: string[] = [
+    `Acute toxicity is one hazard class. Whatever else the mixture is classified for — flammability, ` +
+      `corrosion, aspiration, the environment — is not in this result and is not carried over.`,
+    `The link carries no jurisdiction: the additivity formula is the same everywhere, but which national ` +
+      `rule the label is printed to is a separate choice you make in the label maker.`,
+  ];
+  if (droppedP.length) {
+    notes.push(
+      `${listAnd(droppedP)} ${droppedP.length > 1 ? 'are combined codes' : 'is a combined code'}. CLP Annex IV ` +
+        `counts a combination as ONE label element, while the label maker ticks statements separately, so ` +
+        `${droppedP.length > 1 ? 'they are' : 'it is'} left for you to add there.`,
+    );
+  }
+
+  return {
+    title: 'Put this classification on a label',
+    copy: sentences.join(' '),
+    cta: 'Open in the GHS Label Maker →',
+    note: notes.join(' '),
+    params: {
+      pictograms: pictogram ? [pictogram] : [],
+      signal: signalParamFromWord(signalWord),
+      h: [...hCodes],
+      p: carriedP,
+    },
   };
 }
 
