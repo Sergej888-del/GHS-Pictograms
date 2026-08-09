@@ -1619,6 +1619,45 @@ button.hub-pair:last-child { border-bottom: 0; }
 }
 .hub-table .c-n .zero { color: #cbd5e1; }
 
+/* ─── Имя записи Annex VI по языковым редакциям (страница вещества, session 56)
+   Зачем свои ячейки, а не .c-code + .c-txt: .c-code — это ссылка-код моноширинным,
+   а тут подпись языка из двух строк и без ссылки. И главное — имена бывают
+   длиной с абзац: замер по 3 650 страницам даёт 61 страницу с именем длиннее
+   200 знаков и одно в 909. Без overflow-wrap такая строка растягивает таблицу
+   за край экрана и уносит с собой всю страницу. */
+.hub-table td.c-lang { width: 1%; white-space: nowrap; }
+.hub-table td.c-lang .lang-name {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.hub-table td.c-lang .lang-native {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.hub-table td.c-name { font-size: 14.5px; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere; }
+.hub-table td.c-name .name-main { display: block; }
+/* ⚠⚠ Прочие обозначения ячейки — СПИСОК, а не склеенная строка. Разделитель
+   рисуется здесь, потому что в регламенте он у каждой редакции свой: греческая
+   ставит ано телию `·`, а не точку с запятой. Знак в разметке напечатал бы имя,
+   которого в Annex VI нет. */
+.hub-table td.c-name .name-alt { display: block; margin-top: 4px; font-size: 13px; color: var(--ink-2); }
+.hub-table td.c-name .name-alt .alt + .alt::before { content: ' · '; color: var(--ink-3); }
+.hub-table td.c-name .name-why {
+  display: block;
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
 /* Unused = defined in the regulation, carried by no Annex VI substance */
 .hub-table tr.is-unused .c-code a { color: #64748b; }
 .hub-table tr.is-unused .c-txt { color: var(--ink-3); }
@@ -1663,6 +1702,13 @@ button.hub-pair:last-child { border-bottom: 0; }
   .hub-table tr:last-child { border-bottom: 0; }
   .hub-table td { padding: 0; border: 0; }
   .hub-table .c-code { margin-bottom: 4px; }
+  /* ⚠ На телефоне ячейки таблицы становятся блоками, и подпись языка обязана
+     стоять НАД именем со своим отступом — иначе немецкое имя читается как
+     продолжение слова «German». */
+  .hub-table td.c-lang { white-space: normal; margin-bottom: 6px; }
+  .hub-table td.c-lang .lang-name,
+  .hub-table td.c-lang .lang-native { display: inline; }
+  .hub-table td.c-lang .lang-native { margin-left: 8px; }
   .hub-table .c-n { text-align: left; margin-top: 6px; }
   .hub-table .c-n::before { content: 'substances · '; color: var(--ink-3); }
   .hub-panel-label { min-width: 0; flex: 1 1 100%; }

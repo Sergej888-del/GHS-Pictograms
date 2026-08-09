@@ -60,6 +60,20 @@ import {
   ADR_SOURCE, DOT_SOURCE, ADR_CLASS_NAME, dotClassName, unLabel, ADR_STATUS_TEXT,
 } from '../../lib/dangerousGoods'
 import { buildUnEntriesByCas, MULTI_UN_NOTE, type UnEntry } from '../../lib/substanceTransport'
+// ⚠⚠ Имя записи Annex VI по языковым редакциям собирается ТЕМ ЖЕ модулем, что
+// и имя на этикетке в конструкторе: обязательное примечание, групповые записи и
+// ненадёжный разбор разбираются там один раз. Второй разбор здесь молча разошёлся
+// бы с первым, и справочник начал бы называть вещество иначе, чем этикетка.
+// ⚠ Модуль намеренно без обращений к базе — им же считает check:dist.
+import {
+  buildOfficialNames, NAME_TRANSLATION_COLUMNS, VERBATIM_REASON_TEXT,
+  ANNEX_VI_LANGUAGE_ABSENT, ANNEX_VI_LANGUAGE_ABSENT_REASON,
+  type NameTranslationRow, type OfficialName,
+} from '../../lib/nameForms'
+// ⚠ `EU_LANGUAGES` нужен здесь только чтобы назвать НЕДОСТАЮЩИЕ редакции и
+// подписать строки таблицы. Сам порядок строк задаёт `buildOfficialNames` —
+// одним списком на страницу и на проверку.
+import { EU_LANGUAGES, LANGUAGE_BY_CODE, EURLEX_ATTRIBUTION } from '../../lib/labelLanguages'
 import lcssValues from '../../data/lcss-values.json'
 import lcssText from '../../data/lcss-text.json'
 
@@ -125,6 +139,87 @@ export async function getStaticPaths() {
   // ghssymbols/scripts/generate-substance-redirect-map.mjs — иначе счёта разойдутся.
   const CAS_SHAPE = /^\d{2,7}-\d{2}-\d$/
   const clean = rows.filter((r) => r.cas_number && CAS_SHAPE.test(r.cas_number))
+
+  // ═══ Имя записи Annex VI по языковым редакциям (session 56) ═══
+  //
+  // ⚠⚠ ЧИТАЕТСЯ ПО КЛЮЧУ, А НЕ ЧЕРЕЗ OFFSET, И ЭТО ЗАМЕР, А НЕ ВКУСОВЩИНА.
+  // `range()` — это `LIMIT … OFFSET …`, и Postgres на каждой странице проходит
+  // все предыдущие записи индекса заново. На 101 654 строках последние страницы
+  // упираются в `statement_timeout` роли `anon` (3 с, замер session 47). Замер
+  // 2026-08-09, EXPLAIN ANALYZE на живой базе:
+  //
+  //   ORDER BY … LIMIT 1000 OFFSET 100000   → 4 152 мс, 99 655 буферов
+  //   WHERE index_number >= … LIMIT 1000    →     2,6 мс,  1 008 буферов
+  //
+  // ⚠ Сборка через `range()` проходила — но только потому, что обёртка
+  // `supabase.ts` повторяет GET после ответа 500. То есть отказ был, его просто
+  // гасили повторы. Проверка `check:dist` повторов не делает и упала честно.
+  //
+  // ⭐ Курсор — `index_number`, первый столбец первичного ключа
+  // `(index_number, lang)`, поэтому чтение идёт по индексу и стоит одинаково на
+  // любой странице.
+  // ⚠ Курсор двигается через `gte`, а не `gt`: страница в тысячу строк почти
+  // всегда обрывается ПОСРЕДИ записи (у записи до 23 языков), и `gt` потерял бы
+  // её хвост. Повторы отсеиваются по ключу `(index_number, lang)`.
+  //
+  // ⚠⚠ Порядок обязателен и сам по себе: без ORDER BY Postgres не обязан
+  // отдавать страницы в одном и том же порядке, и соседние страницы начинают
+  // перекрываться — часть строк ПРОПАДАЕТ, часть приходит ДВАЖДЫ (session 55).
+  //
+  // ⚠ Таблица читается ЦЕЛИКОМ, а не фильтром `.in('index_number', …)` на
+  // 3 650 значений: фильтр PostgREST уходит в строку запроса URL и упирается в
+  // предел её длины. Тот же довод записан у транспортного блока ниже.
+  // ⚠ Строки сворачиваются в карту сразу, пачками по тысяче, чтобы 101 654
+  // сырых строки не лежали в памяти разом.
+  const wantedIndex = new Set(
+    clean.map((r) => r.index_number).filter((v): v is string => Boolean(v)),
+  )
+  const nameRowsByIndex = new Map<string, NameTranslationRow[]>()
+  const seenNameRow = new Set<string>()
+  let nameCursor: string | null = null
+  for (;;) {
+    let query = supabase
+      .from('substance_name_translations')
+      .select(NAME_TRANSLATION_COLUMNS)
+      .order('index_number', { ascending: true })
+      .order('lang', { ascending: true })
+      .limit(PAGE)
+    if (nameCursor !== null) query = query.gte('index_number', nameCursor)
+    const chunk = must(
+      `substance_name_translations (getStaticPaths, от ${nameCursor ?? 'начала'})`,
+      await query
+    ) as NameTranslationRow[] | null
+    if (!chunk?.length) break
+    let fresh = 0
+    for (const r of chunk) {
+      const key = `${r.index_number}|${r.lang}`
+      if (seenNameRow.has(key)) continue
+      seenNameRow.add(key)
+      fresh++
+      if (!wantedIndex.has(r.index_number)) continue
+      const list = nameRowsByIndex.get(r.index_number)
+      if (list) list.push(r)
+      else nameRowsByIndex.set(r.index_number, [r])
+    }
+    if (chunk.length < PAGE) break
+    // ⚠ Страховка от вечного цикла: страница целиком из повторов означала бы,
+    // что у одного индексного номера больше 1000 языков. Молчаливое
+    // зацикливание сборки хуже громкого отказа.
+    if (!fresh) {
+      throw new Error(
+        `substance_name_translations: страница из ${chunk.length} строк не дала ни одной новой ` +
+        `на курсоре ${nameCursor} — у одного индексного номера не может быть столько языков`
+      )
+    }
+    nameCursor = chunk[chunk.length - 1].index_number
+  }
+  // ⚠⚠ Порядок языков страница НЕ задаёт. Он свойство регламента и живёт в
+  // `euLanguages.ts` — там же, откуда его берёт проверка. Пока порядок был
+  // аргументом, страница и проверка получали разные ответы от одной функции.
+  const namesByIndex = new Map<string, OfficialName[]>()
+  for (const [index, list] of nameRowsByIndex) {
+    namesByIndex.set(index, buildOfficialNames(list))
+  }
 
   const hCodes = [...new Set(clean.flatMap((r) => r.h_statement_codes ?? []))]
   const hRows = must(
@@ -390,6 +485,9 @@ export async function getStaticPaths() {
       // номером ООН не едут (их возят как компонент смеси или они вообще не
       // опасный груз). Секция на такой странице просто не рисуется.
       unEntries: unByCas.get(it.row.cas_number) ?? [],
+      // ⚠ Только имена СВОЕЙ записи: карта на 3 650 номеров, размноженная на
+      // 3 650 страниц, — это те самые «30 МБ мусора», о которых сказано выше.
+      officialNames: (it.row.index_number && namesByIndex.get(it.row.index_number)) || [],
       prev: i > 0 ? card(ordered[i - 1]) : null,
       next: i < ordered.length - 1 ? card(ordered[i + 1]) : null,
     },
@@ -422,6 +520,12 @@ type Props = {
   sdsSlug: string | null
   /** Номера ООН этого вещества со строками ADR и 49 CFR — lib/substanceTransport.ts. */
   unEntries: UnEntry[]
+  /**
+   * Имя записи Annex VI Part 3 по языковым редакциям регламента.
+   * ⚠ Пустой массив означает «строк переводов у этой записи нет» — тогда секции
+   * нет вовсе. Замер 2026-08-09: пусто у 0 из 3 650 построенных страниц.
+   */
+  officialNames: OfficialName[]
   prev: Neighbour | null
   next: Neighbour | null
 }
@@ -429,7 +533,7 @@ type Props = {
 /** Сосед по алфавиту. Считается в getStaticPaths — см. комментарий там. */
 type Neighbour = { name: string; cas: string; href: string; formula: string | null }
 
-const { row, hText, pMeta, euhText, hazardClasses, rgroups, sdsSlug, unEntries, prev, next } =
+const { row, hText, pMeta, euhText, hazardClasses, rgroups, sdsSlug, unEntries, officialNames, prev, next } =
   Astro.props as Props
 
 // ⚠ Имя для показа: заглавная первая буква там, где это типографика, а не правка
@@ -479,6 +583,35 @@ const synonymList = [
       .filter((s) => s && s.toLowerCase() !== name.toLowerCase())
   ),
 ].slice(0, 40)
+
+// ═══ Блок «имя записи в языковых редакциях Annex VI» (session 56) ═══
+//
+// ⚠⚠ ЭТО НЕ ПЕРЕВОД, И ТАК И НАПИСАНО НА ЭКРАНЕ. Annex VI Part 3 издан на всех
+// официальных языках, и колонка идентификации написана в каждом издании своими
+// словами; мы её оттуда достаём. Замер 2026-08-09 по 3 650 построенным
+// страницам: одинаковое имя во всех редакциях лишь у 9 (0,2 %), в среднем
+// различных написаний 19,7 из 23 — блок по построению не шаблонный.
+//
+// ⚠ Ирландского в таблице нет ни одной строки, и это не наш пропуск: сводного
+// текста CLP на ирландском не издавалось вовсе, цитировать нечего. Сказано под
+// таблицей словами — список из 23 там, где официальных языков 24, иначе
+// читается как недоделка.
+// ⚠ Список недостающих редакций строится ВЫЧИТАНИЕМ из официальных языков, а не
+// переписыванием: новый язык ЕС попадёт сюда сам, и забыть его будет негде.
+const namesLangs = new Set(officialNames.map((n) => n.code))
+const namesMissing = EU_LANGUAGES.filter(
+  (l) => l.code !== ANNEX_VI_LANGUAGE_ABSENT && !namesLangs.has(l.code),
+)
+// ⚠ Обязательное примечание в квадратных скобках — часть имени (Annex VI Part 1
+// п. 1.1.1.4), а не наш комментарий. Оговорка печатается только когда оно есть.
+const namesHavePrintedSuffix = officialNames.some((n) => n.printedSuffix)
+const namesHaveVerbatim = officialNames.some((n) => n.verbatim)
+/**
+ * Языковая метка разметки для кода редакции.
+ * ⚠ Все 24 кода регламента — двухбуквенные ISO 639-1, они же законные подтеги
+ * BCP 47, поэтому перевод в нижний регистр здесь и есть всё преобразование.
+ */
+const htmlLang = (code: string) => code.toLowerCase()
 
 const pictograms = (row.ghs_pictogram_codes ?? []).filter((c) => PICTOGRAM_NAME[c])
 const hList = (row.h_statement_codes ?? []).map((code) => ({ code, text: hText[code] ?? '' }))
@@ -568,13 +701,37 @@ const canonical = `${SITE}${substanceHref(name, cas)}`
  */
 const ld = (data: unknown) => JSON.stringify(data).replace(/</g, '\\u003c')
 
+/**
+ * Официальные имена с языковой меткой — для `alternateName`.
+ * ⚠ Берётся ОДНО, основное обозначение каждой редакции: прочие обозначения той
+ * же ячейки — синонимы внутри языка, и вываливать все 23 × N в разметку значит
+ * подменить идентификацию перечислением.
+ * ⚠ Совпавшее с заголовком страницы не дублируется: `name` уже стоит выше.
+ */
+const officialAlternateNames = officialNames
+  .filter((n) => !n.verbatim && n.designations.length)
+  .map((n) => ({ '@value': n.designations[0], '@language': htmlLang(n.code) }))
+  .filter((v) => v['@value'].toLowerCase() !== name.toLowerCase())
+
 const chemicalJson = ld({
   '@context': 'https://schema.org',
   '@type': 'ChemicalSubstance',
   name,
   ...(formula ? { molecularFormula: formula } : {}),
   ...(row.molecular_weight ? { molecularWeight: `${row.molecular_weight} g/mol` } : {}),
-  ...(synonymList.length ? { alternateName: synonymList.slice(0, 10) } : {}),
+  /**
+   * ⚠⚠ ДВА РАЗНЫХ СОРТА ИМЁН В ОДНОМ ПОЛЕ, И РАЗЛИЧАЕТ ИХ ЯЗЫКОВАЯ МЕТКА.
+   * Синонимы PubChem — торговые и бытовые имена без установленной редакции, у
+   * них языка нет и приписывать его нельзя. Имена Annex VI, наоборот, изданы на
+   * конкретном языке, и подать их голой строкой значило бы утверждать, что
+   * «Aceton» — английское написание. JSON-LD различает это ровно одним
+   * способом — объектом `{ @value, @language }`.
+   * ⚠ Дословные ячейки (групповые и ненадёжные записи) сюда не идут: имя записи
+   * это не одно имя вещества, а разметка обязана обещать только то, что видно.
+   */
+  ...(synonymList.length || officialAlternateNames.length
+    ? { alternateName: [...synonymList.slice(0, 10), ...officialAlternateNames] }
+    : {}),
   identifier: [
     { '@type': 'PropertyValue', propertyID: 'CAS', value: cas },
     ...(ecShown ? [{ '@type': 'PropertyValue', propertyID: 'EC', value: ecShown }] : []),
@@ -617,6 +774,10 @@ const nIdentification = pad()
 const nIdentifiers = pad()
 const nClassification = hList.length || pictograms.length || hazardClasses.length ? pad() : null
 const nPrecautions = pCount ? pad() : null
+// ⚠ Условие ровно одно и то же в трёх местах: здесь, в массиве `toc` и у самой
+// <section id="names">. Разойдутся — либо дырка в нумерации, либо пункт
+// оглавления в никуда; и то и другое ловит проверка subs-toc.
+const nNames = officialNames.length ? pad() : null
 const nLabel = pictograms.length || row.signal_word || hList.length ? pad() : null
 const nHealth = hasHealth ? pad() : null
 const nProperties = propertyRows.length ? pad() : null
@@ -655,6 +816,7 @@ const toc: Array<{ id: string; label: string }> = [
   ...(nClassification ? [{ id: 'hazards', label: 'Hazards' }] : []),
   { id: 'sds', label: 'SDS' },
   ...(nPrecautions ? [{ id: 'precautions', label: 'Precautions' }] : []),
+  ...(nNames ? [{ id: 'names', label: 'Names' }] : []),
   ...(nLabel ? [{ id: 'label', label: 'Label' }] : []),
   ...(nHealth ? [{ id: 'health', label: 'Health' }] : []),
   ...(nProperties ? [{ id: 'properties', label: 'Properties' }] : []),
@@ -1065,6 +1227,111 @@ const multiUn = unEntries.length > 1
           <span class="clp-blank">…</span> is a blank the supplier fills in — not a truncated
           sentence.<span class="sep">·</span>
           <span class="clp-opt">[square brackets]</span> mark a part printed only when it applies.
+        </p>
+      </div>
+    </section>
+  )}
+
+  {/*
+    ⚠⚠ ИМЯ ЗАПИСИ ПО ЯЗЫКОВЫМ РЕДАКЦИЯМ (session 56). Секция стоит ПЕРЕД
+    этикеткой — решение Сергея: имя это первый элемент этикетки, и человек,
+    которому нужна немецкая тара, должен увидеть немецкое имя до превью, а не
+    после него.
+
+    ⚠⚠ ТАБЛИЦА СТАТИЧЕСКАЯ, ОСТРОВА ЗДЕСЬ БЫТЬ НЕ МОЖЕТ. Ровно в этом весь
+    смысл блока: разметку React-острова браузер собирает после гидратации, и в
+    dist/*.html её нет вовсе — то есть ни поиск, ни проверки её не видят. Это
+    первый раз, когда неанглийские имена попадают в отданный файл.
+
+    ⚠ Вес замерен: имена — в среднем 1 071 байт на страницу при 53 КБ самой
+    страницы, у 9 страниц из 3 650 больше 8 КБ (реакционные массы, у которых
+    одно имя длиной 909 знаков). Прятать нечего, сворачивать нечего.
+
+    ⚠⚠ Разделитель между обозначениями рисует CSS, а не разметка. Греческая
+    редакция разделяет имена ано телией `·`, а не точкой с запятой; склеив их
+    нашим знаком, мы напечатали бы имя, которого в регламенте нет.
+  */}
+  {nNames && (
+    <section class="hub-sec-b" id="names">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{nNames} · Names in the regulation</p>
+        <h2 class="hub-h2">{nm} name in {officialNames.length} EU languages</h2>
+        <p class="hub-sub">
+          CLP Annex VI Part 3 is published in every language edition of the regulation, and the
+          identification column is written out in each of them. Nothing below is translated by us:
+          each line is the name as that edition prints it. Under Art. 18(2) the substance name from
+          Annex VI is a lawful product identifier, so this is the wording to put on a label going to
+          that market — and where the cell lists several designations, any one of them qualifies.
+        </p>
+
+        <div class="hub-table-wrap">
+          <table class="hub-table">
+            <thead>
+              <tr>
+                <th>Language</th>
+                <th>Name in CLP Annex VI Part 3</th>
+              </tr>
+            </thead>
+            <tbody>
+              {officialNames.map((n) => (
+                <tr>
+                  <td class="c-lang">
+                    <span class="lang-name">{LANGUAGE_BY_CODE.get(n.code)?.name ?? n.code}</span>
+                    <span class="lang-native" lang={htmlLang(n.code)}>
+                      {LANGUAGE_BY_CODE.get(n.code)?.native ?? n.code}
+                    </span>
+                  </td>
+                  <td class="c-name" lang={htmlLang(n.code)}>
+                    {n.verbatim ? (
+                      <>
+                        <span class="name-main">{n.verbatim}</span>
+                        <span class="name-why" lang="en">
+                          {n.verbatimReason ? VERBATIM_REASON_TEXT[n.verbatimReason] : ''}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span class="name-main">{n.designations[0]}</span>
+                        {n.designations.length > 1 && (
+                          <span class="name-alt">
+                            {n.designations.slice(1).map((d) => <span class="alt">{d}</span>)}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {namesHavePrintedSuffix && (
+          <p class="hub-note">
+            The part in square brackets is not an editorial comment. Annex VI Part 1 §1.1.1.4 makes
+            a reference of that kind part of the name itself, which means it has to be printed on
+            the label together with the name.
+          </p>
+        )}
+
+        <p class="hub-fine">
+          {namesMissing.length === 0 ? (
+            <>All {officialNames.length} language editions of Annex VI carry this entry. </>
+          ) : (
+            <>
+              {officialNames.length} of the {officialNames.length + namesMissing.length} language
+              editions carry this entry; it is absent from{' '}
+              {namesMissing.map((l) => l.name).join(', ')}. That is a property of the regulation,
+              not a gap in this table — editions do occasionally differ in which entries they
+              print.{' '}
+            </>
+          )}
+          {ANNEX_VI_LANGUAGE_ABSENT_REASON}
+          {namesHaveVerbatim && (
+            <> Where a cell is shown exactly as printed, the note beside it says why.</>
+          )}
+          {' '}Source: consolidated CLP, CELEX 02008R1272, language editions.{' '}
+          {EURLEX_ATTRIBUTION}
         </p>
       </div>
     </section>

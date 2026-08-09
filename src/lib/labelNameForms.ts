@@ -1,5 +1,14 @@
 // src/lib/labelNameForms.ts
-// Имя вещества на ВЫБРАННОМ языке этикетки: формы, синонимы, примечания.
+// Имя вещества на ВЫБРАННОМ языке этикетки: загрузка строки из базы.
+//
+// ⚠⚠ ПРАВИЛА РАЗБОРА ЖИВУТ В `./nameForms` И ОТСЮДА ТОЛЬКО РЕЭКСПОРТИРУЮТСЯ.
+// Разделение сделано в session 56 и держится на одном условии: `nameForms.ts`
+// не знает про базу, поэтому его может импортировать `scripts/check-dist.ts`
+// (он идёт через tsx, а `./supabase` на верхнем уровне читает `import.meta.env`
+// и вне сборки Astro падает). Проверка обязана считать имена ТЕМ ЖЕ кодом,
+// которым их печатает страница.
+// ⚠ Для вызывающих ничего не изменилось: `import { … } from './labelNameForms'`
+// продолжает отдавать и правила, и загрузку.
 //
 // ⚠⚠ ИМЕНА БЕРУТСЯ ИЗ `substance_name_translations`, А НЕ ИЗ `substances` —
 // ВКЛЮЧАЯ АНГЛИЙСКИЙ. Это не вопрос удобства: две наши загрузки Annex VI читают
@@ -17,99 +26,11 @@
 // ⚠ У 3 записей строки переводов нет вовсе (005-022-00-4, 606-156-00-1,
 // 649-282-00-2 — они есть в двадцати языковых версиях и отсутствуют в
 // английской). Там вызывающий обязан откатиться к `substances`.
-//
-// ⚠⚠ ПЕРЕВОДИТЬ ЗДЕСЬ НЕЧЕГО И НЕЛЬЗЯ. Имя на каждом языке напечатано в самом
-// Annex VI — мы его только достаём. Ни машинный перевод, ни «то же имя другими
-// буквами» недопустимы: у имени на этикетке есть установленная редакция.
 
 import { supabase } from './supabase';
+import type { LocalisedNames, NameAnnotation } from './nameForms';
 
-export type NameAnnotationKind =
-  | 'composition' | 'form' | 'description' | 'note' | 'abbreviation' | 'scope' | 'unclear';
-
-export type NameAnnotation = { kind: NameAnnotationKind; text: string };
-
-export type LocalisedNames = {
-  lang: string;
-  indexNumber: string;
-  /**
-   * Ячейка регламента КАК ЕСТЬ.
-   * ⚠⚠ Единственный надёжный текст у записей, разбор которых помечен `unclear`:
-   * там формы предлагать нельзя, а показать человеку первоисточник — можно.
-   */
-  cell: string;
-  kind: 'group' | 'single';
-  /** Формы записи: у групповой — по маркерам [1] [2], у одиночной одна. */
-  forms: string[];
-  /**
-   * Номера маркеров, по одному на форму, в том же порядке.
-   *
-   * ⚠⚠ НУЖНЫ РАДИ CAS И EC. Колонки Annex VI хранят номера формы по её маркеру
-   * («71-41-0[1]584-02-1[2]»), и связать имя с номером можно ТОЛЬКО через эту
-   * цифру. Сопоставление по порядку в списке подставило бы форме чужой CAS —
-   * а неверный номер на бумаге читается как верный и отправляет читателя не в
-   * ту карточку вещества.
-   * ⚠ У одиночной записи пуст: маркеров там нет вовсе.
-   */
-  memberNumbers: number[];
-  /** Синонимы одиночной записи. ⚠ У групповой пустой: там формы, а не синонимы. */
-  synonyms: string[];
-  annotations: NameAnnotation[];
-};
-
-/**
- * ⭐⭐ ПЕЧАТАЕТСЯ НА ЭТИКЕТКЕ ВСЕГДА, КАКУЮ БЫ ФОРМУ ЧЕЛОВЕК НИ ВЫБРАЛ.
- *
- * Annex VI Part 1 п. 1.1.1.4: ссылка на примесь «is then to be considered as a
- * part of the name, and must be included on the label». 491 запись.
- * ⚠ Это ЕДИНСТВЕННЫЙ класс, который печатается. Остальные — сведения о записи.
- */
-export const PRINTED_KINDS = new Set<NameAnnotationKind>(['composition']);
-
-/**
- * Показывается подсказкой «это та самая запись», но НЕ печатается.
- *
- * ⚠⚠ Подсказка здесь не украшение. У 10 пар индексных номеров примечание —
- * ЕДИНСТВЕННОЕ различие между РАЗНЫМИ классификациями: `piperazine [solid]`
- * (612-057-00-4) и `piperazine [liquid]` (612-057-01-1) — одно и то же имя и
- * разные наборы H-фраз. Без подсказки человек не отличит свою запись от чужой.
- */
-export const HINT_KINDS = new Set<NameAnnotationKind>([
-  'form', 'description', 'note', 'abbreviation', 'scope',
-]);
-
-/** ⚠⚠ Разбор ячейки ненадёжен — формы предлагать как готовые имена нельзя. */
-export const UNRELIABLE_KIND: NameAnnotationKind = 'unclear';
-
-/**
- * Что дописывается к имени на этикетке.
- *
- * ⚠⚠ КВАДРАТНЫЕ СКОБКИ ВОЗВРАЩАЮТСЯ НА МЕСТО, А НЕ ПРИДУМЫВАЮТСЯ. Разбор снял
- * их с конца ячейки (`nitric acid …% [C > 70 %]` → форма плюс примечание), и
- * приписывание обратно восстанавливает ровно тот текст, что стоит в регламенте.
- * ⚠ Примечания в КРУГЛЫХ скобках разбор не снимает вовсе — они остаются внутри
- * имени (`butane (containing ≥ 0,1 % butadiene)`), и дописывать тут нечего.
- */
-export function printedNameSuffix(annotations: NameAnnotation[]): string {
-  const printed = annotations.filter((a) => PRINTED_KINDS.has(a.kind));
-  return printed.map((a) => ` [${a.text}]`).join('');
-}
-
-/** Полное имя для печати: выбранная форма плюс обязательное примечание. */
-export function nameForLabel(form: string, annotations: NameAnnotation[]): string {
-  return `${form}${printedNameSuffix(annotations)}`.trim();
-}
-
-/** Подсказки «это та самая запись». ⚠ На этикетку не идут. */
-export function identityHints(annotations: NameAnnotation[]): NameAnnotation[] {
-  return annotations.filter((a) => HINT_KINDS.has(a.kind));
-}
-
-/** Причина, по которой формам этой записи верить нельзя, или `null`. */
-export function unreliableReason(annotations: NameAnnotation[]): string | null {
-  const a = annotations.find((x) => x.kind === UNRELIABLE_KIND);
-  return a ? a.text : null;
-}
+export * from './nameForms';
 
 type Row = {
   index_number: string;
@@ -160,75 +81,4 @@ export async function fetchLocalisedNames(
     synonyms: row.synonyms ?? [],
     annotations: row.annotations ?? [],
   };
-}
-
-/**
- * Форма записи вместе с её собственными CAS и EC.
- *
- * ⚠⚠ НОМЕРА БЕРУТСЯ ИЗ `nameVariants` ПО НОМЕРУ МАРКЕРА, А НЕ ПО ПОРЯДКУ.
- * Имена приходят из таблицы переводов, номера — из разбора колонок `substances`
- * (`labelProductName.ts`), и единственное, что их связывает, — цифра в скобках.
- * ⚠ Совпадения нет — номера пустые. Пустое поле честнее чужого номера: по
- * регламенту идентификатор необязателен (Art. 18(2) требует ИМЯ), а неверный
- * отправляет читателя не в ту карточку вещества.
- */
-export type FormChoice = { name: string; index?: number; cas?: string; ec?: string };
-
-export function formChoices(
-  n: LocalisedNames,
-  numbered: { index?: number; cas?: string; ec?: string }[] = [],
-): FormChoice[] {
-  if (unreliableReason(n.annotations)) return [];
-  const byIndex = new Map<number, { cas?: string; ec?: string }>();
-  for (const v of numbered) {
-    if (v.index && !byIndex.has(v.index)) byIndex.set(v.index, { cas: v.cas, ec: v.ec });
-  }
-  const out: FormChoice[] = [];
-  const seen = new Set<string>();
-  n.forms.forEach((raw, i) => {
-    const name = raw.trim();
-    const key = name.toLowerCase();
-    if (!name || seen.has(key)) return;
-    seen.add(key);
-    const index = n.memberNumbers[i];
-    const ids = index ? byIndex.get(index) : undefined;
-    out.push({ name, index, cas: ids?.cas, ec: ids?.ec });
-  });
-  // ⚠ Синонимы одиночной записи идут БЕЗ номеров: у одиночной записи номер один
-  // на всю запись, и он уже стоит в полях. Дописывать его к каждому синониму
-  // значило бы утверждать, что синонимы — разные вещества.
-  for (const raw of n.synonyms) {
-    const name = raw.trim();
-    const key = name.toLowerCase();
-    if (!name || seen.has(key)) continue;
-    seen.add(key);
-    out.push({ name });
-  }
-  return out;
-}
-
-/**
- * Что предложить в поле «Product name».
- *
- * Порядок: формы записи, затем синонимы, которых среди форм ещё не было.
- * ⚠⚠ У ГРУППОВОЙ записи формы — РАЗНЫЕ ВЕЩЕСТВА, а не синонимы одного, и
- * подмешивать к ним синонимы нельзя: список бы утверждал, что все эти имена
- * означают содержимое одной упаковки. У групповой записи `synonyms` поэтому
- * всегда пуст, и слияние ниже касается только одиночных.
- *
- * ⚠ Ненадёжная запись не возвращает НИЧЕГО: предложить человеку «and its
- * sodium» как имя хуже, чем не предложить ничего и показать ячейку регламента.
- */
-export function nameChoices(n: LocalisedNames): string[] {
-  if (unreliableReason(n.annotations)) return [];
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const v of [...n.forms, ...n.synonyms]) {
-    const name = v.trim();
-    const key = name.toLowerCase();
-    if (!name || seen.has(key)) continue;
-    seen.add(key);
-    out.push(name);
-  }
-  return out;
 }

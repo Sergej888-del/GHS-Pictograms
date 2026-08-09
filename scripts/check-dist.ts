@@ -47,6 +47,13 @@ import { substanceNameFull, NAME_COLUMNS } from '../src/lib/substanceName'
 // Списать правило формы сюда — значит завести вторую копию, которая разойдётся
 // с первой молча, и проверка начнёт подтверждать не то, что печатается.
 import { productNameVariants, defaultLabelIdentifiers } from '../src/lib/labelProductName'
+// ⚠⚠ Блок имён по языковым редакциям собирается ТЕМ ЖЕ кодом, что и на странице.
+// ⚠ Импорт идёт из `nameForms`, а НЕ из `labelNameForms`: второй тянет
+// `src/lib/supabase.ts`, а тот на верхнем уровне читает `import.meta.env` и под
+// tsx падает. Ради этого модуль и разделён (session 56).
+import {
+  buildOfficialNames, NAME_TRANSLATION_COLUMNS, type NameTranslationRow,
+} from '../src/lib/nameForms'
 import { casShapeOk, ecShapeOk, indexShapeOk } from '../src/lib/substanceIdentifiers'
 import { substanceSlug, casFromSlug } from '../src/lib/substanceSlug'
 // ⚠⚠ Раскладка «код знака → файл» берётся ИЗ ТОГО ЖЕ модуля, что и страница.
@@ -1033,6 +1040,8 @@ function printedSubstanceNames(): { name: string; page: string }[] {
 
 type SubstanceRow = {
   cas_number: string
+  /** ⚠ Ключ к `substance_name_translations`: связь идёт по индексному номеру, не по CAS. */
+  index_number: string | null
   common_name: string | null
   display_name_short: string | null
   iupac_name: string | null
@@ -1059,7 +1068,7 @@ async function substanceExpectation(): Promise<SubstanceExpectation> {
   if (substanceExpectationCache) return substanceExpectationCache
   const raw = await selectAll<SubstanceRow>(
     'substances',
-    `cas_number, ${NAME_COLUMNS}`,
+    `cas_number, index_number, ${NAME_COLUMNS}`,
     (q: any) => q.not('cas_number', 'is', null).order('cas_number'),
   )
   // ⚠ RLS без политики отдаёт anon пустоту, а не ошибку — без этой строки проверка молча позеленеет
@@ -1083,6 +1092,102 @@ async function substanceExpectation(): Promise<SubstanceExpectation> {
   }
   substanceExpectationCache = { bySlug, casSet, rowCount: rows.length }
   return substanceExpectationCache
+}
+
+/**
+ * Вся таблица `substance_name_translations` — одним чтением на все проверки.
+ *
+ * ⚠⚠ ЧИТАЕТСЯ ПО КЛЮЧУ, А НЕ ЧЕРЕЗ OFFSET, И ЭТО ЗАМЕР, А НЕ ВКУСОВЩИНА.
+ * `selectAll` листает через `range()`, то есть `LIMIT … OFFSET …`. Postgres на
+ * каждой странице проходит все предыдущие записи индекса заново, и на 101 654
+ * строках последние страницы упираются в `statement_timeout` роли `anon` (3 с,
+ * замер session 47). Замер 2026-08-09, EXPLAIN ANALYZE на живой базе:
+ *
+ *   ORDER BY … LIMIT 1000 OFFSET 100000   → 4 152 мс, 99 655 буферов
+ *   WHERE index_number >= … LIMIT 1000    →     2,6 мс,  1 008 буферов
+ *
+ * ⚠⚠ Провал был МОЛЧАЛИВЫМ по смыслу: `check:dist` сказал «проверка упала:
+ * canceling statement due to statement timeout», то есть отказ чтения, а не
+ * факт о данных. Ровно поэтому `selectAll` бросает исключение вместо того,
+ * чтобы вернуть половину таблицы, — половина прочиталась бы как «остальных
+ * записей в базе нет».
+ *
+ * ⭐ Ключ курсора — `index_number`, и он же первый столбец первичного ключа
+ * `(index_number, lang)`, поэтому чтение идёт по индексу и стоит одинаково на
+ * любой странице.
+ * ⚠ Курсор двигается через `gte`, а не `gt`: страница в тысячу строк почти
+ * всегда обрывается ПОСРЕДИ записи (у записи до 23 языков), и `gt` потерял бы
+ * её хвост. Повторы отсеиваются по ключу `(index_number, lang)`.
+ *
+ * ⚠⚠ ПОРЯДОК ТОЖЕ ОБЯЗАТЕЛЕН, И ПО ДРУГОЙ ПРИЧИНЕ. Без ORDER BY Postgres не
+ * обязан отдавать страницы в одном и том же порядке: физический порядок строк
+ * меняется после записи, и соседние страницы начинают перекрываться. Часть
+ * строк ПРОПАДАЕТ из выборки, часть приходит ДВАЖДЫ. Поймано на первом же
+ * прогоне проверки substance-name-composite, сразу после пересчёта 4 527 строк:
+ * она сказала «записей таблицы нет в базе вовсе: 9» у таблицы, ВЫВЕДЕННОЙ ИЗ
+ * ЭТОЙ ЖЕ БАЗЫ. Здесь порядок нужен ещё и затем, чтобы курсор был осмыслен.
+ *
+ * ⚠ Кэш здесь не ради скорости, а ради одинаковости: две проверки, читающие
+ * 101 654 строки порознь, могут увидеть разное состояние базы и разойтись в
+ * выводах на ровном месте.
+ */
+let nameTranslationLoad: Promise<NameTranslationRow[]> | null = null
+
+async function loadNameTranslations(): Promise<NameTranslationRow[]> {
+  const PAGE = 1000
+  const out: NameTranslationRow[] = []
+  const seen = new Set<string>()
+  let cursor: string | null = null
+  for (;;) {
+    let q = supabase
+      .from('substance_name_translations')
+      .select(NAME_TRANSLATION_COLUMNS)
+      .order('index_number', { ascending: true })
+      .order('lang', { ascending: true })
+      .limit(PAGE)
+    if (cursor !== null) q = q.gte('index_number', cursor)
+    const { data, error } = await q
+    if (error) throw new Error(`substance_name_translations: ${error.message}`)
+    const rows = (data ?? []) as NameTranslationRow[]
+    if (!rows.length) break
+    let fresh = 0
+    for (const r of rows) {
+      const key = `${r.index_number}|${r.lang}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(r)
+      fresh++
+    }
+    if (rows.length < PAGE) break
+    // ⚠ Страховка от вечного цикла: страница целиком из повторов означала бы,
+    // что у одного индексного номера строк больше, чем размер страницы, — то
+    // есть больше 1000 языков. Молчаливое зацикливание хуже громкого отказа.
+    if (!fresh) {
+      throw new Error(
+        `substance_name_translations: страница из ${rows.length} строк не дала ни одной новой ` +
+        `на курсоре ${cursor} — у одного индексного номера не может быть столько языков`,
+      )
+    }
+    cursor = rows[rows.length - 1].index_number
+  }
+  return out
+}
+
+function nameTranslations(): Promise<NameTranslationRow[]> {
+  if (!nameTranslationLoad) nameTranslationLoad = loadNameTranslations()
+  return nameTranslationLoad
+}
+
+/** Строки таблицы, разложенные по индексному номеру. Порядок языков сохранён. */
+async function nameTranslationsByIndex(): Promise<Map<string, NameTranslationRow[]>> {
+  const rows = await nameTranslations()
+  const byIndex = new Map<string, NameTranslationRow[]>()
+  for (const r of rows) {
+    const list = byIndex.get(r.index_number)
+    if (list) list.push(r)
+    else byIndex.set(r.index_number, [r])
+  }
+  return byIndex
 }
 
 /** Слаги собранных страниц раздела. Пустой ответ отличаем от «папки нет». */
@@ -5411,36 +5516,11 @@ const CHECKS: Check[] = [
     group: 'subs',
     title: 'Составная запись Annex VI — одно имя, а не имя плюс компонент',
     run: async () => {
-      type NameRow = { index_number: string; lang: string; name: string; kind: string; synonyms: string[] | null }
-      /**
-       * ⚠⚠ ПОРЯДОК В ЗАПРОСЕ ОБЯЗАТЕЛЕН, И ЭТО НЕ ПРИДИРКА.
-       *
-       * `selectAll` читает постранично через `range()`. Без ORDER BY Postgres
-       * не обязан отдавать страницы в одном и том же порядке: физический
-       * порядок строк меняется после записи, и соседние страницы начинают
-       * перекрываться. Часть строк ПРОПАДАЕТ из выборки, часть приходит ДВАЖДЫ.
-       *
-       * ⚠⚠ Поймано на первом же прогоне этой проверки, сразу после пересчёта
-       * 4 527 строк: она сказала «записей таблицы нет в базе вовсе: 9» у
-       * таблицы, ВЫВЕДЕННОЙ ИЗ ЭТОЙ ЖЕ БАЗЫ, и одновременно насчитала лишние
-       * языки у трёх записей. Оба симптома — одна причина.
-       *
-       * ⚠ Это первая проверка, читающая 101 654 строки, поэтому здесь и
-       * проявилось. Прочие таблицы меньше и умещаются в одну-две страницы —
-       * но риск у них тот же, просто ещё не выстрелил.
-       */
-      const rows = await selectAll<NameRow>(
-        'substance_name_translations',
-        'index_number,lang,name,kind,synonyms',
-        (q) => q.order('index_number', { ascending: true }).order('lang', { ascending: true }),
-      )
-
-      const byIndex = new Map<string, NameRow[]>()
-      for (const r of rows) {
-        const list = byIndex.get(r.index_number)
-        if (list) list.push(r)
-        else byIndex.set(r.index_number, [r])
-      }
+      // ⚠⚠ Чтение таблицы — общее (`nameTranslations`), и ORDER BY живёт там же.
+      // Разбор того, почему сортировка обязательна, записан в шапке загрузчика:
+      // именно эта проверка на нём и споткнулась в session 55.
+      const rows = await nameTranslations()
+      const byIndex = await nameTranslationsByIndex()
 
       const problems: string[] = []
       const seen: string[] = []
@@ -5509,6 +5589,167 @@ const CHECKS: Check[] = [
           ? `${COMPOSITE_HEAD.size} составных записей целы на ${langs} языках`
           : `проблем: ${problems.length}`,
         detail: ok ? seen : problems,
+      }
+    },
+  },
+
+  {
+    /**
+     * ⭐⭐ СЧЁТ ПРИСУТСТВИЯ, БЕЗ ПОРОГА. Блок имён на странице вещества — первое
+     * место, где неанглийские имена попадают в отданный файл. Проверка вида
+     * «всё напечатанное верно» промолчала бы о том, что печатать перестали
+     * вовсе: пустая таблица, обрезанный список языков, потерянные обозначения —
+     * всё это выглядит как ровная зелёная страница. Поэтому ожидание — «набор
+     * языков блока равен набору языков этой записи в базе», и число берётся из
+     * самой базы, на каждой из 3 650 страниц.
+     *
+     * ⚠ Сверка идёт В ОБЕ СТОРОНЫ. Лишний язык в блоке — такой же дефект, как
+     * недостающий: он означает, что имя пришло не из строки этой записи.
+     *
+     * ⚠⚠ Имена сверяются ДОСЛОВНО, а не по числу строк. Ровно тут и живёт
+     * ошибка, ради которой блок вообще проверяют: строка на месте, язык на
+     * месте, а имя в ней — от соседней записи или склеено из кусков.
+     */
+    id: 'substance-name-languages',
+    group: 'subs',
+    title: 'Имя записи Annex VI по языковым редакциям: блок страницы сходится с базой в обе стороны',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('substance-name-languages', slugs)
+      if (miss) return miss
+
+      const exp = await substanceExpectation()
+      const byIndex = await nameTranslationsByIndex()
+
+      const ANCHOR = 'id="names"'
+      const CELL = 'c-name'
+      assertAscii('substance-name-languages', [ANCHOR, CELL])
+
+      const noBlock: string[] = []
+      const noRows: string[] = []
+      const langsDiffer: string[] = []
+      const nameMissing: string[] = []
+      const ldDiffer: string[] = []
+      let pagesWithBlock = 0
+      let langCells = 0
+      let namesChecked = 0
+      let verbatimCells = 0
+
+      for (const slug of slugs!) {
+        const want = exp.bySlug.get(slug)
+        // ⚠ Страница без строки базы — забота проверки subs-pages, не этой.
+        if (!want) continue
+        const html = readPage(join('substances', slug, 'index.html'))
+        if (html === null) continue
+
+        const index = want.row.index_number
+        const expected = index ? buildOfficialNames(byIndex.get(index) ?? []) : []
+        if (!expected.length) {
+          // ⚠⚠ Ноль ожидаемых имён — это не «проверять нечего», а факт о базе,
+          // и он называется поимённо: замер 2026-08-09 давал ноль таких страниц.
+          noRows.push(`${slug} (index ${index ?? '—'})`)
+          continue
+        }
+
+        const start = html.indexOf(ANCHOR)
+        if (start < 0) { noBlock.push(slug); continue }
+        const end = html.indexOf('</section>', start)
+        const block = html.slice(start, end < 0 ? html.length : end)
+        pagesWithBlock++
+
+        // ⚠ Ячейки ищем разбором тегов, а не одной регуляркой по всей строке:
+        // порядок атрибутов у сборщика — его дело, и завязываться на него значит
+        // получить красную проверку от смены версии Astro, а не от дефекта.
+        const langs: string[] = []
+        for (const tag of block.match(/<td\b[^>]*>/g) ?? []) {
+          if (!tag.includes(CELL)) continue
+          const m = /lang="([a-zA-Z-]+)"/.exec(tag)
+          langs.push((m?.[1] ?? '').toUpperCase())
+        }
+        langCells += langs.length
+
+        const wantLangs = expected.map((n) => n.code)
+        if (langs.join(',') !== wantLangs.join(',')) {
+          const extra = langs.filter((l) => !wantLangs.includes(l))
+          const lost = wantLangs.filter((l) => !langs.includes(l))
+          langsDiffer.push(
+            `${slug}: в блоке ${langs.length} языков, в базе ${wantLangs.length}` +
+            (lost.length ? `, нет на странице: ${lost.join(' ')}` : '') +
+            (extra.length ? `, лишние на странице: ${extra.join(' ')}` : '') +
+            (!lost.length && !extra.length ? ' — набор тот же, а порядок разошёлся с порядком регламента' : ''),
+          )
+        }
+
+        const text = unescapeHtml(block)
+        for (const n of expected) {
+          const wanted = n.verbatim ? [n.verbatim] : n.designations
+          if (n.verbatim) verbatimCells++
+          for (const value of wanted) {
+            namesChecked++
+            if (!text.includes(value)) {
+              nameMissing.push(`${slug} ${n.code}: ${JSON.stringify(value.slice(0, 80))}`)
+            }
+          }
+        }
+
+        // ⚠⚠ Разметка обязана обещать ровно то, что видно на странице. Языковая
+        // метка в `alternateName` — единственное, чем JSON-LD отличает имя из
+        // регламента от торгового синонима PubChem; потеряется она — и поиск
+        // прочтёт «Aceton» как английское написание.
+        const ldBlocks = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g) ?? []
+        const chem = ldBlocks.find((b) => b.includes('"ChemicalSubstance"'))
+        const wantTags = expected
+          .filter((n) => !n.verbatim && n.designations.length)
+          .filter((n) => n.designations[0].toLowerCase() !== want.name.toLowerCase()).length
+        const gotTags = chem ? countOccurrences(chem, '"@language"') : -1
+        if (gotTags !== wantTags) {
+          ldDiffer.push(`${slug}: языковых меток в JSON-LD ${gotTags}, имён из регламента ${wantTags}`)
+        }
+      }
+
+      const problems: string[] = []
+      if (noRows.length) {
+        problems.push(
+          `страниц, у записи которых в базе нет ни одной строки имени (${noRows.length}): ${preview(noRows)}. ` +
+          'Либо заливка переводов не прошла, либо у страницы пуст index_number — ' +
+          'а без него связать вещество с Annex VI нечем.',
+        )
+      }
+      if (noBlock.length) {
+        problems.push(
+          `имена в базе есть, а блока на странице нет (${noBlock.length}): ${preview(noBlock)}. ` +
+          `Маркер: ${ANCHOR}.`,
+        )
+      }
+      if (langsDiffer.length) problems.push(`набор языков разошёлся (${langsDiffer.length}): ${preview(langsDiffer)}`)
+      if (nameMissing.length) {
+        problems.push(
+          `имя из базы не найдено в блоке дословно (${nameMissing.length}): ${preview(nameMissing)}. ` +
+          'Чаще всего это склейка обозначений своим разделителем: у греческой редакции ' +
+          'разделитель — ано телия «·», и точка с запятой вместо неё печатает имя, ' +
+          'которого в Annex VI нет.',
+        )
+      }
+      if (ldDiffer.length) {
+        problems.push(`языковых меток в JSON-LD не столько, сколько имён (${ldDiffer.length}): ${preview(ldDiffer)}`)
+      }
+
+      const ok = problems.length === 0
+      return {
+        id: 'substance-name-languages',
+        group: 'subs',
+        ok,
+        headline: ok
+          ? `${pagesWithBlock} страниц, ${langCells} языковых строк, ${namesChecked} имён сверено дословно`
+          : `расхождений: ${problems.length}`,
+        detail: ok
+          ? [
+              'ожидание берётся из базы на каждой странице отдельно, порога нет',
+              'сверка идёт в обе стороны: язык базы → строка блока и строка блока → язык базы',
+              `ячеек, показанных дословной ячейкой регламента (групповая или ненадёжная запись): ${verbatimCells}`,
+              'имена собраны тем же buildOfficialNames, которым их печатает страница',
+            ]
+          : problems,
       }
     },
   },

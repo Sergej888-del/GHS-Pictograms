@@ -33,41 +33,16 @@
 
 import { supabase } from './supabase';
 
-export type EuLanguage = { code: string; name: string; native: string };
+// ⚠⚠ САМ СПИСОК ЯЗЫКОВ ЖИВЁТ В `./euLanguages` И ОТСЮДА РЕЭКСПОРТИРУЕТСЯ.
+// Разделение сделано в session 56 и держится на одном условии: тот файл не
+// знает про базу, поэтому его могут импортировать и `nameForms.ts`, и
+// `scripts/check-dist.ts` (он идёт через tsx, а `./supabase` вне сборки Astro
+// падает на `import.meta.env`). Список обязан быть ОДИН: страница печатает
+// языки в порядке регламента, и проверка ждёт их в том же порядке.
+// ⚠ Для вызывающих ничего не изменилось.
+export * from './euLanguages';
 
-/**
- * 24 официальных языка ЕС в порядке, в котором их печатает регламент.
- * ⚠ Исландского и норвежского здесь нет: они не языки ЕС, и в аннексах их тоже
- * нет — тексты ЕЭП публикует Секретариат ЕАСТ отдельно.
- */
-export const EU_LANGUAGES: EuLanguage[] = [
-  { code: 'BG', name: 'Bulgarian', native: 'български' },
-  { code: 'ES', name: 'Spanish', native: 'español' },
-  { code: 'CS', name: 'Czech', native: 'čeština' },
-  { code: 'DA', name: 'Danish', native: 'dansk' },
-  { code: 'DE', name: 'German', native: 'Deutsch' },
-  { code: 'ET', name: 'Estonian', native: 'eesti' },
-  { code: 'EL', name: 'Greek', native: 'ελληνικά' },
-  { code: 'EN', name: 'English', native: 'English' },
-  { code: 'FR', name: 'French', native: 'français' },
-  { code: 'GA', name: 'Irish', native: 'Gaeilge' },
-  { code: 'HR', name: 'Croatian', native: 'hrvatski' },
-  { code: 'IT', name: 'Italian', native: 'italiano' },
-  { code: 'LV', name: 'Latvian', native: 'latviešu' },
-  { code: 'LT', name: 'Lithuanian', native: 'lietuvių' },
-  { code: 'HU', name: 'Hungarian', native: 'magyar' },
-  { code: 'MT', name: 'Maltese', native: 'Malti' },
-  { code: 'NL', name: 'Dutch', native: 'Nederlands' },
-  { code: 'PL', name: 'Polish', native: 'polski' },
-  { code: 'PT', name: 'Portuguese', native: 'português' },
-  { code: 'RO', name: 'Romanian', native: 'română' },
-  { code: 'SK', name: 'Slovak', native: 'slovenčina' },
-  { code: 'SL', name: 'Slovenian', native: 'slovenščina' },
-  { code: 'FI', name: 'Finnish', native: 'suomi' },
-  { code: 'SV', name: 'Swedish', native: 'svenska' },
-];
-
-export const LANGUAGE_BY_CODE = new Map(EU_LANGUAGES.map((l) => [l.code, l]));
+import { EU_LANGUAGES, type EuLanguage } from './euLanguages';
 
 /**
  * ⚠⚠ ЯЗЫК, КОТОРЫЙ НЕ МОЖЕТ БЫТЬ ОСНОВНЫМ.
