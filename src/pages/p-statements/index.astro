@@ -17,6 +17,8 @@ import { splitClpNotation, hasClpNotation } from '../../lib/clpNotation'
 // H-фраз, при том что спрос на «precautionary statements» ВТРОЕ больше
 // (claude/statements-keyword-list.md).
 import LabelMakerCta from '../../components/LabelMakerCta.astro'
+// ⚠⚠ Партнёрская карточка — только этим компонентом, см. комментарий у вызова.
+import SdsManagerCard from '../../components/SdsManagerCard.astro'
 // ⚠ Число языков берётся из СПИСКА, а не набирается цифрой: список один, и
 // когда в ЕС появится двадцать пятый официальный язык, цифра поедет сама.
 import { EU_LANGUAGES } from '../../lib/labelLanguages'
@@ -520,6 +522,16 @@ const CARDS = [
           storage codes into an actual verdict for a given pair of chemicals.
         </p>
       </div>
+
+      {/* ⚠⚠ Партнёрская карточка — только компонентом (rel, target, дисклоуз и
+          fp_sid зашиты в него; их проверяет группа Affiliate в check:dist).
+          ⚠ Свой `fp_sid` у хаба и свой у страницы кода: читатель хаба ещё
+          выбирает, читатель кода уже нашёл. */}
+      <SdsManagerCard
+        service="authoring"
+        body={`Looking a code up is one thing; carrying all of them through a product line is another — Annex IV assigns the set from the classification, the blanks have to be filled per product, and the same wording then has to stand on the label and in the safety data sheet in each language the product is sold in. For doing that once rather than per product, the solution we recommend is SDS Manager (ExactSDS). It also offers SDS management and a broader EHS suite.`}
+        href="https://sdsmanager.com/us/sds-authoring?fpr=ghs3&fp_sid=pstathub"
+      />
     </div>
   </section>
 

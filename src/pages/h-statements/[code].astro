@@ -29,6 +29,8 @@ import { substanceHref } from '../../lib/substanceSlug'
 // параметры адреса собираются ОДНОЙ функцией из данных самой фразы — руками
 // здесь не набирается ни строка адреса, ни имя пиктограммы.
 import LabelMakerCta from '../../components/LabelMakerCta.astro'
+// ⚠⚠ Партнёрская карточка — только этим компонентом, см. комментарий у вызова.
+import SdsManagerCard from '../../components/SdsManagerCard.astro'
 import { categoryElements, categoryElementsDiffer, hStatementCta, PICTOGRAM_NAME } from '../../lib/labelMakerCta'
 // Секция «фраза на 24 языках». ⚠ У H-страниц тот же дефицит веса, что у P:
 // H221 — 485 слов, H281 — 497 при 1 025 у H226. Официальные формулировки —
@@ -854,6 +856,26 @@ const SEC_SUBS = combos.length > 0 ? '05' : '04'
           <a href="/p-statements/">precautionary statements (P-codes)</a>.
         </p>
       </div>
+
+      {/* ⚠⚠ Партнёрская карточка ставится ТОЛЬКО компонентом. Разметка
+          (rel="sponsored nofollow noopener", target, дисклоуз, fp_sid) зашита в
+          него один раз, и обе проверки группы Affiliate в check:dist проверяют
+          именно её. Ссылка, вписанная руками мимо компонента, — тот самый
+          сценарий отказа, который они ловят.
+
+          ⭐ Место — САМЫЙ НИЗ страницы, ниже соседних кодов и ниже ссылки на
+          хаб. Выше, в секции 01, уже стоит `LabelMakerCta`, и порядок здесь
+          осмысленный: бесплатный инструмент — первое действие, платный
+          партнёр — то, к чему приходят, когда это работа, а не разовый вопрос.
+
+          ⚠ `fp_sid=hstat` — свой на раздел. Общий subid на 236 страниц отдал бы
+          в отчёте партнёра одну цифру на три разных намерения читателя, и
+          понять, какой раздел зарабатывает, было бы нечем. */}
+      <SdsManagerCard
+        service="authoring"
+        body={`A hazard statement is not chosen — it follows from the classification, and the same code then has to stand in section 2 of the safety data sheet and on the label, in the official wording of every language the product is sold in. For doing that once and keeping it current when a classification changes, the solution we recommend is SDS Manager (ExactSDS). It also offers SDS management and a broader EHS suite.`}
+        href="https://sdsmanager.com/us/sds-authoring?fpr=ghs3&fp_sid=hstat"
+      />
 
       <p class="hub-fine">
         Wording quoted from the regulation named above. Substance counts come from harmonised

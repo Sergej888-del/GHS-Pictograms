@@ -4,6 +4,8 @@ import Layout from '../../layouts/Layout.astro'
 import SvgDownloadButton from '../../components/SvgDownloadButton'
 import GhsCalculator from '../../components/GhsCalculator'
 import SharePage from '../../components/SharePage.astro'
+// ⚠⚠ Партнёрская карточка — только этим компонентом, см. комментарий у вызова.
+import SdsManagerCard from '../../components/SdsManagerCard.astro'
 import { supabase } from '../../lib/supabase'
 import { hHref } from '../../lib/hStatementSlug'
 import { substanceName, substanceNameFull } from '../../lib/substanceName'
@@ -1025,6 +1027,20 @@ const ghsJsonLd = {
         GHS Symbols →
       </a>
     </div>
+
+    {/* ⚠⚠ Партнёрская карточка — ТОЛЬКО компонентом. Разметка (rel="sponsored
+        nofollow noopener", target, дисклоуз, fp_sid) зашита в него один раз, и
+        обе проверки группы Affiliate в check:dist проверяют именно её.
+        ⭐ Место — ниже кросс-ссылки и ВЫШЕ синей полосы Label Maker: синяя
+        полоса — заключение страницы, и вставать между ней и подвалом карточке
+        нечего. ⚠ `fp_sid=ghscode` свой; `ghspict` уже занят карточкой на
+        `/compliance/pillars/sds/`, и повторить его значило бы склеить в отчёте
+        партнёра два разных места. */}
+    <SdsManagerCard
+      service="authoring"
+      body={`A pictogram is an outcome, not a choice: the classification decides which ones appear, Article 26 decides which of them drop out, and the same set then has to stand on the label and in section 2 of the safety data sheet for every product and every language. For doing that once and reissuing when a classification changes, the solution we recommend is SDS Manager (ExactSDS). It also offers SDS management and a broader EHS suite.`}
+      href="https://sdsmanager.com/us/sds-authoring?fpr=ghs3&fp_sid=ghscode"
+    />
 
   </div>
 

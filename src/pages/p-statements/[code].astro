@@ -24,6 +24,8 @@ import { substanceHref } from '../../lib/substanceSlug'
 // 8,3 % — ровно как у H-страниц. То есть 116 готовых страниц просто не имели
 // ни одной контекстной ссылки, а не «хуже искались».
 import LabelMakerCta from '../../components/LabelMakerCta.astro'
+// ⚠⚠ Партнёрская карточка — только этим компонентом, см. комментарий у вызова.
+import SdsManagerCard from '../../components/SdsManagerCard.astro'
 import { pStatementCta } from '../../lib/labelMakerCta'
 // Секция «фраза на 24 языках». ⚠⚠ Замер session 52: страницы P-кодов без
 // веществ и без комбинаций весят 380–470 слов (P407 — 378, P422 — 377) при
@@ -583,6 +585,18 @@ const breadcrumbJson = JSON.stringify({
           <a href="/h-statements/">hazard statements (H-codes)</a>.
         </p>
       </div>
+
+      {/* ⚠⚠ Партнёрская карточка — ТОЛЬКО компонентом: разметка (rel, target,
+          дисклоуз, fp_sid) зашита в него один раз, и обе проверки группы
+          Affiliate в check:dist проверяют именно её.
+          ⭐ Место — самый низ, ниже соседних кодов и ссылки на хаб: выше, в
+          секции 01, стоит `LabelMakerCta`, и бесплатный инструмент остаётся
+          первым действием. ⚠ `fp_sid=pstat` — свой на раздел. */}
+      <SdsManagerCard
+        service="authoring"
+        body={`Precautionary statements are not written, they are assigned: CLP Annex IV picks them from the classification, several carry blanks the supplier has to fill, and the same set then has to stand on the label and in the safety data sheet, in the official wording of every language the product is sold in. For doing that once and keeping it current, the solution we recommend is SDS Manager (ExactSDS). It also offers SDS management and a broader EHS suite.`}
+        href="https://sdsmanager.com/us/sds-authoring?fpr=ghs3&fp_sid=pstat"
+      />
 
       <p class="hub-fine">
         Wording quoted from the regulation named above. Substance counts come from harmonised

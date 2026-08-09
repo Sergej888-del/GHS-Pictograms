@@ -16,6 +16,8 @@ import { hHref, hSlug } from '../../lib/hStatementSlug'
 // A4 плана claude/label-maker-hub-plan.md. ⚠ Контекстная ссылка в конструктор
 // на этом хабе была ровно одна — внутри абзаца в самом низу страницы.
 import LabelMakerCta from '../../components/LabelMakerCta.astro'
+// ⚠⚠ Партнёрская карточка — только этим компонентом, см. комментарий у вызова.
+import SdsManagerCard from '../../components/SdsManagerCard.astro'
 // ⚠ Число языков берётся из СПИСКА, а не набирается цифрой.
 import { EU_LANGUAGES } from '../../lib/labelLanguages'
 
@@ -521,6 +523,17 @@ const CARDS = [
           hazard classes into a verdict for a given pair of chemicals.
         </p>
       </div>
+
+      {/* ⚠⚠ Партнёрская карточка — только компонентом (rel, target, дисклоуз и
+          fp_sid зашиты в него; их проверяет группа Affiliate в check:dist).
+          ⚠ Свой `fp_sid` у ХАБА и свой у страницы кода: читатель хаба ещё
+          выбирает, читатель кода уже нашёл — сливать их в одну цифру значит
+          лишить отчёт единственного различия, которое в нём есть. */}
+      <SdsManagerCard
+        service="authoring"
+        body={`Looking a code up is one thing; carrying all of them through a product line is another — every hazard statement has to stand in section 2 of the safety data sheet and on the label, in the official wording of each language the product is sold in, and be reissued when a classification changes. For doing that once rather than per product, the solution we recommend is SDS Manager (ExactSDS). It also offers SDS management and a broader EHS suite.`}
+        href="https://sdsmanager.com/us/sds-authoring?fpr=ghs3&fp_sid=hstathub"
+      />
     </div>
   </section>
 
