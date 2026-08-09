@@ -54,6 +54,9 @@ import { productNameVariants, defaultLabelIdentifiers } from '../src/lib/labelPr
 import {
   buildOfficialNames, NAME_TRANSLATION_COLUMNS, type NameTranslationRow,
 } from '../src/lib/nameForms'
+import {
+  erratumFor, erratumLanguages, ERRATA_INDEX_NUMBERS, ERRATA_COUNT, ERRATA_TABLE_NOTE,
+} from '../src/lib/annex6Errata'
 import { casShapeOk, ecShapeOk, indexShapeOk } from '../src/lib/substanceIdentifiers'
 import { substanceSlug, casFromSlug } from '../src/lib/substanceSlug'
 // ⚠⚠ Раскладка «код знака → файл» берётся ИЗ ТОГО ЖЕ модуля, что и страница.
@@ -5748,6 +5751,141 @@ const CHECKS: Check[] = [
               'сверка идёт в обе стороны: язык базы → строка блока и строка блока → язык базы',
               `ячеек, показанных дословной ячейкой регламента (групповая или ненадёжная запись): ${verbatimCells}`,
               'имена собраны тем же buildOfficialNames, которым их печатает страница',
+            ]
+          : problems,
+      }
+    },
+  },
+  {
+    /**
+     * 105-я. ⭐⭐ ПОМЕТКА ОБ ОШИБКЕ САМОГО РЕГЛАМЕНТА СТОИТ РОВНО ТАМ, ГДЕ ДОЛЖНА.
+     *
+     * ⚠⚠ ЭТО НЕ ПРОВЕРКА НАШИХ ДАННЫХ. Все 29 свидетельств сверены с
+     * первоисточником (`.tmp-eurlex/clp-consolidated-<lang>.html`): в регламенте
+     * напечатано то же, что у нас в базе. Проверяется не имя, а ПРЕДУПРЕЖДЕНИЕ:
+     * стоит ли оно у тех строк, у которых должно, и не стоит ли у прочих.
+     *
+     * ⚠⚠ СВЕРКА В ОБЕ СТОРОНЫ, как у 103-й. Лишняя пометка — такой же дефект,
+     * как недостающая: она обвиняет регламент там, где он прав, а читатель
+     * пойдёт искать ошибку, которой нет.
+     *
+     * ⭐⭐ ЧТО ОНА ЗНАЧИТ, КОГДА КРАСНЕЕТ. Список курируемый и сверен вручную,
+     * поэтому её падение почти наверняка означает НЕ нашу поломку, а то, что
+     * EUR-Lex выпустил новую консолидацию и набор ошибок изменился. Тогда
+     * `annex6Errata.ts` пересматривается по первоисточнику, а не подгоняется
+     * под страницу.
+     */
+    id: 'annex6-errata-flags',
+    group: 'subs',
+    title: 'Ошибки языковых редакций Annex VI: пометка стоит у помеченных строк и только у них',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('annex6-errata-flags', slugs)
+      if (miss) return miss
+
+      const exp = await substanceExpectation()
+      const byIndex = await nameTranslationsByIndex()
+
+      const MARK = 'name-erratum'
+      assertAscii('annex6-errata-flags', [MARK])
+
+      const noteMissing: string[] = []
+      const markCountDiffers: string[] = []
+      const tableNoteMissing: string[] = []
+      const tableNoteExtra: string[] = []
+      const langNotBuilt: string[] = []
+      let pagesFlagged = 0
+      let notesChecked = 0
+
+      // ⚠ Записи списка, у которых страницы нет вовсе, называются отдельно:
+      // молча пропустить их значило бы не заметить опечатку в index-номере.
+      const builtIndexes = new Set<string>()
+
+      for (const slug of slugs!) {
+        const want = exp.bySlug.get(slug)
+        if (!want) continue
+        const index = want.row.index_number
+        if (index) builtIndexes.add(index)
+
+        const html = readPage(join('substances', slug, 'index.html'))
+        if (html === null) continue
+
+        const start = html.indexOf('id="names"')
+        if (start < 0) continue
+        const end = html.indexOf('</section>', start)
+        const block = html.slice(start, end < 0 ? html.length : end)
+        const text = unescapeHtml(block)
+
+        // ⚠⚠ Ожидание считается ТЕМ ЖЕ кодом, что печатает страницу, и только
+        // по языкам, реально попавшим в блок: редакции, которой у записи нет,
+        // неоткуда взять и пометку.
+        const printed = index ? buildOfficialNames(byIndex.get(index) ?? []) : []
+        const wanted = printed
+          .map((n) => ({ code: n.code, err: erratumFor(index ?? '', n.code) }))
+          .filter((x) => x.err)
+
+        // ⚠ Свидетельство есть, а редакции на странице нет — это не «нечего
+        // проверять», а расхождение списка с базой.
+        for (const code of erratumLanguages(index ?? '')) {
+          if (!printed.some((n) => n.code === code)) {
+            langNotBuilt.push(`${slug} (index ${index}): в списке есть ${code}, а строки этой редакции в блоке нет`)
+          }
+        }
+
+        const marks = (block.match(new RegExp(MARK, 'g')) ?? []).length
+        if (marks !== wanted.length) {
+          markCountDiffers.push(`${slug}: пометок на странице ${marks}, ожидалось ${wanted.length}`)
+        }
+        if (wanted.length) pagesFlagged++
+
+        // ⚠⚠ Текст свидетельства ищется ДОСЛОВНО. Считать пометки числом мало:
+        // так у двух помеченных строк можно было бы напечатать одно и то же
+        // объяснение, и общая фраза прошла бы проверку.
+        for (const { code, err } of wanted) {
+          notesChecked++
+          if (!text.includes(err!.note)) {
+            noteMissing.push(`${slug} ${code}: ${JSON.stringify(err!.note.slice(0, 60))}`)
+          }
+        }
+
+        const hasTableNote = text.includes(ERRATA_TABLE_NOTE)
+        if (wanted.length && !hasTableNote) tableNoteMissing.push(slug)
+        if (!wanted.length && hasTableNote) tableNoteExtra.push(slug)
+      }
+
+      const noPage = ERRATA_INDEX_NUMBERS.filter((i) => !builtIndexes.has(i))
+
+      const problems: string[] = []
+      if (markCountDiffers.length) {
+        problems.push(`пометок не столько, сколько свидетельств (${markCountDiffers.length}): ${preview(markCountDiffers)}`)
+      }
+      if (noteMissing.length) {
+        problems.push(`свидетельство не найдено на странице дословно (${noteMissing.length}): ${preview(noteMissing)}`)
+      }
+      if (tableNoteMissing.length) {
+        problems.push(`страница с пометкой без подписи под таблицей (${tableNoteMissing.length}): ${preview(tableNoteMissing)}`)
+      }
+      if (tableNoteExtra.length) {
+        problems.push(`подпись под таблицей на странице без пометок (${tableNoteExtra.length}): ${preview(tableNoteExtra)}`)
+      }
+      if (langNotBuilt.length) {
+        problems.push(`редакция из списка отсутствует в блоке (${langNotBuilt.length}): ${preview(langNotBuilt)}`)
+      }
+
+      const ok = problems.length === 0
+      return {
+        id: 'annex6-errata-flags',
+        group: 'subs',
+        ok,
+        headline: ok
+          ? `${pagesFlagged} страниц помечено, ${notesChecked} свидетельств сверено дословно (в списке ${ERRATA_COUNT})`
+          : `расхождений: ${problems.length}`,
+        detail: ok
+          ? [
+              'сверка в обе стороны: свидетельство → пометка на странице и пометка → свидетельство',
+              'ожидание считается тем же buildOfficialNames и тем же annex6Errata, что печатают страницу',
+              `записей списка без построенной страницы: ${noPage.length}${noPage.length ? ' — ' + noPage.join(', ') : ''}`,
+              'красная проверка означает скорее новую консолидацию EUR-Lex, чем нашу поломку',
             ]
           : problems,
       }

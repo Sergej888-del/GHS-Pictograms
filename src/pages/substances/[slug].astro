@@ -70,6 +70,7 @@ import {
   ANNEX_VI_LANGUAGE_ABSENT, ANNEX_VI_LANGUAGE_ABSENT_REASON,
   type NameTranslationRow, type OfficialName,
 } from '../../lib/nameForms'
+import { erratumFor, ERRATUM_LEAD, ERRATA_TABLE_NOTE } from '../../lib/annex6Errata'
 // ⚠ `EU_LANGUAGES` нужен здесь только чтобы назвать НЕДОСТАЮЩИЕ редакции и
 // подписать строки таблицы. Сам порядок строк задаёт `buildOfficialNames` —
 // одним списком на страницу и на проверку.
@@ -606,6 +607,15 @@ const namesMissing = EU_LANGUAGES.filter(
 // п. 1.1.1.4), а не наш комментарий. Оговорка печатается только когда оно есть.
 const namesHavePrintedSuffix = officialNames.some((n) => n.printedSuffix)
 const namesHaveVerbatim = officialNames.some((n) => n.verbatim)
+// ⚠⚠ Ошибки САМОГО регламента в отдельных языковых редакциях: ячейка несёт имя
+// другой записи либо примечание парной записи. Сверено с первоисточником —
+// правится НЕ данными, а пометкой рядом со строкой (`annex6Errata.ts`).
+const namesErrata = new Map(
+  officialNames
+    .map((n) => [n.code, erratumFor(row.index_number ?? '', n.code)] as const)
+    .filter(([, e]) => e),
+)
+const namesHaveErrata = namesErrata.size > 0
 /**
  * Языковая метка разметки для кода редакции.
  * ⚠ Все 24 кода регламента — двухбуквенные ISO 639-1, они же законные подтеги
@@ -1282,6 +1292,12 @@ const multiUn = unEntries.length > 1
                     </span>
                   </td>
                   <td class="c-name" lang={htmlLang(n.code)}>
+                    {namesErrata.get(n.code) && (
+                      <span class="name-erratum" lang="en">
+                        <strong>{ERRATUM_LEAD[namesErrata.get(n.code)!.kind]}</strong>{' '}
+                        {namesErrata.get(n.code)?.note}
+                      </span>
+                    )}
                     {n.verbatim ? (
                       <>
                         <span class="name-main">{n.verbatim}</span>
@@ -1305,6 +1321,8 @@ const multiUn = unEntries.length > 1
             </tbody>
           </table>
         </div>
+
+        {namesHaveErrata && <p class="hub-note warn">{ERRATA_TABLE_NOTE}</p>}
 
         {namesHavePrintedSuffix && (
           <p class="hub-note">

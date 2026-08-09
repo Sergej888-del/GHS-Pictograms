@@ -1658,6 +1658,36 @@ button.hub-pair:last-child { border-bottom: 0; }
   color: var(--ink-3);
 }
 
+/* ⚠⚠ Ошибка САМОГО регламента в этой языковой редакции: ячейка несёт имя другой
+   записи либо примечание парной записи. Стоит ПЕРЕД именем, а не после: человек
+   пришёл списать имя на тару, и предупреждение, встреченное после того как он
+   его прочёл, опаздывает.
+   ⚠ Янтарь, а не роза. По §2.6 роза означает «нельзя», и только это; здесь же
+   имя привести МОЖНО и нужно — регламент есть регламент, — но со знанием, что
+   его собственные EC и CAS в той же строке говорят другое.
+   ⚠ Новых цветов не заводится: обе величины — уже существующие токены вердикта
+   «держать раздельно», третьей краски у системы нет и не нужно. */
+.hub-table td.c-name .name-erratum {
+  display: block;
+  margin-bottom: 8px;
+  border-left: 3px solid var(--verdict-sep-ink);
+  border-radius: 5px;
+  background: var(--verdict-sep-bg);
+  padding: 8px 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--verdict-sep-ink);
+}
+.hub-table td.c-name .name-erratum strong { font-weight: 700; }
+
+/* Янтарный вариант .hub-note — тот же регистр, что у .tool-note.warn. */
+.hub-note.warn {
+  border-color: var(--verdict-sep-ink);
+  border-left-width: 3px;
+  background: var(--verdict-sep-bg);
+  color: var(--verdict-sep-ink);
+}
+
 /* Unused = defined in the regulation, carried by no Annex VI substance */
 .hub-table tr.is-unused .c-code a { color: #64748b; }
 .hub-table tr.is-unused .c-txt { color: var(--ink-3); }
