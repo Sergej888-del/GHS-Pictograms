@@ -421,7 +421,18 @@ export default function GHSLabelConstructor({
         if (!first) return
         const cur = productNameRef.current
         if (cur.trim() && cur !== autoNameRef.current) return
+        /**
+         * ⚠⚠ ОБЕ МЕТКИ ПЕРЕСТАВЛЯЮТСЯ ВМЕСТЕ. Пока `productNameRef` здесь не
+         * трогали, он оставался с прежним именем, а `autoNameRef` уезжал на
+         * новое — и при СЛЕДУЮЩЕЙ смене языка условие выше читало расхождение
+         * двух наших же меток как «человек вписал своё название» и выходило.
+         * Имя замирало на том языке, который загрузился первым (обычно
+         * английский), и дальше не менялось никогда, хотя фразы менялись
+         * исправно. Переводы имён при этом лежат в базе на все 4 178 веществ
+         * и 23 языка — то есть дефект был в одной строке, а не в данных.
+         */
         autoNameRef.current = first.name
+        productNameRef.current = first.name
         setProductName(first.name)
       })
       .catch((e: Error) => { if (!cancelled) { setNames(null); setNamesError(e.message) } })
