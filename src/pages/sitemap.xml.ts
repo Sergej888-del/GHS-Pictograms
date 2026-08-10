@@ -88,7 +88,12 @@ const COMPLIANCE_PILLAR_PAGES = [
   { url: '/compliance/clp-translation-errors/', changefreq: 'monthly', priority: '0.8' },
 ];
 
-/** Storage-compatibility tool, hub and the 5 indexable category pages (P4 prose). */
+/**
+ * Storage-compatibility tool, hub and the 11 indexable category pages (P4 prose).
+ * ⚠ A category page is indexable ONLY if src/content/storage-classes/<slug>.md exists —
+ * the leaf template emits noindex without it. `bases` and `mineral-acids` are
+ * deliberately absent: their membership is still being verified (session 61).
+ */
 const STORAGE_PAGES = [
   { url: '/tools/chemical-storage-compatibility/', changefreq: 'weekly', priority: '0.85' },
   { url: '/storage-compatibility/', changefreq: 'weekly', priority: '0.9' },
@@ -97,6 +102,12 @@ const STORAGE_PAGES = [
   { url: '/storage-compatibility/water-reactives/', changefreq: 'monthly', priority: '0.7' },
   { url: '/storage-compatibility/organic-peroxides/', changefreq: 'monthly', priority: '0.7' },
   { url: '/storage-compatibility/acute-toxics/', changefreq: 'monthly', priority: '0.7' },
+  { url: '/storage-compatibility/compressed-gases/', changefreq: 'monthly', priority: '0.7' },
+  { url: '/storage-compatibility/cyanides-and-sulfides/', changefreq: 'monthly', priority: '0.7' },
+  { url: '/storage-compatibility/organic-acids/', changefreq: 'monthly', priority: '0.7' },
+  { url: '/storage-compatibility/oxidizing-acids/', changefreq: 'monthly', priority: '0.7' },
+  { url: '/storage-compatibility/flammable-solids/', changefreq: 'monthly', priority: '0.7' },
+  { url: '/storage-compatibility/reactive-metals/', changefreq: 'monthly', priority: '0.7' },
 ];
 
 async function fetchBlogSitemapEntries(): Promise<
