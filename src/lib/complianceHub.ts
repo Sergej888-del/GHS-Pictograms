@@ -54,6 +54,15 @@ export type Pillar = {
    * сам градиент) описано в `hub.css` и правке из разметки не подлежит.
    */
   tint: string;
+  /**
+   * Свои страницы столпа, живущие вне коллекции статей.
+   *
+   * ⚠ Заведено ради `/compliance/clp-translation-errors/`: страница собрана из
+   * кода и данных, а не из MDX, и в списке статей столпа её быть не может.
+   * Без этого поля единственная ссылка на неё — карта сайта, то есть её не
+   * найдёт ни один человек, только робот.
+   */
+  extraPages?: { href: string; title: string; desc: string }[];
 };
 
 /**
@@ -91,6 +100,14 @@ export const PILLARS: Pillar[] = [
       'European Regulation 1272/2008 implements GHS for chemicals placed on the EU market. CLP covers hazard classification, labelling, packaging requirements, and Annex VI harmonised classifications. Regular Adaptations to Technical Progress (ATPs) keep the regulation aligned with the latest scientific evidence.',
     // violet
     acc: '#7c3aed', line: '#ddd6fe', soft: '#f5f3ff', ink: '#6d28d9', tint: '#2e1065',
+    extraPages: [
+      {
+        href: '/compliance/clp-translation-errors/',
+        title: 'Where the language editions of Annex VI disagree',
+        desc: 'Thirty entries where one language edition of Annex VI prints something the rest of '
+          + 'its own row contradicts — each quoted from the Official Journal, with the act and the page.',
+      },
+    ],
   },
   {
     slug: 'sds',

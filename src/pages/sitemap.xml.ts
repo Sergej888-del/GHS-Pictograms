@@ -80,6 +80,12 @@ const COMPLIANCE_PILLAR_PAGES = [
   { url: '/compliance/reach/', changefreq: 'weekly', priority: '0.85' },
   { url: '/compliance/svhc/', changefreq: 'weekly', priority: '0.85' },
   { url: '/compliance/ehs/', changefreq: 'weekly', priority: '0.85' },
+  // ⚠⚠ Страница разбора появилась здесь ТОЛЬКО ПОСЛЕ отправки подачи в ECHA
+  // 10 августа 2026 — таково было решение: не публиковать обвинение в адрес
+  // официального текста раньше, чем оно уйдёт по официальному каналу. До этого
+  // дня страница существовала, но была недостижима: ни в карте сайта, ни в
+  // одной ссылке.
+  { url: '/compliance/clp-translation-errors/', changefreq: 'monthly', priority: '0.8' },
 ];
 
 /** Storage-compatibility tool, hub and the 5 indexable category pages (P4 prose). */

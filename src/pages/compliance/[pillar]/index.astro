@@ -199,6 +199,28 @@ const totalArticles = articles.length + (pillarArticle ? 1 : 0);
     </div>
   </section>
 
+  {/* ── СВОИ СТРАНИЦЫ СТОЛПА ──────────────────────────────────────────────
+      ⚠ Отдельной секцией, а не строкой в списке статей: это не статья из
+      коллекции, а разбор, собранный из данных, и обещать читателю «ещё одну
+      статью» было бы неточно. */}
+  {meta.extraPages && meta.extraPages.length > 0 && (
+    <section class="hub-sec-b">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">Also in this pillar</p>
+        <h2 class="hub-h2">Reference and analysis</h2>
+        <div class="hub-mini-cards">
+          {meta.extraPages.map((x) => (
+            <a class="hub-mini-card" href={x.href} style={pillarAccentStyle(meta)}>
+              <span class="code">{meta.label}</span>
+              <h4>{x.title}</h4>
+              <p class="copy">{x.desc}</p>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+
   {/* ── ПРОЗА САМОГО СТОЛПА ───────────────────────────────────────────────── */}
   {PillarContent && (
     <section class="hub-sec-a" id="pillar-content">

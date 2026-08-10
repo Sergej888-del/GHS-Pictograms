@@ -1,14 +1,15 @@
 # Errors in the language editions of Annex VI to Regulation (EC) No 1272/2008
 
 **To:** Publications Office of the European Union  
-**Copy:** European Chemicals Agency (ECHA); European Commission, DG GROW  
-**Subject:** Request for corrigenda — Table 3 of Annex VI Part 3 to the CLP Regulation
+**Subject:** Request for corrigenda — Table 3 of Annex VI Part 3 to the CLP Regulation (30 entries, 13 language editions)
 
 ---
 
 Dear Sir or Madam,
 
 We maintain a public reference site on GHS and CLP classification and labelling. While building a multilingual view of Table 3 of Annex VI Part 3 to Regulation (EC) No 1272/2008, we identified **30 entries across 13 language editions** in which the published text is contradicted by the rest of the same table row.
+
+The same 30 entries were reported to the European Chemicals Agency on 10 August 2026 through its form for potential errors in Annex VI. We are writing to you as well because what these entries need is a corrigendum to the published text, which is not something ECHA issues.
 
 We are writing because these entries are not editorial detail. Under Article 18(2) the name given in Annex VI is the name a supplier puts on the label and in the safety data sheet. Where the name cell of an entry carries the name of a different substance, a supplier following the Regulation in their own language labels a product with the wrong substance name.
 
@@ -20,6 +21,12 @@ The evidence for each entry is internal to the row, which is why no comparison w
 
 - for a wrong name, the EC and CAS numbers printed in the same row identify a different substance than the name;
 - for a wrong qualifier, both halves of a paired entry print the same concentration qualifier although their classifications differ. In entry 007-004-00-1 of the Bulgarian edition the contradiction is visible within the single row: the entry is marked "[C ≤ 70 %]", while the specific concentration limits in the same row read "Ox. Liq. 2; H272: C ≥ 99 %" and "Ox. Liq. 3; H272: 70 % ≤ C < 99 %".
+
+## Checked against ECHA's own table
+
+The Comment column of ECHA's unofficial Excel table of Annex VI records corrections ECHA has itself applied. **Sixteen of the entries below already carry such a comment** — every one of them about the order of hazard classes or of pictograms, and none about column (2).
+
+Two things follow. The entries reported here duplicate nothing ECHA has already recorded. And those sixteen rows were examined closely enough to reorder their pictograms, while the name in column (2) went unquestioned — which is what one would expect if column (2) of the language editions has never been compared against the identifiers printed in its own row.
 
 ## Precedent
 
@@ -33,7 +40,7 @@ We ask that the entries below be examined with a view to issuing corrigenda to t
 
 Where the correct reading does not depend on the language — a transposed per cent sign, a missing letter, a concentration qualifier that belongs to the paired entry — we state it. Where the name cell carries the name of another entry, we deliberately do **not** propose wording: we report what is printed and what the row’s own identifiers say, and leave the correct designation to the translation services.
 
-This list is what we have verified against the Official Journal. We do not claim it is exhaustive.
+This list is what we have verified against the Official Journal. We do not claim it is exhaustive: the method compares the 23 editions of each entry against one another, so an error repeated identically in every edition is invisible to it.
 
 ---
 
@@ -147,8 +154,9 @@ We would be glad to answer any question and to provide the material in whatever 
 Yours faithfully,
 
 
-_(name, position)_  
-ghspictograms.com
+**Sergejs Sevcenko**  
+Founder, SIA Basis Assets  
+ghspictograms.com · sergejssevcenko@ghslabels.com
 
 ---
 

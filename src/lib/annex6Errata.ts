@@ -371,8 +371,13 @@ export const SUBMISSION: {
   /** Куда отправлено — печатается рядом с датой. */
   channel: string;
 } = {
-  date: null,
-  channel: 'ECHA — Mistakes in Annex VI, and the Publications Office',
+  date: '2026-08-10',
+  // ⚠⚠ ТОЛЬКО ECHA. Первая редакция этой строки называла ещё и Бюро
+  // публикаций — а туда не отправляли ничего. Страница, приписавшая себе
+  // обращение, которого не было, врёт ровно там, где требует доверия.
+  // ⚠ Форма ECHA принимает ОДИН файл и не имеет поля для письма: наш
+  // сопроводительный текст ушёл листом `Cover note` внутри книги.
+  channel: 'ECHA’s reporting form for potential errors in Annex VI to CLP',
 };
 
 /**
@@ -409,9 +414,29 @@ export function erratumStatusLabel(st: ErratumStatus): string {
     return `Corrected by ${st.act}, ${st.oj}, p. ${st.page}.`;
   }
   if (st.kind === 'submitted') {
-    return `Reported on ${st.date} to ${st.channel}. No reply is implied by this note.`;
+    return `Reported ${humanDate(st.date)}. No reply is implied by this note.`;
   }
   return 'Not reported to anyone yet.';
+}
+
+/**
+ * `2026-08-10` → `10 August 2026`.
+ *
+ * ⚠ ХРАНИМ ISO, ПЕЧАТАЕМ ПО-ЧЕЛОВЕЧЕСКИ. `10.08.2026` читается британцем как
+ * 10 августа, американцем — как несуществующее 8 октября; на странице, которая
+ * ссылается на даты Официального журнала, двусмысленной даты быть не должно.
+ * ⚠⚠ Разбор строкой, а не `new Date()`: конструктор от `YYYY-MM-DD` даёт
+ * полночь UTC, и в часовом поясе западнее Гринвича `toLocaleDateString` вернёт
+ * предыдущий день.
+ */
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+export function humanDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}`;
 }
 
 /** Ошибка регламента у этой записи в этой редакции, или `null`. */

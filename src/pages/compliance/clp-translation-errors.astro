@@ -21,7 +21,7 @@
 import Layout from '../../layouts/Layout.astro';
 import { PILLAR_BY_SLUG, pillarAccentStyle } from '../../lib/complianceHub';
 import {
-  ERRATUM_LEAD, ERRATA_COUNT, SUBMISSION,
+  ERRATUM_LEAD, ERRATA_COUNT, SUBMISSION, humanDate,
   erratumStatus, erratumStatusLabel, erratumFor, erratumCitation,
   type ErratumKind,
 } from '../../lib/annex6Errata';
@@ -226,9 +226,9 @@ const jsonLd = {
       <div class="hub-prose">
         {SUBMISSION.date ? (
           <p class="hub-sub">
-            The findings were reported on {SUBMISSION.date} to {SUBMISSION.channel}. Reporting is
-            not agreement: nothing on this page implies that any authority has accepted, reviewed
-            or replied to them.
+            The findings were reported on {humanDate(SUBMISSION.date!)} through {SUBMISSION.channel}.
+            Reporting is not agreement: nothing on this page implies that any authority has
+            accepted, reviewed or replied to them.
           </p>
         ) : (
           <p class="hub-sub">
