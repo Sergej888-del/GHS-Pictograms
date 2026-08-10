@@ -333,6 +333,87 @@ export const ERRATUM_LEAD: Record<ErratumKind, string> = {
   typo: 'This edition has a typographic error here.',
 };
 
+// ── Состояние находки ───────────────────────────────────────────────────────
+
+/**
+ * Что с находкой стало к сегодняшнему дню.
+ *
+ * ⚠⚠⚠ БЕЗ ЭТОГО СТРАНИЦА НАЧНЁТ ВРАТЬ ПРИ ПЕРВОМ ЖЕ ИСПРАВЛЕНИИ. Список
+ * ошибок, не знающий, что одну из них уже поправили корриджендумом, — это не
+ * устаревшая страница, а страница, обвиняющая законодателя в том, чего он уже
+ * не делает. Прецедент прямо перед глазами: `32018R0669R(01)` исправил имя
+ * записи `015-011-00-6` во ФРАНЦУЗСКОЙ редакции на полосе 42, и если бы мы
+ * держали и её, наш список был бы неверен восемь лет.
+ */
+export type ErratumStatus =
+  /** Никому не сообщено. */
+  | { kind: 'unreported' }
+  /** Сообщено: дата отправки и канал. */
+  | { kind: 'submitted'; date: string; channel: string }
+  /** Исправлено корриджендумом: чем именно и на какой полосе. */
+  | { kind: 'corrected'; act: string; oj: string; page: number };
+
+/**
+ * Состояние ПОДАЧИ ЦЕЛИКОМ.
+ *
+ * ⚠⚠ ОНО ОДНО НА ВСЕ НАХОДКИ, И ЭТО НЕ УПРОЩЕНИЕ. Подача уходит одним файлом и
+ * одним письмом; расписывать дату у каждой из тридцати строк значило бы
+ * завести тридцать мест, где она может разойтись. Отдельная судьба бывает
+ * только у исправленной записи — для неё и заведены переопределения ниже.
+ *
+ * ⚠⚠⚠ `date: null` ОЗНАЧАЕТ «ЕЩЁ НЕ ОТПРАВЛЕНО», и страница-разбор обязана это
+ * учитывать: решение Сергея — публиковать ПОСЛЕ отправки. Проставить дату
+ * здесь — единственное действие, которое переводит все находки в «сообщено».
+ */
+export const SUBMISSION: {
+  /** Дата отправки в формате `YYYY-MM-DD`, либо `null`. */
+  date: string | null;
+  /** Куда отправлено — печатается рядом с датой. */
+  channel: string;
+} = {
+  date: null,
+  channel: 'ECHA — Mistakes in Annex VI, and the Publications Office',
+};
+
+/**
+ * Находки, которые УЖЕ исправлены отдельным актом.
+ *
+ * ⚠ Сегодня список пуст, и это утверждение, а не заготовка: ни одна из
+ * тридцати наших находок корриджендумом не закрыта. Чешскую `615-050-00-4`
+ * корриджендум `32022R0692R(01)` пережила — у строки нет метки `►C`, и это
+ * проверено, а не предположено (session 58).
+ */
+const CORRECTED: Record<string, Record<string, Extract<ErratumStatus, { kind: 'corrected' }>>> = {};
+
+/**
+ * Состояние конкретной находки.
+ *
+ * ⚠ Порядок проверок значим: исправление СИЛЬНЕЕ отправки. Запись, которую
+ * поправили, перестаёт быть ошибкой независимо от того, сообщали мы о ней.
+ */
+export function erratumStatus(indexNumber: string, lang: string): ErratumStatus {
+  const fixed = CORRECTED[indexNumber]?.[(lang ?? '').trim().toUpperCase()];
+  if (fixed) return fixed;
+  if (SUBMISSION.date) return { kind: 'submitted', date: SUBMISSION.date, channel: SUBMISSION.channel };
+  return { kind: 'unreported' };
+}
+
+/**
+ * Подпись состояния для страницы.
+ *
+ * ⚠⚠ ЖИВЁТ ЗДЕСЬ, А НЕ В РАЗМЕТКЕ, чтобы проверка искала ТОТ ЖЕ текст, что
+ * печатает страница, — как `ERRATUM_LEAD` и `ERRATA_TABLE_NOTE`.
+ */
+export function erratumStatusLabel(st: ErratumStatus): string {
+  if (st.kind === 'corrected') {
+    return `Corrected by ${st.act}, ${st.oj}, p. ${st.page}.`;
+  }
+  if (st.kind === 'submitted') {
+    return `Reported on ${st.date} to ${st.channel}. No reply is implied by this note.`;
+  }
+  return 'Not reported to anyone yet.';
+}
+
 /** Ошибка регламента у этой записи в этой редакции, или `null`. */
 export function erratumFor(indexNumber: string, lang: string): Erratum | null {
   const byLang = ERRATA[indexNumber];

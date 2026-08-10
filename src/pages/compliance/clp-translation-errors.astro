@@ -1,0 +1,285 @@
+---
+/**
+ * /compliance/clp-translation-errors/ — разбор ошибок в языковых редакциях
+ * Annex VI регламента CLP.
+ *
+ * ⚠⚠⚠ ЭТО ОБВИНЕНИЕ В АДРЕС ОФИЦИАЛЬНОГО ТЕКСТА, и написано оно должно быть
+ * так, чтобы читатель мог его ПРОВЕРИТЬ, а не поверить. Отсюда три требования,
+ * которые нельзя ослаблять:
+ *
+ *   1. у каждой находки — акт, выпуск Официального журнала и НОМЕР ПОЛОСЫ;
+ *   2. формулировки берутся из `annex6Errata.ts`, а не пишутся здесь заново:
+ *      письмо в Бюро публикаций, подача в ECHA и эта страница обязаны говорить
+ *      одно и то же, иначе адресат подачи сверит её с сайтом и найдёт разницу;
+ *   3. ПОЛНОТА НЕ УТВЕРЖДАЕТСЯ НИГДЕ. Список — это то, что сверено с ОЖ, и
+ *      ничего сверх того.
+ *
+ * ⚠⚠ ДОСЬЕ ЧИТАЕТСЯ ИЗ `src/data/`, А НЕ ИЗ `.tmp-eurlex/`. Вторая папка стоит
+ * в `.gitignore` (там двадцатимегабайтные акты), и на Cloudflare её нет —
+ * страница, читающая оттуда, собиралась бы только на машине.
+ */
+import Layout from '../../layouts/Layout.astro';
+import { PILLAR_BY_SLUG, pillarAccentStyle } from '../../lib/complianceHub';
+import {
+  ERRATUM_LEAD, ERRATA_COUNT, SUBMISSION,
+  erratumStatus, erratumStatusLabel, erratumFor, erratumCitation,
+  type ErratumKind,
+} from '../../lib/annex6Errata';
+import dossier from '../../data/errata-dossier.json';
+
+export const prerender = true;
+
+const clp = PILLAR_BY_SLUG.get('clp')!;
+const SITE = 'https://ghspictograms.com';
+const canonical = `${SITE}/compliance/clp-translation-errors/`;
+
+/**
+ * ⚠⚠ ДОСЬЕ И МОДУЛЬ СВЕРЯЮТСЯ ПРЯМО ЗДЕСЬ, НА СБОРКЕ. Досье собирается
+ * скриптом из скачанных актов, модуль правится руками; разойтись они могут, и
+ * тогда страница напечатала бы цитату от одной находки со свидетельством от
+ * другой. Лучше не собраться, чем собраться неверно.
+ */
+const findings = dossier.map((f) => {
+  const e = erratumFor(f.index, f.lang);
+  if (!e) throw new Error(`Досье знает ${f.index} · ${f.lang}, а annex6Errata — нет.`);
+  if (e.note !== f.note) throw new Error(`Свидетельство разошлось у ${f.index} · ${f.lang}.`);
+  return { ...f, kind: e.kind as ErratumKind, citation: erratumCitation(e), status: erratumStatus(f.index, f.lang) };
+});
+if (findings.length !== ERRATA_COUNT) {
+  throw new Error(`В досье ${findings.length} находок, в модуле ${ERRATA_COUNT}.`);
+}
+
+const languages = [...new Set(findings.map((f) => f.lang))].sort();
+const acts = [...new Set(findings.map((f) => f.act))].sort();
+
+/** Порядок разделов: по видам ошибок, как и в модуле. */
+const KIND_ORDER: ErratumKind[] = ['foreign-name', 'foreign-designation', 'wrong-qualifier', 'typo'];
+const KIND_TITLE: Record<ErratumKind, string> = {
+  'foreign-name': 'The name of a different entry',
+  'foreign-designation': 'One designation belongs to a different entry',
+  'wrong-qualifier': 'The paired entry’s qualifier',
+  typo: 'Typographic errors',
+};
+const KIND_LEDE: Record<ErratumKind, string> = {
+  'foreign-name':
+    'The name cell carries the name of another Annex VI entry. The EC and CAS numbers in the same row identify a different substance — and they are the ones that are right.',
+  'foreign-designation':
+    'The entry has several designations in one cell, and one of them belongs to a different entry. The rest are correct, which is exactly what makes this hard to spot.',
+  'wrong-qualifier':
+    'Annex VI §1.1.1.4 attaches a concentration or form qualifier to some entries, in square brackets. Here the qualifier of the paired entry has been printed instead — so the row states one concentration and classifies another.',
+  typo:
+    'A misprint in the name itself: a wrong locant, a missing letter, a transposed sign, or a designation left in English inside a translated cell.',
+};
+
+const grouped = KIND_ORDER
+  .map((kind) => ({ kind, items: findings.filter((f) => f.kind === kind) }))
+  .filter((g) => g.items.length > 0);
+
+const LANG_NAME: Record<string, string> = {
+  BG: 'Bulgarian', CS: 'Czech', DA: 'Danish', DE: 'German', EL: 'Greek', EN: 'English',
+  ES: 'Spanish', ET: 'Estonian', FI: 'Finnish', FR: 'French', GA: 'Irish', HR: 'Croatian',
+  HU: 'Hungarian', IT: 'Italian', LT: 'Lithuanian', LV: 'Latvian', MT: 'Maltese',
+  NL: 'Dutch', PL: 'Polish', PT: 'Portuguese', RO: 'Romanian', SK: 'Slovak',
+  SL: 'Slovenian', SV: 'Swedish',
+};
+
+const pageTitle = 'Errors in the language editions of CLP Annex VI';
+const pageDescription =
+  `${ERRATA_COUNT} entries where the published text of Annex VI differs between language editions — each checked against the Official Journal, with the act and the page number.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE}/` },
+    { '@type': 'ListItem', position: 2, name: 'Compliance', item: `${SITE}/compliance/` },
+    { '@type': 'ListItem', position: 3, name: 'CLP Annex VI language errors', item: canonical },
+  ],
+};
+---
+
+<Layout title={pageTitle} description={pageDescription} canonical={canonical}>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  </Fragment>
+
+  <section class="hub-hero" style={`--hub-tint:${clp.tint}`}>
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+    <div class="hub-wrap hub-hero-inner hub-hero-left">
+      <nav class="hub-crumb" aria-label="Breadcrumb">
+        <a href="/">Home</a><span class="sep">/</span>
+        <a href="/compliance/">Compliance</a><span class="sep">/</span>
+        <span aria-current="page">CLP Annex VI language errors</span>
+      </nav>
+      <p class="hub-hero-eyebrow">Regulation (EC) No 1272/2008 · Annex VI Part 3</p>
+      <h1>Where the language editions of Annex VI disagree</h1>
+      <p class="hub-hero-sub">
+        Annex VI is published in 23 languages and every edition is equally authentic. In
+        {' '}{ERRATA_COUNT} places they do not say the same thing — a name belonging to another
+        entry, a qualifier from the paired entry, a misprint. Each one below is quoted from the
+        Official Journal, with the act and the page.
+      </p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">{ERRATA_COUNT} findings</span>
+        <span class="hub-hero-chip">{languages.length} editions affected</span>
+        <span class="hub-hero-chip">{acts.length} amending acts</span>
+      </div>
+    </div>
+  </section>
+
+  {/* ── ЧТО ЭТО ЗА СПИСОК И ЧЕГО ОН НЕ УТВЕРЖДАЕТ ──────────────────────────── */}
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">Read this first</p>
+      <h2 class="hub-h2">What this list is — and what it is not</h2>
+      <div class="hub-prose">
+        <p class="hub-sub">
+          Article 18(2) of CLP points at Annex VI, not at anyone’s reading of it. Where an edition
+          prints something the rest of that same row contradicts, we reproduce the text <b>as
+          published</b> and say what the row’s own EC and CAS numbers identify. We do not correct
+          the Regulation, and a supplier who followed a correction of ours instead of the
+          Regulation would be departing from the text the law refers to.
+        </p>
+        <p class="hub-fine">
+          <b>This list is not claimed to be complete.</b> It is what has been checked against the
+          Official Journal and nothing more. It was assembled by comparing the 23 editions of each
+          entry against one another, so a mistake repeated identically in every edition is
+          invisible to the method — and so is anything in the columns we did not compare.
+        </p>
+        <p class="hub-fine">
+          Every finding was checked twice: first against the consolidated text on EUR-Lex, then
+          against the text of the act that introduced the row, as published in the Official
+          Journal. The consolidated text carries no legal force — the Publications Office
+          assembles it, and the disclaimer says so. Only the electronic Official Journal is
+          authentic (Regulation (EU) No 216/2013, Art. 1(2)). That is why each finding cites an
+          act and a page number, and not a consolidation.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  {/* ── НАХОДКИ ───────────────────────────────────────────────────────────── */}
+  {grouped.map((g, i) => (
+    <section class={i % 2 === 0 ? 'hub-sec-a' : 'hub-sec-white'} id={g.kind}>
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">{g.items.length} {g.items.length === 1 ? 'finding' : 'findings'}</p>
+        <h2 class="hub-h2">{KIND_TITLE[g.kind]}</h2>
+        <p class="hub-sub">{KIND_LEDE[g.kind]}</p>
+        <div class="err-list" style={pillarAccentStyle(clp)}>
+          {g.items.map((f) => (
+            <article class="err-item">
+              <div class="err-head">
+                <span class="err-idx">{f.index}</span>
+                <span class="err-lang">{f.lang}</span>
+                <span class="err-kind">{LANG_NAME[f.lang] ?? f.lang} edition</span>
+              </div>
+
+              <p class="err-quote">{f.publishedName}</p>
+
+              <p class="err-row"><span class="k">English edition</span>{f.en}</p>
+              {(f.ec || f.cas) && (
+                <p class="err-row">
+                  <span class="k">Same row</span>
+                  {f.ec ? `EC ${f.ec}` : ''}{f.ec && f.cas ? ' · ' : ''}{f.cas ? `CAS ${f.cas}` : ''}
+                </p>
+              )}
+              {f.pairIndex && (
+                <p class="err-row"><span class="k">Text belongs to</span>{f.pairIndex}</p>
+              )}
+
+              <p class="err-note">
+                <b>{ERRATUM_LEAD[f.kind]}</b> {f.note}
+              </p>
+
+              <div class="err-foot">
+                <span class="cite">{f.citation}</span>
+                <span>{erratumStatusLabel(f.status)}</span>
+                {/* ⚠⚠ ССЫЛКА ИДЁТ ПО CAS, А НЕ ПО ИНДЕКСНОМУ НОМЕРУ. Поиск на
+                    /substances/ ведёт Fuse.js по полям `cas_number`,
+                    `iupac_name`, `common_name` и `display_name_short` —
+                    индексного номера среди них нет, и `?q=042-003-00-X` открыл
+                    бы пустой список. Ровно тот дефект, что стоил session 38
+                    калькулятора, открывавшегося пустым с 3 650 страниц:
+                    ссылка живая, параметр читается, результата нет.
+                    ⚠ Нет CAS — нет и ссылки: у 607-692-00-9 его в Annex VI не
+                    напечатано, и вести человека в пустой поиск незачем. */}
+                {f.cas && (
+                  <span>
+                    <a href={`/substances/?q=${encodeURIComponent(f.cas)}`}>Find this entry</a>
+                  </span>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  ))}
+
+  {/* ── ЧТО С ЭТИМ СДЕЛАНО ────────────────────────────────────────────────── */}
+  <section class="hub-sec-b">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">Status</p>
+      <h2 class="hub-h2">What has been done about it</h2>
+      <div class="hub-prose">
+        {SUBMISSION.date ? (
+          <p class="hub-sub">
+            The findings were reported on {SUBMISSION.date} to {SUBMISSION.channel}. Reporting is
+            not agreement: nothing on this page implies that any authority has accepted, reviewed
+            or replied to them.
+          </p>
+        ) : (
+          <p class="hub-sub">
+            The findings have not been reported yet. When they are, the date and the channel will
+            appear here, and each entry above will say so on its own line.
+          </p>
+        )}
+        <p class="hub-fine">
+          There is precedent for the correction of exactly this kind of mistake.
+          Corrigendum 32018R0669R(01) (OJ L 233, 10.9.2019, p. 26) corrected the name of entry
+          015-011-00-6 in the French edition, on page 42 of OJ L 115. The Polish mistake in the
+          same entry is on the same page 42 and has not been corrected.
+        </p>
+        <p class="hub-fine">
+          ECHA also runs a register of reported mistakes in Annex VI. None of the findings above
+          appear in it — but that register’s outcome column is empty for 118 of its 125 rows, so
+          absence from it means only that: absence. It is not evidence that a mistake is still
+          live, and it is not evidence that anyone disagreed.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  {/* ── СОСЕДИ ────────────────────────────────────────────────────────────── */}
+  <section class="hub-sec-deep">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">Elsewhere in this section</p>
+      <h2 class="hub-h2">Related</h2>
+      <div class="hub-mini-cards">
+        <a class="hub-mini-card" href="/compliance/clp/" style={pillarAccentStyle(clp)}>
+          <span class="code">CLP</span>
+          <h4>{clp.fullName}</h4>
+          <p class="copy">{clp.short}</p>
+        </a>
+        <a class="hub-mini-card" href="/substances/">
+          <span class="sect">SUBSTANCES</span>
+          <h4>Substance database</h4>
+          <p class="copy">
+            Every Annex VI entry with its harmonised classification and its name in 23 languages —
+            flagged where this page says so.
+          </p>
+        </a>
+        <a class="hub-mini-card" href="/ghs-label-maker/">
+          <span class="sect">LABEL MAKER</span>
+          <h4>Label maker</h4>
+          <p class="copy">
+            Build a label from an Annex VI entry. The primary label language decides which edition
+            of the name is printed.
+          </p>
+        </a>
+      </div>
+    </div>
+  </section>
+</Layout>

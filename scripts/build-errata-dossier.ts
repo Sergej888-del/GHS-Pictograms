@@ -46,6 +46,8 @@ import {
 } from '../src/lib/annex6Errata.ts'
 
 const TMP = '.tmp-eurlex'
+// ⚠ Досье в репозитории: без него страница разбора не соберётся на Cloudflare.
+const SRC_DATA = 'src/data'
 
 type Row = { name: string; ec: string; cas: string }
 type Finding = {
@@ -360,7 +362,7 @@ if (srcMismatch.length) {
 // ⭐ Тот же материал машиночитаемо — из него собирается подача в ECHA.
 // ⚠ Отдельного генератора для неё НЕТ намеренно: подача, письмо и страницы
 // обязаны говорить одно и то же, а для этого им нужен один источник.
-writeFileSync(join(TMP, 'errata-dossier.json'), JSON.stringify(findings.map((f) => ({
+const dossier = findings.map((f) => ({
   index: f.index,
   lang: f.lang,
   kind: f.kind,
@@ -376,7 +378,23 @@ writeFileSync(join(TMP, 'errata-dossier.json'), JSON.stringify(findings.map((f) 
   pairIndex: f.pairIndex,
   pairName: f.actPair,
   sourceEntry: f.sourceEntry,
-})), null, 1), 'utf8')
+}))
+
+writeFileSync(join(TMP, 'errata-dossier.json'), JSON.stringify(dossier, null, 1), 'utf8')
+
+/**
+ * ⚠⚠⚠ ВТОРАЯ ЗАПИСЬ — В `src/data/`, И ОНА ОБЯЗАТЕЛЬНА ДЛЯ СБОРКИ.
+ * `.tmp-eurlex/` стоит в `.gitignore` (там лежат двадцатимегабайтные акты
+ * ОЖ — исходники импорта, а не код). Страница `/compliance/
+ * clp-translation-errors/` печатает цитаты из актов, и если бы она читала
+ * досье оттуда, локально всё собиралось бы, а на Cloudflare Pages сборка
+ * падала бы: в клоне репозитория этой папки нет.
+ *
+ * ⚠ Файл РОВНО ТОТ ЖЕ, а не пересобранный по другим правилам: две редакции
+ * одного досье разошлись бы, и разошлись бы в худший момент — когда адресат
+ * подачи сверит её с сайтом.
+ */
+writeFileSync(join(SRC_DATA, 'errata-dossier.json'), JSON.stringify(dossier, null, 1), 'utf8')
 
 const dest = join(TMP, 'errata-dossier.md')
 writeFileSync(dest, out.join('\n'), 'utf8')

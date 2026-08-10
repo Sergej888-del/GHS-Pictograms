@@ -2,6 +2,7 @@
 import { getCollection, render } from 'astro:content';
 import Layout from '../../../layouts/Layout.astro';
 import SharePage from '../../../components/SharePage.astro';
+import { PILLAR_BY_SLUG, pillarAccentStyle } from '../../../lib/complianceHub';
 
 export const prerender = true;
 
@@ -21,19 +22,17 @@ export async function getStaticPaths() {
 const { article } = Astro.props;
 const { Content } = await render(article);
 
-const pillarLabels: Record<string, string> = {
-  'un-ghs': 'UN GHS',
-  'clp': 'CLP',
-  'osha-hcs': 'OSHA HCS',
-  'global-ghs': 'Global GHS',
-  'sds': 'SDS',
-  'reach': 'REACH',
-  'mixture-classification': 'Mixture Classification',
-  'transport': 'Transport',
-  'svhc': 'SVHC',
-  'ehs': 'EHS',
-};
-const pillarLabel = pillarLabels[article.data.pillar] ?? article.data.pillar.toUpperCase();
+/**
+ * ⚠⚠ ТРЕТЬЯ КОПИЯ СЛОВАРЯ СТОЛПОВ УБРАНА. Здесь стоял свой список меток — уже
+ * разошедшийся с двумя остальными: он знал `global-ghs`,
+ * `mixture-classification` и `transport`, которых нет ни в контенте, ни на
+ * хабе. Метка и цвет столпа теперь приходят из одного места.
+ *
+ * ⚠ Запасной вариант остаётся: заведут статью со столпом, которого ещё нет в
+ * `PILLARS`, — страница покажет слаг заглавными, а не упадёт.
+ */
+const pillar = PILLAR_BY_SLUG.get(article.data.pillar);
+const pillarLabel = pillar?.label ?? article.data.pillar.toUpperCase();
 
 // BreadcrumbList JSON-LD schema для Google rich results
 const SITE = 'https://ghspictograms.com';
@@ -114,196 +113,74 @@ const faqJsonLd = faqItems.length > 0 ? {
     {faqJsonLd && <script type="application/ld+json" set:html={JSON.stringify(faqJsonLd)} />}
   </Fragment>
 
-  <!-- Breadcrumb bar — единый стиль с pillar landing pages -->
-  <nav class="bg-slate-50 border-b border-slate-200" aria-label="Breadcrumb">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3">
-      <ol class="flex items-center gap-2 text-sm text-slate-600 flex-wrap">
-        <li>
-          <a href="/compliance/" class="hover:text-blue-700 transition-colors font-medium">
-            Compliance Hub
-          </a>
-        </li>
-        <li class="text-slate-400" aria-hidden="true">›</li>
-        <li>
-          <a href={`/compliance/${article.data.pillar}/`} class="hover:text-blue-700 transition-colors font-medium">
-            {pillarLabel}
-          </a>
-        </li>
-        <li class="text-slate-400" aria-hidden="true">›</li>
-        <li class="font-semibold text-slate-900 truncate" aria-current="page">
-          {article.data.title}
-        </li>
-      </ol>
-    </div>
-  </nav>
-
-  <article class="max-w-4xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
-    <header class="mb-10 pb-8 border-b border-slate-200">
-      <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 leading-tight tracking-tight mb-4">{article.data.title}</h1>
-      <p class="text-lg text-slate-600 leading-relaxed">{article.data.description}</p>
-      <div class="flex items-center gap-3 mt-6 text-sm text-slate-500">
-        <time datetime={article.data.pubDate.toISOString()}>{article.data.pubDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</time>
-        {article.data.author && <><span>·</span><span>{article.data.author}</span></>}
+  {/* ── ГЕРОЙ ───────────────────────────────────────────────────────────────
+      Session 60: раздел переведён со старого стиля на дизайн-систему v2.
+      Прежде здесь была светло-серая полоса крошек и заголовок утилитами
+      Tailwind — язык оформления, которого на остальном сайте больше нет.
+      Крошки живут ВНУТРИ героя (`.hub-crumb`), как на всех страницах v2: они
+      светлые на тёмном и не занимают отдельной ленты. */}
+  <section class="hub-hero" style={pillar ? `--hub-tint:${pillar.tint}` : undefined}>
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+    <div class="hub-wrap hub-hero-inner hub-hero-left">
+      <nav class="hub-crumb" aria-label="Breadcrumb">
+        <a href="/">Home</a><span class="sep">/</span>
+        <a href="/compliance/">Compliance</a><span class="sep">/</span>
+        <a href={`/compliance/${article.data.pillar}/`}>{pillarLabel}</a><span class="sep">/</span>
+        <span aria-current="page">{article.data.title}</span>
+      </nav>
+      <p class="hub-hero-eyebrow">{pillarLabel}</p>
+      <h1>{article.data.title}</h1>
+      <p class="hub-hero-sub">{article.data.description}</p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">
+          <time datetime={article.data.pubDate.toISOString()}>
+            {article.data.pubDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+          </time>
+        </span>
+        {article.data.updatedDate && (
+          <span class="hub-hero-chip">
+            Updated{' '}
+            <time datetime={article.data.updatedDate.toISOString()}>
+              {article.data.updatedDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            </time>
+          </span>
+        )}
+        {article.data.author && <span class="hub-hero-chip">{article.data.author}</span>}
       </div>
-    </header>
-
-    <SharePage url={articlePageId} title={article.data.title} />
-    <div class="article-content">
-      <Content />
     </div>
+  </section>
 
-    {faqItems.length > 0 && (
-      <section class="article-content" aria-labelledby="faq-heading">
-        <h2 id="faq-heading">Frequently asked questions</h2>
-        {faqItems.map((item) => (
-          <Fragment>
-            <h3>{item.q}</h3>
-            <p set:html={mdLinkToHtml(item.a)} />
-          </Fragment>
-        ))}
-      </section>
-    )}
-  </article>
+  {/* ── ПРОЗА ───────────────────────────────────────────────────────────────
+      `md-prose` одевает теги, которые порождает MDX; цвет приходит из акцента
+      раздела, а не из самого файла прозы. До session 60 стили статьи стояли
+      блоком `<style is:global>` прямо здесь — 150 строк с литеральными
+      цветами, которые повторяли то, что уже описано в `md-prose.css`, только
+      синим. */}
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <div class="hub-share"><SharePage url={articlePageId} title={article.data.title} /></div>
+      <div class="md-prose hub-prose" style={pillar ? pillarAccentStyle(pillar) : undefined}>
+        <Content />
+      </div>
+    </div>
+  </section>
+
+  {faqItems.length > 0 && (
+    <section class="hub-sec-a" id="faq" aria-labelledby="faq-heading">
+      <div class="hub-wrap">
+        <p class="hub-eyebrow">Questions</p>
+        <h2 class="hub-h2" id="faq-heading">Frequently asked</h2>
+        <div class="hub-faq">
+          {faqItems.map((item) => (
+            <div class="hub-faq-item">
+              <p class="q">{item.q}</p>
+              <p class="a" set:html={mdLinkToHtml(item.a)} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
 </Layout>
-
-<style is:global>
-  /* Anchor scroll offset — country names land below the page top, not hidden under it */
-  .article-content :is(h1, h2, h3, h4, h5, h6) {
-    scroll-margin-top: 5rem;
-  }
-
-  /* H2 — major sections, e.g. "Deep Profiles", "Medium Profiles" */
-  .article-content h2 {
-    font-size: 1.875rem;
-    line-height: 2.25rem;
-    font-weight: 700;
-    color: #0f172a;
-    margin-top: 3.5rem;
-    margin-bottom: 1.25rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 2px solid #e2e8f0;
-    letter-spacing: -0.01em;
-  }
-
-  /* H3 — country names like "Australia and New Zealand", "Philippines" */
-  .article-content h3 {
-    font-size: 1.5rem;
-    line-height: 2rem;
-    font-weight: 700;
-    color: #1e293b;
-    margin-top: 2.5rem;
-    margin-bottom: 1rem;
-    padding-left: 0.875rem;
-    border-left: 4px solid #2563eb;
-  }
-
-  /* H4 — subheadings inside country profiles */
-  .article-content h4 {
-    font-size: 1.125rem;
-    line-height: 1.75rem;
-    font-weight: 600;
-    color: #334155;
-    margin-top: 1.75rem;
-    margin-bottom: 0.625rem;
-  }
-
-  /* Body text — readable line-height and good color contrast */
-  .article-content p {
-    color: #334155;
-    line-height: 1.75;
-    margin-bottom: 1.125rem;
-    font-size: 1.0625rem;
-  }
-
-  /* "Regulation:", "Authority:", "Scope:" etc — strong labels */
-  .article-content p strong,
-  .article-content li strong {
-    color: #0f172a;
-    font-weight: 600;
-  }
-
-  /* Lists */
-  .article-content ul, .article-content ol {
-    margin: 1rem 0 1.5rem 0;
-    padding-left: 1.5rem;
-    color: #334155;
-  }
-  .article-content li {
-    margin-bottom: 0.5rem;
-    line-height: 1.7;
-  }
-
-  /* Links */
-  .article-content a {
-    color: #2563eb;
-    text-decoration: underline;
-    text-decoration-color: #93c5fd;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 2px;
-    transition: color 0.15s, text-decoration-color 0.15s;
-  }
-  .article-content a:hover {
-    color: #1d4ed8;
-    text-decoration-color: #2563eb;
-  }
-
-  /* Tables */
-  .article-content table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 2rem 0;
-    font-size: 0.9375rem;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-    overflow: hidden;
-  }
-  .article-content thead {
-    background: #f1f5f9;
-  }
-  .article-content th {
-    text-align: left;
-    padding: 0.875rem 1rem;
-    font-weight: 600;
-    color: #0f172a;
-    border-bottom: 2px solid #cbd5e1;
-  }
-  .article-content td {
-    padding: 0.875rem 1rem;
-    border-bottom: 1px solid #e2e8f0;
-    color: #334155;
-    vertical-align: top;
-  }
-  .article-content tbody tr:hover {
-    background: #f8fafc;
-  }
-  .article-content tbody tr:last-child td {
-    border-bottom: none;
-  }
-
-  /* Blockquotes */
-  .article-content blockquote {
-    border-left: 4px solid #2563eb;
-    background: #f8fafc;
-    padding: 1rem 1.25rem;
-    margin: 1.5rem 0;
-    font-style: italic;
-    color: #475569;
-    border-radius: 0 0.375rem 0.375rem 0;
-  }
-
-  /* Code */
-  .article-content code {
-    background: #f1f5f9;
-    padding: 0.125rem 0.375rem;
-    border-radius: 0.25rem;
-    font-size: 0.875em;
-    color: #0f172a;
-  }
-
-  /* Mobile adjustments */
-  @media (max-width: 640px) {
-    .article-content h2 { font-size: 1.5rem; line-height: 2rem; }
-    .article-content h3 { font-size: 1.25rem; line-height: 1.75rem; }
-    .article-content p { font-size: 1rem; }
-  }
-</style>

@@ -3807,3 +3807,143 @@ a.sub-alpha-item:hover { border-color: var(--teal-200); background: var(--teal-5
 @media (max-width: 640px) {
   .hub-table.stx td.c-code { width: auto; }
 }
+
+/* ── Разбор ошибок языковых редакций Annex VI (session 60) ────────────────────
+   Семейство `err-*` — страница /compliance/clp-translation-errors/.
+
+   ⚠⚠ ПОЧЕМУ НЕ ТАБЛИЦА. Материал у каждой находки — шесть полей, и четыре из
+   них длинные: что напечатано в акте, что говорят EC и CAS той же строки, наше
+   свидетельство и ссылка на полосу ОЖ. В шести колонках это нечитаемо на любом
+   экране, а на телефоне рассыпается совсем. Карточка на находку показывает те
+   же поля и не требует горизонтальной прокрутки.
+
+   ⚠ Цвет — только через `--acc*`: страница принадлежит столпу CLP и берёт его
+   лестницу, как остальной раздел. */
+
+.err-list {
+  margin-top: 28px;
+  display: grid;
+  gap: 14px;
+}
+
+.err-item {
+  border: 1px solid var(--acc-line, var(--line));
+  border-left: 3px solid var(--acc, var(--line-2));
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 18px 20px;
+}
+
+/* Шапка карточки: индексный номер, редакция, вид ошибки. */
+.err-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.err-idx {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+}
+
+.err-lang {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #ffffff;
+  background: var(--acc-ink, var(--ink-3));
+  border-radius: 5px;
+  padding: 2px 7px;
+}
+
+.err-kind {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* ⚠⚠ Строка, напечатанная в Официальном журнале, набрана моноширинным и НЕ
+   переводится в верхний регистр: это ЦИТАТА, а не служебная метка. Верхний
+   регистр исказил бы её — а спор идёт как раз о буквах. */
+.err-quote {
+  margin: 0 0 10px;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--acc-soft, #f8fafc);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-wrap: anywhere;
+}
+
+.err-row {
+  margin: 0 0 6px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.err-row .k {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-right: 8px;
+}
+
+.err-note {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+
+/* Ссылка на первоисточник и состояние находки — подвал карточки. */
+.err-foot {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+
+.err-foot .cite { color: var(--acc-ink, var(--ink-2)); font-weight: 600; }
+
+/* ⚠ Замечено отрисовкой session 60: ссылка в подвале карточки наследовала
+   серый цвет подвала и читалась как обычный текст. */
+.err-foot a {
+  color: var(--acc-ink, var(--ink-2));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--acc-line, var(--line-2));
+}
+.err-foot a:hover { text-decoration-color: var(--acc-ink, var(--ink-2)); }
+
+@media (max-width: 640px) {
+  .err-item { padding: 16px; }
+  .err-quote { font-size: 12.5px; }
+}
+
+/* ⚠ Обёртка вокруг `SharePage.astro`. Сам компонент общий с /ghs/ и /sds/ и
+   до сих пор набран утилитами Tailwind — трогать его значило бы задеть два
+   раздела, которых перестройка не касалась. Но без отступа он прилипает к
+   надзаголовку следующей секции (замечено отрисовкой session 60), поэтому
+   отступ живёт снаружи, на обёртке. ⭐ Переведут компонент — обёртка уйдёт. */
+.hub-share { margin-bottom: 26px; }

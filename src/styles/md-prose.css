@@ -1,0 +1,173 @@
+/* Оформление прозы, отрисованной из markdown.
+   Preflight у Tailwind намеренно снимает размеры и вес заголовков, поля
+   абзацев и рамки таблиц. Разметка компонентов одевает каждый элемент
+   утилитами заново; вывод markdown этого сделать не может. Здесь свойства
+   возвращаются закрытому набору тегов, какие наш MDX действительно порождает.
+   Без @layer намеренно: неслоёный CSS сильнее, чем @layer base у Tailwind.
+
+   ⚠⚠ ЦВЕТ БЕРЁТСЯ ИЗ АКЦЕНТА РАЗДЕЛА, А НЕ ЗАШИТ. До session 60 файл
+   назывался `storage-prose.css` и был бирюзовым насквозь — под страницы
+   хранения, для которых его и писали. Разделу /compliance/ по карте акцентов
+   положен сиреневый (`claude/design-system-accents.md`), и вторая копия того
+   же файла в другом цвете разошлась бы с первой на первой же правке.
+
+   ⚠ У КАЖДОЙ ПЕРЕМЕННОЙ СТОИТ СТАРЫЙ ЛИТЕРАЛ ФОЛБЭКОМ. Контейнер без класса
+   `.acc-*` обязан выглядеть ровно так же, как выглядел: страницы хранения и
+   разделов SDS никто трогать не просил, и молчаливая перекраска двадцати
+   девяти страниц была бы правкой, которой не заказывали.
+
+   Применение: class="md-prose hub-prose acc-reg" — акцент даёт `.acc-*`,
+   ширину полосы `hub-prose`. */
+
+.md-prose {
+  color: #111827;
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.md-prose > :first-child {
+  margin-top: 0;
+}
+
+/* Headings ---------------------------------------------------------------- */
+
+.md-prose h2 {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #111827;
+  margin: 2.5rem 0 0.875rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--acc, #14b8a6);
+}
+
+.md-prose h3 {
+  font-family: var(--font-heading);
+  font-size: 1.1875rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 2rem 0 0.625rem;
+}
+
+/* ⚠ h4 появился в session 60 вместе с разделом /compliance/: его статьи —
+   профили стран и разборы норм, и там есть третий уровень вложенности.
+   У страниц хранения h4 не встречается, так что правило им не мешает. */
+.md-prose h4 {
+  font-family: var(--font-heading);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 1.5rem 0 0.5rem;
+}
+
+/* ⚠ Якорь заголовка не должен уезжать под липкую шапку: с /compliance/ на
+   статьи ведут ссылки прямо на раздел (`#australia-and-new-zealand`). */
+.md-prose :is(h2, h3, h4) {
+  scroll-margin-top: 5rem;
+}
+
+/* Body -------------------------------------------------------------------- */
+
+.md-prose p {
+  margin: 0 0 1rem;
+}
+
+.md-prose strong {
+  font-weight: 600;
+  color: #111827;
+}
+
+.md-prose a {
+  color: var(--acc-ink, #0f766e);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--acc-line, #5eead4);
+  transition: text-decoration-color 0.15s;
+}
+
+.md-prose a:hover {
+  text-decoration-color: var(--acc-ink, #0f766e);
+}
+
+.md-prose ul,
+.md-prose ol {
+  margin: 0 0 1rem;
+  padding-left: 1.5rem;
+}
+
+.md-prose ul { list-style: disc; }
+.md-prose ol { list-style: decimal; }
+.md-prose li { margin: 0.375rem 0; }
+
+/* Tables ------------------------------------------------------------------ */
+
+.md-prose table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 0.9375rem;
+  margin: 1.5rem 0;
+}
+
+.md-prose thead th {
+  background: var(--acc-ink, #134e4a);
+  color: var(--acc-soft, #99f6e4);
+  font-family: var(--font-heading);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 0.625rem 0.875rem;
+  white-space: nowrap;
+}
+
+.md-prose tbody td {
+  padding: 0.625rem 0.875rem;
+  border-top: 1px solid #e5e7eb;
+  vertical-align: top;
+}
+
+.md-prose tbody tr:nth-child(even) {
+  background: #f9fafb;
+}
+
+.md-prose tbody td:first-child {
+  font-weight: 500;
+  color: #111827;
+  white-space: nowrap;
+}
+
+.md-prose tbody td:not(:first-child) {
+  color: #111827;
+}
+
+/* Blockquote (regulatory citations) --------------------------------------- */
+
+.md-prose blockquote {
+  margin: 1.5rem 0;
+  padding: 0.875rem 1.25rem;
+  background: var(--acc-soft, #f0fdfa);
+  border-left: 3px solid var(--acc, #14b8a6);
+  color: var(--acc-ink, #134e4a);
+  font-size: 1.0625rem;
+}
+
+.md-prose blockquote p {
+  margin: 0;
+}
+
+/* Narrow screens ---------------------------------------------------------- */
+
+@media (max-width: 640px) {
+  .md-prose h2 { font-size: 1.3125rem; }
+  .md-prose h3 { font-size: 1.0625rem; }
+  .md-prose table { font-size: 0.8125rem; }
+  .md-prose thead th,
+  .md-prose tbody td { padding: 0.5rem 0.5rem; }
+  .md-prose tbody td:first-child { white-space: normal; }
+}

@@ -82,6 +82,9 @@ import { BRANCHES, TEMPLATES, LABEL_MAKER_PATHS } from '../src/lib/labelMakerHub
 // которая разойдётся с разбором молча, и проверка начнёт подтверждать не то,
 // что лежит в базе.
 import { COMPOSITE_HEAD } from './clp-name-annotations.mjs'
+// ⚠ Подписи состояния — оттуда же, откуда свидетельства (импорт выше):
+// страница печатает ровно эту строку, и проверка ищет ровно её.
+import { erratumStatus, erratumStatusLabel } from '../src/lib/annex6Errata'
 
 config({ path: resolve(process.cwd(), '.env.local') })
 config()
@@ -5287,6 +5290,79 @@ const CHECKS: Check[] = [
   },
 
   // ── Label maker: входы и адреса (session 52, A4/A8 плана) ─────────────────
+  {
+    id: 'annex6-errata-page',
+    group: 'Annex VI',
+    title: 'Страница-разбор печатает те же свидетельства, что модуль, и не обещает полноты',
+    run: async () => {
+      // ⚠⚠⚠ ЗАЧЕМ ЭТА ПРОВЕРКА. Страница обвиняет официальный текст Евросоюза.
+      // Если её формулировка разойдётся с той, что ушла в ECHA и в Бюро
+      // публикаций, разницу найдёт адресат подачи — сверив письмо с сайтом.
+      // Поэтому свидетельства сверяются ДОСЛОВНО и в обе стороны: каждое из
+      // модуля обязано быть на странице, и ничего сверх списка на ней быть не
+      // должно.
+      const REL = 'compliance/clp-translation-errors/index.html'
+      const html = readPage(REL)
+      if (html === null) {
+        return {
+          id: 'annex6-errata-page', group: 'Annex VI', ok: false,
+          headline: 'страницы нет в dist',
+          detail: [`искали ${REL}`, 'страница собирается из src/data/errata-dossier.json и src/lib/annex6Errata.ts'],
+        }
+      }
+      const text = unescapeHtml(html)
+      const detail: string[] = []
+
+      // 1. Каждое свидетельство — дословно.
+      let found = 0
+      for (const index of ERRATA_INDEX_NUMBERS) {
+        for (const lang of erratumLanguages(index)) {
+          const e = erratumFor(index, lang)!
+          if (text.includes(e.note)) found++
+          else detail.push(`нет свидетельства ${index} · ${lang}`)
+          const cite = erratumCitation(e)
+          if (!text.includes(cite)) detail.push(`нет ссылки на полосу ОЖ у ${index} · ${lang}: ${cite}`)
+          const st = erratumStatusLabel(erratumStatus(index, lang))
+          if (!text.includes(st)) detail.push(`нет состояния у ${index} · ${lang}: «${st}»`)
+        }
+      }
+
+      // 2. Карточек ровно столько, сколько свидетельств. Лишняя — такой же
+      //    дефект, как недостающая: страница печатала бы находку, которой в
+      //    подаче нет.
+      const cards = (html.match(/class="err-item"/g) ?? []).length
+      if (cards !== ERRATA_COUNT) detail.push(`карточек ${cards}, свидетельств ${ERRATA_COUNT}`)
+
+      // 3. ⭐⭐⭐ ОГОВОРКА О НЕПОЛНОТЕ. Метод сверяет 23 редакции друг с другом,
+      //    и ошибка, повторённая одинаково во всех, ему не видна. Утверждать
+      //    полноту значило бы обещать то, чего замер не даёт.
+      const CLAIM = 'This list is not claimed to be complete'
+      const hasClaim = text.includes(CLAIM)
+      if (!hasClaim) detail.push(`пропала оговорка о неполноте: «${CLAIM}»`)
+
+      // 4. ⚠⚠ КОНТРОЛЬ С ПРОТИВОПОЛОЖНЫМ ОЖИДАНИЕМ. Проверка «текст есть на
+      //    странице» пройдёт и на странице, где напечатан ВЕСЬ модуль скопом.
+      //    Заведомо отсутствующая строка обязана НЕ найтись.
+      const ABSENT = 'The Portuguese edition prints the name of the preceding entry'
+      const leaked = text.includes(ABSENT)
+      if (leaked) detail.push('контроль не сошёлся: на странице нашлось свидетельство, которого нет в модуле')
+
+      const ok = detail.length === 0
+      return {
+        id: 'annex6-errata-page', group: 'Annex VI', ok,
+        headline: ok
+          ? `${found} свидетельств, ${cards} карточек — всё сверено дословно с annex6Errata`
+          : `расхождений: ${detail.length}`,
+        detail: ok
+          ? [
+              `оговорка о неполноте на месте: «${CLAIM}»`,
+              'контроль «чужого свидетельства на странице нет»: сошёлся',
+              'сверка идёт в обе стороны: модуль → страница и счёт карточек → счёт свидетельств',
+            ]
+          : detail.slice(0, 20),
+      }
+    },
+  },
   {
     id: 'label-maker-href',
     group: 'Label maker',
