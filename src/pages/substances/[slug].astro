@@ -70,7 +70,9 @@ import {
   ANNEX_VI_LANGUAGE_ABSENT, ANNEX_VI_LANGUAGE_ABSENT_REASON,
   type NameTranslationRow, type OfficialName,
 } from '../../lib/nameForms'
-import { erratumFor, ERRATUM_LEAD, ERRATA_TABLE_NOTE } from '../../lib/annex6Errata'
+import {
+  erratumFor, erratumCitation, ERRATUM_LEAD, ERRATA_TABLE_NOTE,
+} from '../../lib/annex6Errata'
 // ⚠ `EU_LANGUAGES` нужен здесь только чтобы назвать НЕДОСТАЮЩИЕ редакции и
 // подписать строки таблицы. Сам порядок строк задаёт `buildOfficialNames` —
 // одним списком на страницу и на проверку.
@@ -1296,6 +1298,11 @@ const multiUn = unEntries.length > 1
                       <span class="name-erratum" lang="en">
                         <strong>{ERRATUM_LEAD[namesErrata.get(n.code)!.kind]}</strong>{' '}
                         {namesErrata.get(n.code)?.note}
+                        {/* ⚠ Ссылка на полосу ОЖ — чтобы читатель мог проверить
+                            сам, а не поверить нам на слово. Раз мы говорим, что
+                            официальный текст неверен, обязанность показать
+                            место лежит на нас. */}
+                        <span class="src">{erratumCitation(namesErrata.get(n.code)!)}</span>
                       </span>
                     )}
                     {n.verbatim ? (

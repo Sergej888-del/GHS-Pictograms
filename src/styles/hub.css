@@ -1679,6 +1679,16 @@ button.hub-pair:last-child { border-bottom: 0; }
   color: var(--verdict-sep-ink);
 }
 .hub-table td.c-name .name-erratum strong { font-weight: 700; }
+/* Ссылка на акт и полосу ОЖ под свидетельством. ⚠ Не моноширинным: по §3
+   дизайн-системы моноширинный — регистр меток и кодов, а не смешанного текста;
+   «Regulation (EU) 2018/669, OJ L 115, 4.5.2018, p. 42» набором в верхнем
+   регистре читалось бы как ошибка вёрстки. Тот же янтарный, размером ниже. */
+.hub-table td.c-name .name-erratum .src {
+  display: block;
+  margin-top: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
 
 /* Янтарный вариант .hub-note — тот же регистр, что у .tool-note.warn. */
 .hub-note.warn {

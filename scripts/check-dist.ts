@@ -55,7 +55,8 @@ import {
   buildOfficialNames, NAME_TRANSLATION_COLUMNS, type NameTranslationRow,
 } from '../src/lib/nameForms'
 import {
-  erratumFor, erratumLanguages, ERRATA_INDEX_NUMBERS, ERRATA_COUNT, ERRATA_TABLE_NOTE,
+  erratumFor, erratumLanguages, erratumCitation,
+  ERRATA_INDEX_NUMBERS, ERRATA_COUNT, ERRATA_TABLE_NOTE,
 } from '../src/lib/annex6Errata'
 import { casShapeOk, ecShapeOk, indexShapeOk } from '../src/lib/substanceIdentifiers'
 import { substanceSlug, casFromSlug } from '../src/lib/substanceSlug'
@@ -5790,6 +5791,7 @@ const CHECKS: Check[] = [
       assertAscii('annex6-errata-flags', [MARK])
 
       const noteMissing: string[] = []
+      const citeMissing: string[] = []
       const markCountDiffers: string[] = []
       const tableNoteMissing: string[] = []
       const tableNoteExtra: string[] = []
@@ -5846,6 +5848,13 @@ const CHECKS: Check[] = [
           if (!text.includes(err!.note)) {
             noteMissing.push(`${slug} ${code}: ${JSON.stringify(err!.note.slice(0, 60))}`)
           }
+          // ⚠⚠ Ссылка на полосу ОЖ проверяется ТАК ЖЕ ДОСЛОВНО, как
+          // свидетельство. Без неё пометка остаётся утверждением, которое
+          // читателю негде проверить, — а мы обвиняем официальный текст.
+          const cite = erratumCitation(err!)
+          if (!text.includes(cite)) {
+            citeMissing.push(`${slug} ${code}: ${JSON.stringify(cite)}`)
+          }
         }
 
         const hasTableNote = text.includes(ERRATA_TABLE_NOTE)
@@ -5861,6 +5870,9 @@ const CHECKS: Check[] = [
       }
       if (noteMissing.length) {
         problems.push(`свидетельство не найдено на странице дословно (${noteMissing.length}): ${preview(noteMissing)}`)
+      }
+      if (citeMissing.length) {
+        problems.push(`ссылка на полосу ОЖ не найдена дословно (${citeMissing.length}): ${preview(citeMissing)}`)
       }
       if (tableNoteMissing.length) {
         problems.push(`страница с пометкой без подписи под таблицей (${tableNoteMissing.length}): ${preview(tableNoteMissing)}`)
@@ -5878,7 +5890,7 @@ const CHECKS: Check[] = [
         group: 'subs',
         ok,
         headline: ok
-          ? `${pagesFlagged} страниц помечено, ${notesChecked} свидетельств сверено дословно (в списке ${ERRATA_COUNT})`
+          ? `${pagesFlagged} страниц помечено, ${notesChecked} свидетельств и столько же ссылок на полосу ОЖ сверено дословно (в списке ${ERRATA_COUNT})`
           : `расхождений: ${problems.length}`,
         detail: ok
           ? [
