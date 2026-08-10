@@ -232,6 +232,8 @@ export default function GHSLabelConstructor({
   /** Имена вещества на основном языке — из `substance_name_translations`. */
   const [names, setNames] = useState<LocalisedNames | null>(null)
   const [namesError, setNamesError] = useState('')
+  /** Официальное имя вещества на втором языке этикетки. CLP ст. 17(2). */
+  const [secondName, setSecondName] = useState<string | null>(null)
   /**
    * Что в поле имени поставили МЫ, а не человек.
    *
@@ -462,6 +464,36 @@ export default function GHSLabelConstructor({
       .finally(() => { if (!cancelled) setSecondLoading(false) })
     return () => { cancelled = true }
   }, [secondLang, entryCas, hStatements.length, pStatements.length])
+
+  /**
+   * Имя вещества на ВТОРОМ языке.
+   *
+   * ⚠⚠ Это обязательный элемент, а не украшение. CLP ст. 17(1)(c) относит
+   * идентификатор продукта к элементам этикетки, а ст. 17(2) разрешает лишние
+   * языки «при условии, что во всех использованных языках приведены одни и те
+   * же сведения». До session 62 второй блок нёс слово и фразы, но не имя — и
+   * двуязычная этикетка называла вещество только на одном языке.
+   *
+   * ⚠ Правкой поля ввода это НЕ управляется, в отличие от основного имени:
+   * там человек вправе поставить своё торговое название, здесь же печатается
+   * официальное имя по Annex VI на втором языке. Своего поля у него нет — и
+   * пока не надо: выдуманного второго имени быть не должно.
+   */
+  useEffect(() => {
+    if (!indexNumber || !secondLang) { setSecondName(null); return }
+    let cancelled = false
+    fetchLocalisedNames(indexNumber, secondLang)
+      .then((n) => {
+        if (cancelled) return
+        const first = n ? formChoices(n, nameVariants ?? [])[0] : undefined
+        setSecondName(first?.name ?? null)
+      })
+      // ⚠ Молча: отсутствие перевода имени — не повод рушить этикетку, а
+      // движок просто не напечатает вторую строку. Ошибка второго языка уже
+      // показывается по фразам, второе сообщение о том же было бы шумом.
+      .catch(() => { if (!cancelled) setSecondName(null) })
+    return () => { cancelled = true }
+  }, [indexNumber, secondLang])
 
   // Смена вещества переустанавливает имя, CAS и EC: иначе на новой этикетке
   // остаётся имя предыдущего вещества.
@@ -836,6 +868,9 @@ export default function GHSLabelConstructor({
     ? {
         langTag: secondLang,
         signalWord: secondSignal,
+        // ⚠ Обязательный элемент по ст. 17(1)(c) + 17(2). `undefined` означает
+        // «перевода имени нет» — движок тогда второй строки не печатает.
+        productName: secondName ?? undefined,
         equal: secondEqual,
         // ⚠ Уже отрисованные: без указаний поставщику и с уточнением в коде.
         // `suppressed` выбрасывается — фраза, у которой не назвали обязательное,

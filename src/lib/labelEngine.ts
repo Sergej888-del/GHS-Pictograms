@@ -108,6 +108,13 @@ export type SignalLevel = 'danger' | 'warning';
 export type SecondLanguageBlock = {
   langTag: string;      // «FR», «ES»
   signalWord: string | null;
+  /**
+   * Имя вещества на этом языке. Обязательный элемент: CLP ст. 17(1)(c) плюс
+   * ст. 17(2) — «одни и те же сведения во всех использованных языках».
+   * `undefined` — перевода имени у нас нет; тогда второе имя не печатается,
+   * выдумывать его нельзя.
+   */
+  productName?: string;
   hStatements: Statement[];
   pStatements: Statement[];
   combinedPText?: string;
@@ -297,9 +304,27 @@ function signalColor(level: SignalLevel | null): string {
  * вещества без классификации сигнального слова и не должно быть, и этикетка
  * такого вещества законна.
  */
+/**
+ * Цвет рамки ВСЕЙ этикетки.
+ *
+ * ⚠⚠ РЕГЛАМЕНТ ЭТОТ ЦВЕТ НЕ ЗАДАЁТ, и это стоит помнить при следующей правке.
+ * Проверено по первоисточнику (29 CFR 1910.1200 App. C, транспозиция UN GHS):
+ * красная рамка предписана ТОЛЬКО пиктограмме — «a black hazard symbol on a
+ * white background with a red frame sufficiently wide to be clearly visible».
+ * Про рамку вокруг этикетки нет ни слова; в перечне элементов CLP ст. 17(1)
+ * её тоже нет. То есть выбор цвета — решение оформления, а не соответствия.
+ *
+ * Решение Сергея (session 62): красная всегда, заодно с пиктограммой, чтобы
+ * этикетка узнавалась через комнату независимо от степени.
+ *
+ * ⚠ Исключение одно и оно осознанное: когда сигнального слова нет вовсе
+ * (вещество не несёт ни Danger, ни Warning), рамка остаётся нейтральной серой.
+ * Красная рамка на неклассифицированном товаре — это уже не оформление,
+ * а ложное утверждение об опасности.
+ */
 function frameColor(level: SignalLevel | null): string {
   if (!level) return RULE;
-  return level === 'danger' ? DANGER : WARNING;
+  return DANGER;
 }
 
 // ── Раскладка ───────────────────────────────────────────────────────────────
@@ -492,6 +517,40 @@ function compose(
     y += nameSize;
     items.push({ t: 'text', x: pad, y, s: ln, size: nameSize, bold: true, color: INK });
     y += nameSize * (LINE - 1);
+  }
+
+  /**
+   * ⚠⚠ ИМЯ ВЕЩЕСТВА ПОВТОРЯЕТСЯ НА ВТОРОМ ЯЗЫКЕ — ЭТО ТРЕБОВАНИЕ, А НЕ ОТДЕЛКА.
+   *
+   * CLP ст. 17(1)(c) относит идентификатор продукта к ОБЯЗАТЕЛЬНЫМ элементам
+   * этикетки наравне с пиктограммой и сигнальным словом, а ст. 17(2) прямо
+   * разрешает добавлять языки сверх обязательных «при условии, что во всех
+   * использованных языках приведены ОДНИ И ТЕ ЖЕ сведения».
+   *
+   * До session 62 второй блок нёс сигнальное слово, H- и P-фразы — но не имя.
+   * То есть двуязычная этикетка называла вещество только на одном языке и
+   * условия ст. 17(2) не выполняла.
+   *
+   * ⚠ Не печатаем второй раз то же самое: у многих веществ имя на двух языках
+   * совпадает буква в букву (напр. «Toluene» в EN и NL), и дубль строки —
+   * это не «оба языка», а типографский мусор.
+   */
+  const secondName = input.second?.productName?.trim();
+  if (secondName && secondName !== (input.productName || '').trim()) {
+    // ⚠ `altEqual` ниже по файлу объявлен позже — здесь читаем поле напрямую,
+    // иначе получаем обращение к `const` до инициализации.
+    const nameEqual = input.second?.equal === true;
+    const secondNameSize = nameEqual ? nameSize : nameSize * 0.86;
+    for (const ln of wrap(secondName, charsPerLine(inner, secondNameSize, 'bold'))) {
+      y += secondNameSize;
+      items.push({
+        t: 'text', x: pad, y, s: ln, size: secondNameSize, bold: true,
+        // Равноправный режим — тот же цвет и начертание, что у первого имени;
+        // иначе имя на втором языке читалось бы как подпись к первому.
+        italic: !nameEqual, color: nameEqual ? INK : INK_SOFT,
+      });
+      y += secondNameSize * (LINE - 1);
+    }
   }
 
   // CAS / EC / количество / партия / UFI — компактной строкой-другой.
