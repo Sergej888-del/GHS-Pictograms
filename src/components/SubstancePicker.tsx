@@ -5,6 +5,7 @@ import { substanceName, substanceNameFull } from '../lib/substanceName'
 import { casForDisplay, ecForDisplay } from '../lib/substanceIdentifiers'
 import {
   LM_PARAM, LM_STICKY_PARAMS, LABEL_MAKER_BASE, labelMakerHref, parseLabelMakerParams,
+  readReturnBase,
 } from '../lib/labelMakerLink'
 
 /**
@@ -74,7 +75,20 @@ function firstLetter(name: string): string {
   return m ? m[0].toUpperCase() : NUM
 }
 
-export default function SubstancePicker() {
+/**
+ * ⚠⚠ СПИСОК АДРЕСОВ РАЗДЕЛА ПРИХОДИТ ПРОПОМ, А НЕ ИМПОРТОМ. `labelMakerHub.ts`
+ * весит под сотню килобайт текстов веток и шаблонов, и тащить его в браузер
+ * ради четырнадцати строк было бы дорого. Страница строит список на сервере из
+ * `LABEL_MAKER_PATHS` — единственной его редакции.
+ *
+ * ⚠ Список не необязателен: без него `readReturnBase` вернёт корень раздела, и
+ * человек с ветки уедет на общий хаб — ровно тот дефект, который чинится.
+ */
+interface Props {
+  branchPaths?: readonly string[]
+}
+
+export default function SubstancePicker({ branchPaths = [] }: Props) {
   const [all, setAll] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
@@ -84,6 +98,13 @@ export default function SubstancePicker() {
 
   /** Настройки инструмента, с которыми человек сюда пришёл. */
   const [sticky, setSticky] = useState('')
+
+  /**
+   * Страница раздела, с которой человек ушёл за веществом, — туда же и вернём.
+   * ⚠ Умолчание — корень раздела: пока адрес не прочитан, ссылка «назад» обязана
+   * вести хоть куда-то годное.
+   */
+  const [returnBase, setReturnBase] = useState<string>(LABEL_MAKER_BASE)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -96,7 +117,8 @@ export default function SubstancePicker() {
       if (v) keep.set(name, v)
     }
     setSticky(keep.toString())
-  }, [])
+    setReturnBase(readReturnBase(q, branchPaths))
+  }, [branchPaths])
 
   useEffect(() => {
     let cancelled = false
@@ -154,13 +176,20 @@ export default function SubstancePicker() {
   const capped = !narrowed && results.length > UNFILTERED_MAX
   const shown = capped ? results.slice(0, UNFILTERED_MAX) : results
 
+  /**
+   * ⚠⚠⚠ ВОЗВРАТ ИДЁТ НА `returnBase`, А НЕ НА КОРЕНЬ РАЗДЕЛА. До session 60
+   * здесь стоял `LABEL_MAKER_BASE`, и выбор вещества уводил человека с ветки на
+   * общий хаб: настройки ветки приходят пропами, в адресе их нет, и на корне
+   * инструмент открывался с умолчаниями — OSHA, этикетка поставщика. Пришедший
+   * за цеховой этикеткой по EU CLP получал не то, за чем пришёл.
+   */
   function open(cas: string) {
     const params = sticky ? parseLabelMakerParams(sticky) : {}
-    const href = labelMakerHref({ ...params, cas }, LABEL_MAKER_BASE) + '#build'
+    const href = labelMakerHref({ ...params, cas }, returnBase) + '#build'
     window.location.assign(href)
   }
 
-  const backHref = LABEL_MAKER_BASE + (sticky ? `?${sticky}` : '') + '#build'
+  const backHref = returnBase + (sticky ? `?${sticky}` : '') + '#build'
   const nf = (n: number) => n.toLocaleString('en-US')
 
   const clearAll = () => { setQuery(''); setLetter(''); setPicFilters([]); setSignalFilter('') }

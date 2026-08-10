@@ -23,7 +23,7 @@ export const prerender = true
 
 import Layout from '../../layouts/Layout.astro'
 import SubstancePicker from '../../components/SubstancePicker'
-import { SITE, JURISDICTION_BRANCHES, breadcrumbJsonLd } from '../../lib/labelMakerHub'
+import { SITE, JURISDICTION_BRANCHES, LABEL_MAKER_PATHS, breadcrumbJsonLd } from '../../lib/labelMakerHub'
 import { labelMakerHref } from '../../lib/labelMakerLink'
 
 const canonical = `${SITE}/ghs-label-maker/pick/`
@@ -73,7 +73,11 @@ const jsonLd = breadcrumbJsonLd([
 
   <section class="hub-sec-tool">
     <div class="hub-wrap">
-      <SubstancePicker client:load />
+      <!-- ⚠⚠ Список адресов раздела уезжает в браузер ПРОПОМ: по нему остров
+           решает, куда вернуть человека после выбора вещества, и подделанный
+           `?from=` через него не пройдёт. Импортировать `labelMakerHub` в
+           остров нельзя — это сотня килобайт текстов в бандле. -->
+      <SubstancePicker client:load branchPaths={LABEL_MAKER_PATHS} />
     </div>
   </section>
 

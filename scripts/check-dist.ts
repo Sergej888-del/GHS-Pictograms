@@ -73,8 +73,10 @@ import { must, mapLimit } from '../src/lib/mustQuery'
 // ⚠⚠ Разбор адресов конструктора берётся ТЕМ ЖЕ файлом, который их и строит.
 // Проверка, знающая имена параметров по своему списку, сверяла бы наше ожидание
 // с нашим же ожиданием — ровно так и прожил дефект session 38.
-import { labelMakerHrefProblems, LABEL_MAKER_BASE } from '../src/lib/labelMakerLink'
-import { BRANCHES, TEMPLATES } from '../src/lib/labelMakerHub'
+import {
+  labelMakerHrefProblems, LABEL_MAKER_BASE, LM_PARAM, pickHrefFor, readReturnBase,
+} from '../src/lib/labelMakerLink'
+import { BRANCHES, TEMPLATES, LABEL_MAKER_PATHS } from '../src/lib/labelMakerHub'
 // ⚠⚠ Таблица составных записей берётся ИЗ ТОГО ЖЕ файла, которым разбирается
 // ячейка Annex VI. Выписать список номеров сюда — значит завести вторую копию,
 // которая разойдётся с разбором молча, и проверка начнёт подтверждать не то,
@@ -5295,13 +5297,10 @@ const CHECKS: Check[] = [
       // `?substance=`. Ссылка вела на живую страницу, параметр был синтаксически
       // безупречен, сборка и все проверки зелёные — и калькулятор открывался
       // ПУСТЫМ. Такое ловится либо глазами на конкретной странице, либо здесь.
-      const known = [
-        LABEL_MAKER_BASE,
-        ...BRANCHES.map((b) => `${LABEL_MAKER_BASE}${b.slug}/`),
-        `${LABEL_MAKER_BASE}templates/`,
-        ...TEMPLATES.map((t) => `${LABEL_MAKER_BASE}templates/${t.slug}/`),
-        `${LABEL_MAKER_BASE}pick/`,
-      ]
+      // ⚠⚠ Список берётся ИЗ `labelMakerHub.ts`, а не собирается здесь заново.
+      // С session 60 по нему решается ещё и то, куда возвращать человека со
+      // страницы подбора, — вторая редакция такого списка стала бы дырой.
+      const known = LABEL_MAKER_PATHS
       // ⚠ Ищем именно `href="…"`: строка `/ghs-label-maker/` встречается ещё и в
       // JSON-LD, и в текстах — разбирать их этим разборщиком бессмысленно.
       const re = /href="(\/ghs-label-maker\/[^"]*)"/g
@@ -5340,6 +5339,83 @@ const CHECKS: Check[] = [
             ? `${seen} ссылок, ${hrefs.size} различных — все разобрались, ${known.length} известных страниц раздела`
             : `${bad.size} различных негодных адресов из ${hrefs.size}`,
         detail: bad.size === 0 ? [] : detail.slice(0, 20),
+      }
+    },
+  },
+  {
+    id: 'label-maker-branch-roundtrip',
+    group: 'Label maker',
+    title: 'С ветки за веществом и обратно: настройки и сама ветка не теряются',
+    run: async () => {
+      // ⚠⚠⚠ ЧТО ИМЕННО ЛОВИТ ЭТА ПРОВЕРКА. Session 60, находка Сергея: человек
+      // открывал `/ghs-label-maker/secondary-container-labels/`, шёл за
+      // веществом, выбирал его — и возвращался на КОРЕНЬ раздела в режиме
+      // OSHA-этикетки поставщика. Настройки ветки приходят в остров ПРОПАМИ, в
+      // адресной строке их нет вовсе, а прежний код собирал адрес страницы
+      // подбора только из адресной строки: копировать было нечего.
+      //
+      // ⚠⚠ НИ ОДНА ПРОВЕРКА ЭТОГО НЕ ВИДЕЛА, и увидеть не могла: таких адресов
+      // в собранных страницах нет — их строит браузер в момент нажатия. Ради
+      // проверяемости сборка адреса и вынесена из острова в `labelMakerLink.ts`;
+      // здесь работает ТА ЖЕ функция, что и в браузере, а не её пересказ.
+      const detail: string[] = []
+      let good = 0
+
+      for (const b of BRANCHES) {
+        const base = `${LABEL_MAKER_BASE}${b.slug}/`
+        // ⚠ Адресная строка ПУСТА — ровно так выглядит заход на ветку по ссылке.
+        const href = pickHrefFor({
+          search: '',
+          base,
+          defaults: { jurisdiction: b.jurisdiction, purpose: b.purpose },
+        })
+        const q = new URLSearchParams(href.split('?')[1] ?? '')
+        const got = {
+          jur: q.get(LM_PARAM.jurisdiction),
+          purpose: q.get(LM_PARAM.purpose),
+          back: readReturnBase(q, LABEL_MAKER_PATHS),
+        }
+        const want = { jur: b.jurisdiction, purpose: b.purpose, back: base }
+        if (got.jur === want.jur && got.purpose === want.purpose && got.back === want.back) { good++; continue }
+        detail.push(`${b.slug}: ждали ${JSON.stringify(want)}, вышло ${JSON.stringify(got)}`)
+      }
+
+      // ⭐⭐⭐ ДВА КОНТРОЛЯ С ПРОТИВОПОЛОЖНЫМ ОЖИДАНИЕМ, И ОБА ПЕЧАТАЮТСЯ ДО
+      // ВЕРДИКТА. Проверка, умеющая только подтверждать, ничего не стоит: она
+      // была бы так же зелена, если бы `readReturnBase` возвращала переданное
+      // ей значение не глядя. Первый контроль требует, чтобы годный адрес
+      // ПРОШЁЛ, второй — чтобы подделанный НЕ прошёл.
+      const okSample = `${LABEL_MAKER_BASE}${BRANCHES[0].slug}/`
+      const passes = readReturnBase(new URLSearchParams({ [LM_PARAM.from]: okSample }), LABEL_MAKER_PATHS) === okSample
+
+      // ⚠⚠ Подделанный `from` — это открытый редирект с нашего домена: человек
+      // видит ссылку на ghspictograms.com, а уезжает на чужой сайт. Каждый из
+      // этих адресов обязан молча свернуться в корень раздела.
+      const FORGED = [
+        '//example.com/',
+        'https://example.com/ghs-label-maker/',
+        '/ghs-label-maker/../../elsewhere/',
+        '/ghs-label-maker/no-such-branch/',
+        '/ghs-label-maker/eu-clp/../../../etc/',
+        '/some-other-section/',
+      ]
+      const leaked = FORGED.filter(
+        (v) => readReturnBase(new URLSearchParams({ [LM_PARAM.from]: v }), LABEL_MAKER_PATHS) !== LABEL_MAKER_BASE,
+      )
+
+      const ok = detail.length === 0 && passes && leaked.length === 0
+      const controls = [
+        `контроль «годный адрес проходит»: ${passes ? 'да' : 'НЕТ'} (${okSample})`,
+        `контроль «подделанный не проходит»: ${leaked.length === 0 ? `да, все ${FORGED.length} свернулись в корень` : `НЕТ, прошли: ${leaked.join(', ')}`}`,
+      ]
+      return {
+        id: 'label-maker-branch-roundtrip',
+        group: 'Label maker',
+        ok,
+        headline: ok
+          ? `${good} веток из ${BRANCHES.length} возвращают человека на себя же, с их настройками`
+          : `${detail.length} веток теряют настройки или ветку${passes && leaked.length === 0 ? '' : '; контроль не сошёлся'}`,
+        detail: [...controls, ...detail.slice(0, 20)],
       }
     },
   },

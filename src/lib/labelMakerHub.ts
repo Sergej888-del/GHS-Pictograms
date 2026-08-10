@@ -1174,6 +1174,27 @@ export const TEMPLATE_BY_SLUG = new Map(TEMPLATES.map((t) => [t.slug, t]));
 /** Обратный указатель: по `id` формата — его страница, если она есть. */
 export const TEMPLATE_BY_STOCK = new Map(TEMPLATES.map((t) => [t.stockId, t]));
 
+/**
+ * ВСЕ адреса раздела, какие есть. Один список на три надобности:
+ *   — `check:dist` сверяет им ссылки в собранных страницах;
+ *   — страница подбора отдаёт его острову, чтобы тот знал, куда можно вернуть
+ *     человека, а куда нельзя;
+ *   — `normalizeLabelMakerBase` им же отбивает подделанный `?from=`.
+ *
+ * ⚠⚠ ДО SESSION 60 ЭТОТ СПИСОК СОБИРАЛСЯ ВНУТРИ `check-dist.ts`. Пока он нужен
+ * был одной проверке, это было терпимо; как только по нему стало решаться, куда
+ * уводить человека, вторая рукописная редакция превратилась бы в дыру: ветку
+ * добавили бы в `BRANCHES`, а в список — забыли, и возврат с неё молча уезжал
+ * бы на корень. Тот же довод, что у `LM_PARAM` в `labelMakerLink.ts`.
+ */
+export const LABEL_MAKER_PATHS: readonly string[] = [
+  HUB_BASE,
+  ...BRANCHES.map((b) => `${HUB_BASE}${b.slug}/`),
+  `${HUB_BASE}templates/`,
+  ...TEMPLATES.map((t) => `${HUB_BASE}templates/${t.slug}/`),
+  `${HUB_BASE}pick/`,
+];
+
 export type CrossLink = { href: string; title: string; desc: string; kind: 'tool' | 'hub' };
 
 export const CROSS_LINKS: CrossLink[] = [

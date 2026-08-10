@@ -6,7 +6,7 @@ import GHSLabelConstructor from './GHSLabelConstructor'
 import type { JurisdictionKey, LabelPurpose } from '../lib/jurisdictions'
 import {
   LABEL_MAKER_BASE,
-  LM_STICKY_PARAMS,
+  pickHrefFor,
   labelMakerUrlAfterSelect,
   parseLabelMakerParams,
   resolveStatementCodes,
@@ -102,23 +102,6 @@ function urlStateNow(): { params: LabelMakerParams | null; hubRoot: boolean } {
   return { params: parseLabelMakerParams(window.location.search), hubRoot: isHubRoot(labelBase()) }
 }
 
-/** Адрес страницы подбора с сохранением настроек инструмента. */
-function pickHref(seed?: string): string {
-  const q = new URLSearchParams()
-  if (typeof window !== 'undefined') {
-    const cur = new URLSearchParams(window.location.search)
-    // ⚠⚠ Настройки обязаны пережить поход за веществом. Человек, выставивший
-    // EU CLP и формат Avery, теряет их ровно в тот момент, когда наконец
-    // выбрал вещество, — если не передать их туда и обратно.
-    for (const name of LM_STICKY_PARAMS) {
-      const v = cur.get(name)
-      if (v) q.set(name, v)
-    }
-  }
-  if (seed && seed.trim()) q.set('q', seed.trim())
-  const s = q.toString()
-  return `${LABEL_MAKER_BASE}pick/${s ? `?${s}` : ''}`
-}
 
 export default function LabelConstructorLoader({
   jurisdiction = 'osha', purpose = 'supplier', initialStockId,
@@ -327,6 +310,30 @@ export default function LabelConstructorLoader({
     setClassOpen(false)
     setLabelConstructorUrl(null)
     scrollToTool()
+  }
+
+  /**
+   * Адрес страницы подбора.
+   *
+   * ⚠⚠ ЖИВЁТ ВНУТРИ КОМПОНЕНТА, ПОТОМУ ЧТО ЕМУ НУЖНЫ ПРОПЫ. Прежняя внешняя
+   * функция знала только адресную строку — а на ветках раздела настройки
+   * приходят пропами и в адресе их нет. Сама сборка адреса вынесена в
+   * `pickHrefFor`: она чистая, и `check:dist` проверяет её по всем веткам,
+   * чего с функцией внутри острова сделать было нельзя.
+   */
+  function pickHref(withSeed?: string): string {
+    if (typeof window === 'undefined') return `${LABEL_MAKER_BASE}pick/`
+    return pickHrefFor({
+      search: window.location.search,
+      base: labelBase(),
+      seed: withSeed,
+      defaults: {
+        jurisdiction: effJurisdiction,
+        purpose: effPurpose,
+        stock: effStockId,
+        lang: effLang,
+      },
+    })
   }
 
   function goPick(e?: { preventDefault: () => void }) {

@@ -38,9 +38,19 @@ export const LM_PARAM = {
   p: 'pstat',
   pictogram: 'pic',
   signal: 'signal',
+  from: 'from',
 } as const;
 
-/** Параметры, которые обязаны пережить выбор вещества внутри конструктора. */
+/**
+ * Параметры, которые обязаны пережить выбор вещества внутри конструктора.
+ *
+ * ⚠⚠ `from` СЮДА НЕ ВХОДИТ, И ЭТО НЕ ЗАБЫВЧИВОСТЬ. Липкий параметр — настройка
+ * ЭТИКЕТКИ, он едет с человеком и остаётся в адресе конструктора. `from` —
+ * маршрут: он нужен ровно один раз, чтобы вернуть человека на ту страницу
+ * раздела, с которой он ушёл за веществом, и в адресе конструктора после
+ * возврата ему делать нечего. Смешать их значит носить за собой мусор и
+ * однажды вернуть человека не туда, откуда он пришёл.
+ */
 export const LM_STICKY_PARAMS: readonly string[] = [
   LM_PARAM.jurisdiction,
   LM_PARAM.purpose,
@@ -60,6 +70,16 @@ export type LabelMakerParams = {
   p?: string[];
   pictograms?: string[];
   signal?: SignalParam | null;
+  /**
+   * Куда вернуть человека после выбора вещества.
+   *
+   * ⚠⚠⚠ ПОЛЕ ТОЛЬКО НА ЗАПИСЬ. `parseLabelMakerParams` его НЕ ВОЗВРАЩАЕТ
+   * намеренно: значение приходит из адресной строки, и всякий, кто прочитал бы
+   * его отсюда, получил бы готовый открытый редирект с нашего домена. Читать
+   * адрес возврата можно единственным способом — `readReturnBase`, который без
+   * списка известных страниц раздела не отдаёт ничего.
+   */
+  from?: string | null;
 };
 
 // ── Словари значений ────────────────────────────────────────────────────────
@@ -273,8 +293,126 @@ export function labelMakerHref(params: LabelMakerParams = {}, base: string = LAB
   const signal = normalizeSignal(params.signal ?? null);
   if (signal) q.set(LM_PARAM.signal, signal);
 
+  if (params.from) q.set(LM_PARAM.from, params.from);
+
   const qs = q.toString();
   return qs ? `${path}?${qs}` : path;
+}
+
+/**
+ * Проверка адреса возврата: годится ли он как цель перехода.
+ *
+ * ⚠⚠⚠ ЗНАЧЕНИЕ ПРИХОДИТ ИЗ АДРЕСНОЙ СТРОКИ, ПОЭТОМУ ПРОВЕРЯЕТСЯ ДВАЖДЫ — по
+ * форме и по списку. Подставить сюда `//example.com/` или
+ * `/ghs-label-maker/../../wherever/` значит получить открытый редирект с нашего
+ * домена: человек видит ссылку на ghspictograms.com, а уезжает на чужой сайт.
+ * Одной проверки формы мало (её легко ослабить правкой регулярного выражения),
+ * одного списка мало тоже (страница может забыть его передать).
+ *
+ * ⚠⚠ ПУСТОЙ СПИСОК ЗАПРЕЩАЕТ ВСЁ, А НЕ РАЗРЕШАЕТ. Страница, не передавшая
+ * список страниц раздела, обязана вернуть человека на корень — это заметный, но
+ * безопасный отказ. Обратное умолчание пустило бы куда угодно ровно в том
+ * случае, когда о безопасности забыли.
+ */
+export function normalizeLabelMakerBase(
+  raw: string | null | undefined,
+  knownBranchPaths: readonly string[],
+): string | null {
+  if (!raw) return null;
+  const v = raw.trim();
+  // ⚠ Только путь от корня сайта: ни схемы, ни хоста, ни протокол-независимого
+  // `//host`, ни попыток выйти вверх, ни обратных слэшей (их часть браузеров
+  // разбирает как прямые).
+  if (!v.startsWith('/') || v.startsWith('//')) return null;
+  if (v.includes('..') || v.includes('\\')) return null;
+  const path = v.endsWith('/') ? v : `${v}/`;
+  if (!path.startsWith(LABEL_MAKER_BASE)) return null;
+  // Ветка — один сегмент от базы, шаблон — два. Больше в разделе нет ничего.
+  const rest = path.slice(LABEL_MAKER_BASE.length);
+  if (rest && !/^[a-z0-9-]+\/([a-z0-9-]+\/)?$/.test(rest)) return null;
+  return knownBranchPaths.includes(path) ? path : null;
+}
+
+/**
+ * Единственный способ узнать, куда возвращать человека со страницы подбора.
+ * Всегда отдаёт годный адрес: неизвестный или подделанный `from` молча
+ * превращается в корень раздела.
+ */
+export function readReturnBase(
+  search: string | URLSearchParams,
+  knownBranchPaths: readonly string[],
+): string {
+  const q = typeof search === 'string' ? new URLSearchParams(search) : search;
+  const raw = q.get('from' satisfies typeof LM_PARAM.from);
+  return normalizeLabelMakerBase(raw, knownBranchPaths) ?? LABEL_MAKER_BASE;
+}
+
+/** Имя параметра затравки поиска на странице подбора. */
+export const LM_PICK_SEED = 'q';
+
+/**
+ * Адрес страницы подбора вещества.
+ *
+ * ⚠⚠⚠ НАСТРОЙКИ БЕРУТСЯ ИЗ АДРЕСА, А ЕСЛИ ИХ ТАМ НЕТ — ИЗ УМОЛЧАНИЙ СТРАНИЦЫ.
+ * Это и есть суть правки session 60, и вот чем она вызвана. На четырнадцати
+ * ветках раздела (`/eu-clp/`, `/secondary-container-labels/` и прочих)
+ * юрисдикция и назначение приходят в остров ПРОПАМИ, а в адресной строке их нет
+ * вовсе. Прежний код копировал липкие параметры ТОЛЬКО из адреса — копировать
+ * было нечего. Человек, пришедший за цеховой этикеткой, после выбора вещества
+ * получал OSHA-этикетку поставщика на корне раздела, и понять, что произошло,
+ * по экрану было нельзя.
+ *
+ * ⚠ Умолчание НЕ ПЕРЕБИВАЕТ адрес: если человек сам выставил юрисдикцию в
+ * инструменте, она уже в адресе, и проп страницы её трогать не должен.
+ */
+export function pickHrefFor(opts: {
+  /** `window.location.search` страницы, с которой уходим. */
+  search: string;
+  /** `window.location.pathname` той же страницы — ветка, шаблон или корень. */
+  base: string;
+  /** Что человек успел набрать в строке поиска. */
+  seed?: string;
+  /** Умолчания страницы: то, что пришло в остров пропами. */
+  defaults?: {
+    jurisdiction?: JurisdictionKey | null;
+    purpose?: LabelPurpose | null;
+    stock?: string | null;
+    lang?: string | null;
+  };
+}): string {
+  const cur = new URLSearchParams(opts.search);
+  const q = new URLSearchParams();
+  const base = opts.base.endsWith('/') ? opts.base : `${opts.base}/`;
+
+  /**
+   * ⚠⚠ НА КОРНЕ РАЗДЕЛА УМОЛЧАНИЯ НЕ ПОДМЕШИВАЮТСЯ, И ЭТО НЕ НЕДОДЕЛКА.
+   * На корне проп острова — это умолчание САМОГО КОМПОНЕНТА (`osha`,
+   * `supplier`), а не выбор страницы: писать его в адрес значит выдать
+   * «человек ничего не выбирал» за «человек выбрал OSHA». Адрес корня остаётся
+   * чистым, как и был. На ветке всё наоборот: там проп — это и есть решение
+   * страницы, ради которого человек по ссылке и пришёл.
+   */
+  const onBranch = base !== LABEL_MAKER_BASE;
+  const fallback: Record<string, string | null | undefined> = onBranch
+    ? {
+        [LM_PARAM.jurisdiction]: opts.defaults?.jurisdiction,
+        [LM_PARAM.purpose]: opts.defaults?.purpose,
+        [LM_PARAM.stock]: opts.defaults?.stock,
+        [LM_PARAM.lang]: opts.defaults?.lang,
+      }
+    : {};
+  for (const name of LM_STICKY_PARAMS) {
+    const v = cur.get(name) || fallback[name];
+    if (v) q.set(name, v);
+  }
+
+  if (onBranch) q.set(LM_PARAM.from, base);
+
+  const seed = opts.seed?.trim();
+  if (seed) q.set(LM_PICK_SEED, seed);
+
+  const s = q.toString();
+  return `${LABEL_MAKER_BASE}pick/${s ? `?${s}` : ''}`;
 }
 
 /**
@@ -327,6 +465,9 @@ export function labelMakerHrefProblems(href: string, knownBranchPaths: readonly 
     if (name === LM_PARAM.h && splitCodes(value, H_SHAPE).length === 0) problems.push(`ни одного годного H-кода в «${value}»`);
     if (name === LM_PARAM.p && splitCodes(value, P_SHAPE).length === 0) problems.push(`ни одного годного P-кода в «${value}»`);
     if (name === LM_PARAM.pictogram && splitCodes(value, PICTOGRAM_SHAPE, 9).length === 0) problems.push(`ни одной годной пиктограммы в «${value}»`);
+    // ⚠ Адрес возврата сверяется тем же списком, что и сам путь ссылки: чужая
+    // страница в `from` — такой же дефект, как чужая страница в пути.
+    if (name === LM_PARAM.from && !normalizeLabelMakerBase(value, knownBranchPaths)) problems.push(`негодный адрес возврата «${value}»`);
   });
   return problems;
 }
