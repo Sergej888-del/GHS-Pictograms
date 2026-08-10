@@ -172,12 +172,37 @@ export type LabelOptions = {
 const CW_REGULAR = 0.52;
 const CW_BOLD = 0.56;
 const CW_MONO = 0.60;
+/**
+ * ⚠⚠ ПРОПИСНЫЕ — ОТДЕЛЬНАЯ МЕРКА, И БЕЗ НЕЁ СИГНАЛЬНОЕ СЛОВО ВЫЛЕЗАЕТ ЗА РАМКУ.
+ *
+ * `CW_BOLD = 0.56` — средняя ширина знака в СМЕШАННОМ наборе, где половина
+ * букв строчные и узкие. Сигнальное слово печатается через `toUpperCase()`, а
+ * прописные шире: W, O, N, B, D — каждая около 0,7 кегля и выше.
+ *
+ * Замер (session 62), два независимых источника, оба дали одно:
+ * `jsPDF.getTextWidth` на Helvetica-Bold и `canvas.measureText` в Chromium на
+ * той же гарнитуре, что стоит в `FONT`. Ширина, делённая на число знаков и
+ * кегль, по 14 словам 23 языков CLP:
+ *
+ *   ВНИМАНИЕ (BG)        0,728  ← худший случай
+ *   DANGER (EN/FR)       0,722
+ *   WAARSCHUWING (NL)    0,718
+ *   NIEBEZPIECZEŃSTWO    0,647
+ *   ATTENZIONE (IT)      0,631  ← лучший случай
+ *
+ * То есть прежняя мерка 0,56 занижала ширину до 30 %, и ровно на столько
+ * польское NIEBEZPIECZEŃSTWO выходило за правую рамку. Берём 0,75 — чуть
+ * выше худшего замера, чтобы запас был у всех 46 слов, а не у среднего.
+ *
+ * ⚠ Мерка ОДНА на SVG и PDF, как и остальные: раскладка обязана совпадать.
+ */
+const CW_CAPS = 0.75;
 
-function widthPerChar(kind: 'regular' | 'bold' | 'mono'): number {
-  return kind === 'bold' ? CW_BOLD : kind === 'mono' ? CW_MONO : CW_REGULAR;
+function widthPerChar(kind: 'regular' | 'bold' | 'mono' | 'caps'): number {
+  return kind === 'caps' ? CW_CAPS : kind === 'bold' ? CW_BOLD : kind === 'mono' ? CW_MONO : CW_REGULAR;
 }
 
-function charsPerLine(widthMm: number, sizeMm: number, kind: 'regular' | 'bold' | 'mono' = 'regular'): number {
+function charsPerLine(widthMm: number, sizeMm: number, kind: 'regular' | 'bold' | 'mono' | 'caps' = 'regular'): number {
   return Math.max(6, Math.floor(widthMm / (sizeMm * widthPerChar(kind))));
 }
 
@@ -193,7 +218,7 @@ function charsPerLine(widthMm: number, sizeMm: number, kind: 'regular' | 'bold' 
  * ⚠ Мерка приблизительная и одна на SVG и PDF: точную ширину даёт только сам
  * шрифт, а раскладка обязана совпадать между превью и печатью.
  */
-export function textWidthMm(s: string, sizeMm: number, kind: 'regular' | 'bold' | 'mono' = 'regular'): number {
+export function textWidthMm(s: string, sizeMm: number, kind: 'regular' | 'bold' | 'mono' | 'caps' = 'regular'): number {
   return String(s ?? '').length * sizeMm * widthPerChar(kind);
 }
 
@@ -584,8 +609,27 @@ function compose(
 
   // Сигнальное слово — крупно, своим цветом, на своей строке.
   if (c.showSignal && input.signalWord) {
-    // Сигнальное слово крупнее основного текста ровно вдвое, но не шире колонки.
-    const sw = Math.min(body * 2.1, textWidth / (input.signalWord.length * CW_BOLD));
+    /**
+     * Сигнальное слово крупнее основного текста ровно вдвое, но не шире колонки.
+     *
+     * ⚠⚠ ШИРИНА СЧИТАЕТСЯ ПО ПРОПИСНЫМ И ПО ОБОИМ ЯЗЫКАМ СРАЗУ — две разные
+     * поправки, и каждая закрывает свой способ вылезти за рамку.
+     *
+     * 1. Меряем `toUpperCase()`, а не исходное слово, и меркой `CW_CAPS`: на
+     *    этикетку идут прописные, а они шире (см. замер у константы). Немецкое
+     *    «Straße» вдобавок удлиняется при подъёме регистра — ß даёт SS, — так
+     *    что и число знаков брать надо у поднятой строки.
+     * 2. Кегль подбирается по САМОМУ ШИРОКОМУ из двух слов. Прежде он считался
+     *    только по первому, и пара «DANGER + NIEBEZPIECZEŃSTWO» вылезала вторым
+     *    словом: шесть знаков наверху упирались в потолок `body * 2.1`, а
+     *    семнадцать под ними печатались тем же кеглем со скидкой 0,82.
+     */
+    const capsMain = input.signalWord.toUpperCase();
+    const capsSecond = input.second?.signalWord ? input.second.signalWord.toUpperCase() : '';
+    // Доля кегля, которой печатается второе слово, — та же, что ниже при отрисовке.
+    const secondScale = capsSecond ? (altEqual ? 1 : 0.82) : 0;
+    const widestUnits = Math.max(capsMain.length, capsSecond.length * secondScale, 1);
+    const sw = Math.min(body * 2.1, textWidth / (widestUnits * CW_CAPS));
     gy += body * 0.5 + sw;
     items.push({
       t: 'text', x: textLeft, y: gy, s: input.signalWord.toUpperCase(),
@@ -867,6 +911,27 @@ function esc(s: string): string {
 }
 
 /**
+ * Снимает с открывающего тега <svg> размерные атрибуты, чтобы поставить свои.
+ *
+ * ⚠⚠ ЭТО НЕ КОСМЕТИКА, А УСЛОВИЕ ТОГО, ЧТО ДОКУМЕНТ ВООБЩЕ РАЗБЕРЁТСЯ.
+ * Дважды объявленный атрибут — фатальная ошибка XML. Инлайн в превью её
+ * переживает (браузер разбирает страницу как HTML и прощает), а `new Image()`
+ * с data:-адресом — нет: он уходит в `onerror` МОЛЧА.
+ *
+ * ⚠⚠ Ровно на этом ломалось скачивание PDF. `placePictogram` атрибуты снимал,
+ * а `rasterisePictogram` — нет, и писал свои поверх чужих. width/height в
+ * корне стоят у СЕМИ пиктограмм из девяти (нет только у GHS02 и GHS07), то
+ * есть PDF не скачивался у **3 385 веществ из 4 178**. Замер в Chromium
+ * (session 62): тот же тег с дублем — `onerror`, без дубля — `loaded`.
+ * Поэтому зачистка теперь ОДНА на оба пути. Второй копии здесь быть не должно.
+ */
+function stripRootSizeAttrs(openTag: string): string {
+  return openTag
+    .replace(/\s(?:width|height|x|y|preserveAspectRatio)\s*=\s*"[^"]*"/gi, '')
+    .replace(/\s(?:width|height|x|y|preserveAspectRatio)\s*=\s*'[^']*'/gi, '');
+}
+
+/**
  * Вставка пиктограммы: с корневого <svg> снимаются width/height/x/y и
  * preserveAspectRatio, потому что они там уже могут быть (у GHS01 — в пунктах),
  * и повторное объявление делает документ невалидным.
@@ -875,9 +940,7 @@ function placePictogram(svgContent: string, x: number, y: number, size: number):
   const s = String(svgContent).trim();
   const m = s.match(/^<svg\b[^>]*>/i);
   if (!m) return '';
-  const open = m[0]
-    .replace(/\s(?:width|height|x|y|preserveAspectRatio)\s*=\s*"[^"]*"/gi, '')
-    .replace(/\s(?:width|height|x|y|preserveAspectRatio)\s*=\s*'[^']*'/gi, '')
+  const open = stripRootSizeAttrs(m[0])
     .replace(/^<svg\b/i, `<svg x="${r(x)}" y="${r(y)}" width="${r(size)}" height="${r(size)}" preserveAspectRatio="xMidYMid meet"`);
   return open + s.slice(m[0].length);
 }
@@ -953,7 +1016,14 @@ export function downloadLabelSvg(layout: LabelLayout, filename: string) {
 /** Растеризация одной пиктограммы в PNG высокого разрешения — только для PDF. */
 async function rasterisePictogram(svg: string, sizeMm: number, dpi = 600): Promise<string> {
   const px = Math.max(64, Math.round((sizeMm / 25.4) * dpi));
-  const wrapped = svg.replace(/^<svg\b/i, `<svg width="${px}" height="${px}"`);
+  // ⚠ Зачистка — та же, что у превью, и по той же причине: дубль width/height
+  // делает документ невалидным, а `new Image()` на невалидный XML отвечает
+  // `onerror`. См. `stripRootSizeAttrs`.
+  const s = String(svg).trim();
+  const m = s.match(/^<svg\b[^>]*>/i);
+  if (!m) throw new Error('pictogram: корневого <svg> нет');
+  const wrapped = stripRootSizeAttrs(m[0])
+    .replace(/^<svg\b/i, `<svg width="${px}" height="${px}"`) + s.slice(m[0].length);
   const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(wrapped);
   const img = new Image();
   await new Promise<void>((resolve, reject) => {

@@ -75,7 +75,7 @@ Two of these carry a second hazard that outranks the first. **Chromates** are cl
 
 ## Why oxidizers must be segregated — and from what
 
-This is the most restrictive class on this site: **eight of the twelve other storage classes are marked never store with**, more than any other. That is not an artefact of a cautious matrix. It follows from what an oxidizer is. Anything that can be oxidised is a potential partner, and "anything that can be oxidised" is a much larger set than "anything labelled flammable".
+This is among the most restrictive classes on this site: **eight of the twelve other storage classes are marked never store with**. Only two classes are held apart more strictly, and both are themselves oxidizers — organic peroxides and oxidizing acids are prohibited with nine each. That is not an artefact of a cautious matrix. It follows from what an oxidizer is. Anything that can be oxidised is a potential partner, and "anything that can be oxidised" is a much larger set than "anything labelled flammable".
 
 **Flammable liquids and solids, reactive metals, water-reactives** are prohibited for the obvious reason — that is fuel and oxygen in one cabinet, waiting only on an ignition source. **Organic peroxides** are prohibited because they are oxidizers that also decompose exothermically, supplying the ignition themselves.
 

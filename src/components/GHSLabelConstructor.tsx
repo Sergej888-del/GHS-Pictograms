@@ -272,6 +272,9 @@ export default function GHSLabelConstructor({
   const [logoError, setLogoError] = useState('')
   const [dragActive, setDragActive] = useState(false)
   const [sheetNote, setSheetNote] = useState('')
+  /** Сбой генерации PDF — виден человеку, а не только в консоли. */
+  const [downloadError, setDownloadError] = useState('')
+  const [pdfBusy, setPdfBusy] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // ⚠ Набор P-фраз пересобирается при смене вещества: иначе от прошлого вещества
@@ -940,15 +943,31 @@ export default function GHSLabelConstructor({
     downloadLabelSvg(layout, `${fileBase}.svg`)
     track('label_download', { format: 'svg', cas: entryCas, jurisdiction: j.key })
   }
+  /**
+   * ⚠⚠ ОШИБКА ПЕЧАТИ ПОКАЗЫВАЕТСЯ ЧЕЛОВЕКУ, А НЕ ТОЛЬКО КОНСОЛИ.
+   *
+   * Пока сбой уходил в `console.error`, кнопка вела себя как неисправная:
+   * нажатие есть, ответа нет, и понять, что случилось, можно было только через
+   * F12. Так дефект с дублем width/height у пиктограмм (см. `labelEngine`)
+   * прожил незамеченным, хотя выбивал PDF у 3 385 веществ из 4 178.
+   */
   const handlePdf = async () => {
+    setDownloadError('')
+    setPdfBusy(true)
     try {
       await downloadLabelPdf(layout, `${fileBase}.pdf`)
       track('label_download', { format: 'pdf', cas: entryCas, jurisdiction: j.key })
-    } catch (e) { console.error('PDF download failed', e) }
+    } catch (e) {
+      console.error('PDF download failed', e)
+      setDownloadError(`PDF could not be generated: ${e instanceof Error ? e.message : String(e)}. The SVG download is unaffected — please use it and let us know.`)
+    } finally {
+      setPdfBusy(false)
+    }
   }
   const handleSheet = async () => {
     if (!selectedStock || selectedStock.sheet === 'roll') return
     const sheet = SHEET_MM[selectedStock.sheet]
+    setDownloadError('')
     try {
       const res = await downloadLabelSheetPdf(
         layout,
@@ -957,7 +976,10 @@ export default function GHSLabelConstructor({
       )
       setSheetNote(`${res.perSheet} labels per sheet (${res.cols} × ${res.rows})`)
       track('label_download', { format: 'sheet_pdf', cas: entryCas, jurisdiction: j.key })
-    } catch (e) { console.error('Sheet PDF failed', e) }
+    } catch (e) {
+      console.error('Sheet PDF failed', e)
+      setDownloadError(`Sheet PDF could not be generated: ${e instanceof Error ? e.message : String(e)}`)
+    }
   }
   const trackSdsAffiliateClick = () =>
     track('affiliate_click', { partner: 'sds_manager', placement: 'label_constructor', cas: entryCas })
@@ -1966,8 +1988,8 @@ export default function GHSLabelConstructor({
               </div>
               <div className="flex flex-col gap-2">
                 <div className="flex gap-3">
-                  <button type="button" onClick={handlePdf} className="flex-1 cursor-pointer rounded-lg bg-[#062A78] py-3 font-semibold text-white transition-colors hover:bg-[#051f5c]">
-                    Download PDF
+                  <button type="button" onClick={handlePdf} disabled={pdfBusy} className="flex-1 cursor-pointer rounded-lg bg-[#062A78] py-3 font-semibold text-white transition-colors hover:bg-[#051f5c] disabled:cursor-wait disabled:opacity-70">
+                    {pdfBusy ? 'Preparing PDF…' : 'Download PDF'}
                   </button>
                   <button type="button" onClick={handleSvg} className="flex-1 cursor-pointer rounded-lg border-2 border-[#062A78] py-3 font-semibold text-[#062A78] transition-colors hover:bg-[#062A78] hover:text-white">
                     Download SVG
@@ -1979,6 +2001,11 @@ export default function GHSLabelConstructor({
                   </button>
                 )}
                 {sheetNote && <p className="text-center text-xs text-gray-500">{sheetNote}</p>}
+                {downloadError && (
+                  <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                    {downloadError}
+                  </p>
+                )}
                 <NewsletterOptIn source="label_constructor" />
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
                   <p className="text-sm font-semibold text-[#062A78]">Need a Safety Data Sheet for {displayName}?</p>
