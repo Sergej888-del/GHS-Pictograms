@@ -21,7 +21,8 @@
     "check:label-layout": "node --use-system-ca --import tsx scripts/check-label-layout.ts",
     "import:substance-names": "node --use-system-ca --import tsx scripts/import-substance-names.ts",
     "check:label-width": "node --use-system-ca --import tsx scripts/check-label-width.ts",
-    "check:p-precedence": "node --experimental-strip-types scripts/check-p-precedence.ts"
+    "check:p-precedence": "node --experimental-strip-types scripts/check-p-precedence.ts",
+    "check:label-size": "node --experimental-strip-types scripts/check-label-size.ts"
   },
   "dependencies": {
     "@astrojs/mdx": "^5.0.3",

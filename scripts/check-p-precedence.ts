@@ -81,8 +81,19 @@ check('P501 = mandatory', b.units.find((u) => u.code === 'P501')?.level === 'man
 check('P102 «Keep out of reach of children» появился', b.units.some((u) => u.code === 'P102'));
 check('P102 закреплён и стоит вторым, сразу за P501',
   b.selected[1]?.code === 'P102', b.selected[1]?.code);
+// ⚠⚠ ПРОТОКОЛ ПЕРЕВЕДЁН НА АНГЛИЙСКИЙ В SESSION 65 — он идёт на страницу
+// /p-statements/selector/, которую читают посетители сайта. Проверка ловит
+// не слово, а СМЫСЛ: строка обязана сказать, что закреп наш, и обязана
+// сказать, что его можно снять. Без этого инструмент врёт о своём основании.
+const p102Reason = b.units.find((u) => u.code === 'P102')?.reasons
+  .find((r) => r.rule === 'anchor-disposal')?.text ?? '';
 check('в протоколе P102 сказано, что это НАШЕ решение, а не регламент',
-  !!b.units.find((u) => u.code === 'P102')?.reasons.some((r) => r.text.includes('НАШИМ решением')));
+  /OUR decision/.test(p102Reason) && /not by the regulation/i.test(p102Reason), p102Reason.slice(0, 90));
+check('и сказано, что закреп можно снять',
+  /unpin/i.test(p102Reason), p102Reason.slice(0, 90));
+check('протокол на английском: кириллицы в reasons нет',
+  !b.units.some((u) => u.reasons.some((r) => /[\u0410-\u044f\u0401\u0451]/.test(r.text + r.citation))),
+  b.units.flatMap((u) => u.reasons).find((r) => /[\u0410-\u044f]/.test(r.text + r.citation))?.text?.slice(0, 90) ?? '');
 check('P103 снят колонкой 5, потому что есть P202',
   b.units.find((u) => u.code === 'P103')?.verdict === 'omitted',
   b.units.find((u) => u.code === 'P103')?.verdict);

@@ -5,8 +5,13 @@ import {
 } from '../lib/labelEngine'
 import {
   JURISDICTIONS, JURISDICTION_ORDER, sizeTierForLitres, recommendedTierForLitres, smallPackageRuleFor,
-  type JurisdictionKey, type LabelPurpose,
+  labelSizeVerdict,
+  type JurisdictionKey, type LabelPurpose, type SizeTier,
 } from '../lib/jurisdictions'
+// ⭐⭐ Отбор шести фраз. До session 65 здесь стоял `pStatements.slice(0, 6)`.
+import { usePPrecedence } from '../lib/usePPrecedence'
+import PStatementProtocol from './PStatementProtocol'
+import type { Audience } from '../lib/pPrecedence'
 import {
   stockFor, stockMm, stockSizeLabel, inchLabel, SHEET_MM, SHEET_NAME, MM_PER_INCH,
   LABEL_STOCK_ALL,
@@ -206,9 +211,42 @@ export default function GHSLabelConstructor({
   const [ufiCode, setUfiCode] = useState('')
   const [batchNumber, setBatchNumber] = useState('')
   const [pFormat, setPFormat] = useState<'codes' | 'combined'>('codes')
-  const [selectedP, setSelectedP] = useState<string[]>(
-    () => initialSelectedP ?? pStatements.slice(0, 6).map((p) => p.code),
-  )
+  /**
+   * ⛔⛔ ЗДЕСЬ СТОЯЛО `pStatements.slice(0, 6)` — И ЭТО БЫЛ САМЫЙ КРУПНЫЙ ДЕФЕКТ
+   * ИНСТРУМЕНТА (закрыт в session 65).
+   *
+   * Первые шесть кодов списка, отсортированного по номеру. Ни статьи 28, ни
+   * уровней важности ECHA, ни колонки 5 Annex IV. Пара `P304+P340` при этом
+   * рвалась пополам, и на этикетку печаталась половина фразы, которой в CLP не
+   * существует. Отбор делает `pPrecedence.ts` — девять проходов и протокол на
+   * каждую фразу.
+   *
+   * ⚠⚠ ПУСТО НА СТАРТЕ, А НЕ «ПОКА ПЕРВЫЕ ШЕСТЬ». Снимок данных грузится
+   * асинхронно, и заполнить набор до его прихода можно только неверно.
+   * Показать шесть неверных фраз и молча заменить их через полсекунды хуже, чем
+   * показать пустое поле: первый вариант человек успевает принять за ответ.
+   * ⚠ `initialSelectedP` (коды из адреса) — исключение: их назвал человек.
+   */
+  const [selectedP, setSelectedP] = useState<string[]>(() => initialSelectedP ?? [])
+  /**
+   * ⚠⚠ Человек тронул набор руками — движок больше НЕ ПЕРЕЗАПИСЫВАЕТ его.
+   * Иначе смена аудитории или объёма тары стирала бы ручную правку, и это
+   * читалось бы как «инструмент не слушается».
+   */
+  const pTouched = useRef(Boolean(initialSelectedP?.length))
+  /**
+   * Кому поставляется товар.
+   *
+   * ⚠⚠ НЕ КОСМЕТИКА И НЕ СИНОНИМ `purpose`. От аудитории зависят три разные
+   * вещи: закреп ст. 28(2) (у населения фраза про утилизацию обязательна),
+   * появление раздела Annex IV «Consumer products» (`P101`–`P103`) и колонка
+   * уровней ECHA — у населения и у профессионала они РАЗНЫЕ. `purpose`
+   * (supplier / workplace / small) отвечает на другой вопрос — какие элементы
+   * вообще обязаны быть на этикетке.
+   */
+  const [audience, setAudience] = useState<Audience>('professional')
+  /** Показывать ли протокол отбора под списком фраз. */
+  const [protocolOpen, setProtocolOpen] = useState(false)
   /**
    * ⭐ Ручная поправка кегля — доля от подобранного движком. 1 = авто.
    *
@@ -293,9 +331,46 @@ export default function GHSLabelConstructor({
 
   // ⚠ Набор P-фраз пересобирается при смене вещества: иначе от прошлого вещества
   // остаются коды, которых у нового нет, и на этикетку не попадает ничего.
+  // ⚠⚠ Смена вещества СНИМАЕТ отметку «тронуто руками»: набор, собранный под
+  // прошлое вещество, к новому отношения не имеет, и держать его как «выбор
+  // человека» значит подсунуть чужие фразы под новую классификацию.
   useEffect(() => {
-    setSelectedP(initialSelectedP ?? pStatements.slice(0, 6).map((p) => p.code))
+    pTouched.current = Boolean(initialSelectedP?.length)
+    setSelectedP(initialSelectedP ?? [])
   }, [entryCas, pStatements.length])
+
+  // ── ДВИЖОК ОТБОРА P-ФРАЗ ──────────────────────────────────────────────────
+  /**
+   * ⚠⚠ ВХОД СОБИРАЕТСЯ ИЗ H-КОДОВ, А НЕ ИЗ `pStatements`. `pStatements` — это
+   * то, что Annex VI перечислил для вещества (или что человек отметил руками),
+   * и оно уже неполно: у смеси там пусто, а у вещества — плоский список без
+   * пар и без уровней. Классы опасности движок выводит сам, из H-кодов и
+   * сигнального слова.
+   *
+   * ⚠ `fitCapacity` пока НЕ передаётся — замер влезаемости по самому тесному
+   * языку (`worstLanguageCapacity` + настоящий `layoutLabel`) остаётся
+   * отдельной задачей. Пока лимит задаёт только ст. 28(3), и `limitReason`
+   * говорит об этом прямо, а не делает вид, что размер учтён.
+   */
+  const precedenceInput = useMemo(
+    () => ({
+      hCodes: hStatements.map((h) => h.code),
+      signalWord,
+      audience,
+      containerMl: capacityMl,
+    }),
+    [hStatements, signalWord, audience, capacityMl],
+  )
+  const precedence = usePPrecedence(precedenceInput, hStatements.length > 0)
+
+  /**
+   * Ответ движка становится набором на этикетке — но только пока человек не
+   * правил набор руками.
+   */
+  useEffect(() => {
+    if (pTouched.current || !precedence.result) return
+    setSelectedP(precedence.result.selected.map((u) => u.code))
+  }, [precedence.result])
 
   /**
    * Заполняемые пропуски H-фраз: что назвал поставщик.
@@ -585,16 +660,21 @@ export default function GHSLabelConstructor({
    * Помещается ли формат под ярус — с учётом ОБЕИХ ориентаций. Наклейка
    * 4 × 2 in под ярус 52 × 74 мм не подходит как есть, но подходит повёрнутой,
    * и отбрасывать её было бы неправдой.
+   *
+   * ⚠ Считает `labelSizeVerdict` — тот же, что печатает вердикт под превью.
+   * Держать здесь ВТОРУЮ реализацию того же сравнения нельзя: до session 65 их
+   * было четыре, и один формат получал у них разные ответы.
    */
-  const fitsTierStrict = (m: { w: number; h: number }, t: { labelMinW: number; labelMinH: number }) =>
-    (m.w >= t.labelMinW - 0.5 && m.h >= t.labelMinH - 0.5)
-    || (m.h >= t.labelMinW - 0.5 && m.w >= t.labelMinH - 0.5)
+  const fitsTierStrict = (m: { w: number; h: number }, t: SizeTier) =>
+    labelSizeVerdict(t, m.w, m.h).meetsSides
 
   /**
-   * ⚠⚠ Там, где закон размеров НЕ устанавливает, годность считается ПО ПЛОЩАДИ,
-   * а не по сторонам. Иначе выходит нелепость: на пол-литровую бутылку
-   * подбирается наклейка 4 × 4 in, потому что привычная 4 × 2 in не проходит по
-   * одной стороне яруса CLP — хотя площади в ней в полтора раза больше.
+   * ⚠⚠ ЭТО НАША ОЦЕНКА, А НЕ НОРМА, И ПОДПИСЫВАТЬ ЕЁ СООТВЕТСТВИЕМ НЕЛЬЗЯ.
+   * В Table 1.3 про площадь ЭТИКЕТКИ нет ни слова: площадь появляется только в
+   * §1.2.1.3 и только у пиктограммы. Прикидка нужна там, где закон размеров не
+   * устанавливает вовсе (OSHA, WHMIS) — иначе на пол-литровую бутылку
+   * подбиралась бы наклейка 4 × 4 in, потому что привычная 4 × 2 in не проходит
+   * по одной стороне яруса CLP, хотя площади в ней в полтора раза больше.
    * Вторая проверка отсекает длинные узкие ленты: короткая сторона не может
    * быть меньше 70 % короткой стороны яруса.
    */
@@ -603,18 +683,22 @@ export default function GHSLabelConstructor({
     && Math.min(m.w, m.h) >= Math.min(t.labelMinW, t.labelMinH) * 0.7
 
   /** Годность по правилам текущей юрисдикции: закон строже рекомендации. */
-  const fitsTier = (m: { w: number; h: number }, t: { labelMinW: number; labelMinH: number }) =>
+  const fitsTier = (m: { w: number; h: number }, t: SizeTier) =>
     tier ? fitsTierStrict(m, t) : fitsTierByArea(m, t)
 
   const stocks = useMemo(() => {
     const list = stockFor(j.region)
-    // ⚠ Там, где минимум предписан законом, форматы ниже него не показываются
-    // вовсе: этикетка на них незаконна. Где закон молчит — показываются все, но
-    // подходящие по объёму идут первыми.
-    if (tier) return list.filter((s) => fitsTier(stockMm(s), tier))
+    // ⚠⚠ ФОРМАТЫ ПРЯЧУТСЯ ТОЛЬКО ТАМ, ГДЕ ЯРУС ОБЯЗАТЕЛЕН (session 65).
+    // Прежняя строка `if (tier) return list.filter(…)` прятала их у ВСЕХ
+    // ярусов таблицы — в том числе у ≤ 3 л, где таблица говорит «If possible».
+    // Из-за этого в режиме CLP на пол-литровую бутылку не показывалась ни одна
+    // наклейка 4 × 2 in, самая ходовая химическая заготовка, — хотя незаконной
+    // она не является. Прячем только настоящий запрет (> 3 л).
+    if (tier?.labelSidesBinding) return list.filter((s) => fitsTierStrict(stockMm(s), tier))
+    const against = tier ?? recTier
     return [...list].sort((a, b) => {
-      const fa = fitsTier(stockMm(a), recTier) ? 0 : 1
-      const fb = fitsTier(stockMm(b), recTier) ? 0 : 1
+      const fa = fitsTier(stockMm(a), against) ? 0 : 1
+      const fb = fitsTier(stockMm(b), against) ? 0 : 1
       if (fa !== fb) return fa - fb
       if (a.chemical !== b.chemical) return a.chemical ? -1 : 1
       const ma = stockMm(a), mb = stockMm(b)
@@ -646,7 +730,10 @@ export default function GHSLabelConstructor({
   const applyCapacity = (ml: number) => {
     setCapacityMl(ml)
     const rec = recommendedTierForLitres(ml / 1000)
-    const ok = tier ? fitsTierStrict : fitsTierByArea
+    // ⚠ По сторонам подбираем только там, где ярус ОБЯЗАТЕЛЕН. У ≤ 3 л таблица
+    // говорит «If possible» — там прикидка по площади честнее: она не
+    // отбрасывает ходовую 4 × 2 in ради размера, которого закон не требует.
+    const ok = tier?.labelSidesBinding ? fitsTierStrict : fitsTierByArea
     const candidates = stockFor(j.region)
       .filter((st) => st.chemical && st.sheet !== 'roll' && ok(stockMm(st), rec))
       .sort((a, b) => {
@@ -664,7 +751,7 @@ export default function GHSLabelConstructor({
       // как есть не проходит. Где это лишь рекомендация — оставляем ориентацию
       // каталога: Avery 60505 продаётся как 4 × 2 in, и разворачивать её в
       // 2 × 4 значит спорить с пачкой, которая лежит у человека на столе.
-      const asIs = tier ? (m.w >= rec.labelMinW - 0.5 && m.h >= rec.labelMinH - 0.5) : true
+      const asIs = tier?.labelSidesBinding ? (m.w >= rec.labelMinW - 0.5 && m.h >= rec.labelMinH - 0.5) : true
       setSizeW(asIs ? m.w : m.h)
       setSizeH(asIs ? m.h : m.w)
       setStockId(best.id)
@@ -1671,10 +1758,23 @@ export default function GHSLabelConstructor({
               />
               <span className="self-center text-xs text-gray-500">mL</span>
             </div>
+            {/* ⚠⚠ ФОРМУЛИРОВКА ЯРУСА — ИЗ ТАБЛИЦЫ, А НЕ ОДНА НА ВСЕХ.
+                «must be at least» верно для > 3 л и неверно для ≤ 3 л, где
+                Table 1.3 говорит «If possible, at least 52 × 74». Одна фраза на
+                четыре яруса приписывала регламенту требование, которого он в
+                первом ярусе не устанавливает. */}
             {tier ? (
               <p className="text-[11px] text-gray-500">
-                {j.tag}: for {tier.capacityLabel} the label must be at least {tier.labelMinW} × {tier.labelMinH} mm
-                and each pictogram at least {tier.pictogramMm} mm
+                {tier.labelSidesBinding ? (
+                  <>{j.tag}: for {tier.capacityLabel} the label must be at least {tier.labelMinW} × {tier.labelMinH} mm</>
+                ) : (
+                  <>
+                    {j.tag}: for {tier.capacityLabel} Table 1.3 asks for <b>if possible</b>, at least{' '}
+                    {tier.labelMinW} × {tier.labelMinH} mm — a target for this tier, not a minimum
+                  </>
+                )}
+                {' '}and each pictogram at least {tier.pictogramFloorMm} mm
+                {tier.pictogramMm !== tier.pictogramFloorMm ? `, ${tier.pictogramMm} mm if possible` : ''}
               </p>
             ) : (
               <p className="text-[11px] text-gray-500">
@@ -1753,9 +1853,50 @@ export default function GHSLabelConstructor({
               <span className="text-xs text-gray-500">{unit}</span>
             </div>
 
-            {fit.belowMinimum ? (
+            {/* ⚠⚠ ТРИ РАЗНЫХ ВЕРДИКТА О РАЗМЕРЕ, А НЕ ОДИН (session 65).
+                Table 1.3 говорит о ярусах разными словами, и смешивать их
+                нельзя: у > 3 л «At least» — это норма, у ≤ 3 л «If possible» —
+                это цель. Пока вердикт был один, наклейка 4 × 2 in под бутылку
+                получала алую плашку «below the 52 × 74 mm minimum» — про
+                минимум, которого в её ярусе нет.
+                Разбор: claude/label-size-table13.md */}
+            {fit.sizeVerdict?.breach ? (
               <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
                 {fmt(sizeW)} × {fmt(sizeH)} {unit} is below the {fit.minimumLabel} minimum for this container ({j.tag}).
+                {' '}Table 1.3 requires <b>{fit.sizeVerdict.wording}</b>
+                {fit.sizeVerdict.shortByMm && (fit.sizeVerdict.shortByMm.shortSide > 0 || fit.sizeVerdict.shortByMm.longSide > 0) ? (
+                  <>
+                    {' — short by '}
+                    {[
+                      fit.sizeVerdict.shortByMm.shortSide > 0 ? `${fit.sizeVerdict.shortByMm.shortSide} mm on the short side` : null,
+                      fit.sizeVerdict.shortByMm.longSide > 0 ? `${fit.sizeVerdict.shortByMm.longSide} mm on the long side` : null,
+                    ].filter(Boolean).join(' and ')}
+                  </>
+                ) : null}.
+              </p>
+            ) : fit.sizeVerdict?.belowIfPossible ? (
+              /* ⚠ Янтарная, а не алая: это НЕ нарушение. Для тары ≤ 3 л
+                 Table 1.3 говорит «If possible, at least 52 × 74» — цель, а не
+                 минимум. Там, где она не достигается, работают ст. 29(1)–(2) и
+                 Annex I §1.5, а не запрет. */
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                {fmt(sizeW)} × {fmt(sizeH)} {unit} is under the {fit.minimumLabel} that Table 1.3 asks for
+                {fit.sizeVerdict.shortByMm && fit.sizeVerdict.shortByMm.shortSide > 0
+                  ? ` (short by ${fit.sizeVerdict.shortByMm.shortSide} mm on the short side)`
+                  : ''}
+                . <b>This is not a breach.</b> For packages not exceeding 3 litres the wording is
+                “<i>if possible</i>, at least 52 × 74” — a target, not a minimum. Where it cannot be met,
+                Art. 29(1)–(2) and Annex I §1.5 apply (tie-on tag, outer packaging, or a reduced set).
+              </p>
+            ) : fit.sizeVerdict?.onlyRotated ? (
+              /* ⭐ Стороны выдержаны, но в другую сторону. Таблица даёт ПАРУ
+                 размеров и не называет, который из них ширина, — поэтому это
+                 соответствие, а не отступление. Но заготовка у человека на
+                 столе лежит одной определённой стороной, и сказать надо. */
+              <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                {fmt(sizeW)} × {fmt(sizeH)} {unit} meets the {fit.minimumLabel} pair of dimensions in landscape.
+                Table 1.3 gives two dimensions and does not say which one is the width, so this is compliant —
+                but check that your label stock is fed that way round.
               </p>
             ) : fit.fits ? (
               <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
@@ -1980,6 +2121,88 @@ export default function GHSLabelConstructor({
                 Six is the usual maximum on a label. Which six is your call — it depends on how the product is
                 actually used, and the regulations let you omit statements that do not apply.
               </p>
+
+              {/* ── ⭐⭐ АУДИТОРИЯ. Стоит НАД списком, а не в «дополнительно»:
+                     от неё зависит не оформление, а сам набор фраз. ────────── */}
+              <div>
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-600">Supplied to</p>
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    { v: 'professional' as const, l: 'Industrial / professional' },
+                    { v: 'general_public' as const, l: 'General public' },
+                  ]).map((o) => (
+                    <button
+                      key={o.v} type="button" onClick={() => setAudience(o.v)}
+                      className={`cursor-pointer rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+                        audience === o.v ? 'border-[#062A78] bg-[#062A78] text-white' : 'border-gray-300 bg-white text-gray-600'
+                      }`}
+                    >{o.l}</button>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
+                  Supplying the general public makes a disposal statement compulsory (Art. 28(2)), brings in
+                  the “Consumer products” section of Annex IV, and moves ECHA’s importance levels to their own
+                  column — so this changes the set, not just the wording.
+                </p>
+              </div>
+
+              {/* ── ⛔⛔ ЧЕМ ЗАДАН НАБОР. Раньше здесь молча стояли первые шесть
+                     кодов по номеру; теперь отбор делает движок, и он обязан
+                     сказать о себе — вместе с оговоркой, что процедуры отбора
+                     ни UN GHS, ни CLP не устанавливают. ────────────────────── */}
+              {precedence.error ? (
+                <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] leading-relaxed text-rose-700">
+                  The selection data did not load ({precedence.error}). Tick the statements yourself below —
+                  the tool will not fall back to “the first six codes”, because a plausible-looking wrong set
+                  on a safety label is worse than an empty one.
+                </p>
+              ) : precedence.loading ? (
+                <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
+                  Working out which statements this classification calls for…
+                </p>
+              ) : precedence.result ? (
+                <div className="rounded-lg border border-[#062A78]/25 bg-blue-50 px-3 py-2">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-[#062A78]">
+                      {pTouched.current ? 'Edited by you' : `Selected by the tool · limit ${precedence.result.limit}`}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setProtocolOpen((v) => !v)}
+                      className="ml-auto cursor-pointer text-[11px] font-semibold text-[#062A78] underline"
+                      aria-expanded={protocolOpen}
+                    >
+                      {protocolOpen ? 'Hide the reasoning' : 'Why these ones?'}
+                    </button>
+                  </div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-[#062A78]/90">
+                    Worked out from Annex IV, ECHA’s importance scale and Art. 28 — not picked off the top of
+                    the list. Neither UN GHS nor CLP lays down a selection procedure, so this is a reproducible
+                    method with its working shown, not a legally correct answer.{' '}
+                    <a href="/p-statements/selector/" className="underline">
+                      Open the full selector →
+                    </a>
+                  </p>
+                  {pTouched.current && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        pTouched.current = false
+                        setSelectedP(precedence.result!.selected.map((u) => u.code))
+                      }}
+                      className="mt-1.5 cursor-pointer rounded border border-[#062A78]/40 bg-white px-2 py-1 text-[11px] text-[#062A78]"
+                    >
+                      ↺ Back to the tool’s selection
+                    </button>
+                  )}
+                </div>
+              ) : null}
+
+              {protocolOpen && precedence.result && (
+                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <PStatementProtocol result={precedence.result} heading="Selected for this label" />
+                </div>
+              )}
               {/* ⚠ В ручном режиме сюда приходят все 117 фраз, и без поиска
                   список бесполезен: нужную ищут по слову, а не листанием. */}
               {pStatements.length > 12 && (
@@ -1997,7 +2220,11 @@ export default function GHSLabelConstructor({
                       <input
                         type="checkbox"
                         checked={on}
-                        onChange={() => setSelectedP((prev) => on ? prev.filter((c) => c !== p.code) : [...prev, p.code])}
+                        onChange={() => {
+                          // ⚠ С этого момента движок набор не перезаписывает.
+                          pTouched.current = true
+                          setSelectedP((prev) => on ? prev.filter((c) => c !== p.code) : [...prev, p.code])
+                        }}
                         className="mt-0.5 accent-[#062A78]"
                       />
                       <span><span className="font-semibold">{p.code}</span> {p.text_en}</span>

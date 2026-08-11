@@ -49,6 +49,25 @@ export type SizeTier = {
   examples: string;
   labelMinW: number; // мм
   labelMinH: number; // мм
+  /**
+   * ⭐⭐ СТОРОНЫ ЭТИКЕТКИ — ТРЕБОВАНИЕ ИЛИ ЦЕЛЬ «ПО ВОЗМОЖНОСТИ».
+   *
+   * Table 1.3 говорит о ярусах РАЗНЫМИ словами, и разница юридическая:
+   *
+   *   ≤ 3 л   → «**If possible**, at least 52 × 74»
+   *   > 3 л   → «At least 74 × 105» / «At least 105 × 148» / «At least 148 × 210»
+   *
+   * ⚠⚠ Это ровно та же конструкция, что у пиктограммы в том же ярусе («Not
+   * smaller than 10 × 10 / If possible, at least 16 × 16»), и для пиктограммы
+   * код её различал с самого начала (`pictogramMm` против `pictogramFloorMm`),
+   * а для этикетки — нет. Из-за этого инструмент писал «below the 52 × 74 mm
+   * minimum» про норму, которой в этом ярусе НЕ СУЩЕСТВУЕТ.
+   *
+   * ⚠ У ≤ 3 л пола нет вовсе: там, где 52 × 74 физически не помещается,
+   * работают ст. 29(1)–(2) и Annex I §1.5.1–1.5.2 (бирка, внешняя упаковка,
+   * сокращённый набор), а не «нарушение таблицы».
+   */
+  labelSidesBinding: boolean;
   /** Целевая сторона пиктограммы, мм. */
   pictogramMm: number;
   /** Абсолютный пол стороны пиктограммы, мм. */
@@ -59,14 +78,31 @@ export type SizeTier = {
  * CLP Annex I, Table 1.3. Действует в ЕС и, слово в слово, в GB CLP —
  * подтверждено по тексту GB-версии на legislation.gov.uk.
  *
+ * ⭐ ДОСЛОВНО, из консолидированного текста (§1.2.1.4 → Table 1.3 «Minimum
+ * dimensions of labels and pictograms», колонки «Capacity of the package» ·
+ * «Dimensions of the label (in millimetres) for the information required by
+ * Article 17» · «Dimensions of each pictogram (in millimetres)»):
+ *
+ *   Not exceeding 3 litres:                    If possible, at least 52 × 74
+ *                                              Not smaller than 10 × 10
+ *                                              If possible, at least 16 × 16
+ *   Greater than 3 but not exceeding 50 l:     At least 74 × 105 · At least 23 × 23
+ *   Greater than 50 but not exceeding 500 l:   At least 105 × 148 · At least 32 × 32
+ *   Greater than 500 litres:                   At least 148 × 210 · At least 46 × 46
+ *
+ * ⚠⚠ ПРО ПЛОЩАДЬ ЭТИКЕТКИ В ТАБЛИЦЕ НЕТ НИ СЛОВА. Площадь появляется только в
+ * §1.2.1.3 и только у ПИКТОГРАММЫ («at least one fifteenth of the minimum
+ * surface area of the label … not less than 1 cm²»). Любой расчёт годности
+ * этикетки по площади — НАША оценка, и подписывать её соответствием нельзя.
+ *
  * ⚠ Для ≤ 3 л регламент говорит «не меньше 10 × 10, по возможности 16 × 16»:
  * 16 — цель, 10 — пол. У остальных ярусов цель и пол совпадают.
  */
 export const CLP_SIZE_TIERS: SizeTier[] = [
-  { key: 'le3', maxLitres: 3, capacityLabel: '≤ 3 L', examples: 'bottles, cans, aerosols', labelMinW: 52, labelMinH: 74, pictogramMm: 16, pictogramFloorMm: 10 },
-  { key: 'gt3le50', maxLitres: 50, capacityLabel: '> 3–50 L', examples: 'jerrycans, pails', labelMinW: 74, labelMinH: 105, pictogramMm: 23, pictogramFloorMm: 23 },
-  { key: 'gt50le500', maxLitres: 500, capacityLabel: '> 50–500 L', examples: 'drums', labelMinW: 105, labelMinH: 148, pictogramMm: 32, pictogramFloorMm: 32 },
-  { key: 'gt500', maxLitres: null, capacityLabel: '> 500 L', examples: 'IBCs, tanks', labelMinW: 148, labelMinH: 210, pictogramMm: 46, pictogramFloorMm: 46 },
+  { key: 'le3', maxLitres: 3, capacityLabel: '≤ 3 L', examples: 'bottles, cans, aerosols', labelMinW: 52, labelMinH: 74, labelSidesBinding: false, pictogramMm: 16, pictogramFloorMm: 10 },
+  { key: 'gt3le50', maxLitres: 50, capacityLabel: '> 3–50 L', examples: 'jerrycans, pails', labelMinW: 74, labelMinH: 105, labelSidesBinding: true, pictogramMm: 23, pictogramFloorMm: 23 },
+  { key: 'gt50le500', maxLitres: 500, capacityLabel: '> 50–500 L', examples: 'drums', labelMinW: 105, labelMinH: 148, labelSidesBinding: true, pictogramMm: 32, pictogramFloorMm: 32 },
+  { key: 'gt500', maxLitres: null, capacityLabel: '> 500 L', examples: 'IBCs, tanks', labelMinW: 148, labelMinH: 210, labelSidesBinding: true, pictogramMm: 46, pictogramFloorMm: 46 },
 ];
 
 /**
@@ -352,4 +388,80 @@ export function requiredPictogramSideMm(tier: SizeTier): number {
   const minLabelArea = tier.labelMinW * tier.labelMinH;
   const byArea = Math.sqrt(Math.max(minLabelArea * CLP_PICTOGRAM_AREA_FRACTION, CLP_PICTOGRAM_MIN_AREA_MM2));
   return Math.max(tier.pictogramMm, byArea);
+}
+
+/** Допуск на округление размеров, мм. 4 × 2 in — это 101,6 × 50,8, а не 102 × 51. */
+const SIZE_EPS_MM = 0.5;
+
+/**
+ * ⭐⭐ ВЕРДИКТ О РАЗМЕРЕ ЭТИКЕТКИ ПРОТИВ Table 1.3 — ОДИН НА ВЕСЬ ПРОЕКТ.
+ *
+ * До session 65 сравнений было ЧЕТЫРЕ, и все разные: `labelEngine` сравнивал
+ * жёстко по осям, конструктор — с разворотом и запасным расчётом по площади,
+ * страницы шаблонов — по площади, `labelArtifact` — снова жёстко по осям. Один
+ * и тот же формат получал у них РАЗНЫЕ ответы.
+ *
+ * ⚠⚠ ДВЕ ВЕЩИ, НА КОТОРЫХ ЗДЕСЬ ЛЕГКО СОВРАТЬ:
+ *
+ * ① **Ориентация не нормирована.** Таблица даёт ПАРУ размеров («At least
+ *    74 × 105») и нигде не говорит, который из них ширина. Этикетка 105 × 74
+ *    имеет ровно эти размеры — просто в другую сторону. Поэтому сравниваем
+ *    отсортированные пары: короткая сторона против короткой, длинная против
+ *    длинной. Сравнение по осям отбраковывало законный альбомный формат.
+ *
+ * ② **«If possible» — не минимум.** У яруса ≤ 3 л недобор до 52 × 74 НЕ
+ *    является нарушением (`breach === false`), и называть его «below the
+ *    minimum» нельзя: минимума там нет. У ярусов > 3 л тот же недобор —
+ *    нарушение.
+ *
+ * ⚠ Площадь здесь НЕ участвует: в Table 1.3 её нет. Оценка по площади живёт
+ * отдельно, называется нашей рекомендацией и в вердикт о соответствии не
+ * входит (см. `fitsTierByArea` в конструкторе).
+ */
+export type LabelSizeVerdict = {
+  /** Стороны яруса выдержаны как пара размеров, без учёта ориентации. */
+  meetsSides: boolean;
+  /** ⛔ Нарушение таблицы. Только там, где ярус говорит «At least». */
+  breach: boolean;
+  /** ⚠ Недобор до «по возможности». Не нарушение — только у яруса ≤ 3 л. */
+  belowIfPossible: boolean;
+  /**
+   * Стороны выдержаны, только если этикетку повернуть.
+   * ⚠ Само по себе не дефект: у конструктора есть кнопка Rotate, а разворот
+   * пары размеров таблице не противоречит. Но сказать об этом человеку надо —
+   * заготовка у него на столе лежит в одну определённую сторону.
+   */
+  onlyRotated: boolean;
+  /** Чего не хватает по каждой стороне, мм. `null`, если хватает всего. */
+  shortByMm: { shortSide: number; longSide: number } | null;
+  /** Пара яруса как она напечатана в таблице: «52 × 74 mm». */
+  tierLabel: string;
+  /** Дословная формулировка яруса — идёт в интерфейс как есть. */
+  wording: string;
+};
+
+export function labelSizeVerdict(tier: SizeTier, widthMm: number, heightMm: number): LabelSizeVerdict {
+  const short = Math.min(widthMm, heightMm);
+  const long = Math.max(widthMm, heightMm);
+  const tShort = Math.min(tier.labelMinW, tier.labelMinH);
+  const tLong = Math.max(tier.labelMinW, tier.labelMinH);
+
+  const meetsSides = short >= tShort - SIZE_EPS_MM && long >= tLong - SIZE_EPS_MM;
+  const asDrawn = widthMm >= tier.labelMinW - SIZE_EPS_MM && heightMm >= tier.labelMinH - SIZE_EPS_MM;
+
+  const round = (n: number) => Math.round(n * 10) / 10;
+
+  return {
+    meetsSides,
+    breach: tier.labelSidesBinding && !meetsSides,
+    belowIfPossible: !tier.labelSidesBinding && !meetsSides,
+    onlyRotated: meetsSides && !asDrawn,
+    shortByMm: meetsSides
+      ? null
+      : { shortSide: round(Math.max(0, tShort - short)), longSide: round(Math.max(0, tLong - long)) },
+    tierLabel: `${tier.labelMinW} × ${tier.labelMinH} mm`,
+    wording: tier.labelSidesBinding
+      ? `at least ${tier.labelMinW} × ${tier.labelMinH} mm`
+      : `if possible, at least ${tier.labelMinW} × ${tier.labelMinH} mm`,
+  };
 }

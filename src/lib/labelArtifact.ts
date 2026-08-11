@@ -533,7 +533,22 @@ export type SizedLabelArtifact = LabelArtifact & {
     fits: boolean; // does all content fit within the chosen height at the legible minimum font?
     neededHeightMm: number; // minimum height (at the chosen width, min font) that fits everything
     pictogramMm: number; // pictogram side actually rendered (mm)
-    belowClpMin: boolean; // chosen size is below the CLP minimum for the tier
+    /**
+     * ⛔⛔ НЕ ИСПОЛЬЗОВАТЬ. Поле считается неверно и НИКЕМ не читается — оно и
+     * осталось только потому, что его никто не читает (session 65).
+     *
+     * Считается как `W < labelMinW || H < labelMinH`, и это неправда дважды:
+     * ① не признаёт альбомную ориентацию (105 × 74 — те же размеры, что
+     *    74 × 105: Table 1.3 даёт ПАРУ и не говорит, который из них ширина);
+     * ② объявляет нарушением недобор у яруса ≤ 3 л, где таблица говорит
+     *    «If possible, at least 52 × 74» — то есть минимума не устанавливает.
+     *
+     * ⚠ Правильный ответ даёт `labelSizeVerdict` из `src/lib/jurisdictions.ts`,
+     * и живой конструктор берёт его. Здесь же лежит ВТОРАЯ копия Table 1.3
+     * (`CLP_TIERS` ниже) — её и надо снести вместе с этим полем, когда до
+     * `labelArtifact` дойдут руки. Разбор: claude/label-size-table13.md.
+     */
+    belowClpMin: boolean;
     clpMinLabel: string; // e.g. "52 x 74 mm"
   };
 };

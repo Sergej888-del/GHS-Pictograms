@@ -182,6 +182,9 @@ async function fetchPStatementSitemapEntries(): Promise<
   const codes = res.data ?? [];
   return [
     { url: '/p-statements/', changefreq: 'weekly', priority: '0.9' },
+    // ⭐ Инструмент отбора. Приоритет как у хаба: страница отвечает на вопрос
+    // «какие из 117 нужны мне», который задают чаще, чем «что значит P280».
+    { url: '/p-statements/selector/', changefreq: 'weekly', priority: '0.9' },
     ...codes.map((c: { code: string }) => ({
       url: `/p-statements/${c.code}/`,
       changefreq: 'monthly',

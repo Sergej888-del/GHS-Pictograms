@@ -20,7 +20,7 @@ export const prerender = true
 import Layout from '../../../layouts/Layout.astro'
 import { SITE, TEMPLATES, faqJsonLd, breadcrumbJsonLd } from '../../../lib/labelMakerHub'
 import { LABEL_STOCK_ALL, stockSizeLabel, stockMm, SHEET_NAME, MM_PER_INCH } from '../../../lib/labelStock'
-import { CLP_SIZE_TIERS, requiredPictogramSideMm } from '../../../lib/jurisdictions'
+import { CLP_SIZE_TIERS, requiredPictogramSideMm, labelSizeVerdict } from '../../../lib/jurisdictions'
 import { labelMakerHref } from '../../../lib/labelMakerLink'
 // ⚠ Цвет карточки перелинковки берётся ИЗ АДРЕСА — одна карта
 // «раздел → цвет» на весь сайт, см. src/lib/sectionAccent.ts.
@@ -48,15 +48,23 @@ const canonical = `${SITE}/ghs-label-maker/templates/${tpl.slug}/`
 // калькулятор открывался пустым с 3 650 страниц.
 const toolHref = labelMakerHref({ stock: stock.id }) + '#build'
 
-// Ярусы CLP, которым формат удовлетворяет по площади (см. комментарий в
-// templates/index.astro — по обеим сторонам считать нельзя).
+// Ярусы CLP: у обязательных (> 3 л) — по сторонам, у «if possible» (≤ 3 л) —
+// наша прикидка по площади. Полный разбор в templates/index.astro.
 const area = mm.w * mm.h
 const short = Math.min(mm.w, mm.h)
-const tiers = CLP_SIZE_TIERS.map((t) => ({
-  tier: t,
-  fits: area >= t.labelMinW * t.labelMinH && short >= Math.min(t.labelMinW, t.labelMinH) / 2,
-  pictogramMm: Math.round(requiredPictogramSideMm(t) * 10) / 10,
-}))
+const tiers = CLP_SIZE_TIERS.map((t) => {
+  const v = labelSizeVerdict(t, mm.w, mm.h)
+  const byArea = area >= t.labelMinW * t.labelMinH && short >= Math.min(t.labelMinW, t.labelMinH) / 2
+  return {
+    tier: t,
+    /** Стороны яруса выдержаны — единственное, что можно назвать соответствием. */
+    meetsSides: v.meetsSides,
+    /** ⚠ Только у необязательного яруса: наша оценка по площади, не норма. */
+    byArea: !t.labelSidesBinding && !v.meetsSides && byArea,
+    verdict: v,
+    pictogramMm: Math.round(requiredPictogramSideMm(t) * 10) / 10,
+  }
+})
 
 const idx = TEMPLATES.findIndex((t) => t.slug === tpl.slug)
 const prev = TEMPLATES[(idx - 1 + TEMPLATES.length) % TEMPLATES.length]
@@ -164,7 +172,7 @@ const jsonLd = [
           <thead>
             <tr>
               <th scope="col">Container</th>
-              <th scope="col">Minimum label</th>
+              <th scope="col">Table 1.3 label size</th>
               <th scope="col">Pictogram side</th>
               <th scope="col">This format</th>
             </tr>
@@ -173,20 +181,33 @@ const jsonLd = [
             {tiers.map((t) => (
               <tr>
                 <td class="c-code">{t.tier.capacityLabel}</td>
-                <td class="c-code">{t.tier.labelMinW} × {t.tier.labelMinH} mm</td>
+                <td class="c-code">
+                  {t.tier.labelMinW} × {t.tier.labelMinH} mm
+                  {t.tier.labelSidesBinding ? '' : ' — if possible'}
+                </td>
                 <td class="c-code">{t.pictogramMm} mm</td>
-                <td class="c-code">{t.fits ? 'qualifies' : '—'}</td>
+                <td class="c-code">
+                  {t.meetsSides
+                    ? (t.verdict.onlyRotated ? 'qualifies (landscape)' : 'qualifies')
+                    : t.byArea
+                      ? '~ enough area'
+                      : '—'}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <p class="hub-fine">
-        Qualification is judged by label <em>area</em>, not by both sides independently — otherwise a
-        4 × 2 in label fails the ≤ 3 L tier because 50.8 mm is under 52 mm, while carrying half again the
-        prescribed area. A second check rejects narrow ribbons. The pictogram column already combines
-        both CLP rules: the side from Table 1.3 and the “at least one fifteenth of the minimum label area,
-        never below 1 cm²” requirement of Annex I §1.2.1, whichever is larger.
+        Read the two wordings apart: for packages over 3 litres Table 1.3 says “<em>at least</em>”, and
+        the format qualifies only when both dimensions are met — in either orientation, since the table
+        gives a pair of dimensions and never says which one is the width. For packages not exceeding
+        3 litres it says “<em>if possible</em>, at least 52 × 74”, which is a target rather than a
+        minimum; a 4 × 2 in label is 1.2 mm under on the short side while carrying half again the area,
+        so it is marked “~ enough area” — our assessment, not a compliance statement. Table 1.3 says
+        nothing about label <em>area</em> at all. The pictogram column does combine two real rules: the
+        side from Table 1.3 and the “at least one fifteenth of the minimum label area, never below 1 cm²”
+        requirement of Annex I §1.2.1, whichever is larger.
       </p>
     </div>
   </section>

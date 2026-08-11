@@ -278,6 +278,24 @@ const NO_ECHA_LEVEL_BUT_LEGITIMATE: Record<string, string> = {
 };
 
 /**
+ * То же поимённо, но для ПРОТОКОЛА, который читает посетитель сайта.
+ *
+ * ⚠⚠ ДВЕ ТАБЛИЦЫ НА ОДНО УТВЕРЖДЕНИЕ — ИСКЛЮЧЕНИЕ, А НЕ ОБРАЗЕЦ. Оправдано
+ * ровно тем, что у них разные читатели: русская объясняет решение разработчику
+ * и процитирована в `claude/p-precedence-engine.md`, английская идёт в
+ * интерфейс. Список закрытый, из пяти кодов, и меняется только вместе с
+ * версией методички ECHA. Заводить такую пару для строк, которые правятся
+ * часто, нельзя — они разойдутся молча.
+ */
+const NO_ECHA_LEVEL_BUT_LEGITIMATE_EN: Record<string, string> = {
+  P101: 'the general section of Annex IV (Consumer products) — the ECHA §7.3 tables grade hazard classes, and the general section is not among them',
+  P102: 'the general section of Annex IV (Consumer products) — same reason',
+  P103: 'the general section of Annex IV (Consumer products) — same reason',
+  P212: 'the Desensitised explosives class was introduced after ECHA guidance version 4.2 (March 2021)',
+  P503: 'for explosives ECHA lists only P501 in the Disposal column; there is no block for P503',
+};
+
+/**
  * ⭐ Старшинство по срочности — прямой пример ECHA §7.2:
  *
  *   «For a substance classified as acutely toxic and carcinogenic … P310 takes
@@ -581,8 +599,8 @@ function buildUnits(pairs: HazardPair[], audience: Audience, data: PrecedenceDat
         }
         existing.reasons.push({
           rule: 'duplicate',
-          text: `Та же фраза положена и по ${pair.classCode} ${pair.categoryCode || ''}`.trim(),
-          citation: 'CLP Annex IV, матрица',
+          text: `Also required by ${pair.classCode} ${pair.categoryCode || ''}`.trim(),
+          citation: 'CLP Annex IV, the precautionary matrix',
         });
         continue;
       }
@@ -604,8 +622,8 @@ function buildUnits(pairs: HazardPair[], audience: Audience, data: PrecedenceDat
             rule: pair.classCode === 'ANY' ? 'consumer-only' : 'matrix',
             text:
               pair.classCode === 'ANY'
-                ? 'Общий раздел Annex IV: применяется, когда товар поставляется населению'
-                : `Положена по ${pair.classCode} ${pair.categoryCode || ''}`.trim(),
+                ? 'General section of Annex IV — applies because the product is supplied to the general public'
+                : `Required by ${pair.classCode} ${pair.categoryCode || ''}`.trim(),
             citation: 'CLP Annex IV, chapeau: «All specific elements relating to particular hazard classes shall be used»',
           },
         ],
@@ -615,15 +633,15 @@ function buildUnits(pairs: HazardPair[], audience: Audience, data: PrecedenceDat
         unit.verdict = 'sds-only';
         unit.reasons.push({
           rule: 'sds-only',
-          text: `ECHA относит эту фразу к паспорту безопасности, а не к этикетке: ${lv.conditions[0] ?? ''}`.trim(),
+          text: `ECHA places this statement in the safety data sheet rather than on the label: ${lv.conditions[0] ?? ''}`.trim(),
           citation: 'ECHA Guidance on Labelling and Packaging v4.2, §7.3',
         });
       }
       if (lv.conditional) {
         unit.reasons.push({
           rule: 'ambiguous-level',
-          text: `Уровень зависит от условия — ${lv.conditional.best} или ${lv.conditional.worst}: ${lv.conditional.conditions.join(' | ')}`,
-          citation: 'ECHA Guidance v4.2, §7.3 — условие применения',
+          text: `The level depends on a condition ECHA leaves to you — ${lv.conditional.best} or ${lv.conditional.worst}: ${lv.conditional.conditions.join(' | ')}`,
+          citation: 'ECHA Guidance v4.2, §7.3 — conditions for use',
         });
       }
       units.set(code, unit);
@@ -645,7 +663,7 @@ function absorbComponents(units: PUnit[]): void {
     u.verdict = 'absorbed';
     u.reasons.push({
       rule: 'combo-absorbs',
-      text: `Уже напечатана внутри ${by} — пара считается одной фразой и рвать её нельзя`,
+      text: `Already printed inside ${by} — a combined statement counts as one statement and must not be split`,
       citation: 'ECHA Guidance v4.2, §7.2: «Such combined statements should be counted as one P-statement»',
     });
   }
@@ -672,8 +690,8 @@ function dropUngradedComponents(units: PUnit[], data: PrecedenceData): void {
     if (NO_ECHA_LEVEL_BUT_LEGITIMATE[u.code]) {
       u.reasons.push({
         rule: 'no-echa-level',
-        text: `Уровня у ECHA нет, но фраза законна: ${NO_ECHA_LEVEL_BUT_LEGITIMATE[u.code]}`,
-        citation: 'CLP Annex IV, часть 1',
+        text: `ECHA gives no level for this code, yet the statement is legitimate: ${NO_ECHA_LEVEL_BUT_LEGITIMATE_EN[u.code] ?? NO_ECHA_LEVEL_BUT_LEGITIMATE[u.code]}`,
+        citation: 'CLP Annex IV, Part 1',
       });
       continue;
     }
@@ -681,8 +699,8 @@ function dropUngradedComponents(units: PUnit[], data: PrecedenceData): void {
       u.verdict = 'dropped';
       u.reasons.push({
         rule: 'no-echa-level',
-        text: 'Компонент комбинированной фразы: у ECHA нет уровня для него отдельно, на этикетке печатается только собранная пара',
-        citation: 'ECHA Guidance v4.2, §7.3 — блоков на этот код в таблицах нет',
+        text: 'Component of a combined statement: ECHA grades no level for it on its own, and only the assembled combination is printed on the label',
+        citation: 'ECHA Guidance v4.2, §7.3 — the tables carry no block for this code',
       });
     }
   }
@@ -721,8 +739,8 @@ function applyOmissionRules(units: PUnit[]): void {
       u.verdict = 'omitted';
       u.reasons.push({
         rule: 'omit-if',
-        text: `Колонка 5 Annex IV разрешает снять, потому что на этикетке уже есть ${target}. Право, а не обязанность — можно вернуть.`,
-        citation: 'CLP Annex IV, колонка 5 (поправка ▼M12)',
+        text: `Column 5 of Annex IV allows this to be omitted because ${target} is already on the label. A permission, not an obligation — you can put it back.`,
+        citation: 'CLP Annex IV, column 5 (as amended by ▼M12)',
       });
       break;
     }
@@ -760,7 +778,7 @@ function applyMedicalLadder(units: PUnit[]): void {
       u.verdict = 'dropped';
       u.reasons.push({
         rule: 'ladder',
-        text: `Более срочная фраза того же пути уже выбрана — ${best.code}`,
+        text: `A more urgent statement for the same route of exposure is already selected — ${best.code}`,
         citation: 'ECHA Guidance v4.2, §7.2: «the most stringent P-statement should be selected»',
       });
     }
@@ -793,8 +811,8 @@ function checkCompanions(selected: PUnit[]): void {
       if (wanted.some((w) => onLabel.has(w))) continue;
       u.reasons.push({
         rule: 'needs-companion',
-        text: `ECHA даёт эту фразу «в сочетании с» ${wanted.join(' / ')}, а ни одной из них на этикетке нет. Проверьте: сама по себе она может быть непонятна.`,
-        citation: 'ECHA Guidance v4.2, §7.3 — условие «in combination with»',
+        text: `ECHA gives this statement “in combination with” ${wanted.join(' / ')}, and none of those is on the label. Check it: on its own it may not make sense.`,
+        citation: 'ECHA Guidance v4.2, §7.3 — the “in combination with” condition',
       });
     }
   }
@@ -852,8 +870,8 @@ function rankUnits(units: PUnit[], audience: Audience): void {
     if (disposal) {
       disposal.reasons.push({
         rule: 'anchor-disposal',
-        text: 'Закреплена законом: при поставке населению одна фраза про утилизацию обязана быть на этикетке',
-        citation: 'CLP ст. 28(2)',
+        text: 'Anchored by law: where the product is supplied to the general public, one disposal statement must appear on the label',
+        citation: 'CLP Art. 28(2)',
       });
       pins.push({ unit: disposal, order: 0 });
     }
@@ -862,8 +880,8 @@ function rankUnits(units: PUnit[], audience: Audience): void {
     if (p102) {
       p102.reasons.push({
         rule: 'anchor-disposal',
-        text: '⚠ Закреплена НАШИМ решением, а не регламентом: в Annex IV «Keep out of reach of children» стоит с условием применения «Consumer products», а не с обязанностью. Шкалы важности у общего раздела нет, поэтому без закрепа фраза уезжала в конец списка. Снять можно.',
-        citation: 'CLP Annex IV, часть 1, раздел общих фраз (условие применения «Consumer products»)',
+        text: '⚠ Anchored by OUR decision, not by the regulation. In Annex IV “Keep out of reach of children” carries a condition for use (“Consumer products”), not an obligation, and the general section has no ECHA importance scale at all — so without this anchor the statement drifted to the bottom of the list, behind storage advice. Market practice is the basis here, not the regulation. You can unpin it.',
+        citation: 'CLP Annex IV, Part 1, general statements (condition for use: “Consumer products”)',
       });
       pins.push({ unit: p102, order: 1 });
     }
@@ -894,9 +912,9 @@ function rankUnits(units: PUnit[], audience: Audience): void {
     u.reasons.push({
       rule: 'level',
       text: u.level
-        ? `Уровень ECHA: ${u.level}; закрывает опасностей: ${u.hazards.length}`
-        : `Уровня у ECHA нет; закрывает опасностей: ${u.hazards.length}`,
-      citation: 'ECHA Guidance v4.2, §7.3 + CLP ст. 28(1)',
+        ? `ECHA level: ${u.level}; covers ${u.hazards.length} of this product's hazards`
+        : `ECHA gives no level; covers ${u.hazards.length} of this product's hazards`,
+      citation: 'ECHA Guidance v4.2, §7.3 + CLP Art. 28(1)',
     });
   });
 }
@@ -933,8 +951,8 @@ export function derogationsFor(pairs: HazardPair[], containerMl: number | undefi
       threshold: 125,
       allows: 'h-and-p',
       classes: hp,
-      text: 'Тара ≤ 125 мл: для этих классов H- и P-фразы можно не печатать. ⚠ Право, а не обязанность.',
-      citation: 'CLP Annex I §1.5.2.1.1 (через ст. 29(2))',
+      text: 'Package of 125 ml or less: for these hazard classes the hazard and precautionary statements may be omitted. A permission, not an obligation.',
+      citation: 'CLP Annex I §1.5.2.1.1 (via Art. 29(2))',
     });
   }
   const po = hit(DEROGATION_125_P_ONLY);
@@ -944,7 +962,7 @@ export function derogationsFor(pairs: HazardPair[], containerMl: number | undefi
       threshold: 125,
       allows: 'p-only',
       classes: po,
-      text: 'Тара ≤ 125 мл: для этих классов можно не печатать P-фразы (H-фразы остаются).',
+      text: 'Package of 125 ml or less: for these hazard classes the precautionary statements may be omitted (hazard statements stay).',
       citation: 'CLP Annex I §1.5.2.1.2',
     });
   }
@@ -955,7 +973,7 @@ export function derogationsFor(pairs: HazardPair[], containerMl: number | undefi
       threshold: 125,
       allows: 'pictogram-signal-h-p',
       classes: all,
-      text: 'Тара ≤ 125 мл, коррозия к металлам: можно снять пиктограмму, сигнальное слово, H- и P-фразу.',
+      text: 'Package of 125 ml or less, corrosive to metals: the pictogram, signal word, hazard statement and precautionary statement may all be omitted.',
       citation: 'CLP Annex I §1.5.2.1.3',
     });
   }
@@ -965,7 +983,7 @@ export function derogationsFor(pairs: HazardPair[], containerMl: number | undefi
       threshold: 10,
       allows: 'article-17-elements',
       classes: pairs,
-      text: 'Внутренняя тара ≤ 10 мл при поставке дистрибьютору: элементы ст. 17 можно снять при условиях §1.5.2.4.',
+      text: 'Inner packaging of 10 ml or less supplied to a distributor: the Article 17 elements may be omitted under the conditions of §1.5.2.4.',
       citation: 'CLP Annex I §1.5.2.4',
     });
   }
@@ -1049,12 +1067,12 @@ export function selectPStatements(input: PrecedenceInput, data: PrecedenceData):
   );
   if (ungraded.length) {
     notes.push(
-      `У ${ungraded.map((p) => `${p.classCode} ${p.categoryCode}`.trim()).join(', ')} шкалы важности ECHA нет: методичка версии 4.2 (март 2021) старше этих классов. Отбор для них опирается только на Annex IV и статью 28.`,
+      `${ungraded.map((p) => `${p.classCode} ${p.categoryCode}`.trim()).join(', ')} has no ECHA importance scale: guidance version 4.2 (March 2021) predates the class. For it the selection rests on Annex IV and Article 28 alone.`,
     );
   }
   for (const a of resolved.ambiguity) {
     notes.push(
-      `${a.hCode} читается по-разному (${a.candidates.map((c) => `${c.classCode} ${c.categoryCode}`.trim()).join(' / ')}), и наборы фраз у прочтений расходятся. Взято объединение — проверьте, какая категория ваша.`,
+      `${a.hCode} can be read as more than one class (${a.candidates.map((c) => `${c.classCode} ${c.categoryCode}`.trim()).join(' / ')}), and the readings give different sets of statements. The union was taken — check which category is actually yours.`,
     );
   }
 
@@ -1070,8 +1088,8 @@ export function selectPStatements(input: PrecedenceInput, data: PrecedenceData):
   const limit = Math.max(1, Math.min(statutory, fit));
   const limitReason =
     fit < statutory
-      ? `Ограничивает размер этикетки: по замеру помещается ${fit}, а не ${statutory}. ⚠ Считалось по самому тесному языку — ст. 17(2) требует одинаковых сведений во всех языках.`
-      : `Потолок статьи 28(3): не более ${statutory} фраз, «unless necessary to reflect the nature and the severity of the hazards».`;
+      ? `Label size is the constraint: the measurement fits ${fit} statements, not ${statutory}. Measured on the tightest language on the label — Art. 17(2) requires the same information in every language.`
+      : `Article 28(3) ceiling: no more than ${statutory} statements, “unless necessary to reflect the nature and the severity of the hazards”.`;
 
   const live = units.filter((u) => u.verdict === 'selected').sort((a, b) => a.rank - b.rank);
   const selected = live.slice(0, limit);
@@ -1079,7 +1097,7 @@ export function selectPStatements(input: PrecedenceInput, data: PrecedenceData):
     u.verdict = 'dropped';
     u.reasons.push({
       rule: 'limit',
-      text: `Не поместилась в лимит ${limit}. ⭐ Уходит в паспорт безопасности — так предписывает ECHA, а не мы.`,
+      text: `Did not fit within the limit of ${limit}. It moves to the safety data sheet — that is ECHA's instruction, not our choice.`,
       citation: 'ECHA Guidance v4.2, §7.2: «The de-selected statements can be introduced under the relevant headings of the SDS»',
     });
   }
@@ -1102,7 +1120,7 @@ export function selectPStatements(input: PrecedenceInput, data: PrecedenceData):
   );
   if (ungradedPushedOut.length) {
     notes.push(
-      `Не попали на этикетку из-за отсутствия шкалы, а не из-за неважности: ${ungradedPushedOut.map((u) => u.code).join(', ')}. Методичка ECHA §7.3 разбирает классы опасности и общий раздел Annex IV не оценивает, поэтому ранг у этих фраз нулевой. ⚠ Для товара населению это стоит проверить руками — особенно P102 «Keep out of reach of children».`,
+      `Left off the label for want of a scale, not for want of importance: ${ungradedPushedOut.map((u) => u.code).join(', ')}. ECHA guidance §7.3 grades hazard classes and does not assess the general section of Annex IV at all, so these statements rank zero. Worth checking by hand for a consumer product — P102 “Keep out of reach of children” above all.`,
     );
   }
 

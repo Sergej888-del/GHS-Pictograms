@@ -291,6 +291,24 @@ const CARDS = [
         ))}
       </div>
 
+      {/* ⭐⭐ ВХОД В ИНСТРУМЕНТ ОТБОРА — ВЫШЕ СПИСКА ИЗ 117 КОДОВ.
+          Хаб отвечает на вопрос «что означает P280». Человек, который сюда
+          пришёл, чаще спрашивает другое: «какие из этих 117 нужны МНЕ». Пока
+          ответа на второй вопрос на странице не было, он уходил листать
+          список — то есть решал задачу отбора глазами. Session 65. */}
+      <a class="p-sel-band" href="/p-statements/selector/">
+        <span class="p-sel-txt">
+          <span class="p-sel-eyebrow">Free tool</span>
+          <span class="p-sel-h">Which of these {TOTAL} does your label need?</span>
+          <span class="p-sel-copy">
+            Give it a classification and it works through Annex IV, ECHA’s importance scale and
+            Article 28 — then shows the rule and the source behind every statement it keeps and
+            every one it drops, including where the reason is a judgement rather than the regulation.
+          </span>
+        </span>
+        <span class="p-sel-go">Open the selector →</span>
+      </a>
+
       {/* A4. ⚠⚠ До session 52 на этом хабе не было ни одной ссылки в
           конструктор, кроме навигационных из шапки и подвала. */}
       <LabelMakerCta
@@ -743,3 +761,30 @@ const CARDS = [
     }
   </script>
 </Layout>
+
+<style>
+  /* ── Вход в инструмент отбора P-фраз (session 65) ─────────────────────── */
+  .p-sel-band {
+    display: flex; gap: 20px; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; margin: 24px 0 0; padding: 20px 24px;
+    background: linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%);
+    border: 1px solid #bfdbfe; border-radius: 16px;
+    text-decoration: none; transition: border-color .15s ease, transform .15s ease;
+  }
+  .p-sel-band:hover { border-color: #062A78; transform: translateY(-1px); }
+  .p-sel-txt { display: block; max-width: 62ch; }
+  .p-sel-eyebrow {
+    display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: #2563eb; margin-bottom: 6px;
+  }
+  .p-sel-h { display: block; font-size: 19px; font-weight: 650; color: #0f172a; margin-bottom: 7px; }
+  .p-sel-copy { display: block; font-size: 14px; line-height: 1.65; color: #475569; }
+  .p-sel-go {
+    flex: 0 0 auto; background: #062A78; color: #fff; border-radius: 10px;
+    padding: 11px 18px; font-size: 14px; font-weight: 600; white-space: nowrap;
+  }
+  @media (max-width: 640px) {
+    .p-sel-band { padding: 18px; }
+    .p-sel-go { width: 100%; text-align: center; }
+  }
+</style>

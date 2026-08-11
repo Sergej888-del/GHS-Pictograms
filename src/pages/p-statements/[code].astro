@@ -367,6 +367,17 @@ const breadcrumbJson = JSON.stringify({
         )}
       </div>
 
+      {/* ⭐ Второй вопрос, который задаёт человек на странице кода: «а мне-то
+          он нужен?». Ответа на него страница дать не может — он зависит от
+          классификации, — но может отправить туда, где ответ считается.
+          Session 65. */}
+      <p class="p-need">
+        <b>Does your label need {p.code}?</b> That depends on the hazard classes of your product, on
+        whether it goes to the public or to professionals, and on what else is already on the label —
+        Annex IV column 5 lets one statement remove another.{' '}
+        <a href="/p-statements/selector/">Work it out from a classification →</a>
+      </p>
+
       {/* A4: единственный контекстный вход в конструктор с этой страницы. */}
       <LabelMakerCta title={lmCta.title} copy={lmCta.copy} cta={lmCta.cta} note={lmCta.note} params={lmCta.params} />
     </div>
@@ -653,3 +664,14 @@ const breadcrumbJson = JSON.stringify({
     })()
   </script>
 </Layout>
+
+<style>
+  /* ── Вход в инструмент отбора со страницы кода (session 65) ───────────── */
+  .p-need {
+    margin: 20px 0 0; padding: 14px 18px; border-radius: 12px;
+    background: #f8fafc; border: 1px solid #e2e8f0;
+    font-size: 14px; line-height: 1.65; color: #475569;
+  }
+  .p-need b { color: #0f172a; }
+  .p-need a { color: #062A78; font-weight: 600; }
+</style>

@@ -17,7 +17,7 @@ export const prerender = true
 import Layout from '../../../layouts/Layout.astro'
 import { SITE, TEMPLATES, TEMPLATE_BY_STOCK, breadcrumbJsonLd } from '../../../lib/labelMakerHub'
 import { stockFor, stockSizeLabel, stockMm, SHEET_NAME, type LabelStockItem } from '../../../lib/labelStock'
-import { CLP_SIZE_TIERS } from '../../../lib/jurisdictions'
+import { CLP_SIZE_TIERS, labelSizeVerdict } from '../../../lib/jurisdictions'
 // ⚠ Цвет карточки перелинковки берётся ИЗ АДРЕСА — одна карта
 // «раздел → цвет» на весь сайт, см. src/lib/sectionAccent.ts.
 import { withAccent, accentBadge } from '../../../lib/sectionAccent'
@@ -33,21 +33,38 @@ const eu = stockFor('eu')
 /**
  * Самый крупный ярус CLP, которому формат удовлетворяет.
  *
- * ⚠⚠ Годность считается ПО ПЛОЩАДИ, а не по обеим сторонам. Иначе привычная
- * 4 × 2 in (101.6 × 50.8 мм) не проходит ярус «≤ 3 л» — потому что 50.8 меньше
- * 52, — хотя площади в ней в полтора раза больше, чем в предписанных 52 × 74.
- * Вторая проверка отсекает узкие ленты: сторона не должна быть меньше половины
- * короткой стороны яруса.
+ * ⛔⛔ ПЕРЕПИСАНО В SESSION 65: ПРЕЖНИЙ РАСЧЁТ ОБЪЯВЛЯЛ ГОДНЫМ ТО, ЧТО ЗАКОН
+ * ЗАПРЕЩАЕТ. Он мерил ТОЛЬКО площадь («area >= labelMinW * labelMinH») и
+ * пропускал длинные узкие ленты через ярусы, где стороны обязательны: лента
+ * 210 × 40 мм давала площадь 8 400 против 7 770 у яруса «> 3–50 л» и
+ * помечалась годной для двадцатилитровой канистры — хотя короткая сторона 40 мм
+ * вдвое меньше предписанных 74. Это утверждение печаталось на 3 650 страницах.
+ *
+ * ⚠⚠ Table 1.3 говорит о ярусах РАЗНЫМИ словами, и расчёт обязан их различать:
+ *   ≤ 3 л  → «If possible, at least 52 × 74» — цель. Здесь прикидка по площади
+ *            уместна и честна: привычная 4 × 2 in (101,6 × 50,8) не добирает
+ *            1,2 мм по короткой стороне, но незаконной не является, а площади в
+ *            ней в полтора раза больше предписанных 52 × 74. Помечается «~».
+ *   > 3 л  → «At least 74 × 105» — норма. Только стороны, в любой ориентации.
+ *
+ * ⚠ Про площадь ЭТИКЕТКИ в Table 1.3 нет ни слова — площадь есть только у
+ * пиктограммы в §1.2.1.3. Поэтому «~» подписан как наша оценка, а не как
+ * соответствие.
  */
 function clpTierFor(s: LabelStockItem): string {
   const { w, h } = stockMm(s)
   const area = w * h
   const short = Math.min(w, h)
   const fits = CLP_SIZE_TIERS.filter((t) => {
-    const tShort = Math.min(t.labelMinW, t.labelMinH)
-    return area >= t.labelMinW * t.labelMinH && short >= tShort / 2
+    if (t.labelSidesBinding) return labelSizeVerdict(t, w, h).meetsSides
+    return area >= t.labelMinW * t.labelMinH && short >= Math.min(t.labelMinW, t.labelMinH) / 2
   })
-  return fits.length ? fits[fits.length - 1].capacityLabel : '—'
+  if (!fits.length) return '—'
+  const top = fits[fits.length - 1]
+  // «~» отличает нашу оценку по площади от выдержанных сторон.
+  return top.labelSidesBinding || labelSizeVerdict(top, w, h).meetsSides
+    ? top.capacityLabel
+    : `~ ${top.capacityLabel}`
 }
 
 const jsonLd = [

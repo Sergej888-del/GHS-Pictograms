@@ -1199,6 +1199,15 @@ export type CrossLink = { href: string; title: string; desc: string; kind: 'tool
 
 export const CROSS_LINKS: CrossLink[] = [
   {
+    // ⭐⭐ Инструмент отбора P-фраз стоит ПЕРВЫМ среди tool-карточек: из всего
+    // списка он единственный отвечает на вопрос, который возникает ВНУТРИ
+    // конструктора и который конструктор раньше решал как `slice(0, 6)`.
+    href: '/p-statements/selector/',
+    title: 'Which P-statements do you need?',
+    desc: 'Give it a classification and it selects the precautionary statements for the label — through Annex IV, ECHA’s importance scale and Article 28 — then shows the rule and the source behind every statement it keeps and every one it drops.',
+    kind: 'tool',
+  },
+  {
     href: '/pictogram-selector/',
     title: 'GHS Pictogram Selector',
     desc: 'Pick hazard classes and categories and get the correct pictograms, signal word and hazard statements for UN GHS, EU CLP, GB CLP and OSHA — with the CLP Article 26 precedence rules applied and explained.',
@@ -1237,7 +1246,7 @@ export const CROSS_LINKS: CrossLink[] = [
   {
     href: '/p-statements/',
     title: 'Precautionary statements (P)',
-    desc: 'All 117 P statements by category — prevention, response, storage, disposal — with the conditions of use that decide which ones belong on your label.',
+    desc: 'All 117 P statements by category — prevention, response, storage, disposal — with the conditions of use that decide which ones belong on your label, and a selector that works the choice out from a classification.',
     kind: 'hub',
   },
   {

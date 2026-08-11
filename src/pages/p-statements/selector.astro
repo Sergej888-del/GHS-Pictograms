@@ -1,0 +1,292 @@
+---
+/**
+ * Инструмент отбора P-фраз — /p-statements/selector/
+ *
+ * ⚠⚠ ЭТО НЕ ЕЩЁ ОДИН СПИСОК КОДОВ. Хаб `/p-statements/` отвечает на вопрос
+ * «что означает P280», а эта страница — на вопрос «какие из 117 нужны ИМЕННО
+ * МНЕ и почему». Второй вопрос задают чаще, а отвечает на него в интернете
+ * почти никто: ни UN GHS, ни CLP процедуры отбора не задают, и большинство
+ * инструментов молча печатает первые попавшиеся.
+ *
+ * ⭐⭐ ГЛАВНОЕ ОБЕЩАНИЕ СТРАНИЦЫ — ПРОТОКОЛ, А НЕ ОТВЕТ. Ответ без основания
+ * здесь ничего не стоит: раз процедуры нет, никакой ответ не может называться
+ * «правильным по CLP». Ценность в том, что у каждой оставленной и каждой
+ * выброшенной фразы видно правило и ссылка на первоисточник — и видно, где
+ * кончается регламент и начинается наше решение.
+ *
+ * ⚠ Перелинковка — часть задачи, а не украшение (решение Сергея, session 65):
+ * сюда ведут хаб P-фраз, страницы 117 кодов и конструктор; отсюда — обратно в
+ * конструктор с уже отобранным набором.
+ */
+export const prerender = true
+
+import Layout from '../../layouts/Layout.astro'
+import PStatementSelector from '../../components/PStatementSelector'
+import { supabase } from '../../lib/supabase'
+import { must } from '../../lib/mustQuery'
+import { EU_LANGUAGES } from '../../lib/labelLanguages'
+import { withAccent, accentBadge } from '../../lib/sectionAccent'
+
+const SITE = 'https://ghspictograms.com'
+const canonical = `${SITE}/p-statements/selector/`
+const title = 'Which P-Statements Do You Need? — CLP Selector with Reasoning'
+const description =
+  'Pick the precautionary statements for your label from a classification. Works through CLP Annex IV, ECHA’s importance scale and Article 28 — and shows the rule and the source behind every statement it keeps or drops.'
+
+/**
+ * ⚠⚠ ЧИСЛА БЕРУТСЯ ИЗ БАЗЫ, А НЕ НАБИРАЮТСЯ РУКАМИ. Они попадают в текст
+ * страницы («{matrixCount} matrix rows behind the answer»), и разойтись с
+ * содержимым инструмента им нельзя: набранная руками цифра переживёт данные,
+ * которые она описывает, и страница начнёт врать, оставаясь зелёной.
+ *
+ * ⚠ Отказ запроса роняет сборку (`must`), а не подставляет ноль: «0 rows»
+ * в этом абзаце читается как утверждение о данных, а не как сбой сети.
+ */
+async function countOf(table: string, column: string): Promise<number> {
+  const res = await supabase.from(table).select(column, { count: 'exact', head: true })
+  must(`p-statements/selector — count(${table})`, res)
+  return res.count ?? 0
+}
+
+const [pCount, comboCount, matrixCount, echaCount] = await Promise.all([
+  countOf('p_statements', 'code'),
+  countOf('p_statement_combinations', 'code'),
+  countOf('clp_matrix_full', 'p_code'),
+  countOf('echa_p_recommendation', 'rec_id'),
+])
+
+const TOTAL = pCount + comboCount
+
+/**
+ * ⭐ ИНСТРУКЦИЯ — ЧЕТЫРЕ ШАГА, И ЧЕТВЁРТЫЙ ВАЖНЕЕ ПЕРВЫХ ТРЁХ.
+ * Первые три — как получить ответ. Четвёртый — как его проверить, и без него
+ * инструмент превращается в оракула, которому верят на слово.
+ */
+const STEPS = [
+  {
+    n: '01',
+    title: 'Give it a classification',
+    body: 'A CAS number pulls the harmonised classification straight from CLP Annex VI. If you are labelling your own mixture — and most people are, since a mixture is never in Annex VI — tick the hazard statements instead. Signal word matters for five codes only (H240, H241, H242, H250, H280), and the tool says so rather than demanding it everywhere.',
+  },
+  {
+    n: '02',
+    title: 'Say who receives it and in what',
+    body: 'Supplying the general public is not a formatting choice: it makes a disposal statement compulsory under Art. 28(2), brings in the “Consumer products” section of Annex IV, and switches ECHA’s importance levels to a different column. Package capacity is used only to check the small-package derogations of Annex I §1.5.2 — at 125 mL and below some classes let you leave statements off entirely.',
+  },
+  {
+    n: '03',
+    title: 'Read the set — and the limit that shaped it',
+    body: 'Article 28(3) caps the label at six statements “unless necessary to reflect the nature and the severity of the hazards”. The tool shows which constraint produced the number you got. Combined statements such as P305+P351+P338 count as one and are never split — a half of a combined statement is a sentence that does not exist in CLP.',
+  },
+  {
+    n: '04',
+    title: 'Open “Why” on every line before you print',
+    body: 'This is the step that makes the tool worth using. Each statement carries the rule that put it there and the source it came from — and where the reason is our judgement rather than the regulation, it says so in those words. P102 “Keep out of reach of children” is pinned on consumer labels by our decision, not by CLP, and the reasoning line tells you that and tells you it can be unpinned.',
+  },
+]
+
+const HONESTY = [
+  {
+    q: 'Does this give me a legally correct set of statements?',
+    a: 'No tool can, and any tool that claims to is overselling. ECHA states it plainly in its own guidance: “Neither the UN GHS nor the CLP Regulation provides for clear-cut rules on how to select precautionary statements for the label” (Guidance on Labelling and Packaging, v4.2, §7.1). What this tool offers instead is a reproducible method and a written reason for every line, so a competent person can check the working rather than trust the output.',
+  },
+  {
+    q: 'Where do the rules come from?',
+    a: `Four sources, in this order. CLP Annex IV says which statements belong to which hazard class, and its column 5 says when one can be omitted because another is present. Article 28 sets the ceiling of six and makes a disposal statement compulsory for the general public. ECHA’s guidance §7.2–7.3 supplies the importance scale — mandatory, highly recommended, recommended, optional — and the rule that a combined statement counts as one. Annex I §1.5.2 grants the small-package derogations. That is ${matrixCount} matrix rows and ${echaCount} graded recommendations behind the answer.`,
+  },
+  {
+    q: 'What happens to the statements it drops?',
+    a: 'They go into the safety data sheet, not into the bin. That is ECHA’s own instruction: “The de-selected statements can be introduced under the relevant headings of the SDS.” The label is the short form; the SDS is the full one. Open the “Not on the label” panel to see each dropped statement with the rule that dropped it.',
+  },
+  {
+    q: 'Why does the number of statements sometimes drop below six?',
+    a: 'Because the label ran out of room, and Art. 17(2) requires the same information in every language on it. Six statements in English and four in Greek is not a label with a small compromise — it is a non-compliant label. So the measurement is taken on the tightest language first, and the limit becomes the smaller of six and what actually fits.',
+  },
+]
+
+const RELATED = [
+  {
+    href: '/p-statements/',
+    name: `All ${TOTAL} precautionary statements`,
+    desc: 'The reference hub: every code with the verbatim CLP wording, the combined codes decomposed, and a switch for CLP, OSHA HazCom and UN GHS status.',
+  },
+  {
+    href: '/ghs-label-maker/',
+    name: 'GHS label maker',
+    desc: `Lay the chosen statements out on a real label — ${EU_LANGUAGES.length} EU languages, four jurisdictions, size rules from CLP Annex I Table 1.3, vector PDF at full scale.`,
+  },
+  {
+    href: '/h-statements/',
+    name: 'Hazard statements',
+    desc: 'The other half of the classification. Precautionary statements follow from hazard classes, so this is where the input to this tool comes from.',
+  },
+  {
+    href: '/ghs-label-maker/templates/',
+    name: 'Label size templates',
+    desc: 'The sizes chemical labels are actually sold in, checked against the Table 1.3 tiers — including which tier is a requirement and which is only “if possible”.',
+  },
+]
+
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE}/` },
+      { '@type': 'ListItem', position: 2, name: 'Precautionary statements', item: `${SITE}/p-statements/` },
+      { '@type': 'ListItem', position: 3, name: 'Which ones do I need', item: canonical },
+    ],
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: HONESTY.map((f) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a },
+    })),
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: 'CLP precautionary statement selector',
+    url: canonical,
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Any',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' },
+    description,
+  },
+]
+---
+
+<Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
+  {jsonLd.map((block) => (
+    <script type="application/ld+json" slot="head" set:html={JSON.stringify(block)} />
+  ))}
+
+  <section class="hub-hero">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+    <div class="hub-wrap hub-hero-inner hub-hero-left">
+      <nav class="hub-crumb" aria-label="Breadcrumb">
+        <a href="/">Home</a><span class="sep">/</span>
+        <a href="/p-statements/">Precautionary statements</a><span class="sep">/</span>
+        <span>Which ones do I need</span>
+      </nav>
+      <p class="hub-hero-eyebrow">Free tool · selection with a written reason</p>
+      <h1>Which precautionary statements does your label need?</h1>
+      <p class="hub-hero-sub">
+        Give it a classification and it works through CLP Annex IV, ECHA’s importance scale and
+        Article 28 to a set that fits a label — then shows you the rule and the source behind every
+        statement it kept and every one it dropped. Including the places where the reason is our
+        judgement rather than the regulation.
+      </p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">{TOTAL} codes considered</span>
+        <span class="hub-hero-chip">{matrixCount} Annex IV rows</span>
+        <span class="hub-hero-chip">{echaCount} ECHA recommendations</span>
+        <span class="hub-hero-chip">No sign-up</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ⚠⚠ ИНСТРУМЕНТ ВЫШЕ ИНСТРУКЦИИ, И ЭТО ТО ЖЕ РЕШЕНИЕ, ЧТО В SESSION 47:
+       «ты не видишь инструмент, из-за этого мало кто доходит до глубоко
+       зарытого инструмента». Инструкция читается после первого ответа, а не
+       вместо него. -->
+  <section class="hub-sec-white" id="tool">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">01 · The tool</p>
+      <h2 class="hub-h2">Start from a classification</h2>
+      <p class="hub-sub">
+        Nothing is stored and nothing is sent anywhere — the selection runs in your browser against
+        a snapshot of the regulation data built into this page.
+      </p>
+      <div style="margin-top:24px">
+        <PStatementSelector client:load />
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">02 · How to use it</p>
+      <h2 class="hub-h2">Four steps, and the fourth is the point</h2>
+      <p class="hub-sub">
+        The first three get you an answer. The fourth is how you check it — and on a safety label,
+        an unchecked answer is worth less than no answer at all.
+      </p>
+      <ol class="sel-steps">
+        {STEPS.map((s) => (
+          <li class="sel-step">
+            <span class="n">{s.n}</span>
+            <div>
+              <h3>{s.title}</h3>
+              <p>{s.body}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">03 · What this tool will not claim</p>
+      <h2 class="hub-h2">The limits, stated up front</h2>
+      <dl class="sel-faq">
+        {HONESTY.map((f) => (
+          <div class="sel-faq-item">
+            <dt>{f.q}</dt>
+            <dd>{f.a}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  </section>
+
+  <section class="hub-sec-b">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">04 · Where to go next</p>
+      <h2 class="hub-h2">Related pages</h2>
+      <div class="hub-index wide" style="margin-top:24px">
+        {RELATED.map((r) => (
+          <a class={withAccent('hub-index-card', r.href)} href={r.href}>
+            <span class="txt">
+              <span class="name">{r.name}</span>
+              <span class="cas">{r.desc}</span>
+            </span>
+            <span class="formula">{accentBadge(r.href)}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  /* ── Инструкция: нумерованные шаги ──────────────────────────────────── */
+  .sel-steps { list-style: none; margin: 24px 0 0; padding: 0; display: grid; gap: 14px; }
+  .sel-step {
+    display: flex; gap: 16px; align-items: flex-start;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 20px;
+  }
+  .sel-step .n {
+    flex: 0 0 auto; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 13px;
+    color: #062A78; background: #eff6ff; border: 1px solid #bfdbfe;
+    border-radius: 8px; padding: 6px 9px; line-height: 1;
+  }
+  .sel-step h3 { margin: 0 0 6px; font-size: 15px; font-weight: 650; color: #0f172a; }
+  .sel-step p { margin: 0; font-size: 14px; line-height: 1.65; color: #475569; }
+
+  /* ── Оговорки ───────────────────────────────────────────────────────── */
+  .sel-faq { margin: 24px 0 0; display: grid; gap: 12px; }
+  .sel-faq-item { border-left: 3px solid #bfdbfe; padding: 2px 0 2px 16px; }
+  .sel-faq dt { font-size: 15px; font-weight: 650; color: #0f172a; margin-bottom: 5px; }
+  .sel-faq dd { margin: 0; font-size: 14px; line-height: 1.65; color: #475569; }
+
+  @media (max-width: 640px) {
+    .sel-step { flex-direction: column; gap: 10px; padding: 16px; }
+  }
+</style>

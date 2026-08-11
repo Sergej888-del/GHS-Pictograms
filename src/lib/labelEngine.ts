@@ -14,8 +14,9 @@
 
 import {
   JURISDICTIONS, elementsFor, sizeTierForLitres, smallPackageRuleFor,
-  requiredPictogramSideMm,
+  requiredPictogramSideMm, labelSizeVerdict,
   type JurisdictionKey, type LabelPurpose, type LabelElement,
+  type LabelSizeVerdict,
 } from './jurisdictions';
 
 // ── Примитивы раскладки ─────────────────────────────────────────────────────
@@ -66,8 +67,19 @@ export type LabelFit = {
   pictogramMm: number;
   /** Требуемый регламентом минимум стороны пиктограммы; null — нормы нет. */
   requiredPictogramMm: number | null;
-  /** Заказанный размер меньше предписанного таблицей; null — таблицы нет. */
-  belowMinimum: boolean | null;
+  /**
+   * ⛔ НАРУШЕНИЕ Table 1.3. `null` — таблицы у юрисдикции нет (OSHA, WHMIS).
+   *
+   * ⚠⚠ ПЕРЕИМЕНОВАНО ИЗ `belowMinimum` В SESSION 65, И НЕ РАДИ КРАСОТЫ. Прежнее
+   * поле считалось как `W < labelMinW || H < labelMinH` и было неверно ДВАЖДЫ:
+   * не признавало альбомную ориентацию (105 × 74 — это те же размеры, что
+   * 74 × 105) и объявляло нарушением недобор у яруса ≤ 3 л, где таблица
+   * говорит «If possible», то есть минимума не устанавливает вовсе.
+   * Разбор: claude/label-size-table13.md.
+   */
+  sizeBreach: boolean | null;
+  /** Полный вердикт о размере против Table 1.3; null — таблицы нет. */
+  sizeVerdict: LabelSizeVerdict | null;
   minimumLabel: string | null;
   /** Кегль основного текста, мм. */
   bodyMm: number;
@@ -875,7 +887,12 @@ export function layoutLabel(input: LabelInput, opt: LabelOptions): LabelLayout {
     },
   ];
 
-  const belowMinimum = tier ? (W < tier.labelMinW - 0.5 || H < tier.labelMinH - 0.5) : null;
+  /**
+   * ⚠ Вердикт считается по ЗАКАЗАННЫМ W × H, а не по выросшей высоте. Если
+   * содержимое не влезло и этикетка вытянулась, печатать её всё равно будут на
+   * заготовке заказанного размера — и соответствие надо оценивать по ней.
+   */
+  const sizeVerdict = tier ? labelSizeVerdict(tier, W, H) : null;
 
   return {
     widthMm: W,
@@ -887,7 +904,8 @@ export function layoutLabel(input: LabelInput, opt: LabelOptions): LabelLayout {
       neededHeightMm: Math.ceil(atMin.height * 10) / 10,
       pictogramMm: Math.round(picFor(body) * 10) / 10,
       requiredPictogramMm: requiredPic ? Math.round(requiredPic * 10) / 10 : null,
-      belowMinimum,
+      sizeBreach: sizeVerdict ? sizeVerdict.breach : null,
+      sizeVerdict,
       minimumLabel: tier ? `${tier.labelMinW} × ${tier.labelMinH} mm` : null,
       bodyMm: Math.round(body * 100) / 100,
       autoBodyMm: Math.round(autoBodyMm * 100) / 100,
