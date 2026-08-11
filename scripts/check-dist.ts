@@ -161,6 +161,35 @@ function pageSlugs(relDir: string): string[] {
     .sort()
 }
 
+/**
+ * ⭐⭐ СТРАНИЦЫ РАЗДЕЛА, КОТОРЫЕ НЕ ЯВЛЯЮТСЯ КОДАМИ ФРАЗ.
+ *
+ * До session 65 всё, что лежало под `/p-statements/` и `/h-statements/`, было
+ * страницей кода, и проверка `p-pages` сравнивала набор папок с реестром базы
+ * напрямую. Появился инструмент `/p-statements/selector/` — и проверка честно
+ * покраснела: «лишние в dist (1): selector».
+ *
+ * ⚠⚠ СПИСОК ПОИМЁННЫЙ, А НЕ ПРАВИЛО ВРОДЕ «слаг не похож на код».
+ * Соблазн написать `!/^P\d+/.test(slug)` велик и опасен: такое правило заодно
+ * пропустит страницу кода, чьё имя собралось неверно, — то есть ровно тот
+ * дефект, ради которого проверка и заведена. Исключение обязано быть решением
+ * человека, записанным по имени, а не побочным следствием регулярки.
+ *
+ * ⚠ Добавляя сюда строку, проверь ДВЕ вещи: страница попала в sitemap
+ * (`p-sitemap` / `h-sitemap`) и на ней есть партнёрская карточка со СВОИМ
+ * `fp_sid` (см. `SINGLES` в `affiliate-placement`).
+ */
+const NON_CODE_PAGES: Record<string, string[]> = {
+  'p-statements': ['selector'],
+  'h-statements': [],
+}
+
+/** Слаги раздела фраз без страниц-инструментов. */
+function codeSlugs(relDir: string): string[] {
+  const skip = new Set(NON_CODE_PAGES[relDir] ?? [])
+  return pageSlugs(relDir).filter((s) => !skip.has(s))
+}
+
 let assetCache: { name: string; text: string }[] | null = null
 
 /** Содержимое dist/_astro/*.js — туда Astro может вынести обработанный <script>. */
@@ -2027,18 +2056,26 @@ const CHECKS: Check[] = [
     run: async () => {
       const codes = await pCodes()
       const expected = new Set(codes.map((c) => c.code))
-      const actual = new Set(pageSlugs('p-statements'))
+      const actual = new Set(codeSlugs('p-statements'))
       const { missing, extra } = diffSets(actual, expected)
       const ok = missing.length === 0 && extra.length === 0
       const detail: string[] = []
       if (missing.length) detail.push(`нет в dist (${missing.length}): ${preview(missing)}`)
       if (extra.length) detail.push(`лишние в dist (${extra.length}): ${preview(extra)}`)
       if (ok) detail.push('каждому коду соответствует ровно одна страница')
+      // ⚠⚠ ИСКЛЮЧЁННЫЕ ПЕРЕЧИСЛЕНЫ ВСЛУХ, А НЕ ВЫЧТЕНЫ МОЛЧА. Строка «исключено
+      // по решению» — это то, что человек обязан перечитать, когда список
+      // вырастет: молчаливое исключение через год перестанет быть решением и
+      // станет дырой, о которой никто не помнит.
+      const skipped = NON_CODE_PAGES['p-statements'] ?? []
+      if (skipped.length) {
+        detail.push(`исключено по решению (${skipped.length}, страницы-инструменты, не коды): ${skipped.join(', ')}`)
+      }
       return {
         id: 'p-pages',
         group: 'P-statements',
         ok,
-        headline: `${actual.size} страниц в dist, база ожидает ${expected.size}`,
+        headline: `${actual.size} страниц кодов в dist, база ожидает ${expected.size}`,
         detail,
       }
     },
@@ -2842,9 +2879,18 @@ const CHECKS: Check[] = [
       ]
       // Одиночные страницы — у них нет «раздела», но карточка на них тоже
       // обязана быть, и потерять её так же легко.
+      //
+      // ⚠⚠ У СТРАНИЦЫ-ИНСТРУМЕНТА СВОЙ `fp_sid`, А НЕ `fp_sid` ЕЁ РАЗДЕЛА.
+      // `/p-statements/selector/` лежит внутри раздела P-фраз, но приходят на
+      // неё с другим намерением: читатель кода уже знает, что ищет, а читатель
+      // селектора ещё выбирает набор для своей этикетки. Слепить их под одним
+      // `pstat` значит потерять именно то различие, ради которого subid и
+      // заводится. Поэтому она перечислена ЗДЕСЬ, а из обхода раздела
+      // исключена через `NON_CODE_PAGES`.
       const SINGLES: { rel: string; sid: string }[] = [
         { rel: 'tools/ate-mixture-calculator/index.html', sid: 'gpmgmt' },
         { rel: 'tools/chemical-storage-compatibility/index.html', sid: 'sttool' },
+        { rel: 'p-statements/selector/index.html', sid: 'pselect' },
       ]
 
       const problems: string[] = []
@@ -2855,7 +2901,9 @@ const CHECKS: Check[] = [
       for (const s of SECTIONS) {
         const marker = `fp_sid=${s.pageSid}`
         assertAscii('affiliate-placement', [marker])
-        const slugs = pageSlugs(s.dir)
+        // ⚠ Страницы-инструменты раздела считаются отдельно, в SINGLES: у них
+        // свой subid, и требовать от них subid раздела было бы неверно.
+        const slugs = codeSlugs(s.dir)
         if (slugs.length === 0) {
           problems.push(`${s.dir}: в dist нет ни одной страницы раздела`)
           continue

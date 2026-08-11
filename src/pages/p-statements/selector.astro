@@ -26,6 +26,9 @@ import { supabase } from '../../lib/supabase'
 import { must } from '../../lib/mustQuery'
 import { EU_LANGUAGES } from '../../lib/labelLanguages'
 import { withAccent, accentBadge } from '../../lib/sectionAccent'
+// ⚠⚠ Партнёрская карточка — только этим компонентом; разметку ссылки он держит
+// сам, и её проверяет группа Affiliate в check:dist.
+import SdsManagerCard from '../../components/SdsManagerCard.astro'
 
 const SITE = 'https://ghspictograms.com'
 const canonical = `${SITE}/p-statements/selector/`
@@ -228,6 +231,24 @@ const jsonLd = [
           </li>
         ))}
       </ol>
+
+      {/* ⚠⚠ Партнёрская карточка — ТОЛЬКО компонентом: rel="sponsored nofollow
+          noopener", target, дисклоуз и разметка зашиты в него, и их проверяет
+          группа Affiliate в check:dist. Руками такую ссылку не писать.
+
+          ⚠ Свой `fp_sid=pselect`, а НЕ `pstat` раздела. Человек здесь пришёл с
+          другим намерением, чем читатель страницы кода: тот уже знает, что
+          ищет, этот ещё собирает набор для своей этикетки. Слепить их под одним
+          subid значит потерять именно то различие, ради которого subid и
+          заводится. Отсюда же отдельная строка в SINGLES проверки.
+
+          ⚠ Стоит ПОСЛЕ инструкции, а не до неё: место, где человек уже понял,
+          что отбор делается на каждый продукт заново. */}
+      <SdsManagerCard
+        service="authoring"
+        body={`This works out one label at a time, and that is the honest limit of a free tool. Across a product line the same work repeats: Annex IV assigns a set from each classification, the blanks in ${TOTAL} statements have to be filled per product, and the wording then has to agree between the label and the safety data sheet in every language the product is sold in. For doing that once rather than per product, the solution we recommend is SDS Manager (ExactSDS). It also offers SDS management and a broader EHS suite.`}
+        href="https://sdsmanager.com/us/sds-authoring?fpr=ghs3&fp_sid=pselect"
+      />
     </div>
   </section>
 
