@@ -134,6 +134,26 @@ export type PrecedenceData = {
   combos: ComboRow[];
   echa: EchaRow[];
   hazardIndex: HazardIndexRow[];
+  /**
+   * ⭐⭐ ВСЕ КОДЫ, КОТОРЫМ ECHA ДАЁТ УРОВЕНЬ ХОТЬ ГДЕ-ТО. Замер session 66: 82.
+   *
+   * ⚠⚠ ПОЛЕ ОБЯЗАТЕЛЬНОЕ, И ВЫЧИСЛЯТЬ ЕГО ИЗ `echa` НЕЛЬЗЯ. Это утверждение обо
+   * ВСЕЙ методичке, а `echa` может быть подмножеством: снимок для проверки
+   * (`scripts/fixtures/p-precedence.json`) держит строки только тех классов,
+   * которые нужны трём подопытным веществам. Вывод «этого кода у ECHA нет
+   * нигде» из такого куска был бы ложью — и, что хуже, ложью МОЛЧАЛИВОЙ:
+   * движок вернул бы меньше фраз, ничего не сказав, а проверка осталась бы
+   * зелёной, потому что гоняет тот же обрезанный кусок.
+   *
+   * Отсюда правило: список приходит снаружи, из ПОЛНОЙ таблицы, и одинаково —
+   * и в сборку (`src/pages/data/p-precedence.json.ts`), и в снимок проверки.
+   * Тогда прод и проверка идут одной дорогой.
+   *
+   * ⚠ «Даёт уровень» = у кода есть хоть одна строка `echa_p_recommendation`.
+   * Замер: 82 кода и через блоки, и через блоки с охватом — расхождения нет,
+   * блоков без охвата ноль.
+   */
+  gradedCodes: string[];
   /** Тексты фраз для показа. Код без текста в протокол попадает, на этикетку — нет. */
   text?: Record<string, string>;
 };
@@ -179,7 +199,8 @@ export type ProtocolLine = {
     | 'matrix'          // фраза положена по Annex IV
     | 'consumer-only'   // раздел Annex IV «Consumer products»
     | 'combo-absorbs'   // компонент поглощён своей парой
-    | 'no-echa-level'   // у ECHA уровня нет
+    | 'no-echa-level'   // у ECHA уровня нет ВООБЩЕ — код живёт только внутри пары
+    | 'ungraded-here'   // ⭐ уровень у кода есть, но не для ЭТОГО класса
     | 'omit-if'         // колонка 5: убрать, если есть другая фраза
     | 'duplicate'       // та же фраза от нескольких опасностей
     | 'ladder'          // старшинство по срочности (P310 › P311 › P312 › P313)
@@ -266,28 +287,22 @@ export type PrecedenceResult = {
  * она перечисляет только собранную пару.
  *
  * ⚠ Но кодов без уровня в матрице 43, а компонентов среди них 38. Оставшиеся
- * ПЯТЬ — законные кандидаты, и выбросить их значит потерять фразу. Причина
- * отсутствия у каждого своя, и ни одна не означает «не печатать»:
+ * ПЯТЬ — законные кандидаты, и выбросить их значит потерять фразу.
+ *
+ * Причина отсутствия у каждого своя, и ни одна не означает «не печатать»:
+ * `P101`–`P103` — общий раздел Annex IV, а §7.3 разбирает классы опасности;
+ * `P212` — класс Desensitised explosives введён после версии 4.2 методички
+ * (март 2021); `P503` — у взрывчатых в колонке Disposal ECHA держит только
+ * `P501`.
+ *
+ * ⚠⚠ ТАБЛИЦА ОДНА, И ОНА ПО-АНГЛИЙСКИ. До session 66 их было две — русская для
+ * разработчика и английская для протокола, — а строка протокола читала русскую
+ * ЗАПАСНЫМ ВАРИАНТОМ: `EN[code] ?? RU[code]`. Промах ключа в английской таблице
+ * не упал бы, а выдал бы посетителю русский текст на английской странице.
+ * Замер: русская таблица весила 228 символов кириллицы в бандле, который едет
+ * в браузер. Объяснение разработчику — комментарий выше, а не данные.
  */
 const NO_ECHA_LEVEL_BUT_LEGITIMATE: Record<string, string> = {
-  P101: 'общий раздел Annex IV (Consumer products) — таблицы ECHA §7.3 разбирают классы, а не общий раздел',
-  P102: 'общий раздел Annex IV (Consumer products) — то же',
-  P103: 'общий раздел Annex IV (Consumer products) — то же',
-  P212: 'класс Desensitised explosives введён после версии 4.2 методички ECHA (март 2021)',
-  P503: 'взрывчатые: у ECHA в колонке Disposal стоит только P501, блока на P503 нет',
-};
-
-/**
- * То же поимённо, но для ПРОТОКОЛА, который читает посетитель сайта.
- *
- * ⚠⚠ ДВЕ ТАБЛИЦЫ НА ОДНО УТВЕРЖДЕНИЕ — ИСКЛЮЧЕНИЕ, А НЕ ОБРАЗЕЦ. Оправдано
- * ровно тем, что у них разные читатели: русская объясняет решение разработчику
- * и процитирована в `claude/p-precedence-engine.md`, английская идёт в
- * интерфейс. Список закрытый, из пяти кодов, и меняется только вместе с
- * версией методички ECHA. Заводить такую пару для строк, которые правятся
- * часто, нельзя — они разойдутся молча.
- */
-const NO_ECHA_LEVEL_BUT_LEGITIMATE_EN: Record<string, string> = {
   P101: 'the general section of Annex IV (Consumer products) — the ECHA §7.3 tables grade hazard classes, and the general section is not among them',
   P102: 'the general section of Annex IV (Consumer products) — same reason',
   P103: 'the general section of Annex IV (Consumer products) — same reason',
@@ -670,19 +685,62 @@ function absorbComponents(units: PUnit[]): void {
 }
 
 /**
- * ⭐⭐ Компонент пары без своего уровня у ECHA — не кандидат на этикетку.
+ * ⭐⭐ Компонент пары, которого у ECHA НЕТ ВООБЩЕ, — не кандидат на этикетку.
  *
- * ECHA не завела ни одного блока на 23 кода: `P301`, `P302`, `P303`, `P304`,
+ * ECHA не завела ни одного блока на 38 кодов: `P301`, `P302`, `P303`, `P304`,
  * `P305`, `P306`, `P308`, `P313`, `P332`…`P342`, `P351`…`P362`. Это не пропуск
  * разбора: в таблицах §7.3 перечислена только собранная пара. Значит одиночный
  * `P304` на этикетке — фраза, которую методичка не предполагает.
  *
  * ⚠ Исключения перечислены поимённо в `NO_ECHA_LEVEL_BUT_LEGITIMATE` — см.
  * комментарий там. Без них терялись бы `P101`, `P102`, `P103`, `P212`, `P503`.
+ *
+ * ⛔⛔ И ГЛАВНОЕ РАЗЛИЧЕНИЕ, КОТОРОГО ЗДЕСЬ НЕ БЫЛО ДО SESSION 66.
+ *
+ * `u.level === null` и «у ECHA нет блока на этот код» — РАЗНЫЕ УТВЕРЖДЕНИЯ.
+ * Первое означает «нет уровня для ЭТОГО класса и категории», второе — «нет
+ * нигде». Правило session 64 проверяло первое, а говорило второе, и выбрасывало
+ * фразы, которых Annex IV требует прямым текстом.
+ *
+ * Мерка session 66: компонентов пар в матрице **47**. У **38** уровня нет нигде
+ * — для них вывод верен. У остальных **девяти** (`P233`, `P235`, `P310`, `P311`,
+ * `P312`, `P330`, `P331`, `P403`, `P410`) уровень у ECHA ЕСТЬ, просто для других
+ * классов. По ним правило било мимо на **54 сочетаниях «класс + категория»**, из
+ * которых на **18** фразу не подхватывала и своя пара, то есть она пропадала с
+ * этикетки совсем. В базе это **481 вещество**, из них 443 — на одном `P330`.
+ *
+ * Худший случай, найденный прогоном нитробензола:
+ *
+ *   Annex I, таблица 3.1.1, Precautionary Statement Response (oral):
+ *     кат. 1 · 2 · 3 → `P301 + P310`, `P321`, **`P330`**
+ *     кат. 4        → `P301 + P312`, **`P330`**
+ *
+ * `P330` «Rinse mouth» положен ВСЕМ четырём категориям. ECHA §7.3 оценивает его
+ * только у категории 4 (`optional / label`). Старое правило выбрасывало фразу у
+ * категорий 1–3 — выходило, что при менее тяжёлом отравлении рот полоскать
+ * надо, а при более тяжёлом нет.
+ *
+ * ⭐⭐ ЧТО ДЕЛАЕМ. Молчание методички — не разрешение не печатать то, чего
+ * требует регламент. Методичка НИЖЕ регламента, а не выше. Фраза остаётся
+ * кандидатом с уровнем `null`: в ранжировании она весит ноль и встаёт ниже всех
+ * оценённых — это честно, потому что шкалы для неё у ECHA действительно нет.
+ *
+ * ⚠ Уровень соседней категории того же класса НЕ заимствуется. Соблазн есть
+ * (`P330` у кат. 4 = `optional`), но это была бы наша выдумка под видом факта
+ * ECHA. Решение — за человеком, и в протоколе прямо сказано, где методичка
+ * молчит.
+ *
+ * ⚠⚠ Список девяти кодов НЕ ЗАШИТ. Он выводится из `data.gradedCodes` — списка
+ * ВСЕЙ методички, который приходит снаружи. Зашитая копия разошлась бы с базой
+ * молча при следующей версии методички — ровно тот дефект, что ловили в
+ * session 39 со списком кодов знаков. Почему именно `gradedCodes`, а не
+ * `data.echa`, расписано у самого поля.
  */
 function dropUngradedComponents(units: PUnit[], data: PrecedenceData): void {
   const isComponent = new Set<string>();
   for (const c of data.combos) for (const x of c.components) isComponent.add(norm(x));
+
+  const gradedSomewhere = new Set(data.gradedCodes.map(norm));
 
   for (const u of units) {
     if (u.verdict !== 'selected') continue;
@@ -690,19 +748,45 @@ function dropUngradedComponents(units: PUnit[], data: PrecedenceData): void {
     if (NO_ECHA_LEVEL_BUT_LEGITIMATE[u.code]) {
       u.reasons.push({
         rule: 'no-echa-level',
-        text: `ECHA gives no level for this code, yet the statement is legitimate: ${NO_ECHA_LEVEL_BUT_LEGITIMATE_EN[u.code] ?? NO_ECHA_LEVEL_BUT_LEGITIMATE[u.code]}`,
+        text: `ECHA gives no level for this code, yet the statement is legitimate: ${NO_ECHA_LEVEL_BUT_LEGITIMATE[u.code]}`,
         citation: 'CLP Annex IV, Part 1',
       });
       continue;
     }
-    if (isComponent.has(u.code)) {
+    if (!isComponent.has(u.code)) continue;
+
+    if (!gradedSomewhere.has(u.code)) {
       u.verdict = 'dropped';
       u.reasons.push({
         rule: 'no-echa-level',
-        text: 'Component of a combined statement: ECHA grades no level for it on its own, and only the assembled combination is printed on the label',
-        citation: 'ECHA Guidance v4.2, §7.3 — the tables carry no block for this code',
+        text: 'Component of a combined statement: ECHA grades no level for it anywhere in §7.3 — only the assembled combination is printed on the label',
+        citation: 'ECHA Guidance v4.2, §7.3 — the tables carry no block for this code at all',
       });
+      continue;
     }
+
+    // ⭐⭐ Уровень есть, но не для нашего класса. Фраза остаётся.
+    const elsewhere = [
+      ...new Set(
+        data.echa
+          .filter((r) => norm(r.pCode) === u.code)
+          .map((r) => `${r.classCode} ${norm(r.categoryCode)}`.trim()),
+      ),
+    ].sort();
+    const shown = elsewhere.slice(0, 4).join(', ');
+    const rest = elsewhere.length > 4 ? ` and ${elsewhere.length - 4} more` : '';
+    // ⚠ `elsewhere` перечисляет только те классы, что есть в снимке. Пусто —
+    // значит снимок их не везёт; утверждение «ECHA оценивает код где-то»
+    // остаётся верным, оно стоит на `gradedCodes`, а не на этом перечне.
+    const where = elsewhere.length ? ` — for ${shown}${rest} —` : ' elsewhere in the guidance,';
+    u.reasons.push({
+      rule: 'ungraded-here',
+      text:
+        `Annex IV requires this statement for ${u.hazards.map((p) => `${p.classCode} ${p.categoryCode}`.trim()).join(', ')}. ` +
+        `ECHA §7.3 does grade this code${where} but carries no block for the class above, so it has no level here and ranks below every graded statement. ` +
+        `Kept rather than dropped: silence in the guidance is not permission to leave out what the regulation requires. Worth a look by hand.`,
+      citation: 'CLP Annex IV, chapeau + ECHA Guidance v4.2, §7.3 (no block for this hazard class)',
+    });
   }
 }
 
@@ -1035,6 +1119,23 @@ export function worstLanguageCapacity(
 // ── Общий вход ──────────────────────────────────────────────────────────────
 
 export function selectPStatements(input: PrecedenceInput, data: PrecedenceData): PrecedenceResult {
+  /**
+   * ⛔⛔ ПАДАЕМ ГРОМКО, А НЕ РАБОТАЕМ ТИХО. Без `gradedCodes` правило
+   * `dropUngradedComponents` не может отличить «у ECHA этого кода нет нигде» от
+   * «нет для этого класса» — и вернётся ровно к дефекту session 64, выбросив с
+   * этикетки фразы, которых Annex IV требует. Отказ видно сразу; молчаливо
+   * укороченный набор фраз не видно никогда.
+   *
+   * ⚠ ТЕКСТ ПО-АНГЛИЙСКИ: сообщение доезжает до посетителя дословно —
+   * `PStatementSelector` печатает его в блоке «The precedence data did not load».
+   */
+  if (!data.gradedCodes?.length) {
+    throw new Error(
+      'the snapshot carries no gradedCodes — the list of codes ECHA assigns a level to. ' +
+      'It was produced by an older build of /data/p-precedence.json.',
+    );
+  }
+
   const notes: string[] = [];
 
   const resolved = input.pairs?.length
@@ -1121,6 +1222,26 @@ export function selectPStatements(input: PrecedenceInput, data: PrecedenceData):
   if (ungradedPushedOut.length) {
     notes.push(
       `Left off the label for want of a scale, not for want of importance: ${ungradedPushedOut.map((u) => u.code).join(', ')}. ECHA guidance §7.3 grades hazard classes and does not assess the general section of Annex IV at all, so these statements rank zero. Worth checking by hand for a consumer product — P102 “Keep out of reach of children” above all.`,
+    );
+  }
+
+  /**
+   * ⛔⛔ ВТОРАЯ ЧЕСТНАЯ ОГОВОРКА — про дефект, найденный в session 66.
+   *
+   * Фразы, которых Annex IV требует, а методичка ECHA для этого класса не
+   * оценивает. До session 66 они молча выбрасывались; теперь остаются с нулевым
+   * весом. Нулевой вес — не «неважно», а «шкалы нет», и разница видна только
+   * если сказать её вслух.
+   */
+  const ungradedHere = units.filter((u) => u.reasons.some((r) => r.rule === 'ungraded-here'));
+  if (ungradedHere.length) {
+    const onLabel = ungradedHere.filter((u) => selected.includes(u)).map((u) => u.code);
+    const pushedOut = ungradedHere.filter((u) => !selected.includes(u)).map((u) => u.code);
+    notes.push(
+      `Required by Annex IV, ungraded by ECHA for this hazard class: ${ungradedHere.map((u) => u.code).join(', ')}. ` +
+        `The §7.3 tables grade these codes for other classes but carry no block for yours, so they rank last — that is the absence of a scale, not a judgement of importance. ` +
+        (onLabel.length ? `On the label: ${onLabel.join(', ')}. ` : '') +
+        (pushedOut.length ? `⚠ Pushed off the label by the limit: ${pushedOut.join(', ')} — check these by hand before you accept the set.` : ''),
     );
   }
 

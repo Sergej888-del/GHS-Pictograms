@@ -40,6 +40,7 @@ const RULE_TITLE: Record<ProtocolLine['rule'], string> = {
   'consumer-only': 'General section — consumer products',
   'combo-absorbs': 'Absorbed into a combined statement',
   'no-echa-level': 'No ECHA level',
+  'ungraded-here': 'Required by Annex IV, ungraded by ECHA for this class',
   'omit-if': 'Omitted under column 5',
   'duplicate': 'Required by more than one hazard',
   'ladder': 'Superseded by a more urgent statement',

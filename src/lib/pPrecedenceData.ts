@@ -18,8 +18,17 @@
  */
 import type { PrecedenceData } from './pPrecedence'
 
-/** Адрес снимка. ⚠ Задаётся файлом `src/pages/data/p-precedence.json.ts`. */
-export const P_PRECEDENCE_URL = '/data/p-precedence.json'
+/**
+ * Адрес снимка. ⚠ Задаётся файлом `src/pages/data/p-precedence.json.ts`.
+ *
+ * ⚠⚠ `?v=` — НЕ УКРАШЕНИЕ. Снимок отдаётся с `max-age=86400`, а ниже он
+ * читается с `cache: 'force-cache'`: у вернувшегося посетителя сутки лежит
+ * СТАРЫЙ файл. В session 66 в снимок добавилось поле `gradedCodes`, без
+ * которого движок отказывается работать, — и без смены адреса такой посетитель
+ * увидел бы сломанный инструмент до конца суток. Метку менять при КАЖДОМ
+ * изменении состава снимка.
+ */
+export const P_PRECEDENCE_URL = '/data/p-precedence.json?v=2'
 
 type Snapshot = {
   counts: Record<string, number>
@@ -29,6 +38,8 @@ type Snapshot = {
   combos: [string, string[]][]
   hidx: [string, string, string[], string | null][]
   text: [string, string][]
+  /** Коды, которым ECHA даёт уровень хоть где-то. См. `PrecedenceData.gradedCodes`. */
+  gradedCodes: string[]
 }
 
 export type PrecedenceBundle = {
@@ -60,6 +71,7 @@ function decode(raw: Snapshot): PrecedenceBundle {
       hazardIndex: raw.hidx.map((r) => ({
         classCode: r[0], categoryCode: r[1], hCodes: r[2], signalWord: r[3],
       })),
+      gradedCodes: raw.gradedCodes,
       text: Object.fromEntries(raw.text),
     },
   }
@@ -87,14 +99,36 @@ export function loadPrecedenceData(): Promise<PrecedenceBundle> {
      * ничего не сказав. Это ровно тот молчаливый отказ, ради которого
      * заводился `must()` в session 31.
      */
+    /**
+     * ⚠⚠ ВСЕ СООБЩЕНИЯ ЗДЕСЬ — ПО-АНГЛИЙСКИ, И ЭТО НЕ ВКУСОВЩИНА.
+     * `PStatementSelector` печатает `error.message` ДОСЛОВНО в блоке «The
+     * precedence data did not load» на английской странице. До session 66 тут
+     * лежала русская строка — посетитель увидел бы её как есть.
+     */
     if (!raw?.matrix?.length || !raw?.echa?.length || !raw?.hidx?.length) {
-      throw new Error(`${P_PRECEDENCE_URL}: снимок пуст или обрезан`)
+      throw new Error(`${P_PRECEDENCE_URL}: the snapshot is empty or truncated`)
     }
-    if (raw.counts?.matrix !== raw.matrix.length || raw.counts?.echa !== raw.echa.length) {
+    /**
+     * ⚠⚠ СНИМОК СТАРОЙ СБОРКИ. До session 66 поля `gradedCodes` не было, и без
+     * него движок не отличит «кода у ECHA нет нигде» от «нет для этого класса»
+     * — то есть выбросит с этикетки фразы, которых Annex IV требует. Отказать
+     * честнее, чем выдать укороченный набор: отказ виден, набор — нет.
+     */
+    if (!raw?.gradedCodes?.length) {
       throw new Error(
-        `${P_PRECEDENCE_URL}: счётчики не сходятся с содержимым ` +
-        `(matrix ${raw.counts?.matrix} против ${raw.matrix.length}, ` +
-        `echa ${raw.counts?.echa} против ${raw.echa.length}) — файл повреждён`,
+        `${P_PRECEDENCE_URL}: this snapshot came from an older build (no gradedCodes)`,
+      )
+    }
+    if (
+      raw.counts?.matrix !== raw.matrix.length ||
+      raw.counts?.echa !== raw.echa.length ||
+      raw.counts?.gradedCodes !== raw.gradedCodes.length
+    ) {
+      throw new Error(
+        `${P_PRECEDENCE_URL}: the row counts do not match the contents ` +
+        `(matrix ${raw.counts?.matrix} vs ${raw.matrix.length}, ` +
+        `echa ${raw.counts?.echa} vs ${raw.echa.length}, ` +
+        `gradedCodes ${raw.counts?.gradedCodes} vs ${raw.gradedCodes.length}) — the file is damaged`,
       )
     }
     return decode(raw)

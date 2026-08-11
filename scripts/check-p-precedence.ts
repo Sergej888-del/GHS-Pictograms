@@ -18,7 +18,19 @@ const data: PrecedenceData = {
   hazardIndex: raw.hidx.map((r: any[]) => ({
     classCode: r[0], categoryCode: r[1], hCodes: r[2], signalWord: r[3],
   })),
+  /**
+   * ⚠⚠ ПОЧЕМУ ЭТО ОТДЕЛЬНОЕ ПОЛЕ, А НЕ ВЫВОД ИЗ `echa` ВЫШЕ. Снимок УЗКИЙ: в
+   * нём строки лишь тех классов, что нужны трём подопытным веществам (103 из
+   * 749). Утверждение «этого кода у ECHA нет нигде» из такого куска — ложь, и
+   * ровно на ней стоял дефект session 64. Список идёт из ПОЛНОЙ таблицы, как в
+   * сборке, поэтому проверка и прод идут одной дорогой.
+   */
+  gradedCodes: raw.gradedCodes,
 };
+
+if (!Array.isArray(raw.gradedCodes) || raw.gradedCodes.length < 80) {
+  throw new Error(`снимок без gradedCodes или обрезан: ${raw.gradedCodes?.length}`);
+}
 
 let failed = 0;
 function check(name: string, cond: boolean, detail = '') {
@@ -69,6 +81,51 @@ check('P312 снят лестницей срочности в пользу P311'
   !!a.units.find((u) => u.code === 'P312')?.reasons.some((r) => r.rule === 'ladder'),
   JSON.stringify(a.units.find((u) => u.code === 'P312')?.verdict));
 check('класса ANY у профессионала нет', !a.units.some((u) => u.code === 'P102'));
+
+// ── 1b. ⛔⛔ ДЕФЕКТ SESSION 66: P330 у ACUTE_TOX_ORAL 3 ──────────────────────
+// Annex I, таблица 3.1.1, Precautionary Statement Response (oral):
+//   кат. 1 · 2 · 3 → P301 + P310, P321, P330
+//   кат. 4        → P301 + P312, P330
+// Фраза положена ВСЕМ четырём категориям. ECHA §7.3 оценивает её только у
+// категории 4 — и правило «компонент без уровня ECHA не кандидат» выбрасывало её
+// у категорий 1–3. Выходило, что при менее тяжёлом отравлении рот полоскать
+// надо, а при более тяжёлом нет. Замер: 481 вещество в базе, 443 из них на P330.
+//
+// ⚠ Эти пять проверок ПАДАЮТ на коде session 65 — прогнано.
+const p330 = a.units.find((u) => u.code === 'P330');
+check('P330 НЕ выброшен как «нет уровня у ECHA» (дефект session 66)',
+  !p330?.reasons.some((r) => r.rule === 'no-echa-level'),
+  JSON.stringify(p330?.reasons.map((r) => r.rule)));
+check('P330 остался кандидатом: вердикт не dropped по причине уровня',
+  p330?.verdict === 'selected' || p330?.reasons[p330.reasons.length - 1]?.rule === 'limit',
+  `${p330?.verdict} / ${p330?.reasons[p330.reasons.length - 1]?.rule}`);
+check('у P330 стоит причина ungraded-here',
+  !!p330?.reasons.some((r) => r.rule === 'ungraded-here'),
+  JSON.stringify(p330?.reasons.map((r) => r.rule)));
+const p330why = p330?.reasons.find((r) => r.rule === 'ungraded-here')?.text ?? '';
+check('в протоколе сказано, что молчание методички — не разрешение не печатать',
+  /Annex IV requires/.test(p330why) && /not permission/i.test(p330why), p330why.slice(0, 110));
+check('оговорка про ungraded-here попала в notes',
+  a.notes.some((n) => /ungraded by ECHA for this hazard class/.test(n)),
+  JSON.stringify(a.notes));
+
+// ⭐⭐ И ОБРАТНАЯ СТОРОНА: правило не должно затупиться. Кодов, которым ECHA не
+// даёт уровня НИГДЕ, — 38 (P301, P304, P313, P351…). Они по-прежнему уходят.
+check('P301 всё ещё не выходит на этикетку голым (ECHA не оценивает его нигде)',
+  !data.gradedCodes.includes('P301') && a.units.find((u) => u.code === 'P301')?.verdict !== 'selected',
+  a.units.find((u) => u.code === 'P301')?.verdict);
+const neverGraded = ['P301', 'P302', 'P304', 'P305', 'P313', 'P351', 'P340', 'P361', 'P364'];
+check('ни один из девяти «нигде не оценённых» кодов не попал в gradedCodes',
+  neverGraded.every((c) => !data.gradedCodes.includes(c)),
+  neverGraded.filter((c) => data.gradedCodes.includes(c)).join(','));
+// ⚠ Инвариант: причина `no-echa-level` со вердиктом `dropped` законна ТОЛЬКО у
+// кода, которого нет в gradedCodes. Иначе строка протокола говорит неправду.
+const lying = a.units.filter((u) =>
+  u.verdict === 'dropped' &&
+  u.reasons.some((r) => r.rule === 'no-echa-level') &&
+  data.gradedCodes.includes(u.code));
+check('нет ни одной фразы, выброшенной с ложной причиной «нет уровня нигде»',
+  lying.length === 0, lying.map((u) => u.code).join(','));
 
 // ── 2. Нитробензол, населению ───────────────────────────────────────────────
 const b = selectPStatements({ hCodes: NITRO, signalWord: 'Danger', audience: 'general_public', containerMl: 100 }, data);

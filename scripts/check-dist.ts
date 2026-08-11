@@ -5412,6 +5412,169 @@ const CHECKS: Check[] = [
     },
   },
   {
+    id: 'p-precedence-snapshot',
+    group: 'Движок P-фраз',
+    title: 'Снимок /data/p-precedence.json собран, сходится с базой и несёт gradedCodes',
+    run: async () => {
+      /**
+       * ⚠⚠ ЗАЧЕМ ЭТА ПРОВЕРКА. Session 65 завела эндпоинт, который собирает
+       * `/data/p-precedence.json` на КАЖДОЙ сборке, — и ни одна из 106 проверок
+       * его не смотрела. Файл не страница: он не попадает ни в `allPages()`, ни
+       * в sitemap, ни в обход ссылок. Обрежься он или соберись без поля —
+       * сборка зелёная, все проверки зелёные, а инструмент у посетителя молча
+       * отказывает. Ровно тот разряд дефекта, что в session 65 поймал `dist`:
+       * «новая вещь в разделе — это отдельные вопросы, и их забывают задать».
+       *
+       * ⭐⭐ И ГЛАВНОЕ: снимок сверяется С БАЗОЙ, а не сам с собой. Внутренняя
+       * согласованность счётчиков ловит порчу файла, но не ловит СТАРЫЙ файл,
+       * собранный до того, как в базу легли новые строки.
+       */
+      const rel = 'data/p-precedence.json'
+      const abs = join(DIST, rel)
+      if (!existsSync(abs)) {
+        return {
+          id: 'p-precedence-snapshot', group: 'Движок P-фраз', ok: false,
+          headline: `нет файла ${rel} — эндпоинт не отработал на сборке`,
+          detail: ['страница /p-statements/selector/ и панель «Why these ones?» покажут отказ загрузки'],
+        }
+      }
+
+      let snap: any
+      try {
+        snap = JSON.parse(readFileSync(abs, 'utf8'))
+      } catch (e) {
+        return {
+          id: 'p-precedence-snapshot', group: 'Движок P-фраз', ok: false,
+          headline: `${rel} не разбирается как JSON`,
+          detail: [String(e)],
+        }
+      }
+
+      const problems: string[] = []
+      const detail: string[] = []
+
+      // ① Счётчики против собственного содержимого — порча файла.
+      for (const [k, arr] of [
+        ['matrix', snap.matrix], ['echa', snap.echa], ['combos', snap.combos],
+        ['conditions', snap.conds], ['texts', snap.text], ['gradedCodes', snap.gradedCodes],
+      ] as [string, unknown[]][]) {
+        if (!Array.isArray(arr)) { problems.push(`нет массива ${k}`); continue }
+        if (snap.counts?.[k] !== arr.length) {
+          problems.push(`счётчик ${k}=${snap.counts?.[k]}, а в массиве ${arr.length}`)
+        }
+      }
+      if (snap.counts?.pairs !== snap.hidx?.length) {
+        problems.push(`счётчик pairs=${snap.counts?.pairs}, а в hidx ${snap.hidx?.length}`)
+      }
+
+      // ② Содержимое против БАЗЫ — старый или обрезанный снимок.
+      const [matrixRows, scopes, blocks, recs] = await Promise.all([
+        selectAll<{ class_code: string; category_code: string }>('clp_matrix_full', 'class_code, category_code'),
+        selectAll<{ table_id: number }>('echa_p_table_scope', 'table_id'),
+        selectAll<{ block_id: number; table_id: number; p_code: string }>('echa_p_block', 'block_id, table_id, p_code'),
+        selectAll<{ block_id: number }>('echa_p_recommendation', 'block_id'),
+      ])
+      const blockById = new Map(blocks.map((b) => [b.block_id, b]))
+      const scopeCount = new Map<number, number>()
+      for (const s of scopes) scopeCount.set(s.table_id, (scopeCount.get(s.table_id) ?? 0) + 1)
+
+      const echaExpected = recs.reduce((n, r) => {
+        const b = blockById.get(r.block_id)
+        return n + (b ? scopeCount.get(b.table_id) ?? 0 : 0)
+      }, 0)
+      const gradedExpected = new Set(
+        recs.map((r) => blockById.get(r.block_id)?.p_code).filter((c): c is string => !!c),
+      )
+      const pairsExpected = new Set(matrixRows.map((r) => `${r.class_code}|${r.category_code}`))
+
+      const vsBase: [string, number, number][] = [
+        ['matrix', snap.matrix?.length ?? -1, matrixRows.length],
+        ['echa', snap.echa?.length ?? -1, echaExpected],
+        ['echaRecommendations', snap.counts?.echaRecommendations ?? -1, recs.length],
+        ['pairs', snap.hidx?.length ?? -1, pairsExpected.size],
+        ['gradedCodes', snap.gradedCodes?.length ?? -1, gradedExpected.size],
+      ]
+      for (const [name, got, want] of vsBase) {
+        if (got !== want) problems.push(`${name}: в снимке ${got}, база ожидает ${want} — снимок собран не с этой базой`)
+      }
+      detail.push(`сверено с базой: ${vsBase.map(([n, , w]) => `${n} ${w}`).join(' · ')}`)
+
+      // ③ ⛔⛔ ДВА ПОЛЮСА ДЕФЕКТА SESSION 66 — счёт их не ловит.
+      // `P330` ECHA оценивает (у ACUTE_TOX_ORAL 4) — он ОБЯЗАН быть в списке,
+      // иначе движок снова выбросит «Rinse mouth» у категорий 1–3.
+      // `P301` ECHA не оценивает нигде — его в списке быть НЕ ДОЛЖНО, иначе
+      // правило затупится и на этикетку пойдёт голая часть пары.
+      const graded: string[] = Array.isArray(snap.gradedCodes) ? snap.gradedCodes : []
+      if (!graded.includes('P330')) problems.push('P330 нет в gradedCodes — вернётся дефект session 66')
+      if (graded.includes('P301')) problems.push('P301 попал в gradedCodes — правило «нет уровня нигде» затупилось')
+      if (graded.includes('P330') && !graded.includes('P301')) {
+        detail.push('полюса на месте: P330 в списке (ECHA оценивает у ACUTE_TOX_ORAL 4), P301 вне списка (не оценивает нигде)')
+      }
+      const gradedWrong = graded.filter((c) => !gradedExpected.has(c))
+      if (gradedWrong.length) problems.push(`в gradedCodes ${gradedWrong.length} кодов, которых база не даёт: ${gradedWrong.slice(0, 6).join(', ')}`)
+
+      /**
+       * ④ ⭐⭐ АДРЕС, ПО КОТОРОМУ ФАЙЛ ПРОСЯТ, И ФАЙЛ, КОТОРЫЙ СОБРАН.
+       *
+       * Тот же разряд, что дефект session 38 с `?cas=` против `?substance=`:
+       * ссылка синтаксически безупречна, файл существует, а инструмент пуст.
+       * С session 66 в адресе стоит метка `?v=`, чтобы старый снимок не лежал
+       * сутки в кэше посетителя, — и опечатка в ПУТИ рядом с меткой ничем бы
+       * себя не выдала.
+       */
+      const astro = join(DIST, '_astro')
+      const asked = new Set<string>()
+      const cyrillic: string[] = []
+      if (existsSync(astro)) {
+        for (const f of readdirSync(astro)) {
+          if (!f.endsWith('.js')) continue
+          const js = readFileSync(join(astro, f), 'utf8')
+          if (!js.includes('/data/p-precedence.json')) continue
+          for (const m of js.matchAll(/["'`](\/data\/p-precedence\.json[^"'`]*)["'`]/g)) asked.add(m[1])
+          /**
+           * ⛔⛔ КИРИЛЛИЦА В БАНДЛЕ ИНСТРУМЕНТА — ЭТО ТЕКСТ, КОТОРЫЙ УВИДИТ
+           * ПОСЕТИТЕЛЬ. Комментарии сборщик выбрасывает, доезжают только строки.
+           * Session 66 нашла две: русскую таблицу объяснений, которую протокол
+           * читал ЗАПАСНЫМ вариантом (`EN[code] ?? RU[code]` — промах ключа
+           * выдал бы русский текст на английской странице), и русские сообщения
+           * об отказе загрузки, которые `PStatementSelector` печатает дословно.
+           *
+           * ⚠ Сборщик экранирует не-ASCII: в файле лежит `б`, а не «б».
+           * Ищем обе записи, иначе проверка была бы слепой ровно к тому, что
+           * ищет.
+           */
+          const raw = [...js.matchAll(/[Ѐ-ӿ]/g)].length
+          const esc = [...js.matchAll(/\\u04[0-9a-fA-F]{2}/g)].length
+          if (raw + esc) cyrillic.push(`${f}: ${raw + esc} символов кириллицы`)
+        }
+      }
+      if (cyrillic.length) {
+        problems.push(...cyrillic.map((c) => `русский текст доехал до браузера — ${c}`))
+      } else if (asked.size) {
+        detail.push('в бандлах инструмента нет ни одного русского символа — посетителю едет только английский')
+      }
+      if (!asked.size) {
+        problems.push('ни один бандл не просит /data/p-precedence.json — снимок собран, но его никто не читает')
+      }
+      for (const url of asked) {
+        const path = url.split('?')[0].replace(/^\//, '')
+        if (!existsSync(join(DIST, path))) problems.push(`бандл просит ${url}, а файла ${path} в dist нет`)
+      }
+      if (asked.size) detail.push(`бандлы просят: ${[...asked].join(', ')} — путь существует`)
+
+      const kb = Math.round(readFileSync(abs).length / 1024)
+      return {
+        id: 'p-precedence-snapshot',
+        group: 'Движок P-фраз',
+        ok: problems.length === 0,
+        headline: problems.length === 0
+          ? `снимок на месте (${kb} КБ), ${vsBase.length} счётчиков сошлись с базой, gradedCodes ${graded.length}`
+          : `${problems.length} расхождений в ${rel}`,
+        detail: problems.length === 0 ? detail : [...problems, ...detail].slice(0, 20),
+      }
+    },
+  },
+  {
     id: 'label-maker-href',
     group: 'Label maker',
     title: 'Все ссылки в конструктор разбираются его же разборщиком',

@@ -136,6 +136,32 @@ export const GET: APIRoute = async () => {
   }
   if (orphans) throw new Error(`build: p-precedence — ${orphans} рекомендаций ECHA без блока`)
 
+  /**
+   * ⭐⭐ КОДЫ, КОТОРЫМ ECHA ДАЁТ УРОВЕНЬ ХОТЬ ГДЕ-ТО. Замер session 66: 82.
+   *
+   * ⚠⚠ СЧИТАЕТСЯ ПО ВСЕЙ ТАБЛИЦЕ, А НЕ ПО МАССИВУ `echa` ВЫШЕ. Разница видна не
+   * здесь, а в проверке: снимок `scripts/fixtures/p-precedence.json` держит
+   * строки лишь нескольких классов, и вывод «кода у ECHA нет нигде» из такого
+   * куска был бы ложью. Движку нужен факт обо ВСЕЙ методичке, поэтому он едет
+   * отдельным полем — см. `PrecedenceData.gradedCodes`.
+   *
+   * ⚠ Берём блоки с рекомендацией, БЕЗ соединения с охватом: «ECHA оценила код»
+   * не зависит от того, разобран ли охват таблицы. Замер: и так и так 82,
+   * блоков без охвата ноль — если разойдётся, сборка ниже упадёт.
+   */
+  const gradedCodes = [...new Set(
+    recs.map((r) => blockById.get(r.block_id)?.p_code).filter((c): c is string => !!c),
+  )].sort()
+  if (!gradedCodes.length) throw new Error('build: p-precedence — gradedCodes пуст, шкала ECHA не прочиталась')
+  const gradedInEcha = new Set(echa.map((r) => r[2] as string))
+  const missed = gradedCodes.filter((c) => !gradedInEcha.has(c))
+  if (missed.length) {
+    throw new Error(
+      `build: p-precedence — ${missed.length} кодов со шкалой ECHA потерялись при соединении с охватом ` +
+      `(${missed.slice(0, 8).join(', ')}): у таблицы нет строки в echa_p_table_scope`,
+    )
+  }
+
   const combos = combosRaw
     .filter((c) => (c.components ?? []).length > 0)
     .map((c) => [c.code, c.components as string[]])
@@ -152,8 +178,9 @@ export const GET: APIRoute = async () => {
       pairs: hidx.length,
       conditions: conds.length,
       texts: text.length,
+      gradedCodes: gradedCodes.length,
     },
-    conds, matrix, echa, combos, hidx, text,
+    conds, matrix, echa, combos, hidx, text, gradedCodes,
   }
 
   return new Response(JSON.stringify(snapshot), {
