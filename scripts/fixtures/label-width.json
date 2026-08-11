@@ -1,0 +1,29 @@
+{
+  "note": "Самая широкая переносимая P-фраза каждого языка Annex IV (em/знак, замер session 64) + сигнальное слово Danger. Тексты ИЗ БАЗЫ statement_translations, не придуманы.",
+  "worst": [
+    ["BG", "P301+P310", "ПРИ ПОГЛЪЩАНЕ: Незабавно се обадете в ЦЕНТЪР ПО ТОКСИКОЛОГИЯ/на лекар/…", "Опасно"],
+    ["CS", "P311", "Volejte TOXIKOLOGICKÉ INFORMAČNÍ STŘEDISKO/lékaře/….", "Nebezpečí"],
+    ["DA", "P302+P352", "VED KONTAKT MED HUDEN: Vask med rigeligt vand/…", "Fare"],
+    ["DE", "P301+P310", "BEI VERSCHLUCKEN: Sofort GIFTINFORMATIONSZENTRUM/Arzt/…/anrufen.", "Gefahr"],
+    ["EL", "P301+P310", "ΣΕ ΠΕΡΙΠΤΩΣΗ ΚΑΤΑΠΟΣΗΣ: καλέστε αμέσως το ΚΕΝΤΡΟ ΔΗΛΗΤΗΡΙΑΣΕΩΝ/γιατρό/…", "Κίνδυνος"],
+    ["EN", "P301+P310", "IF SWALLOWED: Immediately call a POISON CENTER/doctor/…", "Danger"],
+    ["ES", "P311", "Llamar a un CENTRO DE TOXICOLOGĺA/médico/…", "Peligro"],
+    ["ET", "P311", "Võtta ühendust MÜRGISTUSTEABEKESKUSE/arstiga…", "Ettevaatust"],
+    ["FI", "P311", "Ota yhteys MYRKYTYSTIETOKESKUKSEEN/lääkäriin/…", "Vaara"],
+    ["FR", "P302+P352", "EN CAS DE CONTACT AVEC LA PEAU: Laver abondamment à l’eau/…", "Danger"],
+    ["GA", "P303", "I gCÁS TEAGMHÁLA LEIS AN gCRAICEANN (nó le gruaig):", null],
+    ["HR", "P301+P310", "AKO SE PROGUTA: odmah nazvati CENTAR ZA KONTROLU OTROVANJA/liječnika/…", "Opasnost"],
+    ["HU", "P311", "Forduljon TOXIKOLÓGIAI KÖZPONTHOZ/orvoshoz/….", "Veszély"],
+    ["IT", "P302+P352", "IN CASO DI CONTATTO CON LA PELLE: lavare abbondantemente con acqua/…", "Pericolo"],
+    ["LT", "P311", "Skambinti į APSINUODIJIMŲ KONTROLĖS IR INFORMACIJOS BIURĄ/kreiptis į gydytoją/….", "Pavojinga"],
+    ["LV", "P311", "Sazinieties ar SAINDĒŠANĀS INFORMĀCIJAS CENTRU/ārstu/…", "Bīstami"],
+    ["MT", "P310", "Sejjaħ minnufih ĊENTRU TAL-AVVELENAMENT/tabib/…", "Periklu"],
+    ["NL", "P302+P352", "BIJ CONTACT MET DE HUID: met veel water/… wassen.", "Gevaar"],
+    ["PL", "P304", "W PRZYPADKU DOSTANIA SIĘ DO DRÓG ODDECHOWYCH:", "Niebezpieczeństwo"],
+    ["PT", "P311", "Contacte um CENTRO DE INFORMAÇÃO ANTIVENENOS/médico/…", "Perigo"],
+    ["RO", "P311", "Sunați la un CENTRU DE INFORMARE TOXICOLOGICĂ/un medic…", "Pericol"],
+    ["SK", "P311", "Volajte TOXIKOLOGICKÉ INFORMAČNÉ CENTRUM/lekára/…", "Nebezpečenstvo"],
+    ["SL", "P311", "Pokličite CENTER ZA ZASTRUPITVE/zdravnika/…", "Nevarno"],
+    ["SV", "P311", "Kontakta GIFTINFORMATIONSCENTRALEN/läkare/…", "Fara"]
+  ]
+}

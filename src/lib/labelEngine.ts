@@ -172,45 +172,317 @@ export type LabelOptions = {
   containerMl?: number;
 };
 
-// ── Метрика текста ──────────────────────────────────────────────────────────
-// Helvetica/Arial: средняя ширина знака в долях кегля. Точную ширину даёт только
-// сам шрифт, но раскладка должна совпадать между SVG и PDF, поэтому обе стороны
-// считают ОДНОЙ И ТОЙ ЖЕ формулой. Небольшой запас лучше перелива.
-const CW_REGULAR = 0.52;
-const CW_BOLD = 0.56;
-const CW_MONO = 0.60;
-/**
- * ⚠⚠ ПРОПИСНЫЕ — ОТДЕЛЬНАЯ МЕРКА, И БЕЗ НЕЁ СИГНАЛЬНОЕ СЛОВО ВЫЛЕЗАЕТ ЗА РАМКУ.
- *
- * `CW_BOLD = 0.56` — средняя ширина знака в СМЕШАННОМ наборе, где половина
- * букв строчные и узкие. Сигнальное слово печатается через `toUpperCase()`, а
- * прописные шире: W, O, N, B, D — каждая около 0,7 кегля и выше.
- *
- * Замер (session 62), два независимых источника, оба дали одно:
- * `jsPDF.getTextWidth` на Helvetica-Bold и `canvas.measureText` в Chromium на
- * той же гарнитуре, что стоит в `FONT`. Ширина, делённая на число знаков и
- * кегль, по 14 словам 23 языков CLP:
- *
- *   ВНИМАНИЕ (BG)        0,728  ← худший случай
- *   DANGER (EN/FR)       0,722
- *   WAARSCHUWING (NL)    0,718
- *   NIEBEZPIECZEŃSTWO    0,647
- *   ATTENZIONE (IT)      0,631  ← лучший случай
- *
- * То есть прежняя мерка 0,56 занижала ширину до 30 %, и ровно на столько
- * польское NIEBEZPIECZEŃSTWO выходило за правую рамку. Берём 0,75 — чуть
- * выше худшего замера, чтобы запас был у всех 46 слов, а не у среднего.
- *
- * ⚠ Мерка ОДНА на SVG и PDF, как и остальные: раскладка обязана совпадать.
- */
-const CW_CAPS = 0.75;
+// ── Метрика текста ────────────────────────────────────────────────────────
+//
+// ⭐⭐ ЗДЕСЬ СЧИТАЮТСЯ НАСТОЯЩИЕ ШИРИНЫ ЗНАКОВ, А НЕ СРЕДНЯЯ ПО ПАЛАТЕ.
+//
+// ⚠⚠ БЫЛО: одна константа `CW_REGULAR = 0.52` — «средняя ширина знака в долях
+// кегля» — на все 24 языка. Переносы считались по ЧИСЛУ знаков:
+// `charsPerLine = floor(widthMm / (sizeMm × 0.52))`. Это не придирка к точности,
+// а источник двух противоположных дефектов сразу.
+//
+// **Замер (session 64), метрики Arial, все 24 языка Annex IV.** Ширина каждого
+// из 306 знаков, встречающихся в `statement_translations`, взята прямо из
+// шрифта (`fontTools`, Liberation Sans — метрически совместим с Arial). Цифры
+// сошлись с независимым замером session 63 в Chromium через
+// `canvas.measureText` до четвёртого знака: BG 0,5160 · EL 0,4904 · DE 0,4817 ·
+// EN 0,4503 · MT 0,4418. Два разных метода дали одно.
+//
+// ⛔ **И этот замер отменил напрашивавшуюся правку «сделать CW функцией
+// языка».** Средняя описывает ЯЗЫК, а переполняется КОНКРЕТНАЯ фраза. Внутри
+// одного языка разброс больше, чем между языками:
+//
+//   польский   средняя 0,4883 → худшая переносимая фраза 0,6309
+//   болгарский средняя 0,5160 → худшая 0,5787, и фраз шире 0,52 у него 23 штуки
+//   английский средняя 0,4503 → худшая 0,5294
+//
+// То есть `CW_EN = 0.4503` сломал бы и английский: его же собственная фраза
+// требует на 17,6 % больше. И сегодняшняя 0,52 мала — фразы шире неё есть в
+// 23 языках из 24.
+//
+// ⭐ Отсюда решение: не подбирать мерку, а **складывать настоящие ширины**.
+// Тогда ни общей константы, ни таблицы по языкам не нужно вовсе — кириллица,
+// греческий и многоточие (ровно 1,0 кегля, вдвое шире прежней мерки) считаются
+// точно. Заодно возвращается место там, где 0,52 была завышена: у мальтийского
+// это 17,7 % строки.
+//
+// ⚠ Мерка берётся по **Arial**, а не по Noto Sans, которой набирается PDF.
+// Noto на 6–9 % ýже, переносы считаются один раз на оба вывода, значит
+// связывающий случай — SVG. Возьми Noto — SVG будет переливаться.
+//
+// ⚠ Таблицы сгенерированы, а не набраны руками. Повторить:
+// `fontTools.ttLib.TTFont(LiberationSans-Regular.ttf)`, `hmtx[glyph][0] /
+// head.unitsPerEm`, знаки сгруппированы по одинаковой ширине.
+// Невидимые знаки (U+00A0, U+00AD) записаны escape'ами СОЗНАТЕЛЬНО: в
+// исходнике они неотличимы от обычного пробела и дефиса.
 
-function widthPerChar(kind: 'regular' | 'bold' | 'mono' | 'caps'): number {
-  return kind === 'caps' ? CW_CAPS : kind === 'bold' ? CW_BOLD : kind === 'mono' ? CW_MONO : CW_REGULAR;
+const W_REGULAR_SPEC: [number, string][] = [
+  [0.1909, "'"],
+  [0.2222, "ijlįĵĺļłſΐίιϊіј‘’‚‛"],
+  [0.2598, "|¦"],
+  [0.2778, " !,./:;I[\\]ft\u00A0ÌÍÎÏìíîïĨĩĪīĬĭĮİıţŧț·ΙΪІЇї"],
+  [0.2915, "ľ"],
+  [0.3330, "()-`r¡¨\u00AD²³´·¸¹ŕŗř‐“”"],
+  [0.3340, "{}ŀ"],
+  [0.3501, "•"],
+  [0.3550, "\""],
+  [0.3647, "гѓ"],
+  [0.3652, "º"],
+  [0.3701, "ª"],
+  [0.3750, "ť"],
+  [0.3838, "Ί"],
+  [0.3892, "*"],
+  [0.3950, "τ"],
+  [0.3999, "°"],
+  [0.4375, "кќ"],
+  [0.4409, "ζ"],
+  [0.4438, "ĳ"],
+  [0.4458, "έε"],
+  [0.4478, "ξ"],
+  [0.4580, "т"],
+  [0.4585, "з"],
+  [0.4692, "^"],
+  [0.4819, "ς"],
+  [0.5000, "JcksvxyzçýÿćĉċčĴķĸśŝşšŷźżžșγκλνЈсухѕў"],
+  [0.5103, "эє"],
+  [0.5210, "чь"],
+  [0.5249, "χ"],
+  [0.5312, "в"],
+  [0.5371, "¶"],
+  [0.5415, "ЃГпя"],
+  [0.5469, "ΰυϋύ"],
+  [0.5488, "±÷"],
+  [0.5508, "Γ"],
+  [0.5522, "¯нџ"],
+  [0.5562, "#$0123456789?L_abdeghnopqu¢£¤¥§«»àáâãäåèéêëðñòóôõöùúûüþāăąđēĕėęěĝğġģĥħĹĻĽĿŁńņňŋōŏőũūŭůűųήηθοόаеорѐёђћ‒–€"],
+  [0.5566, "δ"],
+  [0.5586, "ийѝ"],
+  [0.5688, "ρ"],
+  [0.5728, "бц"],
+  [0.5752, "β"],
+  [0.5762, "µμ"],
+  [0.5781, "άα"],
+  [0.5825, "ЌК"],
+  [0.5835, "дл"],
+  [0.5840, "+<=>~¬×"],
+  [0.6040, "ŉЗ"],
+  [0.6108, "FTZ¿ßøŢŤŦŹŻŽȚΖΤТ"],
+  [0.6147, "ď"],
+  [0.6172, "σ"],
+  [0.6182, "Σ"],
+  [0.6250, "ъ"],
+  [0.6353, "ЎУ"],
+  [0.6484, "φ"],
+  [0.6499, "Ξ"],
+  [0.6562, "БЛЬ"],
+  [0.6665, "Ч"],
+  [0.6670, "&ABEKPSVXYÀÁÂÃÄÅÈÉÊËÝÞĀĂĄĒĔĖĘĚĶŚŜŞŠŶŸȘΑΒΕΚΡΥΧΫЀЅАВЕРХ"],
+  [0.6675, "ΆЁ"],
+  [0.6680, "ΔΛ"],
+  [0.6689, "ж"],
+  [0.6772, "Д"],
+  [0.6875, "м"],
+  [0.6899, "π"],
+  [0.7129, "ψ"],
+  [0.7188, "ЄЍЏИЙПЭы"],
+  [0.7222, "CDHNRUwÇÐÑÙÚÛÜĆĈĊČĎĐĤĦŃŅŇŔŖŘŨŪŬŮŰŲŵΗΝΠНСЯ"],
+  [0.7231, "Ŋ"],
+  [0.7349, "Ĳ"],
+  [0.7368, "©®"],
+  [0.7397, "Ц"],
+  [0.7476, "Ω"],
+  [0.7500, "ю"],
+  [0.7524, "Ώ"],
+  [0.7603, "Ф"],
+  [0.7744, "Ό"],
+  [0.7778, "GOQÒÓÔÕÖØĜĞĠĢŌŎŐΘΟО"],
+  [0.7808, "ωώ"],
+  [0.7842, "Έ"],
+  [0.7915, "Ъ"],
+  [0.7979, "Φ"],
+  [0.8022, "ш"],
+  [0.8125, "њ"],
+  [0.8228, "фщ"],
+  [0.8330, "MmΜМ"],
+  [0.8340, "¼½¾"],
+  [0.8354, "Ψ"],
+  [0.8379, "Ή"],
+  [0.8540, "Ћ"],
+  [0.8555, "Ύ"],
+  [0.8647, "Ђ"],
+  [0.8853, "Ы"],
+  [0.8892, "%æ"],
+  [0.9062, "љ"],
+  [0.9165, "Ш"],
+  [0.9233, "Ж"],
+  [0.9375, "Щ"],
+  [0.9438, "WœŴ"],
+  [1.0000, "ÆŒ—―…‰™"],
+  [1.0103, "ЊЮ"],
+  [1.0151, "@"],
+  [1.0571, "Љ"],
+];
+
+const W_BOLD_SPEC: [number, string][] = [
+  [0.2378, "'"],
+  [0.2759, "Ї"],
+  [0.2778, " ,./I\\ijl\u00A0ÌÍÎÏìíîïĨĩĪīĬĭĮįİıĵĺļłſΐΙΪίιϊІіј‘’‚‛"],
+  [0.2798, "|¦"],
+  [0.2812, "ї"],
+  [0.3330, "!()-:;[]`ft¡¨\u00AD²³´·¸¹ţŧț·‐"],
+  [0.3501, "•"],
+  [0.3652, "º"],
+  [0.3701, "ª"],
+  [0.3853, "ľ"],
+  [0.3892, "*r{}ŕŗř"],
+  [0.3999, "°"],
+  [0.4165, "гѓ"],
+  [0.4453, "ξ"],
+  [0.4463, "τ"],
+  [0.4512, "έ"],
+  [0.4604, "ζ"],
+  [0.4736, "Ί"],
+  [0.4741, "\""],
+  [0.4746, "ε"],
+  [0.4790, "ŀť"],
+  [0.4897, "т"],
+  [0.4971, "з"],
+  [0.5000, "zźżž“”"],
+  [0.5005, "кќ"],
+  [0.5200, "ς"],
+  [0.5405, "θ"],
+  [0.5488, "±÷"],
+  [0.5522, "¯эє"],
+  [0.5562, "#$0123456789J_aceksvxy¢£¤¥§«¶»àáâãäåçèéêëýÿāăąćĉċčēĕėęěĳĴķĸśŝşšŷșγλνЈаесухѐёѕў‒–€"],
+  [0.5576, "κ"],
+  [0.5669, "ЃГ"],
+  [0.5757, "χ"],
+  [0.5762, "µ"],
+  [0.5806, "ч"],
+  [0.5820, "ΰυϋύ"],
+  [0.5835, "я"],
+  [0.5840, "+<=>^~¬×"],
+  [0.6001, "Σ"],
+  [0.6011, "Γ"],
+  [0.6040, "нпџ"],
+  [0.6064, "δ"],
+  [0.6104, "βЌК"],
+  [0.6108, "?FLTZbdghnopqu¿ßðñòóôõöøùúûüþđĝğġģĥħĹĻĽĿŁńņňŋōŏőŢŤŦũūŭůűųŹŻŽȚΖΤήηοόТорђћ"],
+  [0.6118, "μ"],
+  [0.6147, "άαвийцьѝ"],
+  [0.6177, "б"],
+  [0.6187, "ρ"],
+  [0.6221, "ЎУ"],
+  [0.6265, "З"],
+  [0.6348, "д"],
+  [0.6353, "л"],
+  [0.6436, "Ξ"],
+  [0.6670, "EPSVXYÈÉÊËÝÞĒĔĖĘĚŚŜŞŠŶŸȘΕΛΡΥΧΫЀЅЕРХ"],
+  [0.6689, "Ё"],
+  [0.6841, "σ"],
+  [0.7017, "Л"],
+  [0.7026, "Ч"],
+  [0.7085, "ŉ"],
+  [0.7090, "ж"],
+  [0.7114, "ЄЭ"],
+  [0.7124, "Д"],
+  [0.7153, "φ"],
+  [0.7188, "ďΔЍЏБИЙПЬЯ"],
+  [0.7222, "&ABCDHKNRUÀÁÂÃÄÅÇÐÑÙÚÛÜĀĂĄĆĈĊČĎĐĤĦĶŃŅŇŔŖŘŨŪŬŮŰŲΆΑΒΗΚΝΠАВНС"],
+  [0.7231, "Ŋ"],
+  [0.7290, "ъ"],
+  [0.7305, "Ц"],
+  [0.7368, "©®"],
+  [0.7397, "м"],
+  [0.7534, "ψ"],
+  [0.7656, "π"],
+  [0.7778, "GOQwÒÓÔÕÖØĜĞĠĢŌŎŐŵΘΟО"],
+  [0.7847, "Ĳ"],
+  [0.8018, "Ω"],
+  [0.8091, "Ψ"],
+  [0.8208, "Φ"],
+  [0.8247, "Ό"],
+  [0.8330, "MΜМ"],
+  [0.8335, "ш"],
+  [0.8340, "¼½¾"],
+  [0.8379, "Ώ"],
+  [0.8438, "щ"],
+  [0.8447, "ωώ"],
+  [0.8530, "Έ"],
+  [0.8535, "Ф"],
+  [0.8540, "ыю"],
+  [0.8696, "Ъ"],
+  [0.8750, "Ћф"],
+  [0.8853, "Ђ"],
+  [0.8892, "%mæ"],
+  [0.9038, "Ж"],
+  [0.9058, "Ή"],
+  [0.9062, "њ"],
+  [0.9272, "Ύ"],
+  [0.9438, "WœŴ"],
+  [0.9688, "љ"],
+  [0.9751, "@"],
+  [0.9790, "Ы"],
+  [1.0000, "ÆŒ—―…‰™"],
+  [1.0049, "Ш"],
+  [1.0190, "Щ"],
+  [1.0312, "Ю"],
+  [1.0625, "Њ"],
+  [1.0938, "Љ"],
+];
+
+/**
+ * Ширина знака для тех, кого в таблице нет.
+ *
+ * ⚠ 505 знаков покрывают латиницу, кириллицу, греческий и пунктуацию — то есть
+ * весь Annex IV целиком. Но имя товара и адрес поставщика человек печатает
+ * сам, и туда попадает что угодно.
+ *
+ * ⛔ Занизить здесь опаснее, чем завысить: занижение выносит текст за рамку,
+ * завышение всего лишь переносит строку раньше. Поэтому 0,60 — шире любой
+ * латинской строчной буквы, а для восточноазиатских знаков отдельно 1,0:
+ * они квадратные, и 0,60 для них — гарантированный вылет.
+ */
+const CW_FALLBACK = 0.60;
+const CW_FULLWIDTH = 1.0;
+
+/** Моноширинный (CAS, номер партии, UFI): у Liberation Mono все знаки 0,6001. */
+const CW_MONO = 0.6001;
+
+function buildWidths(spec: [number, string][]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const [w, chars] of spec) for (const ch of chars) m.set(ch, w);
+  return m;
+}
+const W_REGULAR = buildWidths(W_REGULAR_SPEC);
+const W_BOLD = buildWidths(W_BOLD_SPEC);
+
+/** Квадратные знаки CJK, каны и хангыля — им 0,60 мало вдвое. */
+function isFullWidth(cp: number): boolean {
+  return (
+    (cp >= 0x1100 && cp <= 0x115f) || (cp >= 0x2e80 && cp <= 0xa4cf) ||
+    (cp >= 0xac00 && cp <= 0xd7a3) || (cp >= 0xf900 && cp <= 0xfaff) ||
+    (cp >= 0xfe30 && cp <= 0xfe6f) || (cp >= 0xff00 && cp <= 0xff60) ||
+    (cp >= 0xffe0 && cp <= 0xffe6)
+  );
 }
 
-function charsPerLine(widthMm: number, sizeMm: number, kind: 'regular' | 'bold' | 'mono' | 'caps' = 'regular'): number {
-  return Math.max(6, Math.floor(widthMm / (sizeMm * widthPerChar(kind))));
+/**
+ * Ширина одного знака в долях кегля.
+ *
+ * ⚠⚠ `caps` больше НЕ отдельная мерка, и это не потеря, а следствие. Прежняя
+ * `CW_CAPS = 0.75` существовала ровно потому, что 0,56 считалась по СМЕШАННОМУ
+ * набору, а сигнальное слово печатается через `toUpperCase()`. Когда ширина
+ * берётся у самого знака, прописные меряются прописными — поправка становится
+ * лишней. `caps` оставлен в сигнатуре, чтобы не править 12 вызывающих, и
+ * означает то же, что `bold`.
+ */
+function charW(ch: string, kind: 'regular' | 'bold' | 'mono' | 'caps'): number {
+  if (kind === 'mono') return CW_MONO;
+  const w = (kind === 'bold' || kind === 'caps' ? W_BOLD : W_REGULAR).get(ch);
+  if (w !== undefined) return w;
+  const cp = ch.codePointAt(0) ?? 0;
+  return isFullWidth(cp) ? CW_FULLWIDTH : CW_FALLBACK;
 }
 
 /**
@@ -219,34 +491,68 @@ function charsPerLine(widthMm: number, sizeMm: number, kind: 'regular' | 'bold' 
  * ⚠⚠ Экспортируется РАДИ ПРОВЕРКИ `check:label-layout`, и это не удобство.
  * Наложение кода на текст фразы (session 48) видно только по координатам, а
  * проверка, считающая ширину своей формулой, подтверждала бы не то, что
- * печатается. Списать сюда `0.52` второй раз — значит завести копию, которая
- * разойдётся молча, ровно как список кодов знаков в session 39.
+ * печатается.
  *
- * ⚠ Мерка приблизительная и одна на SVG и PDF: точную ширину даёт только сам
- * шрифт, а раскладка обязана совпадать между превью и печатью.
+ * ⚠ Перебор идёт `for…of`, то есть по кодовым точкам, а не по «символам»
+ * строки: суррогатная пара иначе посчиталась бы дважды по 0,60.
  */
 export function textWidthMm(s: string, sizeMm: number, kind: 'regular' | 'bold' | 'mono' | 'caps' = 'regular'): number {
-  return String(s ?? '').length * sizeMm * widthPerChar(kind);
+  let em = 0;
+  for (const ch of String(s ?? '')) em += charW(ch, kind);
+  return em * sizeMm;
 }
 
-/** Перенос по словам с жёстким разрывом слишком длинных слов (IUPAC-имена). */
-function wrap(text: string, maxChars: number): string[] {
-  const raw = String(text ?? '').split(/\s+/).filter(Boolean);
+/**
+ * Сколько знаков ПРИМЕРНО влезает в строку.
+ *
+ * ⚠ Осталась ровно для одного решения — делить ли P-фразы на две колонки
+ * (`MIN_CHARS_PER_COLUMN`). Там нужна прикидка «колонка вообще пригодна для
+ * текста», а не раскладка. Для переносов эта функция больше не годится и не
+ * используется: перенос считает `wrapToWidth` по настоящим ширинам.
+ */
+function charsPerLine(widthMm: number, sizeMm: number, kind: 'regular' | 'bold' | 'mono' | 'caps' = 'regular'): number {
+  const avg = kind === 'mono' ? CW_MONO : kind === 'regular' ? 0.52 : 0.56;
+  return Math.max(6, Math.floor(widthMm / (sizeMm * avg)));
+}
+
+/**
+ * Перенос по НАСТОЯЩЕЙ ширине, с жёстким разрывом слишком длинных слов.
+ *
+ * ⚠ Длинные слова (IUPAC-имена) рвутся посимвольно по той же мерке, а не по
+ * числу знаков: иначе «2,4,6-тринитротолуол» рвётся в одном месте по-английски
+ * и в другом в переводе, и высота блока расходится с посчитанной.
+ */
+function wrapToWidth(
+  text: string,
+  maxWidthMm: number,
+  sizeMm: number,
+  kind: 'regular' | 'bold' | 'mono' | 'caps' = 'regular',
+): string[] {
+  const limit = Math.max(sizeMm * 0.6, maxWidthMm);
+  const w = (s: string) => textWidthMm(s, sizeMm, kind);
+
   const words: string[] = [];
-  for (const w of raw) {
-    if (w.length <= maxChars) words.push(w);
-    else for (let i = 0; i < w.length; i += maxChars) words.push(w.slice(i, i + maxChars));
+  for (const raw of String(text ?? '').split(/\s+/).filter(Boolean)) {
+    if (w(raw) <= limit) { words.push(raw); continue; }
+    let piece = '';
+    for (const ch of raw) {
+      if (piece && w(piece + ch) > limit) { words.push(piece); piece = ch; }
+      else piece += ch;
+    }
+    if (piece) words.push(piece);
   }
+
   const lines: string[] = [];
   let line = '';
-  for (const w of words) {
-    const next = line ? `${line} ${w}` : w;
-    if (next.length > maxChars && line) { lines.push(line); line = w; }
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (w(next) > limit && line) { lines.push(line); line = word; }
     else line = next;
   }
   if (line) lines.push(line);
   return lines.length ? lines : [''];
 }
+
 
 // ── Константы вида ──────────────────────────────────────────────────────────
 const INK = '#111827';
@@ -512,7 +818,7 @@ function compose(
   const secSize = body * 0.78;
 
   // ── Идентификатор продукта ───────────────────────────────────────────────
-  const nameLines = wrap(input.productName || '', charsPerLine(inner, nameSize, 'bold'));
+  const nameLines = wrapToWidth(input.productName || '', inner, nameSize, 'bold');
   for (const ln of nameLines) {
     y += nameSize;
     items.push({ t: 'text', x: pad, y, s: ln, size: nameSize, bold: true, color: INK });
@@ -541,7 +847,7 @@ function compose(
     // иначе получаем обращение к `const` до инициализации.
     const nameEqual = input.second?.equal === true;
     const secondNameSize = nameEqual ? nameSize : nameSize * 0.86;
-    for (const ln of wrap(secondName, charsPerLine(inner, secondNameSize, 'bold'))) {
+    for (const ln of wrapToWidth(secondName, inner, secondNameSize, 'bold')) {
       y += secondNameSize;
       items.push({
         t: 'text', x: pad, y, s: ln, size: secondNameSize, bold: true,
@@ -560,7 +866,7 @@ function compose(
   if (input.nominalQty) metaBits.push(input.nominalQty);
   if (input.batchNumber) metaBits.push(`Batch ${input.batchNumber}`);
   if (metaBits.length) {
-    for (const ln of wrap(metaBits.join('  ·  '), charsPerLine(inner, metaSize))) {
+    for (const ln of wrapToWidth(metaBits.join('  ·  '), inner, metaSize)) {
       y += metaSize + metaSize * (LINE - 1) * 0.6;
       items.push({ t: 'text', x: pad, y, s: ln, size: metaSize, color: INK_SOFT });
     }
@@ -615,7 +921,7 @@ function compose(
    */
   const gutterFor = (list: Statement[]): number => {
     const longest = list.reduce((n, x) => Math.max(n, x.code.length), 4);
-    const wanted = body * (longest * CW_BOLD + 0.8);
+    const wanted = textWidthMm('W'.repeat(longest), body, 'bold') + body * 0.8;
     // ⚠ Потолок обязателен: на этикетке 52 мм колонка под четырнадцать знаков
     // съела бы половину строки, и фраза печаталась бы по три слова в строку.
     const cap = Math.max(body * 3.4, textWidth * 0.34);
@@ -629,7 +935,7 @@ function compose(
    * ставят отдельной строкой, а не втискивают в поле.
    */
   const codeFitsIn = (code: string, gutter: number): boolean =>
-    code.length * CW_BOLD * body <= gutter - body * 0.5;
+    textWidthMm(code, body, 'bold') <= gutter - body * 0.5;
 
   /**
    * ⚠ Степень и режим подачи второго языка считаются ОДИН раз на всю раскладку.
@@ -674,10 +980,11 @@ function compose(
      * ⚠⚠ ШИРИНА СЧИТАЕТСЯ ПО ПРОПИСНЫМ И ПО ОБОИМ ЯЗЫКАМ СРАЗУ — две разные
      * поправки, и каждая закрывает свой способ вылезти за рамку.
      *
-     * 1. Меряем `toUpperCase()`, а не исходное слово, и меркой `CW_CAPS`: на
-     *    этикетку идут прописные, а они шире (см. замер у константы). Немецкое
-     *    «Straße» вдобавок удлиняется при подъёме регистра — ß даёт SS, — так
-     *    что и число знаков брать надо у поднятой строки.
+     * 1. Меряем `toUpperCase()`, а не исходное слово: на этикетку идут
+     *    прописные, а они шире. Немецкое «Straße» вдобавок удлиняется при
+     *    подъёме регистра — ß даёт SS, — так что и мерить надо поднятую строку.
+     *    ⭐ Отдельной поправки `CW_CAPS` больше нет и не нужно: ширина берётся
+     *    у самих прописных знаков, а не у средней по смешанному набору.
      * 2. Кегль подбирается по САМОМУ ШИРОКОМУ из двух слов. Прежде он считался
      *    только по первому, и пара «DANGER + NIEBEZPIECZEŃSTWO» вылезала вторым
      *    словом: шесть знаков наверху упирались в потолок `body * 2.1`, а
@@ -687,8 +994,14 @@ function compose(
     const capsSecond = input.second?.signalWord ? input.second.signalWord.toUpperCase() : '';
     // Доля кегля, которой печатается второе слово, — та же, что ниже при отрисовке.
     const secondScale = capsSecond ? (altEqual ? 1 : 0.82) : 0;
-    const widestUnits = Math.max(capsMain.length, capsSecond.length * secondScale, 1);
-    const sw = Math.min(body * 2.1, textWidth / (widestUnits * CW_CAPS));
+    // ⚠ Ширина при кегле 1 мм; делим на неё, чтобы получить кегль, при котором
+    // слово ровно упирается в колонку. Замер настоящий, а не через мерку.
+    const widestEm = Math.max(
+      textWidthMm(capsMain, 1, 'bold'),
+      textWidthMm(capsSecond, 1, 'bold') * secondScale,
+      0.5,
+    );
+    const sw = Math.min(body * 2.1, textWidth / widestEm);
     gy += body * 0.5 + sw;
     items.push({
       t: 'text', x: textLeft, y: gy, s: input.signalWord.toUpperCase(),
@@ -717,7 +1030,7 @@ function compose(
       const tx = own ? textLeft : textLeft + codeWH;
       const tw = own ? textWidth : textWidth - codeWH;
       const skip = own ? 1 : 0;   // код занял свою строку — текст начинается ниже
-      const lines = wrap(h.text, charsPerLine(tw, body));
+      const lines = wrapToWidth(h.text, tw, body);
       lines.forEach((ln, i) => {
         items.push({ t: 'text', x: tx, y: gy + (i + skip) * lh, s: ln, size: body, color: INK });
       });
@@ -726,7 +1039,7 @@ function compose(
       // читатель видел пару, а не два независимых списка.
       const alt = input.second?.hStatements.find((x) => x.code === h.code);
       if (alt) {
-        const altLines = wrap(alt.text, charsPerLine(tw, body));
+        const altLines = wrapToWidth(alt.text, tw, body);
         altLines.forEach((ln, i) => {
           items.push({ t: 'text', x: tx, y: gy + (i + 1) * lh, s: ln, size: body, ...altText });
         });
@@ -756,12 +1069,12 @@ function compose(
     y += body * 0.7 + secSize + c.gapExtra;
     items.push({ t: 'text', x: pad, y, s: 'PRECAUTIONARY', size: secSize, bold: true, color: INK_FAINT });
     if (input.pFormat === 'combined' && input.combinedPText) {
-      for (const ln of wrap(input.combinedPText, charsPerLine(inner, body))) {
+      for (const ln of wrapToWidth(input.combinedPText, inner, body)) {
         y += lh;
         items.push({ t: 'text', x: pad, y, s: ln, size: body, color: INK });
       }
       if (input.second?.combinedPText) {
-        for (const ln of wrap(input.second.combinedPText, charsPerLine(inner, body))) {
+        for (const ln of wrapToWidth(input.second.combinedPText, inner, body)) {
           y += lh;
           items.push({ t: 'text', x: pad, y, s: ln, size: body, ...altText });
         }
@@ -793,10 +1106,10 @@ function compose(
        */
       const blocks = input.pStatements.map((p) => {
         const own = !codeFitsIn(p.code, codeWP);
-        const chars = charsPerLine(own ? width : width - codeWP, body);
-        const lines = wrap(p.text, chars);
+        const textW = own ? width : width - codeWP;
+        const lines = wrapToWidth(p.text, textW, body);
         const alt = input.second?.pStatements.find((x) => x.code === p.code);
-        const altLines = alt ? wrap(alt.text, chars) : [];
+        const altLines = alt ? wrapToWidth(alt.text, textW, body) : [];
         return { p, own, lines, altLines, rows: lines.length + altLines.length + (own ? 1 : 0) };
       });
 
@@ -844,7 +1157,7 @@ function compose(
   // ── Служебные строки ─────────────────────────────────────────────────────
   if ((input.notes ?? []).length) { sections++; y += c.gapExtra; }
   for (const note of input.notes ?? []) {
-    for (const ln of wrap(note, charsPerLine(inner, metaSize))) {
+    for (const ln of wrapToWidth(note, inner, metaSize)) {
       y += metaSize * LINE;
       items.push({ t: 'text', x: pad, y, s: ln, size: metaSize, bold: true, color: INK });
     }
@@ -871,7 +1184,7 @@ function compose(
       }
       const supW = W - pad - textX;
       let sy = y + body * 0.4 + metaSize;
-      for (const ln of wrap(sup, charsPerLine(supW, metaSize))) {
+      for (const ln of wrapToWidth(sup, supW, metaSize)) {
         items.push({ t: 'text', x: textX, y: sy, s: ln, size: metaSize, color: INK_SOFT });
         sy += metaSize * LINE;
       }

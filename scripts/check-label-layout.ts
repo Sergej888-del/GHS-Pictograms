@@ -76,7 +76,7 @@ async function rows<T>(table: string, columns: string, tweak: (q: any) => any = 
 // она согласится с любым. Разойдутся — упадёт цветовая проверка, а не молча.
 const RULE = '#d1d5db'
 const DANGER = '#dc2626'
-const WARNING = '#b45309'
+// ⚠ WARNING (#b45309) убран: с session 62 рамка алая при любой степени.
 
 // ─────────────────────────── утверждения ───────────────────────────
 
@@ -138,12 +138,29 @@ function assertNoOverlap(name: string, l: LabelLayout, out: Fail[]): void {
  *
  * ⚠⚠ Алая рамка заявляет опасность. У пустой заготовки и у вещества без
  * классификации сигнального слова нет, и рамка обязана быть нейтральной серой.
+ *
+ * ⛔⛔ ПОПРАВКА SESSION 64: ЭТА ПРОВЕРКА ОТСТАЛА ОТ ДВИЖКА НА ДВА КОММИТА.
+ *
+ * Она требовала янтарной рамки при степени `warning`, а `frameColor` с коммита
+ * `f10e497` («red label frame») возвращает алую при ЛЮБОЙ степени. Это решение
+ * Сергея (session 62): этикетка должна узнаваться через комнату независимо от
+ * степени, заодно с красной рамкой пиктограммы. Движок был прав, проверка —
+ * нет, и падала она на всех 24 случаях со дня того коммита.
+ *
+ * ⚠ Утверждение при этом НЕ ослаблено: различие «классифицировано / нет»
+ * осталось, и именно оно содержательно. Ослабить его — значит разрешить алую
+ * рамку на товаре без классификации, то есть ложное заявление об опасности.
+ *
+ * ⚠ Регламент цвет рамки ЭТИКЕТКИ не задаёт вовсе (проверено по 29 CFR
+ * 1910.1200 App. C: красная рамка предписана только пиктограмме). Значит это
+ * решение оформления, и менять его можно — но тогда правится `frameColor`
+ * в движке И это место, вместе.
  */
 function assertFrame(name: string, l: LabelLayout, level: SignalLevel | null, out: Fail[]): void {
   const rects = l.items.filter((i): i is DrawRect => i.t === 'rect' && Boolean(i.stroke))
   if (!rects.length) { out.push({ case: name, what: 'рамки нет вовсе' }); return }
   const frame = rects.reduce((a, b) => (a.w * a.h >= b.w * b.h ? a : b))
-  const want = level === 'danger' ? DANGER : level === 'warning' ? WARNING : RULE
+  const want = level ? DANGER : RULE
   if (frame.stroke !== want) {
     out.push({ case: name, what: `рамка ${frame.stroke} при степени ${level ?? 'нет'} — ждали ${want}` })
   }
@@ -485,9 +502,16 @@ CHECKS.push({
       })
     }
 
-    probe('рамка: danger выдан за warning', () => {
+    /**
+     * ⚠ Случай пересобран в session 64. Прежний («danger выдан за warning»)
+     * зубы потерял: раз рамка алая при обеих степенях, подмена одной степени на
+     * другую больше ничего не ломает, и проба проходила бы всегда. Проверяем
+     * теперь ту границу, которая осталась содержательной, и с другой стороны,
+     * чем проба ниже: классифицированное выдаём за неклассифицированное.
+     */
+    probe('рамка: классифицированное выдано за незаклассифицированное', () => {
       const out: Fail[] = []
-      assertFrame('x', layoutLabel(baseInput({ signalWord: 'Danger', signalLevel: 'danger' }), opt), 'warning', out)
+      assertFrame('x', layoutLabel(baseInput({ signalWord: 'Danger', signalLevel: 'danger' }), opt), null, out)
       return out
     })
     probe('рамка: пустая заготовка выдана за danger', () => {
