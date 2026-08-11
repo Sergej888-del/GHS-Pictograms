@@ -74,9 +74,12 @@ async function rows<T>(table: string, columns: string, tweak: (q: any) => any = 
 // ⚠ Значения повторены здесь СОЗНАТЕЛЬНО и с проверкой: движок держит их
 // приватными константами, а проверка обязана утверждать конкретный цвет, иначе
 // она согласится с любым. Разойдутся — упадёт цветовая проверка, а не молча.
+const INK_SOFT = '#4b5563'
 const RULE = '#d1d5db'
 const DANGER = '#dc2626'
-// ⚠ WARNING (#b45309) убран: с session 62 рамка алая при любой степени.
+// ⚠ WARNING больше НЕ цвет рамки (с session 62 она алая при любой степени),
+// но остался цветом САМОГО сигнального слова — см. assertSignalColor.
+const WARNING = '#b45309'
 
 // ─────────────────────────── утверждения ───────────────────────────
 
@@ -163,6 +166,47 @@ function assertFrame(name: string, l: LabelLayout, level: SignalLevel | null, ou
   const want = level ? DANGER : RULE
   if (frame.stroke !== want) {
     out.push({ case: name, what: `рамка ${frame.stroke} при степени ${level ?? 'нет'} — ждали ${want}` })
+  }
+}
+
+/**
+ * ⭐⭐ ЦВЕТ САМОГО СИГНАЛЬНОГО СЛОВА — И ЭТО УТВЕРЖДЕНИЕ ПРИШЛОСЬ ЗАВЕСТИ ЗАНОВО.
+ *
+ * ⛔ Что случилось. Гарантия «немецкое Gefahr не разберётся как warning» жила
+ * ТОЛЬКО в проверке рамки: там степень danger со словом «Gefahr» должна была
+ * дать алую рамку, а разбор строки дал бы янтарную. Когда рамка стала алой при
+ * любой степени (session 62), случаи «Gefahr» и «Vaara» **молча потеряли зубы**:
+ * они проходят теперь при любом ответе `levelOf`, потому что цвет рамки от него
+ * больше не зависит.
+ *
+ * ⚠⚠ То есть проверка осталась зелёной, а защита исчезла. `levelOf` мог бы
+ * откатиться к разбору строки, и ни одно утверждение файла этого не заметило бы.
+ *
+ * Гарантия переезжает туда, где она и живёт по существу: `signalColor(level)`
+ * красит САМО СЛОВО, и вот он от степени зависит по-прежнему. Ошибка здесь
+ * означает этикетку уровня Danger, напечатанную цветом предупреждения, — и
+ * заметить это может только человек, знающий язык.
+ */
+function assertSignalColor(name: string, l: LabelLayout, level: SignalLevel | null, word: string | null, out: Fail[]): void {
+  if (!word) return
+  const want = level === 'danger' ? DANGER : level === 'warning' ? WARNING : INK_SOFT
+  const printed = texts(l).filter((t) => t.s === word.toUpperCase() && t.bold)
+  /**
+   * ⛔ ОТСУТСТВИЕ СЛОВА — НЕ ДЕФЕКТ ЗДЕСЬ, И ПЕРВАЯ РЕДАКЦИЯ ЭТО ПЕРЕПУТАЛА.
+   *
+   * `showSignal = required.includes('signalWord') && !!input.signalWord`: на
+   * ЦЕХОВОЙ этикетке OSHA и WHMIS сигнальное слово в обязательный набор не
+   * входит и не печатается ЗАКОННО. Проверка, объявившая это дефектом, выдала
+   * 96 ложных провалов — по всем цеховым раскладкам двух юрисдикций.
+   *
+   * ⚠ Здесь утверждается ровно одно: ЕСЛИ слово напечатано, его цвет идёт от
+   * степени. Обязательность элементов — отдельная гарантия и отдельное место.
+   */
+  if (!printed.length) return
+  for (const t of printed) {
+    if (t.color !== want) {
+      out.push({ case: name, what: `слово «${t.s}» цветом ${t.color} при степени ${level ?? 'нет'} — ждали ${want}` })
+    }
   }
 }
 
@@ -377,7 +421,7 @@ CHECKS.push({
 CHECKS.push({
   id: 'frame',
   group: 'Раскладка',
-  title: 'Цвет рамки идёт от степени опасности, а не стоит алым всегда',
+  title: 'Цвет рамки — данные: алая у классифицированного, серая у пустой заготовки',
   async run() {
     const h = await rows<Row>('h_statements', 'code, text_en', (q) => q.in('code', ['H225', 'H319']))
     const fails: Fail[] = []
@@ -411,8 +455,62 @@ CHECKS.push({
       headline: fails.length === 0 ? `${runs} раскладок, цвет рамки везде по данным` : `${fails.length} расхождений`,
       detail: fails.length === 0
         ? [
-            'серая при отсутствии слова, янтарная при Warning, алая при Danger',
-            'нерусские слова Gefahr и Vaara проверены отдельно: разбор строки соврал бы',
+            'серая при отсутствии сигнального слова, алая при Warning и Danger (решение session 62)',
+            '⚠ цвет САМОГО слова проверяется отдельно (signal-color): рамка его больше не ловит',
+          ]
+        : fails.slice(0, 12).map((f) => `${f.case}: ${f.what}`),
+    }
+  },
+})
+
+CHECKS.push({
+  id: 'signal-color',
+  group: 'Раскладка',
+  title: 'Цвет сигнального слова идёт от степени, а не от разбора самого слова',
+  async run() {
+    const fails: Fail[] = []
+    let runs = 0
+    /**
+     * ⭐⭐ ЗАЧЕМ ОТДЕЛЬНАЯ ПРОВЕРКА, А НЕ СТРОКА В СОСЕДНЕЙ.
+     *
+     * Эта гарантия жила в проверке рамки: степень danger со словом «Gefahr»
+     * должна была дать алую рамку, а разбор строки дал бы янтарную. Когда рамка
+     * стала алой при ЛЮБОЙ степени (session 62), случаи «Gefahr» и «Vaara»
+     * молча потеряли зубы — проходят теперь при любом ответе `levelOf`.
+     * ⚠⚠ Проверка осталась зелёной, а защита исчезла.
+     *
+     * Цвет САМОГО слова от степени зависит по-прежнему. Ошибка здесь — этикетка
+     * уровня Danger, напечатанная цветом предупреждения; заметить это может
+     * только человек, знающий язык.
+     */
+    const cases: [string, string | null, SignalLevel | null][] = [
+      ['Danger', 'Danger', 'danger'],
+      ['Warning', 'Warning', 'warning'],
+      ['слово Gefahr при степени danger', 'Gefahr', 'danger'],
+      ['слово Vaara при степени danger', 'Vaara', 'danger'],
+      ['слово Achtung при степени warning', 'Achtung', 'warning'],
+    ]
+    for (const [name, word, level] of cases) {
+      for (const j of JURIS) {
+        for (const [w, h] of SIZES) {
+          for (const purpose of ['supplier', 'workplace'] as LabelPurpose[]) {
+            const l = layoutLabel(baseInput({ signalWord: word, signalLevel: level }), {
+              jurisdiction: j, purpose, widthMm: w, heightMm: h,
+            })
+            assertSignalColor(`${name} · ${JURISDICTIONS[j].tag} · ${w}×${h} · ${purpose}`, l, level, word, fails)
+            runs++
+          }
+        }
+      }
+    }
+    return {
+      id: 'signal-color', group: 'Раскладка', ok: fails.length === 0,
+      headline: fails.length === 0 ? `${runs} раскладок, цвет слова везде по степени` : `${fails.length} расхождений`,
+      detail: fails.length === 0
+        ? [
+            'алое при Danger, янтарное при Warning',
+            'Gefahr, Vaara и Achtung взяты нарочно: разбор напечатанной строки на них соврал бы',
+            '⚠ отсутствие слова дефектом не считается — на цеховой этикетке OSHA и WHMIS его нет законно',
           ]
         : fails.slice(0, 12).map((f) => `${f.case}: ${f.what}`),
     }
@@ -520,6 +618,19 @@ CHECKS.push({
       return out
     })
 
+    /**
+     * ⭐⭐ Ровно тот случай, ради которого `signalLevel` и заведён: степень
+     * danger, а спрашиваем цвет warning. Если `levelOf` когда-нибудь откатится
+     * к разбору напечатанного слова, «Gefahr» разберётся как warning и слово
+     * напечатается янтарным при степени Danger — эта проба обязана краснеть.
+     */
+    probe('цвет слова: danger напечатан, спрошен warning', () => {
+      const out: Fail[] = []
+      const inp = baseInput({ signalWord: 'Gefahr', signalLevel: 'danger' })
+      assertSignalColor('x', layoutLabel(inp, opt), 'warning', inp.signalWord, out)
+      return out
+    })
+
     // ⚠ Наложение и выход за поле подсовываются готовой раскладкой: заставить
     // движок промахнуться нарочно нельзя — он как раз починен.
     const fakeOverlap = {
@@ -546,10 +657,10 @@ CHECKS.push({
     return {
       id: 'selftest', group: 'Сама проверка', ok: silent.length === 0,
       headline: silent.length === 0
-        ? '9 заведомо дефектных раскладок, пойманы все 9'
+        ? '10 заведомо дефектных раскладок, пойманы все 10'
         : `${silent.length} дефектов проверка НЕ ЗАМЕТИЛА — верхние группы ничего не подтверждают`,
       detail: silent.length === 0
-        ? ['знаки всех четырёх видов, оба цвета рамки, наложение, выход за поле']
+        ? ['знаки всех четырёх видов, рамка, цвет сигнального слова, наложение, выход за поле']
         : silent.map((s) => `молчит на: ${s}`),
     }
   },

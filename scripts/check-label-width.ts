@@ -2,7 +2,7 @@
  * scripts/check-label-width.ts — НИ ОДНА СТРОКА НЕ ВЫЛЕЗАЕТ ЗА КРАЙ ЭТИКЕТКИ.
  *
  * Запуск (сборка и сеть не нужны, база не нужна):
- *   npm run check:label-width
+ *   node --experimental-strip-types scripts/check-label-width.ts
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * ⚠⚠ ЗАЧЕМ ОНА. До session 64 движок считал переносы по ОДНОЙ средней ширине
@@ -78,4 +78,67 @@ console.log(
     ? `\n⛔ строк за краем: ${failed} из ${checked} проверенных`
     : `\n✅ ни одна из ${checked} строк не вышла за край (24 языка × ${SIZES.length} размера)`,
 );
-process.exit(failed ? 1 : 0);
+
+/**
+ * ⭐⭐ РУЧНАЯ ПОПРАВКА КЕГЛЯ НЕ ЛОМАЕТ ГРАНИЦУ И НЕ ОБХОДИТ ПОЛ.
+ *
+ * ⚠ Ползунок трогает единственное число, от которого зависит вся раскладка.
+ * Проверять его надо тем же утверждением, что и всё остальное: текст обязан
+ * остаться внутри ширины при ЛЮБОМ значении, включая заведомо дикие.
+ *
+ * ⚠⚠ И отдельно — что нижняя граница НЕ обходится. `MIN_BODY_MM` — наш порог
+ * читаемости, а не норма регламента (CLP числового минимума кегля не задаёт,
+ * ст. 31(3) требование качественное). Именно поэтому он должен держаться
+ * кодом: настройка, которая позволяет напечатать нечитаемую этикетку, хуже
+ * отсутствия настройки.
+ */
+console.log('\nручная поправка кегля:');
+let scaleFailed = 0;
+let scaleChecked = 0;
+const MIN_BODY_MM = 1.4;
+const BODY_CEILING = 24;
+for (const [lang, code, text, signal] of WORST.slice(0, 8)) {
+  for (const [w, h] of SIZES) {
+    for (const s of [0.1, 0.5, 0.9, 1, 1.2, 2, 10]) {
+      const l = layoutLabel(inputFor(code, text, signal), {
+        jurisdiction: 'clp', purpose: 'supplier', widthMm: w, heightMm: h, bodyScale: s,
+      });
+      scaleChecked++;
+      if (l.fit.bodyMm < MIN_BODY_MM - 1e-9) {
+        scaleFailed++; console.log(`  ⛔ ${lang} ${w}×${h} ×${s}: кегль ${l.fit.bodyMm} мм — ниже пола ${MIN_BODY_MM}`);
+      }
+      if (l.fit.bodyMm > BODY_CEILING + 1e-9) {
+        scaleFailed++; console.log(`  ⛔ ${lang} ${w}×${h} ×${s}: кегль ${l.fit.bodyMm} мм — выше потолка ${BODY_CEILING}`);
+      }
+      for (const it of l.items as any[]) {
+        if (it.t !== 'text' || !it.s) continue;
+        const kind = it.mono ? 'mono' : it.bold ? 'bold' : 'regular';
+        if (it.x + textWidthMm(it.s, it.size, kind) > w + 1e-9) {
+          scaleFailed++;
+          console.log(`  ⛔ ${lang} ${w}×${h} ×${s}: за краем — «${it.s.slice(0, 50)}»`);
+          break;
+        }
+      }
+    }
+  }
+}
+/** ⚠ Обещанный запас обязан быть правдой: на нём этикетка ещё влезает. */
+for (const [w, h] of SIZES) {
+  const opt = { jurisdiction: 'clp' as const, purpose: 'supplier' as const, widthMm: w, heightMm: h };
+  const base = layoutLabel(inputFor('P280', 'Wear protective gloves.', 'Danger'), opt);
+  const cap = base.fit.maxFittingBodyMm;
+  if (cap == null) continue;
+  scaleChecked++;
+  const at = layoutLabel(inputFor('P280', 'Wear protective gloves.', 'Danger'), { ...opt, bodyScale: cap / base.fit.autoBodyMm });
+  if (!at.fit.fits) {
+    scaleFailed++;
+    console.log(`  ⛔ ${w}×${h}: обещан запас до ${cap} мм, а на нём этикетка уже не влезает`);
+  }
+}
+console.log(
+  scaleFailed
+    ? `⛔ провалов поправки: ${scaleFailed} из ${scaleChecked}`
+    : `✅ ${scaleChecked} прогонов поправки: пол и потолок держатся, текст внутри, обещанный запас правдив`,
+);
+
+process.exit(failed + scaleFailed ? 1 : 0);

@@ -209,6 +209,18 @@ export default function GHSLabelConstructor({
   const [selectedP, setSelectedP] = useState<string[]>(
     () => initialSelectedP ?? pStatements.slice(0, 6).map((p) => p.code),
   )
+  /**
+   * ⭐ Ручная поправка кегля — доля от подобранного движком. 1 = авто.
+   *
+   * ⚠⚠ ИМЕННО ДОЛЯ, А НЕ МИЛЛИМЕТРЫ. Одно и то же число миллиметров на
+   * 40 × 25 мм и на 210 × 297 мм означает совершенно разные этикетки, и
+   * ползунок в миллиметрах пришлось бы перенастраивать при каждой смене
+   * заготовки. Доля переносится между размерами без пересчёта.
+   *
+   * ⚠ Границы держит движок (`MIN_BODY_MM`, потолок от ширины), а не это поле:
+   * проверка в интерфейсе — удобство, проверка в движке — гарантия.
+   */
+  const [bodyScale, setBodyScale] = useState(1)
   const [showAllP, setShowAllP] = useState(false)
   const [pQuery, setPQuery] = useState('')
 
@@ -966,6 +978,7 @@ export default function GHSLabelConstructor({
     heightMm: Math.max(15, sizeH),
     containerLitres: litres,
     containerMl: capacityMl,
+    bodyScale,
   })
   const previewSvg = renderSvg(layout)
   const fit = layout.fit
@@ -2105,6 +2118,66 @@ export default function GHSLabelConstructor({
                 {!fit.fits ? ' · grown to fit the content' : ''}
               </p>
               <p className="text-[11px] text-gray-400">The preview is scaled to your screen — the real print size is shown above.</p>
+            </div>
+
+            {/* ⭐⭐ Ручной размер текста.
+                ⚠ Стоит ПОД ПРЕВЬЮ, а не в колонке размеров слева: это настройка
+                вида, и оценивается она глазами, а не числом. Ползунок в другом
+                столбце заставлял бы переводить взгляд через весь экран на
+                каждый шаг. */}
+            <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
+              <div className="flex items-baseline justify-between gap-2">
+                <label htmlFor="body-scale" className="text-xs font-semibold text-[#062A78]">Text size</label>
+                <span className="text-[11px] text-gray-500">
+                  {fit.bodyMm} mm
+                  {Math.abs(bodyScale - 1) > 0.001 && <> · auto {fit.autoBodyMm} mm</>}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center gap-3">
+                <input
+                  id="body-scale" type="range" min={60} max={250} step={5}
+                  value={Math.round(bodyScale * 100)}
+                  onChange={(e) => setBodyScale(Number(e.target.value) / 100)}
+                  className="h-1 flex-1 accent-[#062A78]"
+                />
+                <span className="w-12 text-right text-xs tabular-nums text-gray-700">{Math.round(bodyScale * 100)}%</span>
+                <button
+                  type="button"
+                  onClick={() => setBodyScale(1)}
+                  disabled={Math.abs(bodyScale - 1) < 0.001}
+                  className="rounded-lg border border-gray-300 px-2 py-1 text-[11px] text-gray-700 disabled:opacity-40"
+                >
+                  Auto
+                </button>
+              </div>
+
+              {/* ⭐ Порог «ещё влезает» — без него ползунок вверх был бы ловушкой:
+                  движок и так берёт самый крупный кегль, при котором содержимое
+                  помещается, значит выше почти всегда означает «этикетка вырастет». */}
+              {fit.maxFittingBodyMm && fit.autoBodyMm > 0 && (
+                <p className="mt-2 text-[11px] text-gray-500">
+                  Up to {Math.floor((fit.maxFittingBodyMm / fit.autoBodyMm) * 100)}% still fits {fmt(sizeW)} × {fmt(sizeH)} {unit}.
+                </p>
+              )}
+              {!fit.fits && (
+                <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+                  The content no longer fits the size you chose, so the label grew to{' '}
+                  {fmt(layout.widthMm)} × {fmt(layout.heightMm)} {unit}. It will not match the die-cut stock —
+                  reduce the text size, use a larger label, or drop a precautionary statement.
+                </p>
+              )}
+              {fit.bodyClampedTo === 'min' && (
+                <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+                  Held at {fit.bodyMm} mm — our floor for readable print. CLP sets no numeric minimum type size:
+                  Article 31(3) only requires the elements to be “of such size and spacing as to be easily read”.
+                  The judgement is yours, but we will not render below this.
+                </p>
+              )}
+              {fit.bodyClampedTo === 'max' && (
+                <p className="mt-2 text-[11px] text-gray-500">
+                  Held at {fit.bodyMm} mm — any larger and a single character stops fitting across the label.
+                </p>
+              )}
             </div>
           </div>
 
