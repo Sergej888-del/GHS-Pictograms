@@ -113,6 +113,92 @@ function release(): void {
   waiting.shift()?.()
 }
 
+/**
+ * ⚠⚠ «fetch failed» — ЭТО НЕ ДИАГНОЗ, А ЗАГЛУШКА UNDICI.
+ *
+ * Настоящая причина лежит в `err.cause`, иногда на два уровня глубже. Без
+ * разбора цепочки подменённый сертификат, мёртвый DNS и закрытый порт выглядят
+ * ОДНОЙ И ТОЙ ЖЕ бесполезной строкой `TypeError: fetch failed`.
+ *
+ * ⛔ Это не теория: на этой машине TLS перехватывается, и `npm run build`
+ * (без `--use-system-ca`) падает ровно так — на первом же запросе к базе, не
+ * сказав ни слова о том, что дело в сертификате. Правильная команда —
+ * `npm run build:local`; `build` оставлен для Cloudflare, где перехвата нет.
+ *
+ * ⚠ Тот же приём уже работал в `scripts/download-clp-annexes.mjs`. Он повторён
+ * здесь, а не импортирован: `.mjs` из `scripts/` в код сайта не тянется.
+ */
+const TLS_HINTS: Record<string, string> = {
+  UNABLE_TO_VERIFY_LEAF_SIGNATURE: 'сертификат подменён (антивирус или прокси)',
+  SELF_SIGNED_CERT_IN_CHAIN: 'самоподписанный корень в цепочке',
+  DEPTH_ZERO_SELF_SIGNED_CERT: 'самоподписанный сертификат',
+  CERT_HAS_EXPIRED: 'сертификат просрочен — проверь дату и время в Windows',
+  ERR_TLS_CERT_ALTNAME_INVALID: 'сертификат выписан на другое имя',
+}
+const NET_HINTS: Record<string, string> = {
+  ENOTFOUND: 'DNS не разрешает имя — проверь PUBLIC_SUPABASE_URL в .env.local',
+  EAI_AGAIN: 'DNS временно не отвечает',
+  ECONNREFUSED: 'соединение отклонено — файрвол или прокси',
+  ECONNRESET: 'соединение оборвано на середине',
+  ETIMEDOUT: 'таймаут — сеть до Supabase не доходит',
+  UND_ERR_CONNECT_TIMEOUT: 'таймаут соединения',
+  UND_ERR_HEADERS_TIMEOUT: 'база приняла запрос, но не ответила вовремя',
+}
+
+/**
+ * Стоит ли у процесса флаг `--use-system-ca`.
+ * ⚠ Через `globalThis.process`, а не `process` напрямую: в браузерном бандле
+ * такого имени нет вовсе, а сборщик умеет подставлять `process.env` буквально.
+ */
+function hasSystemCa(): boolean {
+  const p = (globalThis as { process?: { execArgv?: string[]; env?: Record<string, string | undefined> } }).process
+  if (!p) return false
+  return (p.execArgv ?? []).some((a) => a.includes('use-system-ca'))
+    || (p.env?.NODE_OPTIONS ?? '').includes('use-system-ca')
+}
+
+/**
+ * Разворачивает отказ сети в сообщение, из которого следует, что делать.
+ *
+ * ⚠⚠ ЗОВЁТСЯ ТОЛЬКО НА СБОРКЕ, И ЭТО НЕ ПЕРЕСТРАХОВКА. Тот же `rawFetch` работает
+ * в браузере, а `secondError` / `primaryError` конструктора печатаются
+ * ПОСЕТИТЕЛЮ. Русский текст и совет про `npm run build:local` посетителю не
+ * нужны и не должны до него доезжать — правило session 67: сообщение, которое
+ * видит посетитель, на языке страницы. В браузере ошибка уходит как есть.
+ */
+function explainFetchFailure(err: unknown): Error {
+  const chain: { message?: string; code?: string; cause?: unknown }[] = []
+  for (let e = err as { message?: string; code?: string; cause?: unknown } | null | undefined;
+       e && chain.length < 8;
+       e = e.cause as typeof e) {
+    chain.push(e)
+  }
+  const codes = chain.map((e) => e.code).filter(Boolean) as string[]
+  const code = codes[codes.length - 1] ?? null
+  const trail = chain.map((e) => e.message).filter(Boolean).join(' ← ')
+
+  const lines = [`сеть до Supabase не поднялась: ${trail || String(err)}`]
+  if (code) lines.push(`  код: ${code}`)
+
+  if (code && TLS_HINTS[code]) {
+    lines.push(`  ⚠ ${TLS_HINTS[code]}`)
+    lines.push(
+      hasSystemCa()
+        ? '  ⚠ флаг --use-system-ca УЖЕ стоит — значит дело не в перехвате TLS'
+        : '  ⛔ флага --use-system-ca НЕТ. Собирать этот проект надо командой\n     `npm run build:local` — `npm run build` идёт без флага и оставлен для Cloudflare',
+    )
+  } else if (code && NET_HINTS[code]) {
+    lines.push(`  ⚠ ${NET_HINTS[code]}`)
+  } else if (!hasSystemCa()) {
+    // ⚠ Причина не опознана — но самая частая на этой машине проверяется первой.
+    lines.push('  ⚠ причина не опознана. Проверь первым делом, что запущено через\n     `npm run build:local`: `npm run build` идёт без --use-system-ca')
+  }
+
+  const out = new Error(lines.join('\n'))
+  ;(out as Error & { cause?: unknown }).cause = err
+  return out
+}
+
 /** Длиннее дефолтного undici/HTML timeout — prerender тысяч страниц без обрыва. */
 const rawFetch: typeof fetch = async (input, init) => {
   // ⚠ Метод по умолчанию — GET: supabase-js для обычной выборки `method` не ставит.
@@ -132,7 +218,9 @@ const rawFetch: typeof fetch = async (input, init) => {
       await sleep(RETRY_BACKOFF_MS[i])
     } catch (err) {
       // Обрыв сети или наш собственный 120-секундный таймаут.
-      if (i >= attempts - 1) throw err
+      // ⚠ На сборке отказ разворачивается в причину (см. `explainFetchFailure`),
+      // в браузере уходит как есть: там его текст видит посетитель.
+      if (i >= attempts - 1) throw IS_BUILD ? explainFetchFailure(err) : err
       console.warn(
         `[supabase] ${(err as Error)?.message ?? err}, attempt ${i + 1} of ${attempts} — retrying in ${RETRY_BACKOFF_MS[i]} ms`,
       )

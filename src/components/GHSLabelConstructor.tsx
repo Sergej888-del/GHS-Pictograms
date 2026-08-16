@@ -1340,7 +1340,11 @@ export default function GHSLabelConstructor({
               aria-label="Primary label language"
               className="cursor-pointer rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700"
             >
-              <option value="">all 23 EU languages…</option>
+              {/* ⚠⚠ ЧИСЛО СЧИТАЕТСЯ ИЗ СПИСКА, А НЕ ВПИСАНО. Раньше здесь стояло «23»
+                  буквами. В день, когда закроется №13 и ирландский вернётся в
+                  PRIMARY_LANGUAGES, список станет из 24 — а надпись осталась бы
+                  «all 23», и это утверждение о регламенте, сделанное опечаткой. */}
+              <option value="">all {PRIMARY_LANGUAGES.length} EU languages…</option>
               {PRIMARY_LANGUAGES.map((l) => (
                 <option key={l.code} value={l.code}>{l.native} — {l.name}</option>
               ))}
@@ -1474,7 +1478,11 @@ export default function GHSLabelConstructor({
               {/* ⭐ Здесь ирландский ЕСТЬ: вторым языком он законен — тексты
                   H- и P-фраз на нём напечатаны в Annex III и IV. Не хватает
                   только сигнального слова, а его во втором блоке не требуется. */}
-              <option value="">all 24 EU languages…</option>
+              {/* ⚠ Длина берётся у НЕотфильтрованного EU_LANGUAGES намеренно: строка
+                  обещает набор («доступны все 24 языка ЕС»), а .filter ниже
+                  снимает ровно один — уже выбранный основным. Это свойство
+                  текущего выбора, а не заявление о том, скольких языков у нас нет. */}
+              <option value="">all {EU_LANGUAGES.length} EU languages…</option>
               {EU_LANGUAGES.filter((l) => l.code !== primaryLang).map((l) => (
                 <option key={l.code} value={l.code}>{l.native} — {l.name}</option>
               ))}
