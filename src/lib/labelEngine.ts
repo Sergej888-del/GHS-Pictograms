@@ -226,6 +226,15 @@ export type LabelOptions = {
    * этикетки и пиктограммы. Значит `MIN_BODY_MM` — НАШ порог, а не норма, и
    * называть его в интерфейсе надо своим именем.
    */
+  /**
+   * Ключ выбранного набора цеховой этикетки (`WorkplaceOption.key`).
+   *
+   * ⚠⚠ Читается ТОЛЬКО при `purpose === 'workplace'`. §1910.1200(f)(6) даёт
+   * выбор из двух законных наборов, и отвечать за человека движок не должен.
+   * ⚠ Неизвестный ключ и `undefined` дают ПЕРВЫЙ набор юрисдикции, а не пустой —
+   * разбор в `workplaceOptionFor` в `jurisdictions.ts`.
+   */
+  workplaceOption?: string;
   bodyScale?: number;
 };
 
@@ -735,7 +744,7 @@ export function layoutLabel(input: LabelInput, opt: LabelOptions): LabelLayout {
     Math.min(Math.max(body * PIC_TO_BODY, requiredPic ?? 4), W * 0.4);
 
   const pics = input.pictograms.filter((p) => p.svg && p.svg.trim());
-  const required = elementsFor(j, opt.purpose, opt.containerMl);
+  const required = elementsFor(j, opt.purpose, opt.containerMl, opt.workplaceOption);
   const showPics = required.includes('pictograms') && pics.length > 0;
   const showSignal = required.includes('signalWord') && !!input.signalWord;
   const showH = required.includes('hazardStatements') && input.hStatements.length > 0;
@@ -1377,7 +1386,7 @@ function compose(
 export function checkCompliance(input: LabelInput, opt: LabelOptions): ComplianceIssue[] {
   const j = JURISDICTIONS[opt.jurisdiction];
   const out: ComplianceIssue[] = [];
-  const required = elementsFor(j, opt.purpose, opt.containerMl);
+  const required = elementsFor(j, opt.purpose, opt.containerMl, opt.workplaceOption);
 
   const has: Record<LabelElement, boolean> = {
     productIdentifier: !!input.productName?.trim(),

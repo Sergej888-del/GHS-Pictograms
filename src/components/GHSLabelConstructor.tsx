@@ -5,7 +5,7 @@ import {
 } from '../lib/labelEngine'
 import {
   JURISDICTIONS, JURISDICTION_ORDER, sizeTierForLitres, recommendedTierForLitres, smallPackageRuleFor,
-  labelSizeVerdict,
+  labelSizeVerdict, workplaceOptionFor,
   type JurisdictionKey, type LabelPurpose, type SizeTier,
 } from '../lib/jurisdictions'
 // ⭐⭐ Отбор шести фраз. До session 65 здесь стоял `pStatements.slice(0, 6)`.
@@ -182,6 +182,18 @@ export default function GHSLabelConstructor({
   const [jurisdictionKey, setJurisdictionKey] = useState<JurisdictionKey>(initialJurisdiction)
   const [purpose, setPurpose] = useState<LabelPurpose>(initialPurpose)
   const j = JURISDICTIONS[jurisdictionKey]
+
+  /**
+   * ⭐⭐ ВЫБРАННЫЙ НАБОР ЦЕХОВОЙ ЭТИКЕТКИ. §1910.1200(f)(6) даёт ВЫБОР ИЗ ДВУХ,
+   * и до session 68 инструмент делал его за человека.
+   *
+   * ⚠⚠ КЛЮЧ ХРАНИТСЯ, А НЕ НОМЕР. Юрисдикцию можно переключить в любой момент,
+   * и `workplaceOptions[1]` у OSHA и у CLP — это разные вещи (у CLP второго нет
+   * вовсе). Номер пережил бы смену и молча выбрал чужой набор; неизвестный ключ
+   * `workplaceOptionFor` честно сворачивает в первый — законный — набор.
+   */
+  const [workplaceOption, setWorkplaceOption] = useState<string>(j.workplaceOptions[0].key)
+  const wpOption = workplaceOptionFor(j, workplaceOption)
 
   // Формат, заданный страницей шаблона. Считается один раз: дальше человек
   // меняет размер сам, и пересчёт затирал бы его выбор на каждой перерисовке.
@@ -785,7 +797,7 @@ export default function GHSLabelConstructor({
   if (purpose === 'small' && smallRule?.keep.includes('outerPackageNote')) {
     notes.push('Full label information is provided on the immediate outer package.')
   }
-  if (purpose === 'workplace' && j.workplaceElements.includes('sdsAvailableNote')) {
+  if (purpose === 'workplace' && wpOption.elements.includes('sdsAvailableNote')) {
     notes.push('A safety data sheet for this product is available in the workplace.')
   }
 
@@ -1061,6 +1073,8 @@ export default function GHSLabelConstructor({
   const layout = layoutLabel(labelInput, {
     jurisdiction: jurisdictionKey,
     purpose,
+    // ⚠ Движок читает это поле только при `purpose === 'workplace'`.
+    workplaceOption,
     widthMm: Math.max(15, sizeW),
     heightMm: Math.max(15, sizeH),
     containerLitres: litres,
@@ -1531,6 +1545,54 @@ export default function GHSLabelConstructor({
         </div>
         {purpose === 'workplace' && (
           <p className="mt-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs leading-relaxed text-gray-700">{j.workplaceNote}</p>
+        )}
+
+        {/* ── ВЫБОР НАБОРА ЦЕХОВОЙ ЭТИКЕТКИ ────────────────────────────────
+            ⚠⚠ ПОЯВЛЯЕТСЯ ТОЛЬКО ТАМ, ГДЕ ВЫБОР ЕСТЬ У НОРМЫ. Сегодня это одна
+            юрисдикция — OSHA, §1910.1200(f)(6). У CLP, GB CLP и WHMIS набор
+            один, и рисовать переключатель из одной кнопки значило бы намекать
+            на выбор, которого нет. Условие — на `length > 1`, а не на
+            `jurisdictionKey === 'osha'`: появится вторая такая норма — панель
+            придёт вместе с ней, а не следующей правкой этого файла. */}
+        {purpose === 'workplace' && j.workplaceOptions.length > 1 && (
+          <div className="mt-2 rounded-lg border border-blue-200 bg-white px-3 py-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+              Which set of elements
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
+              The standard allows either set. Pick the one that matches how the container is used —
+              this is your call, not ours.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {j.workplaceOptions.map((o) => (
+                <button
+                  key={o.key}
+                  type="button"
+                  onClick={() => { setWorkplaceOption(o.key); track('label_workplace_option', { option: o.key }) }}
+                  className={`cursor-pointer rounded-lg border px-3 py-1.5 text-left transition-colors ${
+                    wpOption.key === o.key
+                      ? 'border-[#062A78] bg-[#062A78] text-white'
+                      : 'border-gray-300 bg-white text-gray-700 hover:border-[#062A78]'
+                  }`}
+                >
+                  <span className="block text-sm font-semibold">{o.label}</span>
+                  <span className={`block text-[11px] ${wpOption.key === o.key ? 'text-blue-100' : 'text-gray-500'}`}>
+                    {o.hint}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-gray-700">
+              {wpOption.note} <span className="text-gray-400">{wpOption.citation}</span>
+            </p>
+            {/* ⭐ (f)(8) стоит рядом с выбором, а не в общем примечании: человек,
+                переливающий на одну смену для себя, не должен выбирать между
+                двумя наборами — ему не нужен ни один. */}
+            <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500">
+              ⓘ A portable container filled and used by the same employee within one shift needs no
+              label at all. <span className="text-gray-400">29 CFR 1910.1200(f)(8)</span>
+            </p>
+          </div>
         )}
         {purpose === 'small' && smallRule && (
           <p className="mt-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs leading-relaxed text-gray-700">

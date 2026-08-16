@@ -40,6 +40,38 @@ export type LabelElement =
   | 'outerPackageNote'
   | 'sdsAvailableNote';
 
+/**
+ * ⭐⭐ РАЗРЕШЁННЫЙ НАБОР ЭЛЕМЕНТОВ ЦЕХОВОЙ ЭТИКЕТКИ. ИХ БЫВАЕТ БОЛЬШЕ ОДНОГО.
+ *
+ * ⚠⚠ ЗАЧЕМ СПИСОК, А НЕ ОДИН НАБОР. §1910.1200(f)(6) не предписывает состав —
+ * он даёт ВЫБОР ИЗ ДВУХ, и законны оба:
+ *   (i)  сведения по (f)(1)(i)–(v), то есть полная этикетка БЕЗ блока
+ *        поставщика: (f)(1)(vi) в эту ссылку не входит;
+ *   (ii) идентификатор продукта плюс слова, картинки или символы, дающие
+ *        хотя бы общие сведения об опасностях.
+ *
+ * До session 68 код жёстко выбирал (ii), и человек, которому нужен (i),
+ * получить его не мог: инструмент молча отвечал за него на вопрос, который
+ * норма оставила ему. Найдено разбором session 60 —
+ * `claude/label-maker-branch-loss.md`.
+ *
+ * ⚠ У остальных трёх юрисдикций набор один: выбора не даёт сама норма, и
+ * список из одного элемента это честно выражает. Переключатель в интерфейсе
+ * при длине 1 не появляется — вопрос без вариантов не задаётся.
+ */
+export type WorkplaceOption = {
+  /** Ключ для состояния и адреса. Совпадает с номером пункта нормы. */
+  key: string;
+  /** Подпись кнопки. */
+  label: string;
+  /** Одна строка под подписью — чем этот набор отличается от соседнего. */
+  hint: string;
+  elements: LabelElement[];
+  citation: string;
+  /** Что именно разрешает норма — печатается под переключателем. */
+  note: string;
+};
+
 /** Ярус минимальных размеров по объёму тары (CLP Annex I, Table 1.3). */
 export type SizeTier = {
   key: string;
@@ -157,8 +189,13 @@ export type Jurisdiction = {
   languageNote: string;
   /** Обязательные элементы этикетки поставщика. */
   supplierElements: LabelElement[];
-  /** Обязательные элементы цеховой (вторичной) этикетки. */
-  workplaceElements: LabelElement[];
+  /**
+   * Разрешённые наборы цеховой (вторичной) этикетки, в порядке предложения.
+   * ⚠⚠ ПЕРВЫЙ — УМОЛЧАНИЕ, и менять порядок значит менять то, что получит
+   * человек, ничего не выбравший. Список непустой всегда.
+   */
+  workplaceOptions: WorkplaceOption[];
+  /** Общая рамка: чей это вообще вопрос — норма о поставке или охрана труда. */
   workplaceNote: string;
   /** Пороги малой тары, от большего к меньшему. */
   smallPackage: SmallPackageRule[];
@@ -176,6 +213,23 @@ const CLP_SUPPLIER_ELEMENTS: LabelElement[] = [
   'hazardStatements', 'precautionaryStatements', 'supplier',
 ];
 
+/**
+ * ⭐⭐ НАБОР §1910.1200(f)(6)(i) СЧИТАЕТСЯ ИЗ ЭТИКЕТКИ ПОСТАВЩИКА, А НЕ ПИШЕТСЯ
+ * РУКАМИ.
+ *
+ * ⚠⚠ Потому что и норма его не перечисляет. Дословно (f)(6)(i) — это «the
+ * information specified under paragraphs (f)(1)(i) through (v)», то есть
+ * ССЫЛКА на состав этикетки поставщика минус (f)(1)(vi), блок «name, U.S.
+ * address, and U.S. telephone number». Выписать эти пять элементов списком
+ * значило бы завести ВТОРОЙ источник того же факта — ровно тот дефект, за
+ * который в этой же сессии снесены 602 строки `labelArtifact.ts`.
+ *
+ * ⚠ Совпадение с `supplierElements` OSHA проверяется на прогоне
+ * (`npm run check:label-elements`): сломайся вывод — проверка покраснеет и
+ * назовёт расхождение поимённо, а не оставит два разошедшихся списка.
+ */
+const OSHA_WORKPLACE_F6_I: LabelElement[] = CLP_SUPPLIER_ELEMENTS.filter((e) => e !== 'supplier');
+
 export const JURISDICTIONS: Record<JurisdictionKey, Jurisdiction> = {
   // ── Европейский союз ─────────────────────────────────────────────────────
   clp: {
@@ -192,7 +246,17 @@ export const JURISDICTIONS: Record<JurisdictionKey, Jurisdiction> = {
     languageNote:
       'The label must be in the official language of the country where the product is placed on the market (Art. 17(2)). More than one language is allowed if all of them carry the same information.',
     supplierElements: CLP_SUPPLIER_ELEMENTS,
-    workplaceElements: ['productIdentifier', 'pictograms', 'signalWord', 'hazardStatements'],
+    workplaceOptions: [
+      {
+        key: 'chemical-agents',
+        label: 'Workplace container',
+        hint: 'no supplier block',
+        elements: ['productIdentifier', 'pictograms', 'signalWord', 'hazardStatements'],
+        citation: 'Directive 98/24/EC, Art. 6(3) and national implementing rules',
+        note:
+          'CLP itself does not prescribe a workplace-container label, so no alternative set exists to choose from: this is the common national minimum — identity of the substance, its pictograms, signal word and hazard statements.',
+      },
+    ],
     workplaceNote:
       'CLP governs placing on the market, not decanting inside a plant. Workplace container labelling falls under Directive 98/24/EC and national occupational safety rules.',
     smallPackage: [],
@@ -222,7 +286,17 @@ export const JURISDICTIONS: Record<JurisdictionKey, Jurisdiction> = {
     languageNote:
       'GB Art. 17(2): “The label shall be written in English.” Other languages are allowed provided all of them carry the same information.',
     supplierElements: CLP_SUPPLIER_ELEMENTS,
-    workplaceElements: ['productIdentifier', 'pictograms', 'signalWord', 'hazardStatements'],
+    workplaceOptions: [
+      {
+        key: 'coshh',
+        label: 'Workplace container',
+        hint: 'no supplier block',
+        elements: ['productIdentifier', 'pictograms', 'signalWord', 'hazardStatements'],
+        citation: 'COSHH Regulations 2002, reg. 7 and HSE guidance',
+        note:
+          'GB CLP does not prescribe a workplace-container label, so there is no alternative set to choose from: this is the practical minimum under COSHH — what the substance is, and what it can do.',
+      },
+    ],
     workplaceNote: 'Workplace container labelling is governed by COSHH, not by GB CLP.',
     smallPackage: [],
     // ⚠⚠ Annex VIII отменён в GB с 1 января 2024 — UFI не требуется.
@@ -256,9 +330,32 @@ export const JURISDICTIONS: Record<JurisdictionKey, Jurisdiction> = {
       '§1910.1200(f)(2): the label is in English; other languages may also be included. For workplace containers, (f)(10) allows a second language “as long as the information is presented in English as well”.',
     // ⚠ (f)(1)(vi) после правила 2024 года требует именно США-адрес и США-телефон.
     supplierElements: CLP_SUPPLIER_ELEMENTS,
-    // ⚠ (f)(6)(ii): достаточно идентификатора продукта и слов, картинок или
-    // символов, дающих общую информацию об опасностях. Пиктограммы НЕ обязательны.
-    workplaceElements: ['productIdentifier', 'hazardStatements'],
+    // ⚠⚠ ДВА НАБОРА, ОБА ЗАКОННЫ, ВЫБИРАЕТ ЧЕЛОВЕК. Раньше здесь стоял один
+    // жёстко выбранный (ii) — см. шапку `WorkplaceOption`.
+    //
+    // ⚠ ПОРЯДОК ЗНАЧИМ: первым идёт (ii), потому что он и был поведением до
+    // session 68. Поставить первым (i) значило бы молча поменять этикетку всем,
+    // кто уже пользуется инструментом, — и выдать это за починку.
+    workplaceOptions: [
+      {
+        key: 'f6ii',
+        label: 'Identifier + hazard info',
+        hint: '§1910.1200(f)(6)(ii) — the shorter set',
+        elements: ['productIdentifier', 'hazardStatements'],
+        citation: '29 CFR 1910.1200(f)(6)(ii)',
+        note:
+          'Product identifier plus words, pictures or symbols giving at least general information about the hazards. Pictograms and a signal word are permitted here but not required — the standard leaves the form to you, provided it works together with the training and the SDS your hazard communication program already gives employees.',
+      },
+      {
+        key: 'f6i',
+        label: 'Full label, no supplier',
+        hint: '§1910.1200(f)(6)(i) — shipped-label elements',
+        elements: OSHA_WORKPLACE_F6_I,
+        citation: '29 CFR 1910.1200(f)(6)(i), referring to (f)(1)(i)–(v)',
+        note:
+          'The same elements as the shipped-container label, except the name, U.S. address and U.S. telephone number of the responsible party — (f)(1)(vi) is deliberately outside the reference. Choose this when the container leaves the immediate work area or is handled by people who did not fill it.',
+      },
+    ],
     workplaceNote:
       '§1910.1200(f)(6) gives a choice: either the elements of (f)(1)(i)–(v) — that is, without the supplier block — or the product identifier plus words, pictures or symbols conveying general hazard information. A portable container for the immediate use of the employee who fills it needs no label at all under (f)(8).',
     smallPackage: [
@@ -303,7 +400,17 @@ export const JURISDICTIONS: Record<JurisdictionKey, Jurisdiction> = {
     languageNote:
       'HPR s. 6.2: label elements must appear in BOTH official languages of Canada. Either a single bilingual label, or two unilingual parts that together constitute one bilingual label.',
     supplierElements: CLP_SUPPLIER_ELEMENTS,
-    workplaceElements: ['productIdentifier', 'hazardStatements', 'sdsAvailableNote'],
+    workplaceOptions: [
+      {
+        key: 'cohsr-10-41',
+        label: 'Workplace label',
+        hint: 'identifier, hazards, SDS available',
+        elements: ['productIdentifier', 'hazardStatements', 'sdsAvailableNote'],
+        citation: 'COHSR s. 10.41 (federal); provincial OHS rules mirror it',
+        note:
+          'The workplace label is set by occupational health and safety law, not by the HPR, and the three parts are named there — so there is no alternative set to choose from. ⚠ The bilingual duty of HPR s. 6.2 is a supplier duty; workplace-label language follows the OHS rules of the jurisdiction you are in.',
+      },
+    ],
     workplaceNote:
       'Workplace labels are governed by occupational health and safety law, not by the HPR. Federally (COHSR s. 10.41): product identifier, hazard information, and a statement that a safety data sheet is available in the workplace.',
     smallPackage: [
@@ -366,9 +473,30 @@ export function smallPackageRuleFor(j: Jurisdiction, ml: number): SmallPackageRu
   return sorted.find((r) => ml <= r.ml) ?? null;
 }
 
-/** Обязательные элементы для выбранной цели этикетки. */
-export function elementsFor(j: Jurisdiction, purpose: LabelPurpose, ml?: number): LabelElement[] {
-  if (purpose === 'workplace') return j.workplaceElements;
+/**
+ * Выбранный набор цеховой этикетки.
+ *
+ * ⚠⚠ НЕИЗВЕСТНЫЙ КЛЮЧ ДАЁТ ПЕРВЫЙ НАБОР, А НЕ ПУСТОЙ. Ключ приезжает из
+ * состояния острова и может пережить смену юрисдикции: выбрал `f6i` у OSHA,
+ * переключился на CLP — там такого ключа нет. Вернуть пустой набор значило бы
+ * напечатать этикетку без единого обязательного элемента и назвать это
+ * соответствием. Умолчание — всегда первый, и оно законно.
+ */
+export function workplaceOptionFor(j: Jurisdiction, key?: string): WorkplaceOption {
+  return j.workplaceOptions.find((o) => o.key === key) ?? j.workplaceOptions[0];
+}
+
+/**
+ * Обязательные элементы для выбранной цели этикетки.
+ * ⚠ `workplaceOptionKey` читается только при `purpose === 'workplace'`.
+ */
+export function elementsFor(
+  j: Jurisdiction,
+  purpose: LabelPurpose,
+  ml?: number,
+  workplaceOptionKey?: string,
+): LabelElement[] {
+  if (purpose === 'workplace') return workplaceOptionFor(j, workplaceOptionKey).elements;
   if (purpose === 'small' && typeof ml === 'number') {
     const rule = smallPackageRuleFor(j, ml);
     if (rule) return rule.keep;

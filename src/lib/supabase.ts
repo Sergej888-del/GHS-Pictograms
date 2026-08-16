@@ -127,22 +127,37 @@ function release(): void {
  *
  * ⚠ Тот же приём уже работал в `scripts/download-clp-annexes.mjs`. Он повторён
  * здесь, а не импортирован: `.mjs` из `scripts/` в код сайта не тянется.
+ *
+ * ⛔⛔ ПОДСКАЗКИ ПО-АНГЛИЙСКИ, И ЭТО НЕ ВКУСОВЩИНА — ЭТО ПОЙМАННЫЙ ДЕФЕКТ.
+ *
+ * В первой редакции session 68 они были русскими, а вызов закрыт условием
+ * `IS_BUILD`: посетитель этих слов НЕ УВИДЕЛ БЫ. Проверка «Язык интерфейса»
+ * (session 67) всё равно покраснела — и была права. Она спрашивает не «увидит
+ * ли посетитель», а **«доехало ли до браузера»**: строковые литералы лежат в
+ * бандле и читаются по Ctrl+U независимо от того, вызовется ли ветка.
+ *
+ * ⭐⭐ МЁРТВАЯ ВЕТКА КОДА — НЕ ТО ЖЕ САМОЕ, ЧТО ОТСУТСТВУЮЩАЯ СТРОКА.
+ * Комментарии выше остаются русскими совершенно законно: их выбрасывает
+ * сборщик, и проверка их не находит. Разница ровно в этом, а не в языке.
+ *
+ * ⚠ Диагностическая ценность от смены языка не пострадала: код ошибки и имя
+ * команды `npm run build:local` от языка не зависят вовсе.
  */
 const TLS_HINTS: Record<string, string> = {
-  UNABLE_TO_VERIFY_LEAF_SIGNATURE: 'сертификат подменён (антивирус или прокси)',
-  SELF_SIGNED_CERT_IN_CHAIN: 'самоподписанный корень в цепочке',
-  DEPTH_ZERO_SELF_SIGNED_CERT: 'самоподписанный сертификат',
-  CERT_HAS_EXPIRED: 'сертификат просрочен — проверь дату и время в Windows',
-  ERR_TLS_CERT_ALTNAME_INVALID: 'сертификат выписан на другое имя',
+  UNABLE_TO_VERIFY_LEAF_SIGNATURE: 'TLS certificate replaced by antivirus or proxy',
+  SELF_SIGNED_CERT_IN_CHAIN: 'self-signed root in the certificate chain',
+  DEPTH_ZERO_SELF_SIGNED_CERT: 'self-signed certificate',
+  CERT_HAS_EXPIRED: 'certificate expired — check the system clock',
+  ERR_TLS_CERT_ALTNAME_INVALID: 'certificate issued for a different host name',
 }
 const NET_HINTS: Record<string, string> = {
-  ENOTFOUND: 'DNS не разрешает имя — проверь PUBLIC_SUPABASE_URL в .env.local',
-  EAI_AGAIN: 'DNS временно не отвечает',
-  ECONNREFUSED: 'соединение отклонено — файрвол или прокси',
-  ECONNRESET: 'соединение оборвано на середине',
-  ETIMEDOUT: 'таймаут — сеть до Supabase не доходит',
-  UND_ERR_CONNECT_TIMEOUT: 'таймаут соединения',
-  UND_ERR_HEADERS_TIMEOUT: 'база приняла запрос, но не ответила вовремя',
+  ENOTFOUND: 'DNS does not resolve the host — check PUBLIC_SUPABASE_URL in .env.local',
+  EAI_AGAIN: 'DNS temporarily unavailable',
+  ECONNREFUSED: 'connection refused — firewall or proxy',
+  ECONNRESET: 'connection reset midway',
+  ETIMEDOUT: 'timed out — no route to Supabase',
+  UND_ERR_CONNECT_TIMEOUT: 'connect timeout',
+  UND_ERR_HEADERS_TIMEOUT: 'the database accepted the request but did not answer in time',
 }
 
 /**
@@ -160,11 +175,13 @@ function hasSystemCa(): boolean {
 /**
  * Разворачивает отказ сети в сообщение, из которого следует, что делать.
  *
- * ⚠⚠ ЗОВЁТСЯ ТОЛЬКО НА СБОРКЕ, И ЭТО НЕ ПЕРЕСТРАХОВКА. Тот же `rawFetch` работает
- * в браузере, а `secondError` / `primaryError` конструктора печатаются
- * ПОСЕТИТЕЛЮ. Русский текст и совет про `npm run build:local` посетителю не
- * нужны и не должны до него доезжать — правило session 67: сообщение, которое
- * видит посетитель, на языке страницы. В браузере ошибка уходит как есть.
+ * ⚠⚠ ЗОВЁТСЯ ТОЛЬКО НА СБОРКЕ, И ЭТО НЕ ПЕРЕСТРАХОВКА. Тот же `rawFetch`
+ * работает в браузере, а `secondError` / `primaryError` конструктора печатаются
+ * ПОСЕТИТЕЛЮ. Совет «собери через `npm run build:local`» посетителю бессмыслен:
+ * он ничего не собирает. В браузере ошибка уходит как есть.
+ *
+ * ⚠ Условие `IS_BUILD` закрывает ПОКАЗ, но не выкидывает строки из бандла —
+ * см. разбор про Ctrl+U в шапке `TLS_HINTS`. Одно другого не заменяет.
  */
 function explainFetchFailure(err: unknown): Error {
   const chain: { message?: string; code?: string; cause?: unknown }[] = []
@@ -177,21 +194,21 @@ function explainFetchFailure(err: unknown): Error {
   const code = codes[codes.length - 1] ?? null
   const trail = chain.map((e) => e.message).filter(Boolean).join(' ← ')
 
-  const lines = [`сеть до Supabase не поднялась: ${trail || String(err)}`]
-  if (code) lines.push(`  код: ${code}`)
+  const lines = [`cannot reach Supabase: ${trail || String(err)}`]
+  if (code) lines.push(`  code: ${code}`)
 
   if (code && TLS_HINTS[code]) {
-    lines.push(`  ⚠ ${TLS_HINTS[code]}`)
+    lines.push(`  ! ${TLS_HINTS[code]}`)
     lines.push(
       hasSystemCa()
-        ? '  ⚠ флаг --use-system-ca УЖЕ стоит — значит дело не в перехвате TLS'
-        : '  ⛔ флага --use-system-ca НЕТ. Собирать этот проект надо командой\n     `npm run build:local` — `npm run build` идёт без флага и оставлен для Cloudflare',
+        ? '  ! --use-system-ca is already set, so TLS interception is not the cause'
+        : '  > --use-system-ca is NOT set. Build this project with `npm run build:local`\n    — plain `npm run build` runs without the flag and is kept for Cloudflare',
     )
   } else if (code && NET_HINTS[code]) {
-    lines.push(`  ⚠ ${NET_HINTS[code]}`)
+    lines.push(`  ! ${NET_HINTS[code]}`)
   } else if (!hasSystemCa()) {
     // ⚠ Причина не опознана — но самая частая на этой машине проверяется первой.
-    lines.push('  ⚠ причина не опознана. Проверь первым делом, что запущено через\n     `npm run build:local`: `npm run build` идёт без --use-system-ca')
+    lines.push('  ! cause not recognised. First check this was started with\n    `npm run build:local`: plain `npm run build` runs without --use-system-ca')
   }
 
   const out = new Error(lines.join('\n'))
