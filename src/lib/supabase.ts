@@ -6,7 +6,7 @@ const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Отсутствуют PUBLIC_SUPABASE_URL или PUBLIC_SUPABASE_ANON_KEY в .env.local')
+  throw new Error('Missing PUBLIC_SUPABASE_URL or PUBLIC_SUPABASE_ANON_KEY in .env.local')
 }
 
 /**
@@ -127,14 +127,14 @@ const rawFetch: typeof fetch = async (input, init) => {
       const res = await fetch(input, { ...init, signal: AbortSignal.timeout(120_000) })
       if (res.ok || i >= attempts - 1 || !RETRY_STATUS.has(res.status)) return res
       console.warn(
-        `[supabase] HTTP ${res.status}, попытка ${i + 1} из ${attempts} — повтор через ${RETRY_BACKOFF_MS[i]} мс`,
+        `[supabase] HTTP ${res.status}, attempt ${i + 1} of ${attempts} — retrying in ${RETRY_BACKOFF_MS[i]} ms`,
       )
       await sleep(RETRY_BACKOFF_MS[i])
     } catch (err) {
       // Обрыв сети или наш собственный 120-секундный таймаут.
       if (i >= attempts - 1) throw err
       console.warn(
-        `[supabase] ${(err as Error)?.message ?? err}, попытка ${i + 1} из ${attempts} — повтор через ${RETRY_BACKOFF_MS[i]} мс`,
+        `[supabase] ${(err as Error)?.message ?? err}, attempt ${i + 1} of ${attempts} — retrying in ${RETRY_BACKOFF_MS[i]} ms`,
       )
       await sleep(RETRY_BACKOFF_MS[i])
     }

@@ -1566,7 +1566,7 @@ async function rasterisePictogram(svg: string, sizeMm: number, dpi = 600): Promi
   // `onerror`. См. `stripRootSizeAttrs`.
   const s = String(svg).trim();
   const m = s.match(/^<svg\b[^>]*>/i);
-  if (!m) throw new Error('pictogram: корневого <svg> нет');
+  if (!m) throw new Error('pictogram: no root <svg> element');
   const wrapped = stripRootSizeAttrs(m[0])
     .replace(/^<svg\b/i, `<svg width="${px}" height="${px}"`) + s.slice(m[0].length);
   const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(wrapped);

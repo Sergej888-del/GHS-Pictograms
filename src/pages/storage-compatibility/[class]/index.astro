@@ -165,10 +165,10 @@ const nFaq = entry?.data.faq?.length ? pad() : null
 ---
 
 <Layout title={title} description={description} canonical={canonical}>
-  <!-- Data-only pages (no prose entry) stay out of the index until P4 prose lands -->
+  {/* Data-only pages (no prose entry) stay out of the index until P4 prose lands */}
   {!entry && <meta name="robots" content="noindex,follow" slot="head" />}
 
-  <!-- HERO — v2 frame, original storage colour (HERO_BG) kept via inline style -->
+  {/* HERO — v2 frame, original storage colour (HERO_BG) kept via inline style */}
   <section class="hub-hero" style={`background:${HERO_BG};`}>
     <div class="dots-a" aria-hidden="true"></div>
     <div class="dots-b" aria-hidden="true"></div>
@@ -194,7 +194,7 @@ const nFaq = entry?.data.faq?.length ? pad() : null
     </div>
   </section>
 
-  <!-- SEGREGATION — the three verdicts against the other classes -->
+  {/* SEGREGATION — the three verdicts against the other classes */}
   <section class="hub-sec-deep">
     <div class="hub-wrap">
       <p class="hub-eyebrow">{nSeg} · Segregation</p>
@@ -240,7 +240,7 @@ const nFaq = entry?.data.faq?.length ? pad() : null
     </div>
   </section>
 
-  <!-- EDITORIAL PROSE (optional, P4) -->
+  {/* EDITORIAL PROSE (optional, P4) */}
   {Content && (
     <section class="hub-sec-white">
       <div class="hub-wrap">
@@ -252,7 +252,7 @@ const nFaq = entry?.data.faq?.length ? pad() : null
     </section>
   )}
 
-  <!-- SUBSTANCES IN THIS CLASS -->
+  {/* SUBSTANCES IN THIS CLASS */}
   <section class="hub-sec-b">
     <div class="hub-wrap">
       <p class="hub-eyebrow navy">{nSubs} · Substances</p>
@@ -296,7 +296,7 @@ const nFaq = entry?.data.faq?.length ? pad() : null
     </div>
   </section>
 
-  <!-- FAQ (optional, P4) + closing bridge -->
+  {/* FAQ (optional, P4) + closing bridge */}
   <section class="hub-sec-white">
     <div class="hub-wrap">
       {entry?.data.faq && entry.data.faq.length > 0 && (

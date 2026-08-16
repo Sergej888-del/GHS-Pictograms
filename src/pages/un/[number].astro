@@ -535,7 +535,7 @@ if (substances.length) {
     <script type="application/ld+json" slot="head" set:html={JSON.stringify(block)} />
   ))}
 
-  <!-- ═══ HERO ═══ -->
+  {/* ═══ HERO ═══ */}
   <section class="hub-hero">
     <div class="dots-a" aria-hidden="true"></div>
     <div class="dots-b" aria-hidden="true"></div>
@@ -573,10 +573,10 @@ if (substances.length) {
     </div>
   </section>
 
-  <!-- ═══ ПЕРЕКЛЮЧАТЕЛЬ ЮРИСДИКЦИИ ═══
+  {/* ═══ ПЕРЕКЛЮЧАТЕЛЬ ЮРИСДИКЦИИ ═══
        ⚠ По умолчанию активно «Both»: обе панели в HTML и обе видны. Скрипт
        только сужает вид, он ничего не подгружает. Без JavaScript страница
-       остаётся полной. -->
+       остаётся полной. */}
   {hasAdr && hasDot && (
     <section class="hub-sec-white" style="padding-top:28px;padding-bottom:0">
       <div class="hub-wrap">
@@ -605,7 +605,7 @@ if (substances.length) {
     </section>
   )}
 
-  <!-- ═══ 01 · СРАВНЕНИЕ ═══ -->
+  {/* ═══ 01 · СРАВНЕНИЕ ═══ */}
   {compare.length > 0 && (
     <section class="hub-sec-a" data-panel="both">
       <div class="hub-wrap">
@@ -645,7 +645,7 @@ if (substances.length) {
     </section>
   )}
 
-  <!-- ═══ ADR ═══ -->
+  {/* ═══ ADR ═══ */}
   {hasAdr && (
     <section class="hub-sec-white" data-panel="adr" id="adr">
       <div class="hub-wrap">
@@ -809,7 +809,7 @@ if (substances.length) {
     </section>
   )}
 
-  <!-- ═══ 49 CFR ═══ -->
+  {/* ═══ 49 CFR ═══ */}
   {hasDot && (
     <section class="hub-sec-b" data-panel="dot" id="us">
       <div class="hub-wrap">
@@ -969,7 +969,7 @@ if (substances.length) {
     </section>
   )}
 
-  <!-- ═══ ОРАНЖЕВАЯ ТАБЛИЧКА ═══ -->
+  {/* ═══ ОРАНЖЕВАЯ ТАБЛИЧКА ═══ */}
   {hin && (
     <section class="hub-sec-white" data-panel="adr" id="orange-plate">
       <div class="hub-wrap">
@@ -1037,7 +1037,7 @@ if (substances.length) {
     </section>
   )}
 
-  <!-- ═══ ВЕЩЕСТВА ═══ -->
+  {/* ═══ ВЕЩЕСТВА ═══ */}
   {substances.length > 0 && (
     <section class="hub-sec-a" data-panel="both">
       <div class="hub-wrap">
@@ -1074,7 +1074,7 @@ if (substances.length) {
     </section>
   )}
 
-  <!-- ═══ GHS-СТОРОНА — то, ради чего страница существует ═══ -->
+  {/* ═══ GHS-СТОРОНА — то, ради чего страница существует ═══ */}
   {(allPictograms.length > 0 || hWithText.length > 0) && (
     <section class="hub-sec-white" data-panel="both" id="ghs-side">
       <div class="hub-wrap">
@@ -1129,7 +1129,7 @@ if (substances.length) {
     </section>
   )}
 
-  <!-- ═══ FAQ + ЗАКРЫТИЕ ═══ -->
+  {/* ═══ FAQ + ЗАКРЫТИЕ ═══ */}
   <section class="hub-sec-b" data-panel="both">
     <div class="hub-wrap">
       {faq.length > 0 && (

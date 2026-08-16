@@ -60,12 +60,12 @@ const canonicalURL = canonical
     <link rel="canonical" href={canonicalURL} />
     <title>{pageTitle}</title>
 
-    <!-- Google Fonts -->
+    {/* Google Fonts */}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 
-    <!--
+    {/*
       Значки (session 37). ⚠⚠ До этой правки здесь стояла ОДНА строка про
       favicon.svg, а public/favicon.ico оставался дефолтным логотипом Astro —
       чёрный квадрат с ракетой. Именно он показывался во вкладке браузера, в
@@ -75,21 +75,21 @@ const canonicalURL = canonical
       он масштабируется. .ico запасной, и в нём ТРИ кадра (16, 32, 48), где кадр
       16 нарисован по пиксельной сетке, а не сжат из 32: при сжатии полосы знака
       попадают на половину пикселя и замыливаются антиалиасингом.
-    -->
+    */}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
-    <!-- ⚠ apple-touch-icon обязан быть НЕПРОЗРАЧНЫМ во весь квадрат: iOS кладёт
-         своё скругление поверх и подставляет под прозрачность чёрный. -->
+    {/* ⚠ apple-touch-icon обязан быть НЕПРОЗРАЧНЫМ во весь квадрат: iOS кладёт
+         своё скругление поверх и подставляет под прозрачность чёрный. */}
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#062a78" />
 
-    <!--
+    {/*
       Open Graph. ⚠⚠ og-default.png до session 37 был ПРОЗРАЧНЫМ ПИКСЕЛЕМ 1 × 1
       на 70 байт: каждое превью ссылки в Slack, LinkedIn, Telegram и Facebook
       выходило пустым. Размер обязателен 1200 × 630, иначе часть площадок
       обрежет или откажется показывать.
-    -->
+    */}
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalURL} />

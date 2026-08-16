@@ -47,7 +47,7 @@ const method = [
   description="Check chemical storage compatibility by GHS hazard class, chemical reactivity, and ADR transport. See what to never store together, what to keep separate, and each substance's transport class."
   canonical="https://ghspictograms.com/tools/chemical-storage-compatibility/"
 >
-  <!-- HERO — v2 frame, original storage colour (HERO_BG) kept via inline style -->
+  {/* HERO — v2 frame, original storage colour (HERO_BG) kept via inline style */}
   <section class="hub-hero" style={`background:${HERO_BG};`}>
     <div class="dots-a" aria-hidden="true"></div>
     <div class="dots-b" aria-hidden="true"></div>
@@ -71,14 +71,14 @@ const method = [
     </div>
   </section>
 
-  <!-- TOOL (interactive island) -->
+  {/* TOOL (interactive island) */}
   <section class="hub-sec-tool">
     <div class="hub-wrap">
       <StorageTool client:load />
     </div>
   </section>
 
-  <!-- METHOD -->
+  {/* METHOD */}
   <section class="hub-sec-deep">
     <div class="hub-wrap">
       <p class="hub-eyebrow">01 · Method</p>

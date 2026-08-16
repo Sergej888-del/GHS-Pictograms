@@ -82,7 +82,7 @@ const jsonLd = [
     <script type="application/ld+json" slot="head" set:html={JSON.stringify(block)} />
   ))}
 
-  <!-- ── HERO ─────────────────────────────────────────────────────────────── -->
+  {/* ── HERO ─────────────────────────────────────────────────────────────── */}
   <section class="hub-hero">
     <div class="dots-a" aria-hidden="true"></div>
     <div class="dots-b" aria-hidden="true"></div>
@@ -108,17 +108,17 @@ const jsonLd = [
     </div>
   </section>
 
-  <!-- ── ИНСТРУМЕНТ ────────────────────────────────────────────────────────
+  {/* ── ИНСТРУМЕНТ ────────────────────────────────────────────────────────
        ⚠⚠ Стоит ВЫШЕ всего текста. Это адрес, на который ведёт 301 со старого
-       `/label-constructor/`, и первый экран обязан показывать продукт. -->
+       `/label-constructor/`, и первый экран обязан показывать продукт. */}
   <section class="hub-sec-tool" id="build">
     <div class="hub-wrap">
       <LabelConstructorLoader client:load />
     </div>
   </section>
 
-  <!-- ── НАВИГАЦИЯ ПО СТРАНИЦЕ ─────────────────────────────────────────────
-       Страница длинная по замыслу. Чистые якоря, без JavaScript. -->
+  {/* ── НАВИГАЦИЯ ПО СТРАНИЦЕ ─────────────────────────────────────────────
+       Страница длинная по замыслу. Чистые якоря, без JavaScript. */}
   <nav class="hub-sec-white" style="padding-top:26px;padding-bottom:0" aria-label="On this page">
     <div class="hub-wrap">
       <p class="hub-eyebrow">On this page</p>
@@ -134,7 +134,7 @@ const jsonLd = [
     </div>
   </nav>
 
-  <!-- ── 01 · КАК ПОЛЬЗОВАТЬСЯ ─────────────────────────────────────────────── -->
+  {/* ── 01 · КАК ПОЛЬЗОВАТЬСЯ ─────────────────────────────────────────────── */}
   <section class="hub-sec-a" id="how">
     <div class="hub-wrap">
       <p class="hub-eyebrow">01 · How to use it</p>
@@ -164,7 +164,7 @@ const jsonLd = [
     </div>
   </section>
 
-  <!-- ── 02 · АНАТОМИЯ ─────────────────────────────────────────────────────── -->
+  {/* ── 02 · АНАТОМИЯ ─────────────────────────────────────────────────────── */}
   <section class="hub-sec-white" id="anatomy">
     <div class="hub-wrap">
       <p class="hub-eyebrow">02 · Anatomy</p>
@@ -193,7 +193,7 @@ const jsonLd = [
     </div>
   </section>
 
-  <!-- ── 03 · ЮРИСДИКЦИИ ───────────────────────────────────────────────────── -->
+  {/* ── 03 · ЮРИСДИКЦИИ ───────────────────────────────────────────────────── */}
   <section class="hub-sec-deep" id="jurisdictions">
     <div class="hub-wrap">
       <p class="hub-eyebrow navy">03 · By jurisdiction</p>
@@ -220,7 +220,7 @@ const jsonLd = [
     </div>
   </section>
 
-  <!-- ── 04 · ВИДЫ ЭТИКЕТОК ────────────────────────────────────────────────── -->
+  {/* ── 04 · ВИДЫ ЭТИКЕТОК ────────────────────────────────────────────────── */}
   <section class="hub-sec-a" id="types">
     <div class="hub-wrap">
       <p class="hub-eyebrow">04 · By label type</p>
@@ -264,7 +264,7 @@ const jsonLd = [
     </div>
   </section>
 
-  <!-- ── 05 · ПЕЧАТЬ ───────────────────────────────────────────────────────── -->
+  {/* ── 05 · ПЕЧАТЬ ───────────────────────────────────────────────────────── */}
   <section class="hub-sec-white" id="printing">
     <div class="hub-wrap">
       <p class="hub-eyebrow">05 · Printing</p>
@@ -335,7 +335,7 @@ const jsonLd = [
     </div>
   </section>
 
-  <!-- ── 06 · FAQ ──────────────────────────────────────────────────────────── -->
+  {/* ── 06 · FAQ ──────────────────────────────────────────────────────────── */}
   <section class="hub-sec-b" id="faq">
     <div class="hub-wrap">
       <p class="hub-eyebrow navy">06 · Questions</p>
@@ -351,7 +351,7 @@ const jsonLd = [
     </div>
   </section>
 
-  <!-- ── 07 · ОСТАЛЬНОЙ САЙТ ───────────────────────────────────────────────── -->
+  {/* ── 07 · ОСТАЛЬНОЙ САЙТ ───────────────────────────────────────────────── */}
   <section class="hub-sec-white" id="more">
     <div class="hub-wrap">
       <p class="hub-eyebrow">07 · Elsewhere on the site</p>

@@ -908,7 +908,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
     rel="stylesheet"
   />
 
-  <!-- HERO (S1) — mockup: navy gradient, teal dots, pills, side column -->
+  {/* HERO (S1) — mockup: navy gradient, teal dots, pills, side column */}
   <section class="relative overflow-hidden text-white hero-dots" style="background:linear-gradient(135deg,#0f172a 0%,#062A78 48%,#134e4a 100%);">
     <div class="absolute inset-0" style="background:linear-gradient(90deg,rgba(15,23,42,0.75) 0%,rgba(15,23,42,0) 65%);" aria-hidden="true"></div>
     <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-11 grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
@@ -967,7 +967,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
             D/E page yet, so no selector markup ships today. */}
       </div>
 
-      <!-- Hero side column: Emergency (gated, v1.5) + supplier PDF hand-off -->
+      {/* Hero side column: Emergency (gated, v1.5) + supplier PDF hand-off */}
       <div class="flex flex-col gap-3.5">
         {emergencyOn && (
           <label
@@ -1007,7 +1007,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
     </div>
   </section>
 
-  <!-- STICKY §-NAV (hybrid nav, D3 — behaves like tabs on mobile) -->
+  {/* STICKY §-NAV (hybrid nav, D3 — behaves like tabs on mobile) */}
   <nav class="sticky top-16 z-40 border-b border-gray-200 bg-white/95 backdrop-blur" aria-label="On this page">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-1 overflow-x-auto">
       {navItems.map((p) => (
@@ -1026,7 +1026,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-9 space-y-11">
       <SharePage url={canonical} title={`${cap} SDS — GHS hazards, classification & storage`} />
 
-      <!-- IDENTITY STRIP (S1 + S3) -->
+      {/* IDENTITY STRIP (S1 + S3) */}
       {identity.length > 0 && (
         <section aria-label="Substance identifiers">
           <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
@@ -1042,7 +1042,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
 
       {substance && (
         <>
-          <!-- §2 HAZARDS -->
+          {/* §2 HAZARDS */}
           <section id="s2" class={sectionCls}>
             <p class={secLabelCls} style={mono}>§ 02 · Hazards identification</p>
             <h2 class={h2Cls} style={grotesk}>{cap} harmonised EU classification</h2>
@@ -1151,9 +1151,9 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
         </>
       )}
 
-      <!-- VARIANT B / C — honest fallback. Moved out of the §2…§15 branch in
+      {/* VARIANT B / C — honest fallback. Moved out of the §2…§15 branch in
            session 16: §4/§5/§6 render for these pages too, so the "no harmonised
-           classification" note has to sit ABOVE them, not instead of them. -->
+           classification" note has to sit ABOVE them, not instead of them. */}
       {!substance && (
         <section class="rounded-xl border border-gray-200 bg-white p-6">
           {page.template_variant === 'C' ? (
@@ -1187,7 +1187,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
         </section>
       )}
 
-      <!-- §3 COMPOSITION / STRUCTURE — session 26. Renders on the 96 pages whose
+      {/* §3 COMPOSITION / STRUCTURE — session 26. Renders on the 96 pages whose
            substance_structure row carries a PubChem CID. 81 of those get an RDKit
            drawing from public/structures/; the remaining 15 are elements and
            lattice solids, where a picture of a discrete molecule would be a
@@ -1195,7 +1195,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
            ⚠ The anchor is #structure, not #s3: the section answers the
            "<substance> structure" query, and that is the id worth linking to.
            ⚠ Formula and molar mass are deliberately NOT repeated here — they are
-           already in the identity strip at the top of the page. -->
+           already in the identity strip at the top of the page. */}
       {showStructure && (
         <section id="structure" class={sectionCls}>
           <p class={secLabelCls} style={mono}>§ 03 · Composition and identifiers</p>
@@ -1264,8 +1264,8 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
         </section>
       )}
 
-      <!-- §4 FIRST AID — substance_response (session 16). Renders for every
-           template variant: response data does not depend on Annex VI. -->
+      {/* §4 FIRST AID — substance_response (session 16). Renders for every
+           template variant: response data does not depend on Annex VI. */}
       {hasFirstAid && (
         <section id="s4" class={sectionCls}>
           <p class={secLabelCls} style={mono}>§ 04 · First-aid measures</p>
@@ -1303,7 +1303,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
         </section>
       )}
 
-      <!-- §5 FIRE-FIGHTING -->
+      {/* §5 FIRE-FIGHTING */}
       {hasFireSec && (
         <section id="s5" class={sectionCls}>
           <p class={secLabelCls} style={mono}>§ 05 · Fire-fighting measures</p>
@@ -1343,7 +1343,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
         </section>
       )}
 
-      <!-- §6 ACCIDENTAL RELEASE -->
+      {/* §6 ACCIDENTAL RELEASE */}
       {hasSpillSec && (
         <section id="s6" class={sectionCls}>
           <p class={secLabelCls} style={mono}>§ 06 · Accidental release measures</p>
@@ -1366,13 +1366,13 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
 
       {substance && (
         <>
-          <!-- §7 HANDLING & STORAGE (the computed differentiator) -->
+          {/* §7 HANDLING & STORAGE (the computed differentiator) */}
           <section id="s7" class={sectionCls}>
             <p class={secLabelCls} style={mono}>§ 07 · Handling and storage</p>
             <h2 class={h2Cls} style={grotesk}>{cap} computed storage compatibility</h2>
 
             <div class="mt-5 overflow-hidden rounded-[14px] border border-teal-200 bg-white">
-              <!-- dark verdict header -->
+              {/* dark verdict header */}
               <div class="flex flex-wrap items-center gap-3 px-5 py-4 text-white sm:px-6" style="background:linear-gradient(135deg,#0f766e 0%,#134e4a 100%);">
                 <span class="text-lg sm:text-xl font-bold tracking-tight" style={grotesk}>{verdictHeadline}</span>
                 {storageClasses.map((c: string) => (
@@ -1435,7 +1435,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
         </>
       )}
 
-      <!-- §8 EXPOSURE CONTROLS — IDLH from NIOSH (session 27).
+      {/* §8 EXPOSURE CONTROLS — IDLH from NIOSH (session 27).
            ⚠⚠ Deliberately OUTSIDE the {substance && …} branch. IDLH is a NIOSH
            figure and has nothing to do with CLP Annex VI: 16 of the 76 pages
            that have a Pocket Guide entry (urea, gasoline, kerosene, glycerin,
@@ -1443,7 +1443,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
            branch this section silently rendered on 60 pages instead of 76 —
            the same reasoning that moved §4/§5/§6 out of it in session 16.
            OSHA PEL / NIOSH REL / EU IOELV still to come from PubChem LCSS.
-           NEVER ACGIH TLV (© private body) — see D11 drop list. -->
+           NEVER ACGIH TLV (© private body) — see D11 drop list. */}
       {showOel && (
         <section id="s8" class={sectionCls}>
           <p class={secLabelCls} style={mono}>§ 08 · Exposure controls</p>
@@ -1521,7 +1521,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
 
       {substance && (
         <>
-          <!-- §9 PHYSICAL & CHEMICAL PROPERTIES — fire values first -->
+          {/* §9 PHYSICAL & CHEMICAL PROPERTIES — fire values first */}
           {(hasFire || physRows.length > 0) ? (
             <section id="s9" class={sectionCls}>
               <p class={secLabelCls} style={mono}>§ 09 · Physical and chemical properties</p>
@@ -1583,7 +1583,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
             </section>
           )}
 
-          <!-- §10 STABILITY & REACTIVITY -->
+          {/* §10 STABILITY & REACTIVITY */}
           {(reactiveGroups.length > 0 || nIncompat + nCaution > 0) && (
             <section id="s10" class={sectionCls}>
               <p class={secLabelCls} style={mono}>§ 10 · Stability and reactivity</p>
@@ -1619,7 +1619,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
             </section>
           )}
 
-          <!-- §11 TOXICOLOGY — hidden until a real (> 0) ATE exists -->
+          {/* §11 TOXICOLOGY — hidden until a real (> 0) ATE exists */}
           {ateReal.length > 0 && (
             <section id="s11" class={sectionCls}>
               <p class={secLabelCls} style={mono}>§ 11 · Toxicological information</p>
@@ -1661,7 +1661,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
             </section>
           )}
 
-          <!-- §12 ECOLOGY — live-wired, hidden until the eco import fills lc50/ec50 -->
+          {/* §12 ECOLOGY — live-wired, hidden until the eco import fills lc50/ec50 */}
           {ecoCards.length > 0 && (
             <section id="s12" class={sectionCls}>
               <p class={secLabelCls} style={mono}>§ 12 · Ecological information</p>
@@ -1677,7 +1677,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
             </section>
           )}
 
-          <!-- §13 DISPOSAL -->
+          {/* §13 DISPOSAL */}
           <section id="s13" class={sectionCls}>
             <p class={secLabelCls} style={mono}>§ 13 · Disposal considerations</p>
             <p class="mt-3 max-w-3xl text-[14.5px] leading-relaxed text-slate-700">
@@ -1688,7 +1688,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
             </p>
           </section>
 
-          <!-- §14 TRANSPORT -->
+          {/* §14 TRANSPORT */}
           {transportRows.length > 0 && (
             <section id="s14" class={sectionCls}>
               <p class={secLabelCls} style={mono}>§ 14 · Transport information</p>
@@ -1797,7 +1797,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
             </section>
           )}
 
-          <!-- §15 REGULATORY — hidden until Step-4 import (substance_regulatory_status) -->
+          {/* §15 REGULATORY — hidden until Step-4 import (substance_regulatory_status) */}
           {regRows.length > 0 && (
             <section id="s15" class={sectionCls}>
               <p class={secLabelCls} style={mono}>§ 15 · Regulatory information</p>
@@ -1807,7 +1807,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
         </>
       )}
 
-      <!-- MSDS vs SDS -->
+      {/* MSDS vs SDS */}
       <section id="msds" class={sectionCls}>
         <p class={secLabelCls} style={mono}>MSDS vs SDS</p>
         <h2 class={h2Cls} style={grotesk}>{cap} MSDS vs SDS: is there a difference?</h2>
@@ -1822,10 +1822,10 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
         </p>
       </section>
 
-      <!-- SDS MANAGER (affiliate) -->
+      {/* SDS MANAGER (affiliate) */}
       <SdsManagerCard service="management" href="https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=sdspage" />
 
-      <!-- SIMILAR SUBSTANCES -->
+      {/* SIMILAR SUBSTANCES */}
       {similar.length > 0 && storageClasses.length > 0 && (
         <section>
           <h2 class="text-xl font-bold text-gray-900" style={grotesk}>
@@ -1847,7 +1847,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
         </section>
       )}
 
-      <!-- CROSS-LINKS: справочник вещества + compliance hub + tools -->
+      {/* CROSS-LINKS: справочник вещества + compliance hub + tools */}
       <section class="grid gap-3 sm:grid-cols-2">
         {profileHref && (
           <a href={profileHref} class="rounded-xl border border-teal-200 bg-teal-50/50 p-5 hover:border-teal-300 transition-colors">
@@ -1876,7 +1876,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
         </a>
       </section>
 
-      <!-- §16 SOURCES + DISCLAIMER -->
+      {/* §16 SOURCES + DISCLAIMER */}
       <section id="s16" class={`${sectionCls} rounded-xl border border-gray-200 bg-slate-100 px-5 py-5 sm:px-6`}>
         <p class="text-[11px] font-semibold uppercase tracking-[0.11em] text-slate-500" style={mono}>§ 16 · Sources</p>
         <ul class="mt-3 space-y-1 text-[12.5px] leading-relaxed text-slate-600 list-disc pl-4">
@@ -1917,7 +1917,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
         </p>
       </section>
 
-      <!-- FAQ -->
+      {/* FAQ */}
       <section id="faq" class={sectionCls}>
         <h2 class={h2Cls} style={grotesk}>Frequently asked questions about {name}</h2>
         <div class="mt-4 space-y-4">
@@ -1932,7 +1932,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
     </div>
   </div>
 
-  <!-- ══ EMERGENCY MODE ══════════════════════════════════════════════════════
+  {/* ══ EMERGENCY MODE ══════════════════════════════════════════════════════
        "The lights go out and only the safety data stays lit" (Sergej, s16).
        Opened by a visually-hidden checkbox, NOT by a #hash: the hash version
        navigated instead of opening inside a preview frame, and it would also
@@ -1941,7 +1941,7 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
        not depend on a hydrated island. Same three answers as §4/§5/§6, inverted.
        The input sits directly before the overlay so the sibling combinator is
        enough on its own; the :has() rule is the belt to that braces.
-       ═══════════════════════════════════════════════════════════════════════ -->
+       ═══════════════════════════════════════════════════════════════════════ */}
   {emergencyOn && (
     <input type="checkbox" id="emg-toggle" class="emg-toggle" aria-label={`Open emergency mode for ${name}`} />
   )}
@@ -2040,9 +2040,9 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
     </div>
   )}
 
-  <!-- Keyboard only. The overlay opens and closes with CSS alone; this adds
+  {/* Keyboard only. The overlay opens and closes with CSS alone; this adds
        Enter/Space on the two labels and Esc to close. If it never runs, the
-       emergency screen still works with mouse and touch. -->
+       emergency screen still works with mouse and touch. */}
   <script is:inline>
     (function () {
       var t = document.getElementById('emg-toggle')

@@ -596,11 +596,11 @@ const ghsJsonLd = {
   canonical={`https://ghspictograms.com/ghs/${code}/`}
 >
 
-  <!-- Hero section -->
+  {/* Hero section */}
   <section class="bg-[#062A78] text-white py-16 px-4 hero-dots">
     <div class="max-w-5xl mx-auto flex flex-col sm:flex-row items-center gap-10">
 
-      <!-- Большая пиктограмма -->
+      {/* Большая пиктограмма */}
       {picData?.svg_content ? (
         <div
           class="shrink-0 w-48 h-48 [&>svg]:w-full [&>svg]:h-full"
@@ -612,7 +612,7 @@ const ghsJsonLd = {
         </div>
       )}
 
-      <!-- Заголовок -->
+      {/* Заголовок */}
       <div>
         <p class="text-blue-200 text-sm font-semibold uppercase tracking-widest mb-2">GHS Hazard Pictogram</p>
         <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight">
@@ -653,7 +653,7 @@ const ghsJsonLd = {
   <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-8">
     <SharePage url={`https://ghspictograms.com/ghs/${code}/`} title={`${upperCode} — ${meta.name} (GHS pictogram)`} />
 
-    <!-- Что означает -->
+    {/* Что означает */}
     <div class="rounded-2xl p-6 border-2" style={`background:${meta.bgLight};border-color:${meta.borderColor}`}>
       <h2 class="text-xl font-bold mb-3" style={`color:${meta.textColor}`}>
         What does {upperCode} mean?
@@ -661,12 +661,12 @@ const ghsJsonLd = {
       <p class="text-gray-700 leading-relaxed">{meta.description}</p>
     </div>
 
-    <!--
+    {/*
       Блок «прямой ответ» под экзаменационный интент (session 23).
       ⚠ Ответ обязан стоять первой строкой абзаца: по этим фразам мы уже показываемся
       на позициях 5–9 с нулём кликов, и выигрывает здесь сниппет, а не длина текста.
       Разбор — claude/pictograms-seo-baseline.md §3.6.
-    -->
+    */}
     {faqHere.length > 0 && (
       <div id="answers">
         <h2 class="text-xl font-bold text-gray-900 mb-3">Straight answers</h2>
@@ -685,10 +685,10 @@ const ghsJsonLd = {
       </div>
     )}
 
-    <!--
+    {/*
       Классы и категории опасности. Данные — hazard_category_mapping × hazard_class_catalog,
       той же выборкой, из которой берётся список H-кодов. Хардкода здесь нет и быть не должно.
-    -->
+    */}
     {mapping.length > 0 && (
       <div>
         <h2 class="text-xl font-bold text-gray-900 mb-2">
@@ -752,10 +752,10 @@ const ghsJsonLd = {
       </div>
     )}
 
-    <!-- GHS calculator: per-pictogram interactive tool (self-hides when no config) -->
+    {/* GHS calculator: per-pictogram interactive tool (self-hides when no config) */}
     <GhsCalculator client:load code={upperCode} />
 
-    <!-- H-statements карточки -->
+    {/* H-statements карточки */}
     {hStatements.length > 0 && (
       <div id="h-statements">
         <h2 class="text-xl font-bold text-gray-900 mb-4">
@@ -782,11 +782,11 @@ const ghsJsonLd = {
       </div>
     )}
 
-    <!--
+    {/*
       Совместная встречаемость — считается из веществ этой страницы (session 23).
       Такого блока нет ни у одного конкурента: он показывает правила вытеснения
       живыми числами. Маркер data-pict-co проверяется в scripts/check-dist.ts.
-    -->
+    */}
     {coRows.length > 0 && (
       <div id="alongside">
         <h2 class="text-xl font-bold text-gray-900 mb-2">Which pictograms appear next to {upperCode}</h2>
@@ -819,10 +819,10 @@ const ghsJsonLd = {
       </div>
     )}
 
-    <!--
+    {/*
       Приоритет — только те правила Article 26, которые касаются ЭТОЙ пиктограммы.
       Чужое правило на странице — это чужой текст. Числа считаются, не пишутся.
-    -->
+    */}
     {rulesHere.length > 0 && (
       <div id="precedence">
         <h2 class="text-xl font-bold text-gray-900 mb-2">
@@ -849,29 +849,29 @@ const ghsJsonLd = {
       </div>
     )}
 
-    <!-- Storage note -->
+    {/* Storage note */}
     <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-2xl p-6">
       <h2 class="text-xl font-bold text-amber-900 mb-2">Storage & handling requirements</h2>
       <p class="text-amber-800 leading-relaxed">{meta.storageNote}</p>
     </div>
 
-    <!-- Regulatory note -->
+    {/* Regulatory note */}
     <div class="bg-slate-50 border border-slate-200 rounded-2xl p-6">
       <h2 class="text-xl font-bold text-slate-900 mb-2">Regulatory context (CLP / OSHA / REACH)</h2>
       <p class="text-slate-700 leading-relaxed">{meta.regulatoryNote}</p>
     </div>
 
-    <!-- ADR/DOT note -->
+    {/* ADR/DOT note */}
     <div class="bg-blue-50 border border-blue-200 rounded-2xl p-6">
       <h2 class="text-xl font-bold text-blue-900 mb-2">Transport marking: GHS vs ADR/DOT</h2>
       <p class="text-blue-800 leading-relaxed">{meta.adnNote}</p>
     </div>
 
-    <!--
+    {/*
       Размеры — CLP Annex I 1.2.1.1–1.2.1.4 и Table 1.3. Полная таблица на четыре размера
       упаковки живёт на хабе; здесь только два правила, которые её перебивают, — иначе
       одна и та же таблица размножится на девять страниц.
-    -->
+    */}
     <div class="bg-slate-50 border border-slate-200 rounded-2xl p-6">
       <h2 class="text-xl font-bold text-slate-900 mb-2">Printing {upperCode} on a label</h2>
       <p class="text-slate-700 leading-relaxed">
@@ -891,7 +891,7 @@ const ghsJsonLd = {
       </p>
     </div>
 
-    <!-- Download SVG -->
+    {/* Download SVG */}
     {picData?.svg_content && (
       <div class="border-2 border-dashed border-[#062A78]/30 rounded-2xl p-6 flex flex-col sm:flex-row items-center gap-6">
         <div class="w-24 h-24 shrink-0 [&>svg]:w-full [&>svg]:h-full" set:html={picData.svg_content}/>
@@ -917,7 +917,7 @@ const ghsJsonLd = {
       </div>
     )}
 
-    <!-- Substances list -->
+    {/* Substances list */}
     <div>
       <h2 class="text-2xl font-bold text-gray-900 mb-2">
         Substances classified with {upperCode}
@@ -1012,7 +1012,7 @@ const ghsJsonLd = {
       </ul>
     </div>
 
-    <!-- Cross-link to ghssymbols -->
+    {/* Cross-link to ghssymbols */}
     <div class="bg-gray-50 border border-gray-200 rounded-2xl p-5 flex items-start gap-4">
       <div class="flex-1">
         <p class="font-semibold text-gray-900">Need full toxicological data?</p>
@@ -1044,7 +1044,7 @@ const ghsJsonLd = {
 
   </div>
 
-  <!-- CTA -->
+  {/* CTA */}
   <section class="bg-[#062A78] text-white py-14 px-4 text-center">
     <h2 class="text-2xl sm:text-3xl font-bold">Ready to build a GHS-compliant label?</h2>
     <p class="mt-3 text-blue-100 text-lg">Auto-filled with {upperCode} — {meta.name} hazard data</p>

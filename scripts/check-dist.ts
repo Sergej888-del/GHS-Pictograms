@@ -37,6 +37,7 @@ import { resolve, join } from 'node:path'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { STORAGE_CLASSES } from '../src/lib/storageClasses'
+import { EU_LANGUAGES } from '../src/lib/euLanguages'
 import { SDS_SECTIONS } from '../src/lib/sdsSections'
 import { hSlug } from '../src/lib/hStatementSlug'
 // ⚠ Правило имени и правило адреса берём из тех же файлов, по которым
@@ -5524,7 +5525,6 @@ const CHECKS: Check[] = [
        */
       const astro = join(DIST, '_astro')
       const asked = new Set<string>()
-      const cyrillic: string[] = []
       if (existsSync(astro)) {
         for (const f of readdirSync(astro)) {
           if (!f.endsWith('.js')) continue
@@ -5532,26 +5532,17 @@ const CHECKS: Check[] = [
           if (!js.includes('/data/p-precedence.json')) continue
           for (const m of js.matchAll(/["'`](\/data\/p-precedence\.json[^"'`]*)["'`]/g)) asked.add(m[1])
           /**
-           * ⛔⛔ КИРИЛЛИЦА В БАНДЛЕ ИНСТРУМЕНТА — ЭТО ТЕКСТ, КОТОРЫЙ УВИДИТ
-           * ПОСЕТИТЕЛЬ. Комментарии сборщик выбрасывает, доезжают только строки.
-           * Session 66 нашла две: русскую таблицу объяснений, которую протокол
-           * читал ЗАПАСНЫМ вариантом (`EN[code] ?? RU[code]` — промах ключа
-           * выдал бы русский текст на английской странице), и русские сообщения
-           * об отказе загрузки, которые `PStatementSelector` печатает дословно.
-           *
-           * ⚠ Сборщик экранирует не-ASCII: в файле лежит `б`, а не «б».
-           * Ищем обе записи, иначе проверка была бы слепой ровно к тому, что
-           * ищет.
+           * ⭐⭐ КИРИЛЛИЦА ОТСЮДА УБРАНА, И ЭТО НЕ ОСЛАБЛЕНИЕ. Session 66
+           * проверяла её ЗДЕСЬ — то есть только в бандлах, где встретилась
+           * строка `/data/p-precedence.json`. Из тридцати бандлов их два, и
+           * `continue` пятью строками выше отсекал остальные двадцать восемь:
+           * русское сообщение из `labelEngine.ts` уезжало посетителю мимо
+           * проверки полтора месяца. С session 67 правило живёт в группе
+           * «Язык интерфейса» и смотрит ВСЕ бандлы и ВСЕ страницы. Держать
+           * здесь вторую редакцию — значит завести список, который разойдётся
+           * с первым молча.
            */
-          const raw = [...js.matchAll(/[Ѐ-ӿ]/g)].length
-          const esc = [...js.matchAll(/\\u04[0-9a-fA-F]{2}/g)].length
-          if (raw + esc) cyrillic.push(`${f}: ${raw + esc} символов кириллицы`)
         }
-      }
-      if (cyrillic.length) {
-        problems.push(...cyrillic.map((c) => `русский текст доехал до браузера — ${c}`))
-      } else if (asked.size) {
-        detail.push('в бандлах инструмента нет ни одного русского символа — посетителю едет только английский')
       }
       if (!asked.size) {
         problems.push('ни один бандл не просит /data/p-precedence.json — снимок собран, но его никто не читает')
@@ -5661,6 +5652,140 @@ const CHECKS: Check[] = [
         headline: problems.length === 0
           ? `снимок на месте (${kb} КБ), ${vsBase.length} счётчиков сошлись с базой, gradedCodes ${graded.length}`
           : `${problems.length} расхождений в ${rel}`,
+        detail: problems.length === 0 ? detail : [...problems, ...detail].slice(0, 20),
+      }
+    },
+  },
+  {
+    id: 'interface-language',
+    group: 'Язык интерфейса',
+    title: 'До браузера не доезжает ни одного русского слова: ни в бандлах, ни в комментариях страниц',
+    run: async () => {
+      /**
+       * ⚠⚠ ЗАЧЕМ ЭТА ПРОВЕРКА. Сайт англоязычный целиком, русской версии нет и
+       * не планируется. Значит любое русское слово, доехавшее до посетителя, —
+       * дефект по определению, а не вкусовщина.
+       *
+       * Session 66 завела такую проверку внутри группы «Движок P-фраз» — и она
+       * смотрела ТОЛЬКО бандлы со строкой `/data/p-precedence.json`. Строка
+       * `if (!js.includes(...)) continue` отсекала 28 бандлов из 30. Session 67
+       * прогнала то же правило по всем: `pictogram: корневого <svg> нет` из
+       * `labelEngine.ts` печаталось посетителю в блоке «PDF could not be
+       * generated», а `supabase.ts` писал ему в консоль «попытка 2 из 3 —
+       * повтор через 400 мс». Ни то, ни другое старая проверка не видела.
+       *
+       * ⛔⛔ И ГЛАВНОЕ, ЧЕГО ОНА НЕ ВИДЕЛА ВООБЩЕ: HTML-комментарии. В `.astro`
+       * запись `<!-- ... -->` попадает в вывод дословно — это не комментарий
+       * сборщика, а разметка. 154 таких комментария отдавали посетителю рабочие
+       * заметки на русском: 1 681 байт с КАЖДОЙ из 4 501 страницы, потому что
+       * четыре из них стоят в `Layout.astro`. Комментарий, набранный ради себя,
+       * читался через «Просмотр кода страницы» кем угодно. Лечение — `{/* ... *\/}`:
+       * текст остаётся в исходнике на русском и не уезжает никуда.
+       *
+       * ⭐⭐ ПОЧЕМУ ПРАВИЛО НЕ «НИ ОДНОГО КИРИЛЛИЧЕСКОГО СИМВОЛА». Кириллица на
+       * этом сайте ЗАКОННА: болгарский — официальный язык ЕС, `български` стоит
+       * в списке языков этикетки, а таблицы ширин глифов в `labelEngine.ts`
+       * держат кириллические буквы как ДАННЫЕ рядом с греческими. Правило,
+       * запрещающее алфавит, било бы по ним каждый день и было бы отключено на
+       * первой же неделе. Поэтому спрашивается не «есть ли кириллица», а
+       * «ИЗВЕСТЕН ЛИ ЕЁ ИСТОЧНИК»: разрешение собирается ИЗ САМИХ ИСТОЧНИКОВ —
+       * `EU_LANGUAGES` и `W_*_SPEC`, — а не переписывается сюда списком.
+       * Добавится язык — разрешение подтянется само; появится русская строка —
+       * проверка упадёт.
+       *
+       * ⚠ Буквы, а не «кириллический блок»: U+0483…0489 — комбинирующие знаки,
+       * они лежат внутри регулярки нормализации Unicode в Fuse.js. Наивное
+       * `\p{Script=Cyrillic}` давало на них ложную тревогу в стороннем коде.
+       */
+      const CYR_RUN = /(?:(?!\p{M})\p{Script=Cyrillic})+/gu
+      const problems: string[] = []
+      const detail: string[] = []
+
+      // ① Разрешение собирается из источников, а не из списка в этом файле.
+      const allowed = new Map<string, string>()
+      for (const l of EU_LANGUAGES) {
+        for (const m of l.native.matchAll(CYR_RUN)) allowed.set(m[0], `эндоним ${l.code}`)
+      }
+      const enginePath = resolve(process.cwd(), 'src/lib/labelEngine.ts')
+      const engineSrc = existsSync(enginePath) ? readFileSync(enginePath, 'utf8') : ''
+      if (!engineSrc) problems.push('не читается src/lib/labelEngine.ts — таблицы ширин глифов взять неоткуда')
+      let widthRows = 0
+      for (const table of ['W_REGULAR_SPEC', 'W_BOLD_SPEC']) {
+        const m = engineSrc.match(new RegExp(`const ${table}[^=]*=\\s*\\[([\\s\\S]*?)\\n\\];`))
+        if (!m) {
+          problems.push(`в labelEngine.ts не нашлась таблица ${table} — разрешение собрано не полностью, дальше пойдут ложные тревоги`)
+          continue
+        }
+        for (const row of m[1].matchAll(/\[\s*[\d.]+\s*,\s*"((?:[^"\\]|\\.)*)"\s*\]/g)) {
+          widthRows++
+          for (const c of row[1].matchAll(CYR_RUN)) if (!allowed.has(c[0])) allowed.set(c[0], `ширины ${table}`)
+        }
+      }
+
+      /**
+       * ⭐ САМОПРОВЕРКА ПРАВИЛА. Сломайся `CYR_RUN` или разбор таблиц — множество
+       * разрешённого осталось бы пустым, и проверка стала бы ЗЕЛЕНОЙ на пустом
+       * месте, ничего не сравнивая. Поэтому сначала утверждается, что источники
+       * прочитаны: болгарский эндоним на месте и строки ширин найдены.
+       */
+      if (!allowed.has('български')) problems.push('в разрешении нет болгарского эндонима — источник языков прочитан неверно, сравнивать не с чем')
+      if (widthRows < 100) problems.push(`строк таблиц ширин найдено ${widthRows} — разбор labelEngine.ts сломан`)
+      detail.push(`разрешение собрано из источников: ${allowed.size} фрагментов (${EU_LANGUAGES.length} эндонимов, ${widthRows} строк таблиц ширин)`)
+
+      // ② Бандлы — ВСЕ, а не только те, что просят снимок движка.
+      const astroDir = join(DIST, '_astro')
+      let bundles = 0
+      const unexplained: string[] = []
+      if (!existsSync(astroDir)) {
+        problems.push('в dist нет _astro — смотреть нечего')
+      } else {
+        for (const f of readdirSync(astroDir)) {
+          if (!f.endsWith('.js')) continue
+          bundles++
+          // ⚠ Сборщик экранирует не-ASCII: в файле может лежать `б`, а не «б».
+          const js = readFileSync(join(astroDir, f), 'utf8')
+            .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+          const seen = new Set<string>()
+          for (const m of js.matchAll(CYR_RUN)) if (!allowed.has(m[0])) seen.add(m[0])
+          if (seen.size) unexplained.push(`${f}: ${[...seen].slice(0, 8).map((s) => `«${s}»`).join(', ')}`)
+        }
+      }
+      if (unexplained.length) {
+        problems.push(...unexplained.map((u) => `русское слово доехало до браузера — ${u}`))
+      } else if (bundles) {
+        detail.push(`бандлов просмотрено ${bundles} из ${bundles} — необъяснённой кириллицы нет ни в одном`)
+      }
+
+      // ③ HTML-комментарии: в выводе их быть не должно совсем.
+      const pages = allPages()
+      let withComments = 0
+      let cyrChars = 0
+      const worst: [number, string][] = []
+      for (const { rel, html } of pages) {
+        let n = 0
+        for (const c of html.matchAll(/<!--[\s\S]*?-->/g)) {
+          for (const run of c[0].matchAll(CYR_RUN)) n += run[0].length
+        }
+        if (n) { withComments++; cyrChars += n; worst.push([n, rel]) }
+      }
+      if (withComments) {
+        worst.sort((a, b) => b[0] - a[0])
+        problems.push(
+          `русские HTML-комментарии уехали в браузер: ${withComments} страниц из ${pages.length}, ` +
+          `${cyrChars} букв всего. Самые тяжёлые: ${worst.slice(0, 3).map(([n, r]) => `${r} (${n})`).join(', ')}`,
+        )
+        problems.push('лечение: в .astro комментарий пишется {/* ... *\/}, а не <!-- ... --> — второе есть разметка и попадает в вывод дословно')
+      } else {
+        detail.push(`страниц просмотрено ${pages.length} — ни одна не отдаёт русский комментарий`)
+      }
+
+      return {
+        id: 'interface-language',
+        group: 'Язык интерфейса',
+        ok: problems.length === 0,
+        headline: problems.length === 0
+          ? `${bundles} бандлов и ${pages.length} страниц: посетителю едет только английский, кириллица только там, где её источник известен`
+          : `${problems.length} мест, где посетитель увидел бы русский`,
         detail: problems.length === 0 ? detail : [...problems, ...detail].slice(0, 20),
       }
     },
