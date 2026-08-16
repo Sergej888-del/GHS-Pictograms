@@ -183,12 +183,26 @@ export const GET: APIRoute = async () => {
     conds, matrix, echa, combos, hidx, text, gradedCodes,
   }
 
+  /**
+   * ⛔⛔ ЗАГОЛОВКОВ КЭША ЗДЕСЬ НЕТ, И ЭТО НЕ ЗАБЫВЧИВОСТЬ.
+   *
+   * Session 65 ставила тут `Cache-Control: public, max-age=86400` с комментарием
+   * «держать у посетителя сутки безопасно». **Эта строка не работала ни дня.**
+   * Сборка статическая (`output: 'static'`, `prerender = true`, `_worker.js` в
+   * `dist` нет): Astro вызывает `GET` НА СБОРКЕ и записывает на диск только
+   * ТЕЛО ответа. Заголовки `Response` выбрасываются — отдавать файл будет
+   * Cloudflare Pages, и что он напишет в `Cache-Control`, здесь не решается.
+   *
+   * Замер session 66 на живом сайте: у снимка, у страницы инструмента и у
+   * страницы вещества заголовок ОДИН И ТОТ ЖЕ — `public, max-age=14400,
+   * must-revalidate`. Ни 86400, ни чего-либо нашего.
+   *
+   * ⚠ Поэтому кэш снимка задаётся там, где он действительно задаётся, —
+   * в `public/_headers`, правило `/data/*`. Cloudflare Pages этот файл читает
+   * (им же работает `public/_redirects`). Оставить здесь мёртвый заголовок
+   * значило бы держать в коде утверждение, которое ложно, но выглядит рабочим.
+   */
   return new Response(JSON.stringify(snapshot), {
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      // ⚠ Файл меняется только с деплоем — держать его у посетителя сутки
-      // безопасно и снимает повторную загрузку при возврате на инструмент.
-      'Cache-Control': 'public, max-age=86400',
-    },
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
   })
 }

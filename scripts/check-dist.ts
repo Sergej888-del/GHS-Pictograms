@@ -5562,6 +5562,97 @@ const CHECKS: Check[] = [
       }
       if (asked.size) detail.push(`бандлы просят: ${[...asked].join(', ')} — путь существует`)
 
+      /**
+       * ⑥ ⛔⛔ `_headers` — ЕДИНСТВЕННОЕ МЕСТО, ГДЕ КЭШ СНИМКА ВООБЩЕ ЗАДАЁТСЯ.
+       *
+       * Сборка статическая: заголовки из `Response` эндпоинта Astro выбрасывает,
+       * на диск идёт только тело. Session 65 полтора месяца держала в эндпоинте
+       * `Cache-Control: max-age=86400`, который не действовал ни дня, — и ни
+       * одна проверка этого не видела, потому что смотреть было некуда.
+       *
+       * ⚠ Верхняя граница здесь не вкусовая. Снимок меняется с каждым деплоем,
+       * трогающим данные, адрес при этом прежний, а кэш В БРАУЗЕРЕ посетителя
+       * очистить нельзя ничем: длинный `max-age` = столько же времени отбора
+       * P-фраз по вчерашней матрице Annex IV.
+       */
+      const headersFile = join(DIST, '_headers')
+      if (!existsSync(headersFile)) {
+        problems.push('в dist нет _headers — кэш браузера задавать нечем, за нас решит Cloudflare')
+      } else {
+        const rules: { path: string; cc: string | null }[] = []
+        for (const line of readFileSync(headersFile, 'utf8').split(/\r?\n/)) {
+          if (!line.trim() || /^\s*#/.test(line)) continue
+          if (!/^\s/.test(line)) { rules.push({ path: line.trim(), cc: null }); continue }
+          const m = /^\s*cache-control\s*:(.*)$/i.exec(line)
+          if (m && rules.length) rules[rules.length - 1].cc = m[1].trim()
+        }
+        const ageOf = (cc: string | null) => Number(/max-age\s*=\s*(\d+)/i.exec(cc ?? '')?.[1] ?? -1)
+        const byPath = new Map(rules.map((r) => [r.path, r]))
+
+        // ① Снимок движка — коротко. Данные меняются, адрес прежний.
+        const dataCc = byPath.get('/data/*')?.cc ?? null
+        const dataAge = ageOf(dataCc)
+        if (!dataCc) problems.push('в _headers нет правила /data/* с Cache-Control — снимок отдаётся с тем, что придумает Cloudflare')
+        else if (dataAge < 0 || dataAge > 900) {
+          problems.push(
+            `_headers держит снимок у посетителя ${dataAge} с. Кэш браузера очистить нельзя — ` +
+            `столько же он будет отбирать фразы по вчерашней матрице Annex IV. Предел 900`,
+          )
+        } else detail.push(`_headers: /data/* → «${dataCc}»`)
+
+        // ② Бандлы — длинно. Хеш содержимого в имени файла делает это безопасным.
+        const astroCc = byPath.get('/_astro/*')?.cc ?? null
+        const astroAge = ageOf(astroCc)
+        if (!astroCc) problems.push('в _headers нет правила /_astro/* — бандлы перезапрашиваются на каждой странице впустую')
+        else if (astroAge < 86400) {
+          problems.push(
+            `_headers даёт бандлам всего ${astroAge} с. В имени файла лежит хеш содержимого: ` +
+            `изменилось содержимое — изменился адрес, поэтому длинный срок здесь безопасен по построению`,
+          )
+        } else detail.push(`_headers: /_astro/* → «${astroCc}»`)
+
+        /**
+         * ③ ⛔⛔ НИ ОДНО ДЛИННОЕ ПРАВИЛО НЕ СМЕЕТ НАКРЫТЬ СТРАНИЦУ.
+         *
+         * Это и есть дефект, ради которого затевалась вся правка: кэш браузера
+         * нельзя очистить ни Purge-ем, ни деплоем. Страница, залипшая у
+         * посетителя на сутки, — это сутки старых фраз, и поделать нельзя
+         * ничего. Соблазн написать `/pictograms/*` велик: там 101 картинка —
+         * и ОДНА страница, хаб раздела.
+         *
+         * ⚠ Проверяется по dist, а не по списку в коде: список разошёлся бы.
+         */
+        const pageUnder = (relDir: string): string | null => {
+          const abs = relDir ? join(DIST, relDir) : DIST
+          if (!existsSync(abs)) return null
+          const stack = [abs]
+          while (stack.length) {
+            const cur = stack.pop()!
+            for (const e of readdirSync(cur, { withFileTypes: true })) {
+              if (e.isDirectory()) stack.push(join(cur, e.name))
+              else if (e.name === 'index.html') return join(cur, e.name).slice(DIST.length + 1)
+            }
+          }
+          return null
+        }
+        for (const r of rules) {
+          const age = ageOf(r.cc)
+          if (age <= 900) continue
+          if (r.path.endsWith('/*')) {
+            const page = pageUnder(r.path.slice(1, -2))
+            if (page) {
+              problems.push(
+                `правило ${r.path} (max-age ${age}) накрывает СТРАНИЦУ ${page}. ` +
+                `Кэш браузера очистить нельзя ничем — страница залипнет у посетителя на весь срок`,
+              )
+            }
+          } else if (!existsSync(join(DIST, r.path.replace(/^\//, '')))) {
+            problems.push(`правило ${r.path} указывает на файл, которого в dist нет — оно молча ничего не делает`)
+          }
+        }
+        detail.push(`_headers: ${rules.length} правил, ни одно длинное не накрывает страницу и не бьёт мимо файла`)
+      }
+
       const kb = Math.round(readFileSync(abs).length / 1024)
       return {
         id: 'p-precedence-snapshot',
