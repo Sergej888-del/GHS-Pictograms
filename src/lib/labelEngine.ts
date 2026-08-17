@@ -17,7 +17,15 @@ import {
   requiredPictogramSideMm, labelSizeVerdict,
   type JurisdictionKey, type LabelPurpose, type LabelElement,
   type LabelSizeVerdict,
-} from './jurisdictions';
+} from './jurisdictions.ts';
+// ⚠⚠ РАСШИРЕНИЕ `.ts` В ИМПОРТЕ ОБЯЗАТЕЛЬНО, И ЭТО НЕ КОСМЕТИКА (session 69, №39).
+// Без него `node --experimental-strip-types` падает с ERR_MODULE_NOT_FOUND, а
+// значит движок раскладки НЕЛЬЗЯ БЫЛО ПОЗВАТЬ НИ ИЗ ОДНОЙ ПРОВЕРКИ: `layoutLabel`
+// собиралась только внутри Astro, где расширения дописывает Vite. Самая сложная
+// функция в проекте оставалась единственной непроверяемой.
+// ⭐ Astro и Vite явное `.ts` понимают, `check:types` тоже: в
+// `astro/tsconfigs/strict` стоит `allowImportingTsExtensions`, и точно так же уже
+// написан импорт в `scripts/check-p-precedence.ts`.
 
 // ── Примитивы раскладки ─────────────────────────────────────────────────────
 

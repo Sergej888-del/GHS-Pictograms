@@ -902,11 +902,10 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
 ---
 
 <Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
-  <link
-    slot="head"
-    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&display=swap"
-    rel="stylesheet"
-  />
+  {/* ⚠⚠ ЧЕТВЁРТАЯ ссылка на googleapis жила здесь — JetBrains Mono, своя
+      отдельная блокирующая цепочка на всех 110 страницах SDS (session 69,
+      №43). Шрифт теперь свой: @font-face в global.css, файл в public/fonts/.
+      Вид не изменился. ⛔ НЕ ВОЗВРАЩАТЬ. */}
 
   {/* HERO (S1) — mockup: navy gradient, teal dots, pills, side column */}
   <section class="relative overflow-hidden text-white hero-dots" style="background:linear-gradient(135deg,#0f172a 0%,#062A78 48%,#134e4a 100%);">

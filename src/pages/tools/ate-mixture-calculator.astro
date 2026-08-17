@@ -65,11 +65,9 @@ const jsonLd = {
 ---
 
 <Layout title={title} description={description} canonical={canonical}>
-  <link
-    slot="head"
-    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&display=swap"
-    rel="stylesheet"
-  />
+  {/* ⚠⚠ ПЯТАЯ ссылка на googleapis жила здесь — тот же JetBrains Mono
+      (session 69, №43). Шрифт теперь свой, см. global.css.
+      ⛔ НЕ ВОЗВРАЩАТЬ. */}
 
   {/* HERO — v2.1 navy→teal + teal dots */}
   <section class="relative overflow-hidden text-white hero-dots" style="background:linear-gradient(135deg,#0f172a 0%,#062A78 48%,#134e4a 100%);">

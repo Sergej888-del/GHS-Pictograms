@@ -29,8 +29,21 @@ const STATS = [
   description="Select hazard classes and categories to get the correct GHS label pictograms, signal word, and hazard statements for UN GHS, EU CLP, GB CLP, and OSHA HazCom — with CLP Article 26 precedence applied and explained."
   canonical="https://ghspictograms.com/pictogram-selector/"
 >
+  {/*
+    ⚠⚠ ТРЕТЬЯ КОПИЯ подключения шрифтов жила в блоке ниже, и в самой дорогой
+    форме: `@import url('https://…/css2?family=…')` ВНУТРИ CSS (session 69, №43).
+    Страница идёт через Layout.astro, где те же два семейства уже подключались, —
+    то есть блокирующая цепочка стояла здесь ДВАЖДЫ, и вторая ещё и внутри стиля.
+    Шрифты берутся из global.css. ⛔ НЕ ВОЗВРАЩАТЬ.
+
+    ⚠⚠ И ПОЧЕМУ ЭТО ПОЯСНЕНИЕ СТОИТ ЗДЕСЬ, А НЕ ВНУТРИ `is:inline`:
+    `is:inline` значит «отдать браузеру как есть». Vite такой блок не
+    обрабатывает и комментарий CSS из него НЕ вырезает — русский текст доехал бы
+    до посетителя и читался по Ctrl+U. Это дефект №35 из session 68.
+    Комментарий Astro `{/* … */}` из вывода вырезается, комментарий CSS
+    внутри is:inline — нет.
+  */}
   <style is:inline>
-    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
     .ps-refcard{transition:transform .3s ease, box-shadow .3s ease;}
     .ps-refcard:hover{transform:translateY(-4px);box-shadow:0 14px 30px -16px rgba(16,32,64,.35);}
     .ps-refsvg svg{width:100%;height:100%;display:block;}

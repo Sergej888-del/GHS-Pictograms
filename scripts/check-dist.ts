@@ -3873,6 +3873,164 @@ const CHECKS: Check[] = [
     },
   },
 
+  // ─────────────────────────── Шрифты (session 69, №43) ───────────────────────
+  //
+  // ⛔⛔ ЗАЧЕМ ЭТА ГРУППА. Пункт №43 в очереди называл ОДИН адрес —
+  // `Layout.astro:66`. На деле подключений к шрифтам Google было ПЯТЬ, в трёх
+  // семействах: Layout, стандалонная главная, `@import url(…)` внутри
+  // `<style is:inline>` у селектора пиктограмм и по одному JetBrains Mono на
+  // страницах SDS и калькуляторе ATE. Три из пяти не находились поиском по
+  // «link rel=stylesheet», потому что были написаны иначе.
+  //
+  // ⭐⭐ Поэтому проверка спрашивает не «убрали ли строку из исходника», а
+  // «есть ли чужой домен в собранном ВЫВОДЕ» — в html, в css и в js. Копия,
+  // которую никто не стережёт, возвращается: это ровно то, что случилось с
+  // блоком значков (три копии, группа Brand) и с Table 1.3 (пункт №29).
+  {
+    id: 'fonts-no-google',
+    group: 'Fonts',
+    title: 'Ни одного обращения к шрифтам Google в собранном выводе',
+    run: async () => {
+      const MARKERS = ['fonts.googleapis.com', 'fonts.gstatic.com']
+      assertAscii('fonts-no-google', MARKERS)
+      const hits: string[] = []
+      for (const page of allPages()) {
+        for (const m of MARKERS) if (page.html.includes(m)) hits.push(`${page.rel} <- ${m}`)
+      }
+      // ⚠ CSS обязателен: самая дорогая из пяти форм была `@import url(…)`
+      // внутри стиля, а не тегом в <head>.
+      styleFiles().forEach((css, i) => {
+        for (const m of MARKERS) if (css.includes(m)) hits.push(`_astro css #${i + 1} <- ${m}`)
+      })
+      for (const a of assetFiles()) {
+        for (const m of MARKERS) if (a.text.includes(m)) hits.push(`${a.name} <- ${m}`)
+      }
+      const ok = hits.length === 0
+      return {
+        id: 'fonts-no-google',
+        group: 'Fonts',
+        ok,
+        headline: ok
+          ? `${allPages().length} страниц, ${styleFiles().length} css, ${assetFiles().length} js — чужого домена нет`
+          : `вхождений: ${hits.length}, ожидался 0`,
+        detail: ok ? [`проверено: ${MARKERS.join(', ')}`] : hits.slice(0, 20),
+      }
+    },
+  },
+
+  {
+    id: 'fonts-files',
+    group: 'Fonts',
+    title: 'Файлы шрифтов на месте, читаемы, и ссылки css сходятся с ними в обе стороны',
+    run: async () => {
+      const detail: string[] = []
+      const dir = join(DIST, 'fonts')
+      const onDisk = existsSync(dir)
+        ? readdirSync(dir).filter((f) => f.endsWith('.woff2')).sort()
+        : []
+      if (onDisk.length === 0) {
+        detail.push('в dist/fonts нет ни одного woff2 — весь сайт уедет в системный шрифт')
+      }
+
+      // ⚠⚠ «Файл существует» и «файл годен» — не одно и то же. Пустой файл,
+      // обрезанная выгрузка и текстовая заглушка существуют точно так же,
+      // поэтому смотрим подпись формата и порог веса.
+      for (const f of onDisk) {
+        const buf = readFileSync(join(dir, f))
+        if (buf.length < 4 || buf.toString('ascii', 0, 4) !== 'wOF2') {
+          detail.push(`${f} не начинается с подписи wOF2 — это не woff2`)
+        } else if (buf.length < 5_000) {
+          detail.push(`${f} весит ${buf.length} байт: так выглядит заглушка, а не шрифт`)
+        }
+      }
+
+      // ⚠⚠ СВЕРКА В ОБЕ СТОРОНЫ. Переименовать файл и забыть про css — часть
+      // букв уедет в системный шрифт МОЛЧА, сборка при этом зелёная. Забыть
+      // файл при живой ссылке — то же самое с другой стороны. Ловится только
+      // сравнением множеств, как в comparePageSets.
+      const referenced = new Set<string>()
+      for (const css of styleFiles()) {
+        for (const m of css.matchAll(/\/fonts\/([A-Za-z0-9._-]+\.woff2)/g)) referenced.add(m[1])
+      }
+      const { missing, extra } = diffSets(new Set(onDisk), referenced)
+      if (missing.length) detail.push(`css зовёт, а файла нет (${missing.length}): ${preview(missing)}`)
+      if (extra.length) detail.push(`файл лежит, а css его не зовёт (${extra.length}): ${preview(extra)}`)
+
+      // ⚠ Версия в ИМЕНИ файла — условие права на `immutable` в public/_headers.
+      // Без неё год кэша означает год, в течение которого правка шрифта не
+      // доедет до вернувшегося посетителя (пункт №37 про `?v=`).
+      const unversioned = onDisk.filter((f) => !/-v\d+-/.test(f))
+      if (unversioned.length) {
+        detail.push(
+          `без версии в имени (${unversioned.length}): ${preview(unversioned)} — ` +
+            'с таким именем правило immutable в _headers ставить нельзя',
+        )
+      }
+
+      const ok = detail.length === 0
+      if (ok) {
+        const kb = onDisk.reduce((s, f) => s + readFileSync(join(dir, f)).length, 0) / 1024
+        detail.push(`${onDisk.length} файлов, ${kb.toFixed(1)} КиБ, все с версией в имени`)
+        detail.push(`css зовёт ровно их: ${preview(onDisk)}`)
+      }
+      return {
+        id: 'fonts-files',
+        group: 'Fonts',
+        ok,
+        headline: ok ? `${onDisk.length} woff2 в dist/fonts, ссылки сходятся` : `расхождений: ${detail.length}`,
+        detail,
+      }
+    },
+  },
+
+  {
+    id: 'fonts-preload',
+    group: 'Fonts',
+    title: 'preload шрифта — на существующий файл, с as="font" и обязательно с crossorigin',
+    run: async () => {
+      const detail: string[] = []
+      const dir = join(DIST, 'fonts')
+      const onDisk = new Set(existsSync(dir) ? readdirSync(dir) : [])
+      let tags = 0
+      const seen = new Set<string>()
+      for (const page of allPages()) {
+        for (const m of page.html.matchAll(/<link[^>]*rel="preload"[^>]*>/g)) {
+          const tag = m[0]
+          if (!tag.includes('/fonts/')) continue
+          tags++
+          const file = /\/fonts\/([A-Za-z0-9._-]+\.woff2)/.exec(tag)?.[1]
+          if (file) seen.add(file)
+          if (!file || !onDisk.has(file)) {
+            detail.push(`${page.rel}: preload на несуществующий ${file ?? '(имя не разобрано)'}`)
+          }
+          // ⚠⚠ БЕЗ crossorigin PRELOAD ПРЕВРАЩАЕТСЯ ВО ВРЕД. Шрифты
+          // запрашиваются в режиме CORS всегда, даже со своего домена; без
+          // атрибута браузер считает предзагруженный ответ несовпадающим и
+          // качает файл ВТОРОЙ раз. Молча, и вдвое дороже, чем без preload.
+          if (!/\bcrossorigin\b/.test(tag)) {
+            detail.push(`${page.rel}: preload без crossorigin — файл приедет дважды`)
+          }
+          if (!/as="font"/.test(tag)) detail.push(`${page.rel}: preload без as="font"`)
+        }
+      }
+      // ⚠ Ноль тегов — тоже отказ: значит правка №43 не доехала до сборки.
+      if (tags === 0) detail.push('ни одного preload шрифта во всём dist — правка №43 не доехала')
+
+      const ok = detail.length === 0
+      if (ok) {
+        detail.push(`${tags} тегов preload, все с as="font" и crossorigin`)
+        detail.push(`предзагружаются: ${preview([...seen].sort())}`)
+      }
+      return {
+        id: 'fonts-preload',
+        group: 'Fonts',
+        ok,
+        headline: ok ? `${tags} preload, ${seen.size} файла` : `расхождений: ${detail.length}`,
+        detail: detail.slice(0, 20),
+      }
+    },
+  },
+
   {
     id: 'subs-affiliate-placement',
     group: 'subs',

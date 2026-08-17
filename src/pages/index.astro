@@ -292,12 +292,16 @@ const roles = [
       content="Professional GHS pictogram library and label builder for 4,178 classified substances. CLP Annex VI data, CLP/GHS compliant tools."
     />
     <link rel="canonical" href="https://ghspictograms.com/" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    {/*
+      ⚠⚠ ВТОРАЯ КОПИЯ подключения шрифтов жила здесь (session 69, №43).
+      Главная — СТАНДАЛОН, через Layout.astro она не проходит, поэтому те же
+      три строки на fonts.googleapis.com приходилось держать дважды. Пункт
+      №43 называл только Layout.astro:66 — на деле адресов было ПЯТЬ.
+      Теперь @font-face приходит из global.css (импорт выше, строка 6).
+      ⛔ НЕ ВОЗВРАЩАТЬ: группа Fonts в check:dist красит сборку.
+    */}
+    <link rel="preload" href="/fonts/inter-v4001-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/space-grotesk-v2000-latin.woff2" as="font" type="font/woff2" crossorigin />
     {/*
       ⚠⚠ Главная — СТАНДАЛОН, она не проходит через Layout.astro, и ссылок на
       значки здесь не было ВООБЩЕ. Браузер молча брал /favicon.ico из корня, а

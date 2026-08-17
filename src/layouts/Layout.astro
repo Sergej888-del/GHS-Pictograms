@@ -60,10 +60,38 @@ const canonicalURL = canonical
     <link rel="canonical" href={canonicalURL} />
     <title>{pageTitle}</title>
 
-    {/* Google Fonts */}
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    {/*
+      Шрифты (session 69, пункт №43).
+
+      ⚠⚠ ЗДЕСЬ БОЛЬШЕ НЕТ ССЫЛОК НА GOOGLE. До этой правки стояли три строки:
+      `preconnect` к fonts.googleapis.com, `preconnect` к fonts.gstatic.com и
+      `<link rel="stylesheet">` на `googleapis.com/css2?family=…`. Они давали
+      цепочку из трёх шагов перед первой буквой на экране: HTML → CSS с чужого
+      домена (БЛОКИРУЕТ отрисовку) → woff2 со ВТОРОГО чужого домена. PSI
+      оценивал её в 1 800–1 970 мс, и это на КАЖДОЙ из 4 501 страницы.
+
+      ⚠ `preconnect` и `display=swap` цепочку не убирали и убрать не могли:
+      браузер не знает, какие woff2 качать, пока не приедет и не разберётся CSS.
+
+      Теперь `@font-face` живёт в src/styles/global.css, файлы — в public/fonts/.
+      Полный разбор с замерами — в шапке global.css.
+
+      ⛔ НЕ ВОЗВРАЩАТЬ эти строки. Группа Fonts в `check:dist` красит сборку,
+      если в HTML снова появится `fonts.googleapis.com` или `fonts.gstatic.com`.
+
+      ⚠ `preload` ровно на два файла, и только потому, что они нужны на КАЖДОЙ
+      странице: латиница основного текста и латиница заголовков (h1 обычно и
+      есть элемент LCP). Остальные четыре — latin-ext, кириллица, греческий и
+      latin-ext заголовков — браузер найдёт сам по `unicode-range`, и это
+      правильно: они нужны не везде, а `preload` лишнего файла крадёт полосу
+      у нужного.
+
+      ⚠⚠ `crossorigin` у шрифта обязателен ДАЖЕ на своём домене. Шрифты
+      запрашиваются в режиме CORS всегда; без атрибута браузер считает preload
+      несовпадающим и качает файл ВТОРОЙ раз — preload становится чистым вредом.
+    */}
+    <link rel="preload" href="/fonts/inter-v4001-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/space-grotesk-v2000-latin.woff2" as="font" type="font/woff2" crossorigin />
 
     {/*
       Значки (session 37). ⚠⚠ До этой правки здесь стояла ОДНА строка про
