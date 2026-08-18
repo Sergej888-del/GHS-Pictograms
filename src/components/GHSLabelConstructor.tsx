@@ -9,7 +9,9 @@ import {
   type JurisdictionKey, type LabelPurpose, type SizeTier,
 } from '../lib/jurisdictions'
 // ⭐⭐ Отбор шести фраз. До session 65 здесь стоял `pStatements.slice(0, 6)`.
-import { usePPrecedence } from '../lib/usePPrecedence'
+import { usePPrecedence, type FitProbe } from '../lib/usePPrecedence'
+// ⭐⭐ Замер влезаемости настоящим `layoutLabel` — session 70.
+import { measureFitCapacity, type FitProbeContext } from '../lib/labelFitProbe'
 import PStatementProtocol from './PStatementProtocol'
 import type { Audience } from '../lib/pPrecedence'
 import {
@@ -350,39 +352,6 @@ export default function GHSLabelConstructor({
     pTouched.current = Boolean(initialSelectedP?.length)
     setSelectedP(initialSelectedP ?? [])
   }, [entryCas, pStatements.length])
-
-  // ── ДВИЖОК ОТБОРА P-ФРАЗ ──────────────────────────────────────────────────
-  /**
-   * ⚠⚠ ВХОД СОБИРАЕТСЯ ИЗ H-КОДОВ, А НЕ ИЗ `pStatements`. `pStatements` — это
-   * то, что Annex VI перечислил для вещества (или что человек отметил руками),
-   * и оно уже неполно: у смеси там пусто, а у вещества — плоский список без
-   * пар и без уровней. Классы опасности движок выводит сам, из H-кодов и
-   * сигнального слова.
-   *
-   * ⚠ `fitCapacity` пока НЕ передаётся — замер влезаемости по самому тесному
-   * языку (`worstLanguageCapacity` + настоящий `layoutLabel`) остаётся
-   * отдельной задачей. Пока лимит задаёт только ст. 28(3), и `limitReason`
-   * говорит об этом прямо, а не делает вид, что размер учтён.
-   */
-  const precedenceInput = useMemo(
-    () => ({
-      hCodes: hStatements.map((h) => h.code),
-      signalWord,
-      audience,
-      containerMl: capacityMl,
-    }),
-    [hStatements, signalWord, audience, capacityMl],
-  )
-  const precedence = usePPrecedence(precedenceInput, hStatements.length > 0)
-
-  /**
-   * Ответ движка становится набором на этикетке — но только пока человек не
-   * правил набор руками.
-   */
-  useEffect(() => {
-    if (pTouched.current || !precedence.result) return
-    setSelectedP(precedence.result.selected.map((u) => u.code))
-  }, [precedence.result])
 
   /**
    * Заполняемые пропуски H-фраз: что назвал поставщик.
@@ -1033,6 +1002,143 @@ export default function GHSLabelConstructor({
   const nameHints = names ? identityHints(names.annotations) : []
   /** Текст, из-за которого разбор этой записи объявлен ненадёжным, или `null`. */
   const nameNotice = names ? unreliableReason(names.annotations) : null
+
+  // ── ДВИЖОК ОТБОРА P-ФРАЗ И ЗАМЕР ВЛЕЗАЕМОСТИ ──────────────────────────────
+  /**
+   * ⚠⚠ ВХОД СОБИРАЕТСЯ ИЗ H-КОДОВ, А НЕ ИЗ `pStatements`. `pStatements` — это
+   * то, что Annex VI перечислил для вещества (или что человек отметил руками),
+   * и оно уже неполно: у смеси там пусто, а у вещества — плоский список без
+   * пар и без уровней. Классы опасности движок выводит сам, из H-кодов и
+   * сигнального слова.
+   *
+   * ⚠⚠ БЛОК СТОИТ ЗДЕСЬ, А НЕ В НАЧАЛЕ КОМПОНЕНТА, И ЭТО НЕ ПЕРЕСТАНОВКА РАДИ
+   * ПОРЯДКА. Замеру нужны отрисованные фразы, имя на языке, сигнальное слово,
+   * пиктограммы и размер этикетки — то есть почти всё, что вычисляется выше.
+   * Оставь вызов наверху, и замер пришлось бы собирать из вторых копий тех же
+   * значений, а вторая копия расходится с первой примерно через месяц.
+   */
+  const precedenceInput = useMemo(
+    () => ({
+      hCodes: hStatements.map((h) => h.code),
+      signalWord,
+      audience,
+      containerMl: capacityMl,
+    }),
+    [hStatements, signalWord, audience, capacityMl],
+  )
+
+  /**
+   * Языки, на которых этикетка реально печатается.
+   *
+   * ⚠⚠ ВТОРОЙ ЯЗЫК СЧИТАЕТСЯ ВЫБРАННЫМ ТОЛЬКО ПРИ ЗАГРУЖЕННЫХ ПЕРЕВОДАХ. Пустая
+   * карта означает, что второго блока на этикетке нет вовсе — и мерить его
+   * место значит отнять его у фраз без причины.
+   *
+   * ⛔ Условие НЕ смотрит на `second`: тот собран из `shownP`, то есть из уже
+   * отобранного набора, а замер обязан посчитаться ДО отбора. Ссылка на него
+   * замкнула бы круг «отбор → замер → отбор».
+   */
+  const labelLangs = useMemo(
+    () => (secondLang && Object.keys(secondTexts).length > 0
+      ? [primaryLang, secondLang]
+      : [primaryLang]),
+    [primaryLang, secondLang, secondTexts],
+  )
+
+  /**
+   * ⚠⚠ ТЕКСТ ФРАЗЫ ДЛЯ ЗАМЕРА — ТОТ ЖЕ, ЧТО ДЛЯ ПЕЧАТИ, НО ПОДАВЛЕННАЯ ФРАЗА
+   * МЕРЯЕТСЯ ОФИЦИАЛЬНЫМ ТЕКСТОМ.
+   *
+   * Фраза с незаполненным обязательным пропуском («Wash … thoroughly after
+   * handling») сейчас не печатается. Посчитай мы её нулём — замер пообещал бы
+   * место, которое исчезнет ровно в тот момент, когда поставщик заполнит поле.
+   * Замер обязан ошибаться в сторону осторожности, а не в сторону обещаний.
+   */
+  const measuredText = (src: string, code: string, lang: string, values: string[]): string => {
+    const r = renderPStatement(src, code, lang, values, pBrackets[code] ?? false)
+    return r.suppressed || !r.text.trim() ? src : r.text
+  }
+
+  const fitCtx: FitProbeContext = {
+    langs: labelLangs,
+    byLang: Object.fromEntries(labelLangs.map((lang) => {
+      const isPrimary = lang === primaryLang
+      return [lang, {
+        signalWord: isPrimary ? primarySignal : secondSignal,
+        productName: isPrimary ? productNameOnLabel : (secondName ?? undefined),
+        // ⚠ H-блок берётся ГОТОВЫМ: он от числа P-фраз не зависит, а второй
+        // отрисовки того же текста в проекте быть не должно.
+        hStatements: (isPrimary ? renderedH : renderedSecondH)
+          .filter((r) => !r.suppressed)
+          .map((r) => ({ code: r.code, text: r.text })),
+        pText: Object.fromEntries(pStatements.map((p) => {
+          const src = isPrimary ? primaryText(p.code, p.text_en) : (secondTexts[p.code] ?? p.text_en)
+          const values = isPrimary ? (pValues[p.code] ?? []) : (pValuesSecond[p.code] ?? [])
+          return [p.code, measuredText(src, p.code, lang, values)]
+        })),
+      }]
+    })),
+    fallbackP: Object.fromEntries(pStatements.map((p) => [p.code, p.text_en])),
+    productName: productNameOnLabel,
+    casNumber: casOnLabel,
+    ecNumber: ecOnLabel,
+    nominalQty,
+    batchNumber,
+    ufiCode,
+    signalLevel,
+    pictograms: pictograms.map((p) => ({ code: p.code, svg: p.svg_content ?? '' })),
+    pFormat,
+    supplier: { name: supplierName, address: supplierAddress, phone: supplierPhone },
+    logo: logo ?? undefined,
+    notes,
+    secondEqual,
+    options: {
+      jurisdiction: jurisdictionKey,
+      purpose,
+      workplaceOption,
+      widthMm: Math.max(15, sizeW),
+      heightMm: Math.max(15, sizeH),
+      containerLitres: litres,
+      containerMl: capacityMl,
+      // ⭐⭐ ПОЛЗУНОК КЕГЛЯ ВХОДИТ В ЗАМЕР. Человек увеличил шрифт — фраз
+      // влезает меньше, и число обязано это показать. Замер по автоподбору
+      // обещал бы место, которого при поднятом кегле уже нет.
+      bodyScale,
+    },
+  }
+
+  /**
+   * ⚠⚠ КЛЮЧ ПЕРЕСЧЁТА ЗАМЕРА. Замер стоит десятков раскладок, а `fitCtx`
+   * собирается литералом на каждом кадре. Без ключа он считался бы заново на
+   * каждый символ, набранный в поле имени поставщика.
+   *
+   * ⚠ В ключ входит всё, от чего зависит РАСКЛАДКА: размер, кегль, языки,
+   * число пиктограмм и H-фраз, длина имени, заполненные пропуски. Загрузка
+   * переводов видна по числу ключей в карте — она приходит асинхронно и обязана
+   * пересчитать замер.
+   */
+  const fitProbe: FitProbe = {
+    measure: (codes) => measureFitCapacity(fitCtx, codes),
+    key: JSON.stringify([
+      labelLangs, sizeW, sizeH, bodyScale, jurisdictionKey, purpose, workplaceOption,
+      litres, capacityMl, pFormat, pictograms.length, hStatements.length,
+      pStatements.map((p) => p.code), productNameOnLabel.length, (secondName ?? '').length,
+      Object.keys(primaryTexts).length, Object.keys(secondTexts).length,
+      supplierName.length + supplierAddress.length + supplierPhone.length,
+      notes.length, Boolean(logo), secondEqual, pValues, pValuesSecond, pBrackets,
+    ]),
+  }
+
+  const precedence = usePPrecedence(precedenceInput, hStatements.length > 0, fitProbe)
+
+  /**
+   * Ответ движка становится набором на этикетке — но только пока человек не
+   * правил набор руками.
+   */
+  useEffect(() => {
+    if (pTouched.current || !precedence.result) return
+    setSelectedP(precedence.result.selected.map((u) => u.code))
+  }, [precedence.result])
 
   const labelInput: LabelInput = {
     productName: productNameOnLabel,
@@ -2264,6 +2370,54 @@ export default function GHSLabelConstructor({
                     >
                       ↺ Back to the tool’s selection
                     </button>
+                  )}
+
+                  {/* ── ⭐⭐ ЧТО ПОКАЗАЛ ЗАМЕР ВЛЕЗАЕМОСТИ.
+                         ⚠⚠ Число здесь — ОБЕЩАНИЕ, данное до печати, поэтому
+                         сказано, ЧЕМ оно получено и на каком языке измерено.
+                         «Влезает шесть» без указания языка на двуязычной
+                         этикетке — это половина правды: ст. 17(2) требует
+                         одинакового содержания, и число задаёт самый тесный
+                         язык, а не основной. ───────────────────────────── */}
+                  {precedence.fit && (
+                    <div className="mt-1.5 border-t border-[#062A78]/20 pt-1.5">
+                      {!precedence.fit.baseFits ? (
+                        <p className="text-[11px] leading-relaxed text-rose-700">
+                          ⚠ At {fmt(sizeW)} × {fmt(sizeH)} {unit} this label does not fit
+                          <strong> even with no precautionary statements at all</strong> — the pictograms,
+                          hazard statements and supplier details alone overflow it. Removing P-statements
+                          will not help: make the label larger, or lower the text size below the preview.
+                        </p>
+                      ) : precedence.fit.none ? (
+                        <p className="text-[11px] leading-relaxed text-rose-700">
+                          ⚠ Measured on this label: <strong>no precautionary statement fits</strong> at this
+                          size and text size. Article 28(3) is not what limits the set here — the label is.
+                        </p>
+                      ) : precedence.fit.capacity >= precedence.fit.candidates ? (
+                        <p className="text-[11px] leading-relaxed text-[#062A78]/90">
+                          Measured on this label with the real layout: room for{' '}
+                          <strong>{precedence.fit.capacity} statements or more</strong>, so the set is limited
+                          by Article 28(3), not by the size.
+                        </p>
+                      ) : (
+                        <p className="text-[11px] leading-relaxed text-[#062A78]/90">
+                          Measured on this label with the real layout:{' '}
+                          <strong>{precedence.fit.capacity} statements fit</strong>
+                          {precedence.fit.worstLang
+                            ? <> — {LANGUAGE_BY_CODE.get(precedence.fit.worstLang)?.name ?? precedence.fit.worstLang} is
+                                the tightest of the languages on this label, and Art. 17(2) requires the same
+                                information in every one of them, so the tightest sets the number.</>
+                            : '.'}
+                        </p>
+                      )}
+                      {labelLangs.length > 1 && (
+                        <p className="mt-1 text-[11px] text-[#062A78]/70">
+                          {labelLangs.map((l) => `${l} ${precedence.fit!.byLang[l] ?? '—'}`).join(' · ')}
+                          {' · '}measured with both language blocks on the label, because every statement is
+                          printed twice.
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               ) : null}
