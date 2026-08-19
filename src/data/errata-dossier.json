@@ -51,6 +51,23 @@
   "sourceEntry": []
  },
  {
+  "index": "612-008-00-7",
+  "lang": "EN",
+  "kind": "typo",
+  "note": "The English edition prints \"niline\" — the initial letter is missing from \"aniline\". The same edition writes the name in full elsewhere in this Annex (\"salts of aniline\", \"dimethyl anilines\"), and twenty of the twenty-three editions print the complete name.",
+  "citation": "Regulation (EU) 2018/669, OJ L 115, 4.5.2018, p. 399",
+  "act": "32018R0669",
+  "oj": "COMMISSION REGULATION (EU) 2018/669, ОЖ L 115, 4.5.2018",
+  "page": 399,
+  "publishedName": "niline",
+  "ec": "200-539-3",
+  "cas": "62-53-3",
+  "en": "niline",
+  "pairIndex": null,
+  "pairName": null,
+  "sourceEntry": []
+ },
+ {
   "index": "042-003-00-X",
   "lang": "ET",
   "kind": "foreign-name",
@@ -391,6 +408,23 @@
   ]
  },
  {
+  "index": "612-008-00-7",
+  "lang": "MT",
+  "kind": "typo",
+  "note": "The Maltese edition prints \"nilina\" — the initial letter is missing from \"anilina\". The same edition writes the stem in full elsewhere in this Annex (\"2-bromo-4,6-difluworoanilina\", \"4-kloroanilin\"), and twenty of the twenty-three editions print the complete name.",
+  "citation": "Regulation (EU) 2018/669, OJ L 115, 4.5.2018, p. 399",
+  "act": "32018R0669",
+  "oj": "REGOLAMENT TAL-KUMMISSJONI (UE) 2018/669, ОЖ L 115, 4.5.2018",
+  "page": 399,
+  "publishedName": "nilina",
+  "ec": "200-539-3",
+  "cas": "62-53-3",
+  "en": "niline",
+  "pairIndex": null,
+  "pairName": null,
+  "sourceEntry": []
+ },
+ {
   "index": "612-104-00-9",
   "lang": "MT",
   "kind": "foreign-name",
@@ -509,6 +543,23 @@
   "ec": "200-929-3",
   "cas": "76-05-1",
   "en": "trifluoroacetic acid . . . %",
+  "pairIndex": null,
+  "pairName": null,
+  "sourceEntry": []
+ },
+ {
+  "index": "612-008-00-7",
+  "lang": "SV",
+  "kind": "typo",
+  "note": "The Swedish edition prints \"nilin\" — the initial letter is missing from \"anilin\". The same edition writes the stem in full elsewhere in this Annex (\"2-brom-4,6-difluoranilin\", \"4-kloranilin\"), and twenty of the twenty-three editions print the complete name.",
+  "citation": "Regulation (EU) 2018/669, OJ L 115, 4.5.2018, p. 399",
+  "act": "32018R0669",
+  "oj": "KOMMISSIONENS FÖRORDNING (EU) 2018/669, ОЖ L 115, 4.5.2018",
+  "page": 399,
+  "publishedName": "nilin",
+  "ec": "200-539-3",
+  "cas": "62-53-3",
+  "en": "niline",
   "pairIndex": null,
   "pairName": null,
   "sourceEntry": []

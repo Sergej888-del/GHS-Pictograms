@@ -36,6 +36,10 @@ import {
 import {
   marketsFor, secondLanguageIsEqual, suggestedPairFor, MARKET_BY_CODE,
 } from '../lib/labelMarkets'
+// ⭐⭐ Свидетельства об ошибках САМОГО регламента — session 71, №60. Файл чистый
+// (без обращений к базе), поэтому его же импортируют и страница вещества, и
+// `check-dist.ts`: текст пометки обязан быть ОДИН на все три места.
+import { erratumFor, ERRATUM_LEAD, erratumCitation } from '../lib/annex6Errata'
 import {
   renderStatement, rolesForCodes, roleIsRequired, ROLE_OBLIGATION,
   type PlaceholderRole, type PlaceholderValues,
@@ -487,10 +491,37 @@ export default function GHSLabelConstructor({
          * ⚠ CAS и EC при смене языка НЕ ТРОГАЕМ: номера от языка не зависят, а
          * человек мог ввести номер той партии, которую фасует.
          */
-        const first = n ? formChoices(n, nameVariants ?? [])[0] : undefined
-        if (!first) return
         const cur = productNameRef.current
         if (cur.trim() && cur !== autoNameRef.current) return
+        /**
+         * ⚠⚠⚠ ПОМЕЧЕННУЮ ЗАПИСЬ НЕ ПОДСТАВЛЯЕМ ВОВСЕ — session 71, №60.
+         *
+         * У анилина в АНГЛИЙСКОЙ редакции Annex VI напечатано «niline», и до
+         * этой правки конструктор молча ставил его в поле поверх целого имени
+         * из `substances`. На этикетку уходил неверный идентификатор продукта
+         * по ст. 17(1)(c) — на самом видном веществе проекта, и восемь месяцев
+         * этого никто не видел, потому что имя проверяли глазами на СТРАНИЦЕ
+         * (там `display_name_short`), а не в КОНСТРУКТОРЕ.
+         *
+         * ⚠⚠ ПОЧЕМУ НЕ ПОДСТАВИТЬ ИСПРАВЛЕННОЕ. Art. 18(2) отсылает к Annex VI,
+         * а не к нашему прочтению его. Молча напечатать «aniline» там, где ОЖ
+         * печатает «niline», — это переписать юридический текст за поставщика.
+         * Мы вправе предупредить и дать выбрать; выбирает человек.
+         *
+         * ⚠⚠ ПОЧЕМУ НЕ ОСТАВИТЬ ПОЛЕ КАК ЕСТЬ. Оставить — значит при смене
+         * языка с немецкого на английский держать на английской этикетке
+         * «Anilin». Поэтому откатываемся на `display_name_short`: он от языка
+         * не зависит и повреждением не задет (у анилина там «Aniline» целиком).
+         * Рядом печатается пометка с обоими чтениями и ссылкой на полосу ОЖ.
+         */
+        if (erratumFor(indexNumber, primaryLang)) {
+          autoNameRef.current = displayName
+          productNameRef.current = displayName
+          setProductName(displayName)
+          return
+        }
+        const first = n ? formChoices(n, nameVariants ?? [])[0] : undefined
+        if (!first) return
         /**
          * ⚠⚠ ОБЕ МЕТКИ ПЕРЕСТАВЛЯЮТСЯ ВМЕСТЕ. Пока `productNameRef` здесь не
          * трогали, он оставался с прежним именем, а `autoNameRef` уезжал на
@@ -1002,6 +1033,26 @@ export default function GHSLabelConstructor({
   const nameHints = names ? identityHints(names.annotations) : []
   /** Текст, из-за которого разбор этой записи объявлен ненадёжным, или `null`. */
   const nameNotice = names ? unreliableReason(names.annotations) : null
+
+  /**
+   * Ошибка САМОГО регламента у этой записи в выбранной редакции, или `null`.
+   *
+   * ⚠⚠ БЕРЁТСЯ ИЗ `annex6Errata.ts`, А НЕ ВЫВОДИТСЯ ЗДЕСЬ НА ЛЕТУ. Признак
+   * «имя на одном языке есть имя на другом без первой буквы» находит восемь
+   * кандидатов и ошибается на шести из них: итальянские `idrazina`,
+   * `stricnina`, `iosciamina`, чешская `rtuť` — законные названия. Вердикт по
+   * каждой строке вынесен человеком и сверен с факсимиле ОЖ; движок берёт
+   * готовый список и ничего не решает сам.
+   */
+  const nameErratum = indexNumber ? erratumFor(indexNumber, primaryLang) : null
+  /**
+   * ⚠⚠ ИМЯ, КОТОРОЕ ЛЕЖИТ В РЕГЛАМЕНТЕ, — ИЗ БАЗЫ, А НЕ ИЗ СВИДЕТЕЛЬСТВА.
+   * Свидетельство цитирует его прозой для читателя; вторая копия того же
+   * текста в поле для кнопки однажды разошлась бы с базой молча.
+   */
+  const erratumPrintedName = nameErratum ? (localisedForms[0]?.name ?? names?.cell ?? '') : ''
+  /** Та же ошибка у ВТОРОГО языка. ⚠ Там поля ввода нет — см. пометку ниже. */
+  const secondNameErratum = indexNumber && secondLang ? erratumFor(indexNumber, secondLang) : null
 
   // ── ДВИЖОК ОТБОРА P-ФРАЗ И ЗАМЕР ВЛЕЗАЕМОСТИ ──────────────────────────────
   /**
@@ -1615,6 +1666,35 @@ export default function GHSLabelConstructor({
             </p>
           )}
 
+          {/* ⚠⚠⚠ У ВТОРОГО ЯЗЫКА ПОВЕДЕНИЕ ДРУГОЕ, И ЭТО ОСОЗНАННО, А НЕ
+              НЕДОДЕЛКА. В основном блоке автоподстановка на помеченной записи
+              останавливается — там есть куда откатиться (поле ввода и
+              `display_name_short`). Здесь поля нет вовсе: имя второго языка
+              берётся только из Annex VI, и «не подставлять» означало бы убрать
+              с этикетки обязательный элемент — идентификатор продукта по
+              ст. 17(1)(c). Молчаливая пропажа обязательного элемента хуже, чем
+              напечатанный как есть текст регламента с громкой пометкой рядом.
+              ⏳ Своё поле для второго имени — отдельная задача; до неё человек
+              вправе снять второй язык или сменить его. */}
+          {secondNameErratum && (
+            <div className="mt-2 rounded border-2 border-amber-400 bg-amber-50 px-2.5 py-2 text-[11px] leading-relaxed text-amber-900">
+              <p>
+                <b>{ERRATUM_LEAD[secondNameErratum.kind]}</b>{' '}{secondNameErratum.note}
+              </p>
+              <p className="mt-1 text-[10px] text-amber-700">{erratumCitation(secondNameErratum)}</p>
+              <p className="mt-1.5 text-gray-800">
+                The second language block has no name field of its own, so the second block prints the
+                substance name exactly as the Official Journal prints it
+                {secondName ? <> — <b>{secondName}</b></> : null}
+                {secondNameErratum.corrected
+                  ? <>, and not <b>{secondNameErratum.corrected}</b>, which is how this edition spells it
+                    elsewhere.</>
+                  : <>.</>}
+                {' '}If that is not what you want on the package, drop the second language or pick another one.
+              </p>
+            </div>
+          )}
+
           {secondLang && !secondError && (
             <>
               <p className="mt-2 text-[11px] leading-relaxed text-gray-500">
@@ -2110,6 +2190,76 @@ export default function GHSLabelConstructor({
                     label, whichever designation you pick.
                   </span>
                 </p>
+              )}
+
+              {/* ⚠⚠⚠ ОШИБКА САМОГО РЕГЛАМЕНТА — ПОМЕТКА СТОИТ ВЫШЕ ВСЕГО
+                  ОСТАЛЬНОГО И НИЧЕМ НЕ СВЁРНУТА. Здесь человек собирает
+                  идентификатор продукта по ст. 17(1)(c); если он узнает о
+                  повреждённом имени после того, как скачает PDF, пометка не
+                  сработала. ⚠ Автоподстановка на такой записи остановлена —
+                  см. эффект загрузки имён выше. */}
+              {nameErratum && (
+                <div className="mt-2 rounded border-2 border-amber-400 bg-amber-50 px-2.5 py-2 text-[11px] leading-relaxed text-amber-900">
+                  <p>
+                    <b>{ERRATUM_LEAD[nameErratum.kind]}</b>{' '}{nameErratum.note}
+                  </p>
+                  {/* ⚠ Ссылка на полосу ОЖ — чтобы человек мог посмотреть сам,
+                      а не поверить нам на слово. Раз мы говорим, что
+                      официальный текст неверен, показать место обязаны мы. */}
+                  <p className="mt-1 text-[10px] text-amber-700">{erratumCitation(nameErratum)}</p>
+                  <p className="mt-1.5 text-gray-800">
+                    Nothing has been filled in for you here. Pick the wording you will print:
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {erratumPrintedName && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          autoNameRef.current = erratumPrintedName
+                          productNameRef.current = erratumPrintedName
+                          setProductName(erratumPrintedName)
+                        }}
+                        className={`cursor-pointer rounded-lg border px-2.5 py-1 text-left text-[11px] transition-colors ${
+                          productName === erratumPrintedName
+                            ? 'border-amber-600 bg-amber-100 font-semibold text-amber-900'
+                            : 'border-amber-300 bg-white text-gray-700 hover:border-amber-600'
+                        }`}
+                      >
+                        {erratumPrintedName}
+                        <span className="ml-1 text-gray-400">as the Official Journal prints it</span>
+                      </button>
+                    )}
+                    {/* ⚠⚠ ВТОРАЯ КНОПКА ПОЯВЛЯЕТСЯ НЕ ВСЕГДА, И ЭТО НЕ
+                        НЕДОДЕЛКА. Она есть только там, где восстановление
+                        проверяемо ВНУТРИ той же редакции. Там, где ячейка несёт
+                        имя ДРУГОЙ записи, верного имени на этом языке в
+                        регламенте не напечатано вовсе, и предложить его значило
+                        бы сочинить официальное наименование. */}
+                    {nameErratum.corrected && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          autoNameRef.current = nameErratum.corrected!
+                          productNameRef.current = nameErratum.corrected!
+                          setProductName(nameErratum.corrected!)
+                        }}
+                        className={`cursor-pointer rounded-lg border px-2.5 py-1 text-left text-[11px] transition-colors ${
+                          productName === nameErratum.corrected
+                            ? 'border-[#062A78] bg-blue-50 font-semibold text-[#062A78]'
+                            : 'border-gray-300 bg-white text-gray-700 hover:border-[#062A78]'
+                        }`}
+                      >
+                        {nameErratum.corrected}
+                        <span className="ml-1 text-gray-400">as this edition spells it elsewhere</span>
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1.5 text-[10px] text-gray-600">
+                    We do not choose for you. Art. 18(2) points at Annex VI itself, so following the printed
+                    wording is defensible — and so is following the spelling every other edition uses. The
+                    finding has been reported; it is not a correction we are entitled to make.
+                  </p>
+                </div>
               )}
 
               {namesError && (

@@ -83,6 +83,30 @@ export type Erratum = {
    * что говорят идентификаторы той же строки и откуда приехало чужое значение.
    */
   note: string;
+  /**
+   * Чтение, которое ТА ЖЕ редакция даёт этому корню в других своих записях.
+   * Предлагается КНОПКОЙ в конструкторе и НИКОГДА не подставляется само.
+   *
+   * ⚠⚠⚠ ЭТО НЕ «ПРАВИЛЬНОЕ ИМЯ» И НЕ ПОПРАВКА К РЕГЛАМЕНТУ. Исправить
+   * официальное наименование вправе только Комиссия, корриджендумом. Здесь
+   * записано ровно одно наблюдение: как эта же языковая редакция Annex VI
+   * пишет тот же корень в СВОИХ ДРУГИХ записях. Поставщик, выбравший это
+   * чтение, делает выбор сам и осознанно — потому мы и не подставляем молча.
+   *
+   * ⚠⚠ ЗАПОЛНЯЕТСЯ ТОЛЬКО У `typo` И ТОЛЬКО КОГДА ВОССТАНОВЛЕНИЕ ПРОВЕРЯЕМО
+   * ВНУТРИ ЭТОГО ЖЕ ЯЗЫКА. У `foreign-name` его не может быть по построению:
+   * там ячейка несёт имя ДРУГОЙ записи, и верного имени на этом языке в
+   * регламенте просто не напечатано — предложить его значило бы сочинить.
+   *
+   * ⛔⛔ СВИДЕТЕЛЬСТВО ДРУГИХ ЯЗЫКОВ САМО ПО СЕБЕ НЕ ГОДИТСЯ, И ЭТО ПРОВЕРЕНО
+   * НА ЖИВОМ ПРИМЕРЕ (session 71). Словенское `uabain` выглядит как `ouabain`
+   * без первой буквы — но румынская редакция независимо печатает `uabaină`,
+   * сочетание «ou» в словенских именах Annex VI не встречается ни разу, а
+   * записей с английским именем на «ou» во всём приложении РОВНО ОДНА, то есть
+   * сравнивать не с чем. Находку сняли. Языки отличаются одной ведущей буквой
+   * сплошь и рядом, и вывод из одного лишь межъязыкового сходства — догадка.
+   */
+  corrected?: string;
   /** Акт, выпуск и полоса ОЖ. ⚠ Выводится из файлов, не вписывается руками. */
   source: ErratumSource;
 };
@@ -314,6 +338,48 @@ const ERRATA: Record<string, Record<string, Erratum>> = {
       source: { act: '32018R0669', oj: 'OJ L 115, 4.5.2018', page: 252 },
     },
   },
+
+  // ── Потеря ПЕРВОЙ буквы имени ───────────────────────────────────────────
+  //
+  // ⭐⭐ ЭТИ ТРИ НАЙДЕНЫ НЕ ПОИСКОМ ПО РЕГЛАМЕНТУ, А ЭТИКЕТКОЙ. Session 70
+  // мерила влезаемость и запросила имя анилина на шести языках — в выдаче
+  // базы английское оказалось «niline». Разбор — `claude/eurlex-truncated-names.md`.
+  //
+  // ⛔⛔ ПЕРВАЯ ДОГАДКА БЫЛА НЕВЕРНОЙ И ОБОШЛАСЬ БЫ ДОРОГО. «Наш парсер срезал
+  // букву» напрашивалось: дефекты разбора имён у нас есть, и №25 в очереди
+  // прямо про них. Один `grep` по снимку EUR-Lex показал, что так напечатано
+  // у ЕС — и не только в консолидации, но и в самом акте. Правка нашего
+  // парсера была бы вредом.
+  //
+  // ⚠⚠ ЧЕТВЁРТАЯ НАХОДКА ТОГО ЖЕ ЗАМЕРА СЮДА НЕ ПОПАЛА. Словенское `uabain`
+  // (614-025-00-5) session 71 проверила отдельно и сняла: см. предупреждение
+  // у поля `corrected`. Автоматический критерий сузил поиск, но вердикт по
+  // каждой строке выносился глазами — из восьми кандидатов SQL законными
+  // оказались шесть, а после перепроверки семь.
+  //
+  // ⭐ Восстановление здесь проверяемо ВНУТРИ языка: та же редакция печатает
+  // этот корень целиком в соседних записях. Поэтому у всех трёх есть
+  // `corrected`, а у 26 прежних свидетельств его нет.
+  '612-008-00-7': {
+    EN: {
+      kind: 'typo',
+      note: 'The English edition prints "niline" — the initial letter is missing from "aniline". The same edition writes the name in full elsewhere in this Annex ("salts of aniline", "dimethyl anilines"), and twenty of the twenty-three editions print the complete name.',
+      corrected: 'aniline',
+      source: { act: '32018R0669', oj: 'OJ L 115, 4.5.2018', page: 399 },
+    },
+    MT: {
+      kind: 'typo',
+      note: 'The Maltese edition prints "nilina" — the initial letter is missing from "anilina". The same edition writes the stem in full elsewhere in this Annex ("2-bromo-4,6-difluworoanilina", "4-kloroanilin"), and twenty of the twenty-three editions print the complete name.',
+      corrected: 'anilina',
+      source: { act: '32018R0669', oj: 'OJ L 115, 4.5.2018', page: 399 },
+    },
+    SV: {
+      kind: 'typo',
+      note: 'The Swedish edition prints "nilin" — the initial letter is missing from "anilin". The same edition writes the stem in full elsewhere in this Annex ("2-brom-4,6-difluoranilin", "4-kloranilin"), and twenty of the twenty-three editions print the complete name.',
+      corrected: 'anilin',
+      source: { act: '32018R0669', oj: 'OJ L 115, 4.5.2018', page: 399 },
+    },
+  },
 };
 
 /**
@@ -391,15 +457,47 @@ export const SUBMISSION: {
 const CORRECTED: Record<string, Record<string, Extract<ErratumStatus, { kind: 'corrected' }>>> = {};
 
 /**
+ * ВТОРАЯ подача — находки, которых 10 августа ещё не существовало.
+ *
+ * ⚠⚠⚠ БЕЗ ЭТОГО СТРАНИЦА НАЧАЛА БЫ ВРАТЬ В ТОТ ЖЕ ДЕНЬ, КОГДА МЫ ДОБАВИЛИ
+ * СТРОКУ. `SUBMISSION` — одна дата на все свидетельства, и любая новая запись
+ * молча получала бы «Reported 10 August 2026». То есть страница приписала бы
+ * себе обращение, которого не было, — ровно та ложь, от которой файл
+ * предостерегает абзацем выше про Бюро публикаций.
+ *
+ * ⚠⚠ ПОЧЕМУ ВТОРАЯ ПОДАЧА, А НЕ ПРАВКА ПЕРВОЙ. Первая ушла в ECHA и в этом
+ * составе; переписать её дату или состав задним числом — исказить то, что
+ * действительно произошло. Подач может стать и три: тогда здесь появится
+ * третий список, а не третья интерпретация первого.
+ *
+ * ⏳ `date: null` — «ещё не отправлено». Проставить дату здесь единственное,
+ * что переводит эти находки в «сообщено».
+ */
+export const SUPPLEMENT: { date: string | null; channel: string } = {
+  date: null,
+  // ⚠ Канал ДРУГОЙ, чем у первой подачи, и это не небрежность: переписка по
+  // Annex VI уже открыта в хелпдеске EUR-Lex под этим номером, и дополнение
+  // логичнее приложить к ней, чем заводить новое обращение в ECHA.
+  channel: 'EUR-Lex helpdesk, ticket OPXHDJSM-237',
+};
+
+/** Находки, вошедшие в `SUPPLEMENT`, а не в `SUBMISSION`. */
+const IN_SUPPLEMENT: Record<string, string[]> = {
+  '612-008-00-7': ['EN', 'MT', 'SV'],
+};
+
+/**
  * Состояние конкретной находки.
  *
  * ⚠ Порядок проверок значим: исправление СИЛЬНЕЕ отправки. Запись, которую
  * поправили, перестаёт быть ошибкой независимо от того, сообщали мы о ней.
  */
 export function erratumStatus(indexNumber: string, lang: string): ErratumStatus {
-  const fixed = CORRECTED[indexNumber]?.[(lang ?? '').trim().toUpperCase()];
+  const L = (lang ?? '').trim().toUpperCase();
+  const fixed = CORRECTED[indexNumber]?.[L];
   if (fixed) return fixed;
-  if (SUBMISSION.date) return { kind: 'submitted', date: SUBMISSION.date, channel: SUBMISSION.channel };
+  const sent = IN_SUPPLEMENT[indexNumber]?.includes(L) ? SUPPLEMENT : SUBMISSION;
+  if (sent.date) return { kind: 'submitted', date: sent.date, channel: sent.channel };
   return { kind: 'unreported' };
 }
 
