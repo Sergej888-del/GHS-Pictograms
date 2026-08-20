@@ -127,3 +127,35 @@
 # чужим сроком кэша, которым мы не управляли.
 /fonts/*
   Cache-Control: public, max-age=31536000, immutable
+
+
+# ── Технический домен Cloudflare Pages (session 73, пункт №72) ──────────────
+#
+# ⛔⛔ `ghs-pictograms.pages.dev` отдаёт ВЕСЬ сайт: `200 OK` на `/sds/acetone/`
+# с полным содержимым. Это второй адрес тех же 4 501 страницы, и он лежит ВНЕ
+# нашей зоны — ни Redirect Rule, ни Page Rule до него не достают. Проверено
+# session 73: то же самое у `ghssymbols.pages.dev`.
+#
+# ⭐⭐⭐ ХЕНДОФФ УТВЕРЖДАЛ, ЧТО `_headers` НЕ УМЕЕТ УСЛОВИЙ ПО ХОСТУ. ЭТО НЕВЕРНО.
+# Cloudflare документирует абсолютные URL (обязательно `https`) именно для
+# этого случая. Значит Pages Functions не нужны, а с ними не нужна и их квота
+# (Free = 100 000 вызовов в сутки при наших 7–14 тыс. просмотров).
+#
+# ⚠ Второе правило закрывает превью-развёртывания: у каждого деплоя свой адрес
+# вида `a1b2c3d4.ghs-pictograms.pages.dev`. Плейсхолдер `:version` берёт любой
+# один сегмент. Хост при этом написан ЯВНО, а не плейсхолдером `:project` —
+# так правило не может случайно совпасть с чем-то ещё.
+#
+# ⭐ `canonical` на apex уже стоит на всех страницах — проверено запросом к
+# `ghs-pictograms.pages.dev/sds/acetone/`, отдаёт
+# `<link rel="canonical" href="https://ghspictograms.com/sds/acetone/">`.
+# Но canonical — это ПОДСКАЗКА поисковику, а `noindex` — указание. Нужны оба.
+#
+# ⛔⛔⛔ ПОСЛЕ ДЕПЛОЯ ОБЯЗАТЕЛЬНО ПРОВЕРИТЬ, ЧТО ЗАГОЛОВКА НЕТ НА APEX:
+#   curl -sI -A "Mozilla/5.0" https://ghspictograms.com/ | Select-String "x-robots"
+# Пустой ответ — правильно. Если `noindex` вдруг окажется на apex, из индекса
+# выпадет весь сайт. ⚠ `-A` обязателен: наш же WAF (session 27) даёт 403 на curl.
+https://ghs-pictograms.pages.dev/*
+  X-Robots-Tag: noindex
+https://:version.ghs-pictograms.pages.dev/*
+  X-Robots-Tag: noindex
