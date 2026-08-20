@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
 import { substanceName, substanceNameFull } from '../lib/substanceName'
-import { casForDisplay, ecForDisplay } from '../lib/substanceIdentifiers'
+import { casForDisplay, ecForDisplay, casShapeOk } from '../lib/substanceIdentifiers'
 import {
   LM_PARAM, LM_STICKY_PARAMS, LABEL_MAKER_BASE, labelMakerHref, parseLabelMakerParams,
   readReturnBase,
@@ -183,9 +183,26 @@ export default function SubstancePicker({ branchPaths = [] }: Props) {
    * инструмент открывался с умолчаниями — OSHA, этикетка поставщика. Пришедший
    * за цеховой этикеткой по EU CLP получал не то, за чем пришёл.
    */
+  /**
+   * ⚠⚠ CAS УХОДИТ В АДРЕС ТОЛЬКО ЕСЛИ ПРОШЁЛ ФОРМУ (session 73). Список тянется
+   * запросом `.not('cas_number','is',null)` — без проверки формы, — поэтому в
+   * нём лежат и групповые записи Annex VI, у которых в одной ячейке склеены
+   * идентификаторы всех форм и обрезаны шириной колонки: `71-41-0[1]584-02-1[2`.
+   * Строкой ниже такая запись честно показывается как «no single CAS», но в
+   * `open()` до session 73 уходило сырое значение, и конструктор открывался
+   * пустым с мусором в адресной строке: он ищет `.eq('cas_number', …)` и не
+   * находит ничего.
+   *
+   * ⭐ Тот же класс дефекта чинили в session 42, 44 и 52 — каждый раз в другом
+   * месте. Правило формы одно на проект и живёт в `substanceIdentifiers.ts`.
+   *
+   * ⚠ Переход НЕ блокируем: у групповой записи этикетка нужна ровно так же,
+   * просто классифицировать её человек будет руками. Так же поступает
+   * `pages/ghs/[code].astro` — почерк обязан быть один.
+   */
   function open(cas: string) {
     const params = sticky ? parseLabelMakerParams(sticky) : {}
-    const href = labelMakerHref({ ...params, cas }, returnBase) + '#build'
+    const href = labelMakerHref({ ...params, cas: casShapeOk(cas) ? cas : null }, returnBase) + '#build'
     window.location.assign(href)
   }
 
@@ -293,7 +310,21 @@ export default function SubstancePicker({ branchPaths = [] }: Props) {
                 const pics = s.ghs_pictogram_codes ?? []
                 return (
                   <li key={s.cas_number}>
-                    <button type="button" onClick={() => open(s.cas_number)} className="lm-pick-row">
+                    {/* ⭐⭐ В КОНСТРУКТОР УХОДИТ РОВНО ТОТ НОМЕР, ЧТО ВИДЕН В СТРОКЕ.
+                        `cas` выше — это `casForDisplay`: у групповой записи Annex VI он
+                        отдаёт номер ПЕРВОЙ формы, и её же имя показывает `substanceName`
+                        (`display_name_short` обрезан до неё). Пара «имя + номер» согласована,
+                        поэтому человек попадает в конструкторе на то вещество, на которое нажал.
+                        ⚠ Замер `check:dist`: разбор форм спасает CAS у 144 записей из 159 —
+                        отдавать всем им пустоту значило бы терять 144 рабочих перехода. */}
+                    <button
+                      type="button"
+                      onClick={() => open(cas)}
+                      className="lm-pick-row"
+                      title={cas
+                        ? undefined
+                        : 'Multi-component Annex VI entry — no single CAS could be recovered, so the label maker opens empty and you classify by hand'}
+                    >
                       <span className="n" title={substanceNameFull(s)}>{substanceName(s)}</span>
                       <span className="m">
                         {cas ? cas : 'no single CAS'}{ec ? ` · EC ${ec}` : ''}

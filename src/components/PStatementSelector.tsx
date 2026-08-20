@@ -21,6 +21,7 @@ import { supabase } from '../lib/supabase'
 import { usePPrecedence } from '../lib/usePPrecedence'
 import PStatementProtocol from './PStatementProtocol'
 import { labelMakerHref, resolveStatementCodes, parseLabelMakerParams } from '../lib/labelMakerLink'
+import { casForDisplay } from '../lib/substanceIdentifiers'
 import type { Audience } from '../lib/pPrecedence'
 
 interface HStatement { code: string; text_en: string }
@@ -340,9 +341,29 @@ export default function PStatementSelector() {
     return [...on, ...off]
   }, [allH, hQuery, pickedH])
 
-  /** Открыть тот же набор в конструкторе этикетки. */
+  /**
+   * Открыть тот же набор в конструкторе этикетки.
+   *
+   * ⚠⚠ `cas` ИДЁТ ЧЕРЕЗ РАЗБОР ФОРМ (session 73). У групповых записей Annex VI в
+   * `cas_number` лежит склейка идентификаторов всех форм, обрезанная шириной
+   * колонки (`71-41-0[1]584-02-1[2`). До session 73 она уезжала в живой
+   * `<a href>` ниже как есть, и конструктор открывался пустым: он ищет
+   * `.eq('cas_number', …)` и не находит ничего.
+   *
+   * ⭐ `casForDisplay` отдаёт номер ПЕРВОЙ формы — той же, чьё имя показано в
+   * карточке вещества, — так что человек попадает на то вещество, которое видел.
+   * Замер `check:dist`: разбор спасает CAS у 144 записей из 159. У оставшихся 15
+   * функция вернёт пустую строку, и `|| null` уберёт параметр целиком.
+   *
+   * ⚠ Проверять форму ПОВТОРНО здесь не нужно: `casForDisplay` возвращает либо
+   * номер, уже прошедший `CAS_SHAPE`, либо пустую строку. Третьего нет.
+   *
+   * ⭐ Отобранные H- и P-коды при этом НЕ теряются — они уходят своими
+   * параметрами. Человек получает тот же набор фраз, просто без предзаполненного
+   * идентификатора вещества.
+   */
   const toLabelMaker = useMemo(() => labelMakerHref({
-    cas: substance?.cas_number ?? null,
+    cas: casForDisplay(substance?.cas_number) || null,
     h: substance ? undefined : pickedH,
     p: result ? result.selected.map((u) => u.code) : undefined,
     signal: signalWord === 'Danger' ? 'danger' : signalWord === 'Warning' ? 'warning' : 'none',
