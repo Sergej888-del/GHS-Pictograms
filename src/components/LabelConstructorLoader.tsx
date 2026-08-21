@@ -173,11 +173,29 @@ export default function LabelConstructorLoader({
     async function load() {
       setLoading(true)
       setNotFound(false)
-      const { data: sub } = await supabase
+      /**
+       * ⚠⚠ ПОИСК — ПО `cas_primary`, НОРМАЛИЗОВАННОЙ КОЛОНКЕ (№79, session 74).
+       * `cas_number` испорчен импортом: у групповых записей в ячейке склейка
+       * форм, обрезанная шириной колонки (`71-41-0[1]584-02-1[2`), и точный
+       * `.eq()` по ней не находил номер, спасённый разбором форм. `cas_primary`
+       * заполнен миграцией `substances_cas_ec_primary_normalize_v1`.
+       *
+       * ⚠ И НЕ `.single()`: один CAS может дать ДВЕ записи Annex VI —
+       * `7440-43-9` это и 048-002-00-0 (cadmium non-pyrophoric), и
+       * 048-011-00-X (cadmium pyrophoric). Правило выбора: предпочесть строку,
+       * где сырой `cas_number` совпал с запросом целиком, — ровно её находил
+       * старый запрос, то есть поведение до миграции сохраняется. Показ выбора
+       * форм человеку — отдельная карточка, не эта правка.
+       */
+      const { data: subRows } = await supabase
         .from('substances')
         .select('id, index_number, iupac_name, common_name, display_name_short, cas_number, ec_number, signal_word, ghs_pictogram_codes, h_statement_codes, p_statement_codes')
-        .eq('cas_number', cas)
-        .single()
+        .eq('cas_primary', cas)
+        .order('index_number')
+        .limit(2)
+
+      const casRows = (subRows ?? []) as Substance[]
+      const sub = casRows.find((r) => (r.cas_number ?? '').trim() === cas) ?? casRows[0] ?? null
 
       if (!sub) { setNotFound(true); setLoading(false); return }
       setSubstance(sub as Substance)

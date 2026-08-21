@@ -207,20 +207,31 @@ export default function PStatementSelector() {
 
     // ── Путь 1: точный номер ────────────────────────────────────────────────
     if (CAS_SHAPE.test(cas)) {
-      const { data, error } = await supabase.from('substances').select(SUB_COLS)
-        .eq('cas_number', cas).single()
-      setSubLoading(false)
       /**
-       * ⚠⚠ ОТКАЗ ОТДЕЛЯЕТСЯ ОТ ОТСУТСТВИЯ, И ЭТО НЕ ПРИДИРКА.
-       * `PGRST116` у `.single()` означает «строк нет» — это факт о данных, и он
-       * законно превращается в «нет гармонизированной записи». Любой другой код
-       * — факт о СЕТИ, и выдавать его за факт о регламенте нельзя.
+       * ⚠⚠ ПОИСК — ПО `cas_primary` (№79, session 74): `cas_number` испорчен
+       * импортом (склейка форм, обрезка 20 знаков), и точный `.eq()` по нему не
+       * находил спасённый номер. И НЕ `.single()`: один CAS может дать ДВЕ
+       * записи Annex VI (кадмий `7440-43-9`), а `.single()` при двух строках
+       * отвечает тем же `PGRST116`, что и при нуле, — «нет гармонизированной
+       * записи» стало бы ложью. Предпочитаем строку с точным совпадением сырой
+       * колонки — ровно её находил старый запрос, поведение сохраняется.
+       *
+       * ⚠⚠ ОТКАЗ ПО-ПРЕЖНЕМУ ОТДЕЛЯЕТСЯ ОТ ОТСУТСТВИЯ, И ЭТО НЕ ПРИДИРКА.
+       * Без `.single()` пустой результат — это `data: []` БЕЗ ошибки, факт о
+       * данных, он законно превращается в «нет гармонизированной записи».
+       * А любой `error` — факт о СЕТИ, и выдавать его за факт о регламенте
+       * нельзя.
        */
-      if (error && error.code !== 'PGRST116') {
+      const { data, error } = await supabase.from('substances').select(SUB_COLS)
+        .eq('cas_primary', cas).order('index_number').limit(2)
+      setSubLoading(false)
+      if (error) {
         setSubState({ kind: 'error', message: error.message }); return
       }
-      if (!data) { setSubState({ kind: 'miss', q: cas, byName: false }); return }
-      applySubstance(data as Substance)
+      const casRows = (data ?? []) as Substance[]
+      const hit = casRows.find((r) => (r.cas_number ?? '').trim() === cas) ?? casRows[0]
+      if (!hit) { setSubState({ kind: 'miss', q: cas, byName: false }); return }
+      applySubstance(hit)
       return
     }
 
@@ -347,8 +358,10 @@ export default function PStatementSelector() {
    * ⚠⚠ `cas` ИДЁТ ЧЕРЕЗ РАЗБОР ФОРМ (session 73). У групповых записей Annex VI в
    * `cas_number` лежит склейка идентификаторов всех форм, обрезанная шириной
    * колонки (`71-41-0[1]584-02-1[2`). До session 73 она уезжала в живой
-   * `<a href>` ниже как есть, и конструктор открывался пустым: он ищет
-   * `.eq('cas_number', …)` и не находит ничего.
+   * `<a href>` ниже как есть, и конструктор открывался пустым: тогда он искал
+   * `.eq('cas_number', …)` и не находил ничего. С session 74 поиск идёт по
+   * `cas_primary`, но разбор форм здесь всё равно обязателен: в адрес должен
+   * уехать номер, а не склейка.
    *
    * ⭐ `casForDisplay` отдаёт номер ПЕРВОЙ формы — той же, чьё имя показано в
    * карточке вещества, — так что человек попадает на то вещество, которое видел.
