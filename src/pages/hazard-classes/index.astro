@@ -56,6 +56,13 @@ type CatalogRow = {
   name_en: string
   ghs_chapter: string | null
   display_order: number | null
+  /**
+   * ⚠⚠ Класс есть ТОЛЬКО в EU CLP (Reg. (EU) 2023/707: ED HH, ED ENV, PBT/vPvB,
+   * PMT/vPvM), в UN GHS его нет. Страница считает «классы GHS» — эти четыре
+   * в счёт GHS не входят и показываются отдельной группой. Без флага копия
+   * «N hazard classes under GHS» стала бы неправдой в день добавления строк.
+   */
+  eu_only: boolean
 }
 type MappingRow = {
   hazard_class_id: string
@@ -84,7 +91,7 @@ type MatrixRow = {
 const [catalogRes, mappingRes, criteriaRes, matrixRes] = await Promise.all([
   supabase
     .from('hazard_class_catalog')
-    .select('id, class_code, group_type, name_en, ghs_chapter, display_order')
+    .select('id, class_code, group_type, name_en, ghs_chapter, display_order, eu_only')
     .order('display_order'),
   supabase
     .from('hazard_category_mapping')
@@ -205,17 +212,41 @@ const GROUPS = [
   },
 ] as const
 
+// ⚠ Три группы GHS — БЕЗ классов, существующих только в CLP; они идут четвёртой
+// группой ниже и в счётчики «под GHS» не входят.
 const grouped = GROUPS.map(g => ({
   ...g,
   classes: catalog
-    .filter(c => c.group_type === g.key)
+    .filter(c => c.group_type === g.key && !c.eu_only)
     .map(c => byClass.get(c.class_code))
     .filter((c): c is HazardClass => Boolean(c)),
 }))
 
+/**
+ * Классы только EU CLP (Reg. (EU) 2023/707): эндокринные разрушители для
+ * человека и среды, PBT/vPvB, PMT/vPvM. ⚠ У них нет пиктограмм и нет аналога
+ * в UN GHS; фразы — EUH, а не H. Обязательны для веществ с 1 мая 2025, для
+ * смесей — с 1 мая 2026 (переходные сроки — до 1 ноября 2026 и 1 мая 2028).
+ */
+const EU_ONLY_GROUP = {
+  key: 'EU_ONLY',
+  title: 'EU-only hazard classes (CLP, not in UN GHS)',
+  lead:
+    'Regulation (EU) 2023/707 added four hazard classes to CLP that have no counterpart in the UN GHS: ' +
+    'endocrine disruption for human health, endocrine disruption for the environment, PBT/vPvB and PMT/vPvM ' +
+    'properties. They carry an EUH statement and a signal word but no pictogram, and they bind in the EU ' +
+    'only — for substances from 1 May 2025 and for mixtures from 1 May 2026.',
+  classes: catalog
+    .filter(c => c.eu_only)
+    .map(c => byClass.get(c.class_code))
+    .filter((c): c is HazardClass => Boolean(c)),
+} as const
+
 // ── Счётчики: только из базы ──────────────────────────────────────────────────
 const allCategories = [...byClass.values()].flatMap(c => c.categories)
-const totalClasses = catalog.length
+// ⚠ «Классы GHS» — без EU-only; те считаются отдельно и называются отдельно.
+const totalClasses = catalog.filter(c => !c.eu_only).length
+const euOnlyClasses = EU_ONLY_GROUP.classes.length
 const clpCategories = allCategories.filter(c => c.inClp)
 const nonClpCategories = allCategories.filter(c => !c.inClp)
 const noLabelCategories = clpCategories.filter(c => !c.hasLabelElements)
@@ -231,7 +262,7 @@ for (const cls of byClass.values()) {
 
 const title = 'GHS Hazard Classes and Categories: Complete GHS Classification List'
 const description = truncateMetaDescription(
-  `All ${totalClasses} GHS hazard classes and ${clpCategories.length} CLP categories in one table — ` +
+  `All ${totalClasses} GHS hazard classes, ${euOnlyClasses} EU-only CLP classes and ${clpCategories.length} CLP categories in one table — ` +
     'pictogram, signal word, H-statement and the official classification criteria for each.'
 )
 const canonical = `${SITE}/hazard-classes/`
@@ -283,8 +314,10 @@ const faq: { q: string; a: string }[] = [
     a:
       `There are ${totalClasses} hazard classes under the Globally Harmonized System: ${groupCounts.PHYSICAL} physical, ` +
       `${groupCounts.HEALTH} health and ${groupCounts.ENVIRONMENTAL} environmental. Each class divides into categories ` +
-      `that grade severity, and ${clpCategories.length} of those categories are recognised in EU CLP. The number of ` +
-      'classes is fixed by the regulation and does not vary by country, although which categories a jurisdiction ' +
+      `that grade severity, and ${clpCategories.length} of those categories are recognised in EU CLP. On top of the GHS ` +
+      `set, EU CLP has ${euOnlyClasses} hazard classes of its own, added by Regulation (EU) 2023/707 — endocrine ` +
+      'disruption for human health and for the environment, PBT/vPvB and PMT/vPvM — which exist in no other ' +
+      'jurisdiction. The GHS classes themselves do not vary by country, although which categories a jurisdiction ' +
       'adopts very much does.',
   },
   {
@@ -402,12 +435,14 @@ const breadcrumbJson = JSON.stringify({
       <h1>GHS hazard classes and categories</h1>
       <p class="hub-hero-sub">
         There are {totalClasses} hazard classes under GHS — {groupCounts.PHYSICAL} physical,
-        {groupCounts.HEALTH} health and {groupCounts.ENVIRONMENTAL} environmental. Inside them sit
-        {clpCategories.length} categories recognised by EU CLP, each carrying a fixed set of label elements.
-        Every one of them is below, with its pictogram, signal word, hazard statement and the official criteria.
+        {groupCounts.HEALTH} health and {groupCounts.ENVIRONMENTAL} environmental — plus {euOnlyClasses} that
+        exist only in EU CLP. Inside them sit {clpCategories.length} categories recognised by EU CLP, each
+        carrying a fixed set of label elements. Every one of them is below, with its pictogram, signal word,
+        hazard statement and the official criteria.
       </p>
       <div class="hub-hero-chips">
-        <span class="hub-hero-chip">{totalClasses} classes · {clpCategories.length} CLP categories</span>
+        <span class="hub-hero-chip">{totalClasses} GHS classes · {clpCategories.length} CLP categories</span>
+        <span class="hub-hero-chip">{euOnlyClasses} EU-only classes (Reg. 2023/707)</span>
         <span class="hub-hero-chip">{pictogramCount} pictograms · {signalWordCount} signal words</span>
         <span class="hub-hero-chip">{nonClpCategories.length} not adopted in CLP</span>
       </div>
@@ -433,13 +468,13 @@ const breadcrumbJson = JSON.stringify({
   <section class="hub-sec-b">
     <div class="hub-wrap">
       <p class="hub-eyebrow navy">02 · The list</p>
-      <h2 class="hub-h2">All {totalClasses} hazard classes, grouped as the regulation groups them</h2>
+      <h2 class="hub-h2">All {totalClasses} GHS hazard classes and {euOnlyClasses} EU-only classes, grouped as the regulation groups them</h2>
       <p class="hub-sub">
         Order follows the regulation, not the alphabet. Each row links its hazard statement and precautionary
         statements to their own pages, so a label can be assembled by following the links.
       </p>
 
-      {grouped.map(group => (
+      {[...grouped, EU_ONLY_GROUP].map(group => (
         <div class="hub-cat" id={group.key.toLowerCase()}>
           <div class="hub-cat-head">
             <h3>{group.title}</h3>
@@ -451,7 +486,9 @@ const breadcrumbJson = JSON.stringify({
             <div class="hub-cat" id={cls.class_code.toLowerCase()}>
               <div class="hub-cat-head">
                 <h3>{cls.name_en}</h3>
-                {cls.ghs_chapter && <span class="range">GHS {cls.ghs_chapter}</span>}
+                {cls.ghs_chapter && (
+                  <span class="range">{cls.eu_only ? `CLP Annex I ${cls.ghs_chapter}` : `GHS ${cls.ghs_chapter}`}</span>
+                )}
               </div>
 
               <div class="hub-table-wrap">

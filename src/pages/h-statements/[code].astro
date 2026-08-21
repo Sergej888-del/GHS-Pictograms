@@ -167,8 +167,8 @@ const classIds = [...new Set(maps.map((m) => m.hazard_class_id))]
 const hazardClasses = classIds.length
   ? ((must(
       `hazard_class_catalog(${classIds.length} ids for ${code})`,
-      await supabase.from('hazard_class_catalog').select('id, name_en, ghs_chapter').in('id', classIds).order('name_en'),
-    ) ?? []) as { name_en: string; ghs_chapter: string | null }[])
+      await supabase.from('hazard_class_catalog').select('id, name_en, ghs_chapter, eu_only').in('id', classIds).order('name_en'),
+    ) ?? []) as { name_en: string; ghs_chapter: string | null; eu_only: boolean }[])
   : []
 
 const categories = [...new Set(maps.map((m) => m.category_code))].sort()
@@ -530,8 +530,14 @@ const SEC_SUBS = combos.length > 0 ? '05' : '04'
               <div class="hcls-txt">
                 <p class="hcls-class">
                   {hazardClasses.map((c, i) => <>{i > 0 && ' · '}{c.name_en}</>)}
+                  {/* ⚠ Классы только EU CLP (Reg. 2023/707: EUH380–EUH451) в UN GHS
+                      не существуют — у них раздел Annex I CLP, а не «глава GHS». */}
                   {hazardClasses[0].ghs_chapter && (
-                    <span class="hcls-ch">GHS chapter {hazardClasses[0].ghs_chapter}</span>
+                    <span class="hcls-ch">
+                      {hazardClasses[0].eu_only
+                        ? `CLP Annex I section ${hazardClasses[0].ghs_chapter} (EU-only class, not in UN GHS)`
+                        : `GHS chapter ${hazardClasses[0].ghs_chapter}`}
+                    </span>
                   )}
                 </p>
                 <p class="hcls-cat">
