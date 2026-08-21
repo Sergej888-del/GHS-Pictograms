@@ -11,8 +11,8 @@
 //
 // Приёмка (design-doc §4.1): 100 % строк разобраны; у каждой пары есть H-код
 // в строке либо строка — в `ROW_ERRATA`; остаток H-кодов без пары — только у
-// errata `class-missing`; каждая пара есть в реестре, кроме известной дыры
-// `SKIN_CORR_IRRIT '1'` (№102). Любое «none» без причины — красное.
+// errata `class-missing`; каждая пара есть в реестре (дыра `SKIN_CORR_IRRIT '1'`
+// закрыта №102 в s78). Любое «none» без причины — красное.
 import { readFileSync } from 'node:fs';
 import {
   parseAnnex6Row, RegistryIndex, ANNEX6_CLASSIFICATION_PARSER_VERSION,
@@ -83,8 +83,9 @@ check('errata-строк: 9', ROW_ERRATA_INDEX_NUMBERS.length === 9, String(ROW_
 console.log('\n3. Язык реестра');
 const gaps = pairs.filter((p) => p.flags.includes('REGISTRY_GAP'));
 const gapKinds = [...new Set(gaps.map((p) => `${p.classCode}/${p.categoryCode}`))];
-check('единственная дыра реестра — SKIN_CORR_IRRIT/1 (№102)', gapKinds.length === 1 && gapKinds[0] === 'SKIN_CORR_IRRIT/1', gapKinds.join(', '));
-check('SKIN_CORR_IRRIT/1 — 9 строк (замер s77)', gaps.length === 9, String(gaps.length));
+check('ни одной пары вне реестра (REGISTRY_GAP = 0; Skin Corr. 1 добавлена в реестр №102)', gaps.length === 0, gapKinds.join(', '));
+check('SKIN_CORR_IRRIT/1 — 9 строк Annex VI (замер s77)', count(pairs, (p) => p.classCode === 'SKIN_CORR_IRRIT' && p.categoryCode === '1') === 9,
+  String(count(pairs, (p) => p.classCode === 'SKIN_CORR_IRRIT' && p.categoryCode === '1')));
 check('все классы пар есть в каталоге', pairs.every((p) => registry.hasClass(p.classCode)),
   [...new Set(pairs.filter((p) => !registry.hasClass(p.classCode)).map((p) => p.classCode))].join(','));
 const noCat = pairs.filter((p) => p.categoryCode == null);
@@ -140,8 +141,8 @@ check('016-011-00-9 H370 (respiratory system) (inhalation) → organs',
 check('607-699-00-7 «H372 (nervous» | «system) H317» → organs «nervous system», H317 найден',
   byIndex.get('607-699-00-7')!.pairs.find((p) => p.hCode === 'H372')?.organs === 'nervous system' && pr('607-699-00-7').some((s) => s.endsWith(':H317')),
   pr('607-699-00-7').join(' '));
-check('050-034-00-5 Skin Corr. 1 → SKIN_CORR_IRRIT/1:H314 REGISTRY_GAP',
-  byIndex.get('050-034-00-5')!.pairs.some((p) => p.categoryCode === '1' && p.classCode === 'SKIN_CORR_IRRIT' && p.flags.includes('REGISTRY_GAP')));
+check('050-034-00-5 Skin Corr. 1 → SKIN_CORR_IRRIT/1:H314, в реестре, без флагов',
+  byIndex.get('050-034-00-5')!.pairs.some((p) => p.categoryCode === '1' && p.classCode === 'SKIN_CORR_IRRIT' && p.hCode === 'H314' && p.flags.length === 0));
 check('601-023-00-4 «H373» | «(hearing organs)» → organs «hearing organs»',
   byIndex.get('601-023-00-4')!.pairs.find((p) => p.hCode === 'H373')?.organs === 'hearing organs');
 check('Eye Irrit. 2 → 2A с флагом, 2B нигде',

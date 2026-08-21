@@ -65,7 +65,7 @@ export type TokenFlag =
   | 'EYE_IRRIT_2_AS_2A'
   /** Тип C/D, E/F → «Type C and D», «Type E and F» реестра. */
   | 'TYPE_MERGED'
-  /** «Skin Corr. 1» без подкатегории — в реестре пары нет (№102). */
+  /** Пары нет в реестре (зарезервировано для следующего ATP; после №102 не встречается). */
   | 'REGISTRY_GAP'
   /** `**`/`***` напечатаны в колонке (3), хотя относятся к H-кодам; прочитано без значения. */
   | 'MARKER_MISPLACED';
@@ -157,9 +157,8 @@ export const ABBREV_RULES: ReadonlyArray<AbbrevRule> = [
   // ── здоровье ──────────────────────────────────────────────────────────────
   // Путь (oral/dermal/inhal) Annex VI в коде класса не печатает — его даёт H-код.
   { re: /Acute Tox\.\s*([1-5])\b/y, classCode: 'ACUTE_TOX', category: plain },
-  { re: /Skin Corr\.\s+(1A|1B|1C|1)\b/y, classCode: 'SKIN_CORR_IRRIT', category: (m) => (m[1] === '1'
-      ? { code: '1', raw: '1', flags: ['REGISTRY_GAP'] }
-      : { code: m[1]!, raw: m[1]!, flags: [] }) },
+  // «Skin Corr. 1» без подкатегории — родительская категория реестра «1» (№102, s78)
+  { re: /Skin Corr\.\s+(1A|1B|1C|1)\b/y, classCode: 'SKIN_CORR_IRRIT', category: plain },
   { re: /Skin Irrit\.\s+(2)\b/y, classCode: 'SKIN_CORR_IRRIT', category: plain },
   { re: /Eye Dam\.\s+(1)\b/y, classCode: 'EYE_DAMAGE_IRRIT', category: plain },
   { re: /Eye Irrit\.\s+(2A|2B|2)\b/y, classCode: 'EYE_DAMAGE_IRRIT', category: (m) => (m[1] === '2'

@@ -112,7 +112,7 @@ for (const [name, n, examples] of gates) {
   if (n) red++;
 }
 const gaps = pairs.filter((p) => p.flags.includes('REGISTRY_GAP'));
-console.log(`  ⚠ пары вне реестра (REGISTRY_GAP, ожидаемо SKIN_CORR_IRRIT/1 ×9 до №102): ${gaps.length} — ${[...new Set(gaps.map((p) => `${p.classCode}/${p.categoryCode}`))].join(', ')}`);
+console.log(`  ${gaps.length === 0 ? '✓' : '⚠'} пары вне реестра (REGISTRY_GAP; после №102 ожидается 0): ${gaps.length}${gaps.length ? ' — ' + [...new Set(gaps.map((p) => `${p.classCode}/${p.categoryCode}`))].join(', ') : ''}`);
 if (red) {
   console.error(`\n⛔ ${red} ворот красные — в базу не пишу. Сначала словарь/errata, потом повтор.`);
   process.exit(1);

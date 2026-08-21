@@ -24,6 +24,15 @@
  * Возвращает СПИСОК: одна строка матрицы может питать две строки реестра
  * («2» → «2A» и «2B»; «1» у кожи → «1A», «1B», «1C»), а общие фразы класса
  * `ANY` (P101–P103, Annex IV Table 6.1) не принадлежат ни одной категории.
+ *
+ * ⭐ Skin corrosion, Category 1 (session 78, №102). В реестре появилась
+ * родительская «1» (Annex I 3.2.2.1; Annex VI печатает «Skin Corr. 1» у 9
+ * записей; смесь по 3.2.3.3.4 получает именно «1»). Annex IV печатает «1»
+ * только в двух строках (P301, P501), а «1A, 1B, 1C» — везде; P-фразы
+ * Категории 1 — те же, что у подкатегорий (Table 3.2.5 даёт им одни элементы
+ * этикетки). Поэтому мост работает в ОБЕ стороны: строка матрицы «1» питает
+ * «1», «1A», «1B», «1C», а строки «1A»/«1B»/«1C» — ещё и «1». Семь строк
+ * «как напечатано» без этого показали бы Категорию 1 втрое «безопаснее» 1A.
  */
 export function matrixToMappingCategories(classCode: string, matrixCategory: string): string[] {
   const cls = classCode.trim()
@@ -38,7 +47,9 @@ export function matrixToMappingCategories(classCode: string, matrixCategory: str
     case 'EYE_DAMAGE_IRRIT':
       return cat === '2' ? ['2A', '2B'] : [cat]
     case 'SKIN_CORR_IRRIT':
-      return cat === '1' ? ['1A', '1B', '1C'] : [cat]
+      if (cat === '1') return ['1', '1A', '1B', '1C']
+      if (cat === '1A' || cat === '1B' || cat === '1C') return [cat, '1']
+      return [cat]
     case 'FLAM_GAS':
       if (cat === 'A') return ['Chemically unstable A']
       if (cat === 'B') return ['Chemically unstable B']
