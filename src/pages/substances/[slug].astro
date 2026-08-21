@@ -73,6 +73,12 @@ import {
 import {
   erratumFor, erratumCitation, ERRATUM_LEAD, ERRATA_TABLE_NOTE,
 } from '../../lib/annex6Errata'
+// ⚠⚠ Ошибки регламента ВНУТРИ СТРОКИ (код H-фразы ≠ напечатанному классу) —
+// другой вид, чем языковые: одинаковы во всех 23 редакциях, с 2008 года.
+// Печатаем фразы по классу, расхождение — пометкой (`annex6RowErrata.ts`).
+import {
+  rowErratumFor, rowErratumCitation, ROW_ERRATUM_LEAD, ROW_ERRATA_TABLE_NOTE,
+} from '../../lib/annex6RowErrata'
 // ⚠ `EU_LANGUAGES` нужен здесь только чтобы назвать НЕДОСТАЮЩИЕ редакции и
 // подписать строки таблицы. Сам порядок строк задаёт `buildOfficialNames` —
 // одним списком на страницу и на проверку.
@@ -627,6 +633,11 @@ const htmlLang = (code: string) => code.toLowerCase()
 
 const pictograms = (row.ghs_pictogram_codes ?? []).filter((c) => PICTOGRAM_NAME[c])
 const hList = (row.h_statement_codes ?? []).map((code) => ({ code, text: hText[code] ?? '' }))
+// ⚠⚠ Ошибка регламента в строке этой записи: напечатанный код H-фразы не
+// соответствует напечатанному классу (6 записей, все — базовый текст 2008 г.).
+// Пометка стоит ПОД таблицей H-фраз, потому что именно её содержимое расходится
+// с напечатанным. Данные не правятся: `annex6RowErrata.ts`, шапка.
+const rowErratum = rowErratumFor(row.index_number)
 const euhList = (row.euh_codes ?? []).map((code) => ({ code, text: euhText[code] ?? '' }))
 // ⚠ Группы P-фраз — см. lib/pStatements.ts: раздел берётся ИЗ БАЗЫ, а не из
 // первой цифры кода.
@@ -1086,6 +1097,19 @@ const multiUn = unEntries.length > 1
                 </tbody>
               </table>
             </div>
+            {rowErratum && (
+              <>
+                {/* ⚠ Порядок: что напечатано → почему показано иное → где проверить.
+                    Ссылка на полосу ОЖ обязательна: мы утверждаем, что официальный
+                    текст противоречит сам себе, и обязаны показать место. */}
+                <p class="hub-note warn row-erratum" lang="en">
+                  <strong>{ROW_ERRATUM_LEAD[rowErratum.kind]}</strong>{' '}
+                  {rowErratum.note}
+                  <span class="src">{rowErratumCitation(rowErratum)}</span>
+                </p>
+                <p class="hub-fine">{ROW_ERRATA_TABLE_NOTE}</p>
+              </>
+            )}
           </>
         )}
 

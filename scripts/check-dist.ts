@@ -86,6 +86,12 @@ import { COMPOSITE_HEAD } from './clp-name-annotations.mjs'
 // ⚠ Подписи состояния — оттуда же, откуда свидетельства (импорт выше):
 // страница печатает ровно эту строку, и проверка ищет ровно её.
 import { erratumStatus, erratumStatusLabel } from '../src/lib/annex6Errata'
+// ⚠ Ошибки регламента ВНУТРИ строки (код H-фразы ≠ классу) — тот же модуль,
+// что печатает пометку под таблицей H-фраз. Второго списка нет и не будет.
+import {
+  rowErratumFor, rowErratumCitation, ROW_ERRATUM_LEAD,
+  ROW_ERRATA_INDEX_NUMBERS, ROW_ERRATA_COUNT, ROW_ERRATA_TABLE_NOTE,
+} from '../src/lib/annex6RowErrata'
 
 config({ path: resolve(process.cwd(), '.env.local') })
 config()
@@ -6635,6 +6641,141 @@ const CHECKS: Check[] = [
               'ожидание считается тем же buildOfficialNames и тем же annex6Errata, что печатают страницу',
               `записей списка без построенной страницы: ${noPage.length}${noPage.length ? ' — ' + noPage.join(', ') : ''}`,
               'красная проверка означает скорее новую консолидацию EUR-Lex, чем нашу поломку',
+            ]
+          : problems,
+      }
+    },
+  },
+  {
+    /**
+     * Ошибки регламента ВНУТРИ строки Annex VI (session 76): напечатанный код
+     * H-фразы не соответствует напечатанному классу той же строки. Шесть
+     * записей, все — базовый текст 2008 года, одинаковы во всех 23 редакциях.
+     *
+     * ⚠⚠ ПРОВЕРЯЕТСЯ ТРИ ВЕЩИ, И КАЖДАЯ — В ОБЕ СТОРОНЫ:
+     *   1. пометка стоит у шести страниц и ТОЛЬКО у них (лишняя пометка
+     *      обвиняет регламент там, где он прав);
+     *   2. свидетельство и ссылка на полосы ОЖ напечатаны ДОСЛОВНО;
+     *   3. H-фразы в базе у этих записей — ровно `shownStatements` модуля.
+     *      Иначе пометка «this page shows H260» начнёт врать в тот день, когда
+     *      кто-то «поправит» базу по напечатанной колонке кодов.
+     *
+     * ⭐ ЧТО ЗНАЧИТ, КОГДА КРАСНЕЕТ. Если разошёлся пункт 3 — менялась база;
+     * если 1–2 — страница или модуль. Новая консолидация EUR-Lex здесь менее
+     * вероятна, чем у языковых ошибок: эти строки не трогал ни один ATP.
+     */
+    id: 'annex6-row-errata-flags',
+    group: 'subs',
+    title: 'Ошибки строк Annex VI (класс ≠ H-код): пометка у шести записей и только у них, база по классу',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('annex6-row-errata-flags', slugs)
+      if (miss) return miss
+
+      const exp = await substanceExpectation()
+
+      const MARK = 'row-erratum'
+      assertAscii('annex6-row-errata-flags', [MARK])
+
+      // ⚠ H-фразы базы — отдельным чтением: в общем ожидании их нет, а
+      // тянуть 4 178 массивов ради шести строк незачем.
+      type HRow = { index_number: string | null; h_statement_codes: string[] | null }
+      const hRows = (must(
+        'substances (row errata, h_statement_codes)',
+        await supabase
+          .from('substances')
+          .select('index_number, h_statement_codes')
+          .in('index_number', ROW_ERRATA_INDEX_NUMBERS),
+      ) ?? []) as HRow[]
+      const dbCodes = new Map(hRows.map((r) => [r.index_number ?? '', [...(r.h_statement_codes ?? [])].sort()]))
+
+      const markCountDiffers: string[] = []
+      const noteMissing: string[] = []
+      const citeMissing: string[] = []
+      const tableNoteMissing: string[] = []
+      const tableNoteExtra: string[] = []
+      const dbDiffers: string[] = []
+      const builtIndexes = new Set<string>()
+      let pagesFlagged = 0
+
+      for (const slug of slugs!) {
+        const want = exp.bySlug.get(slug)
+        if (!want) continue
+        const index = want.row.index_number
+        if (index) builtIndexes.add(index)
+        const err = rowErratumFor(index)
+
+        const html = readPage(join('substances', slug, 'index.html'))
+        if (html === null) continue
+
+        // ⚠ Считаем по ВСЕЙ странице, а не по блоку: лишняя пометка в любом
+        // месте — дефект, и искать её надо везде.
+        const marks = (html.match(new RegExp(`hub-note warn ${MARK}`, 'g')) ?? []).length
+        const wantMarks = err ? 1 : 0
+        if (marks !== wantMarks) {
+          markCountDiffers.push(`${slug}: пометок ${marks}, ожидалось ${wantMarks}`)
+        }
+        const text = unescapeHtml(html)
+        const hasTableNote = text.includes(ROW_ERRATA_TABLE_NOTE)
+        if (err && !hasTableNote) tableNoteMissing.push(slug)
+        if (!err && hasTableNote) tableNoteExtra.push(slug)
+        if (!err) continue
+
+        pagesFlagged++
+        // ⚠⚠ Заголовок, свидетельство и ссылка — ДОСЛОВНО, как у языковых ошибок.
+        for (const piece of [ROW_ERRATUM_LEAD[err.kind], err.note]) {
+          if (!text.includes(piece)) noteMissing.push(`${slug}: ${JSON.stringify(piece.slice(0, 60))}`)
+        }
+        const cite = rowErratumCitation(err)
+        if (!text.includes(cite)) citeMissing.push(`${slug}: ${JSON.stringify(cite)}`)
+
+        // ⚠⚠ База по классу: набор H-фраз записи равен `shownStatements`.
+        const inDb = dbCodes.get(index ?? '') ?? []
+        const shown = [...err.shownStatements].sort()
+        if (inDb.join(' ') !== shown.join(' ')) {
+          dbDiffers.push(`${slug} (index ${index}): в базе ${inDb.join(' ') || '—'}, модуль ожидает ${shown.join(' ')}`)
+        }
+      }
+
+      const noPage = ROW_ERRATA_INDEX_NUMBERS.filter((i) => !builtIndexes.has(i))
+
+      const problems: string[] = []
+      if (markCountDiffers.length) {
+        problems.push(`пометок не столько, сколько свидетельств (${markCountDiffers.length}): ${preview(markCountDiffers)}`)
+      }
+      if (noteMissing.length) {
+        problems.push(`свидетельство не найдено на странице дословно (${noteMissing.length}): ${preview(noteMissing)}`)
+      }
+      if (citeMissing.length) {
+        problems.push(`ссылка на полосы ОЖ не найдена дословно (${citeMissing.length}): ${preview(citeMissing)}`)
+      }
+      if (tableNoteMissing.length) {
+        problems.push(`страница с пометкой без подписи под таблицей (${tableNoteMissing.length}): ${preview(tableNoteMissing)}`)
+      }
+      if (tableNoteExtra.length) {
+        problems.push(`подпись под таблицей на странице без пометки (${tableNoteExtra.length}): ${preview(tableNoteExtra)}`)
+      }
+      if (dbDiffers.length) {
+        problems.push(`H-фразы в базе не равны shownStatements модуля (${dbDiffers.length}): ${preview(dbDiffers)}`)
+      }
+      // ⚠ Запись без страницы — НЕ провал, а строка отчёта (как у языковых
+      // ошибок): 609-010-00-5 «salts of picric acid» не имеет CAS («—»), и
+      // страницы у неё нет по правилу отбора. Пометка ждёт свою страницу.
+
+      const ok = problems.length === 0
+      return {
+        id: 'annex6-row-errata-flags',
+        group: 'subs',
+        ok,
+        headline: ok
+          ? `${pagesFlagged} страниц помечено из ${ROW_ERRATA_COUNT} в списке; свидетельства, ссылки на полосы ОЖ и H-фразы базы сверены`
+          : `расхождений: ${problems.length}`,
+        detail: ok
+          ? [
+              'сверка в обе стороны: свидетельство → пометка на странице и пометка → свидетельство',
+              'H-фразы базы у шести записей равны shownStatements модуля — база ведётся по классу, а не по напечатанному коду',
+              'ожидание считается тем же annex6RowErrata, что печатает страницу',
+              `записей списка без построенной страницы: ${noPage.length}${noPage.length ? ' — ' + noPage.join(', ') + ' (нет CAS — нет страницы)' : ''}`,
             ]
           : problems,
       }

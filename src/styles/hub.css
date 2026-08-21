@@ -1697,6 +1697,18 @@ button.hub-pair:last-child { border-bottom: 0; }
   background: var(--verdict-sep-bg);
   color: var(--verdict-sep-ink);
 }
+/* Ошибка регламента ВНУТРИ строки (код H-фразы ≠ классу) — под таблицей
+   H-фраз страницы вещества. Тот же янтарный регистр, что у .name-erratum:
+   смысл тот же — «регламент есть регламент, но его собственная строка говорит
+   иное». Ссылка на полосу ОЖ — отдельной строкой, не моноширинным (см. выше). */
+.hub-note.row-erratum { margin-top: 12px; }
+.hub-note.row-erratum strong { font-weight: 700; }
+.hub-note.row-erratum .src {
+  display: block;
+  margin-top: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
 
 /* Unused = defined in the regulation, carried by no Annex VI substance */
 .hub-table tr.is-unused .c-code a { color: #64748b; }

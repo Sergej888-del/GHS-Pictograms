@@ -44,6 +44,8 @@ import {
   erratumLanguages,
   type ErratumKind,
 } from '../src/lib/annex6Errata.ts'
+// ⚠ Ошибки ВНУТРИ строки (класс ≠ H-код) — свой модуль, тот же сторож ниже.
+import { rowErratumFor, ROW_ERRATA_INDEX_NUMBERS } from '../src/lib/annex6RowErrata.ts'
 
 const TMP = '.tmp-eurlex'
 // ⚠ Досье в репозитории: без него страница разбора не соберётся на Cloudflare.
@@ -393,6 +395,97 @@ for (const kind of ['foreign-name', 'foreign-designation', 'wrong-qualifier', 't
     out.push('**Свидетельство (annex6Errata.ts):** ' + f.note)
     out.push('')
   }
+}
+
+// ── ошибки ВНУТРИ строки (класс ≠ H-код), session 76 ────────────────────────
+//
+// ⭐⭐⭐ ТОТ ЖЕ СТОРОЖ, ЧТО И У ЯЗЫКОВЫХ ОШИБОК. Проверяется:
+//   1. строка в консолидации стоит под меткой ▼M16 = 32018R0669 — актом, на
+//      который ссылается модуль (2018/669 перепечатал Table 3 целиком);
+//   2. напечатанные классы и коды модуля — дословно ячейки (3) и (4) строки;
+//   3. полоса ОЖ L 115 — по PDF акта 2018/669 (первое вхождение номера);
+//   4. происхождение: полосы ОЖ L 353 — по PDF акта 2008 года, первое вхождение
+//      номера = Table 3.1, второе = Table 3.2 (в акте они идут подряд, проверено
+//      по колонтитулам `L 353/N`); на полосе Table 3.2 стоит классификация по
+//      67/548, названная в модуле.
+// ⚠ Досье ECHA/EUR-Lex из этих шести пока НЕ собирается — они пойдут второй
+// подачей (`SUPPLEMENT` в annex6Errata.ts), и формат её ещё не решён.
+{
+  const en = readFileSync(join(TMP, 'clp-consolidated.html'), 'utf8')
+  const pagesOf = (celex: string): string[] | null => {
+    const pdf = join(TMP, `act-${celex}-en.pdf`)
+    if (!existsSync(pdf)) return null
+    const txt = pdf.replace(/\.pdf$/, '.txt')
+    if (!existsSync(txt) || statSync(txt).mtimeMs < statSync(pdf).mtimeMs) {
+      execFileSync('pdftotext', ['-layout', pdf, txt])
+    }
+    return readFileSync(txt, 'utf8').split('\f')
+  }
+  const hitsIn = (pages: string[], index: string) =>
+    pages.map((p, i) => (p.includes(index) ? i + 1 : 0)).filter(Boolean)
+  const pdfCache = new Map<string, string[] | null>()
+  const pdfPages = (celex: string) => {
+    if (!pdfCache.has(celex)) pdfCache.set(celex, pagesOf(celex))
+    return pdfCache.get(celex)!
+  }
+
+  for (const index of ROW_ERRATA_INDEX_NUMBERS) {
+    const e = rowErratumFor(index)!
+    const bad: string[] = []
+    const r = rowOf(en, index)
+    if (!r) {
+      bad.push('строки нет в консолидации')
+    } else {
+      const { mark, celex } = markerBefore(en, r.at)
+      if (celex !== e.source.act) {
+        bad.push(`строка под меткой ${mark} (${celex || 'без CELEX'}), а модуль ссылается на ${e.source.act}`)
+      }
+      const classes = r.cells[4] ?? ''
+      const codes = r.cells[5] ?? ''
+      if (classes !== e.printedClasses.join(' ')) {
+        bad.push(`классы «${classes}» против модуля «${e.printedClasses.join(' ')}»`)
+      }
+      if (codes !== e.printedStatements.join(' ')) {
+        bad.push(`коды «${codes}» против модуля «${e.printedStatements.join(' ')}»`)
+      }
+    }
+    // ⚠ Пометка печатает наши H-фразы как «следующие из классов»: проверяем,
+    // что показанное и напечатанное действительно различаются — иначе
+    // свидетельство устарело (строку поправили корриджендумом).
+    if ([...e.shownStatements].sort().join(' ') === [...e.printedStatements].sort().join(' ')) {
+      bad.push('shownStatements совпадают с printedStatements — свидетельство устарело')
+    }
+
+    const act = pdfPages(e.source.act)
+    if (!act) {
+      bad.push(`полоса ${e.source.page} НЕ ПРОВЕРЕНА — нет ${TMP}/act-${e.source.act}-en.pdf`)
+    } else {
+      const hits = hitsIn(act, index)
+      if (hits[0] !== e.source.page) bad.push(`полоса ${e.source.oj} ${e.source.page} против ${hits[0] ?? '—'}`)
+    }
+
+    const o = e.source.origin
+    const orig = pdfPages(o.act)
+    if (!orig) {
+      bad.push(`полосы происхождения ${o.page31}/${o.page32} НЕ ПРОВЕРЕНЫ — нет ${TMP}/act-${o.act}-en.pdf`)
+    } else {
+      const hits = hitsIn(orig, index)
+      if (hits[0] !== o.page31) bad.push(`полоса Table 3.1 (${o.oj}) ${o.page31} против ${hits[0] ?? '—'}`)
+      if (hits[1] !== o.page32) bad.push(`полоса Table 3.2 (${o.oj}) ${o.page32} против ${hits[1] ?? '—'}`)
+      // ⚠ Колонки PDF расползаются по строкам («Carc. Cat. 2;» и «R45» стоят на
+      // разных строках), поэтому ищем КАЖДЫЙ элемент классификации 67/548 на
+      // полосе — символ и R-фразу порознь, — а не строку целиком. Односимвольные
+      // обозначения (F, C, T) пропускаем: они найдутся на любой полосе.
+      const p32 = hits[1] ? orig[hits[1] - 1] : ''
+      for (const piece of e.table32.split(/\s*[;—]\s*/).filter((t) => t.length > 1)) {
+        if (!p32.includes(piece)) bad.push(`на полосе Table 3.2 нет «${piece}»`)
+      }
+    }
+    if (bad.length) srcMismatch.push(`row ${index}: ${bad.join(', ')}`)
+  }
+  const have = [...pdfCache.entries()].filter(([, v]) => v).map(([k]) => k)
+  console.log(`⭐ ошибки строк (класс ≠ H-код): ${ROW_ERRATA_INDEX_NUMBERS.length} сверены с консолидацией` +
+    (have.length ? ` и с PDF ${have.join(', ')}` : ''))
 }
 
 if (srcMismatch.length) {
