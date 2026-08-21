@@ -25,7 +25,9 @@
     "check:label-size": "node --experimental-strip-types scripts/check-label-size.ts",
     "check:label-elements": "node --experimental-strip-types scripts/check-label-elements.ts",
     "check:label-fit": "node --experimental-strip-types scripts/check-label-fit.ts",
-    "check:live": "node --use-system-ca --experimental-strip-types scripts/check-live.ts"
+    "check:live": "node --use-system-ca --experimental-strip-types scripts/check-live.ts",
+    "check:classifier": "node --experimental-strip-types scripts/check-classifier.ts",
+    "build:annex6-classification": "node --use-system-ca --experimental-strip-types scripts/build-annex6-classification.ts"
   },
   "dependencies": {
     "@astrojs/mdx": "^5.0.3",
