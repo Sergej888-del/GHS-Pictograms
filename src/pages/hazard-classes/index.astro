@@ -23,6 +23,7 @@ import Layout from '../../layouts/Layout.astro'
 import { supabase } from '../../lib/supabase'
 import { truncateMetaDescription } from '../../lib/metaDescription'
 import { hHref } from '../../lib/hStatementSlug'
+import { matrixToMappingCategories } from '../../lib/matrixCategoryBridge'
 
 /**
  * ⚠ session 30: комбинированные P-коды своих страниц НЕ имеют.
@@ -47,7 +48,17 @@ const isCatCode = (value: string): boolean => /^[\d.]+[A-Za-z]?$/.test(value.tri
 export const prerender = true
 
 const SITE = 'https://ghspictograms.com'
-const PAGE = 5000
+/**
+ * ⚠⚠⚠ ПОСТРАНИЧНО ПО 1000, А НЕ `range(0, 4999)` ОДНИМ ЗАПРОСОМ.
+ * PostgREST на проекте отдаёт не больше 1 000 строк за запрос, сколько бы ни
+ * просил `range`. Пока в матрице P-фраз было 982 строки, это не проявлялось.
+ * В session 76 добавились 54 строки классов 2023/707 — стало 1 036, и
+ * последние 36 строк молча пропали: на проде у ED HH Cat 2 было «4 P-codes»
+ * вместо 9, у ED ENV Cat 1 — «1» вместо 6. Сторож `matrix.length >= PAGE`
+ * не сработал, потому что обрезка случилась на 1 000, а порог стоял на 5 000.
+ * Найдено глазами Сергея на скриншоте, не проверкой.
+ */
+const PAGE = 1000
 
 type CatalogRow = {
   id: string
@@ -88,7 +99,26 @@ type MatrixRow = {
   p_code: string
 }
 
-const [catalogRes, mappingRes, criteriaRes, matrixRes] = await Promise.all([
+/** Вся матрица, страницами по PAGE; порядок фиксирован, иначе страницы «плывут». */
+async function allMatrixRows(): Promise<MatrixRow[]> {
+  const out: MatrixRow[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('clp_matrix_full')
+      .select('class_code, category_code, p_code')
+      .order('class_code')
+      .order('category_code')
+      .order('p_code')
+      .range(from, from + PAGE - 1)
+    if (error) throw new Error(`[hazard-classes] clp_matrix_full (from=${from}): ${error.message}`)
+    const chunk = (data ?? []) as MatrixRow[]
+    out.push(...chunk)
+    if (chunk.length < PAGE) break
+  }
+  return out
+}
+
+const [catalogRes, mappingRes, criteriaRes, matrix] = await Promise.all([
   supabase
     .from('hazard_class_catalog')
     .select('id, class_code, group_type, name_en, ghs_chapter, display_order, eu_only')
@@ -99,21 +129,18 @@ const [catalogRes, mappingRes, criteriaRes, matrixRes] = await Promise.all([
   supabase
     .from('clp_category_criteria')
     .select('class_code, category_code, mapping_category_code, criteria_en, label_clp_en, label_status, footnote, note'),
-  supabase.from('clp_matrix_full').select('class_code, category_code, p_code').range(0, PAGE - 1),
+  allMatrixRows(),
 ])
 
 const catalog = (catalogRes.data ?? []) as CatalogRow[]
 const mapping = (mappingRes.data ?? []) as MappingRow[]
 const criteria = (criteriaRes.data ?? []) as CriteriaRow[]
-const matrix = (matrixRes.data ?? []) as MatrixRow[]
 
 // ⚠ Тихая обрезка выборки — самый неприятный класс ошибок: страница соберётся
-// и будет выглядеть правильной, просто части данных в ней не будет.
-if (matrix.length >= PAGE) {
-  throw new Error(
-    `[hazard-classes] clp_matrix_full вернул ${matrix.length} строк при лимите ${PAGE}. ` +
-      'Выборка обрезана — поднимите PAGE, иначе часть P-кодов молча потеряется.'
-  )
+// и будет выглядеть правильной, просто части данных в ней не будет. Страницы
+// по 1000 выше снимают обрезку PostgREST; здесь — страховка от пустого ответа.
+if (!matrix.length) {
+  throw new Error('[hazard-classes] clp_matrix_full отдала пусто — проверь политику чтения для anon.')
 }
 if (!catalog.length || !mapping.length || !criteria.length) {
   throw new Error('[hazard-classes] пустая выборка из базы — сборка остановлена, чтобы не выпустить пустую страницу.')
@@ -130,14 +157,23 @@ for (const row of criteria) {
   else criteriaByKey.set(key, [row])
 }
 
-/** P-коды по «класс|категория», уникальные и отсортированные. */
+/**
+ * P-коды по «класс|категория РЕЕСТРА», уникальные и отсортированные.
+ * ⚠⚠ Матрица именует категории по Annex IV («Division 1.1», «Type C»,
+ * «Additional category»), реестр — по Annex I («1.1», «Type C and D»,
+ * «Lactation»). Без моста 21 строка страницы печатала «none» вместо фраз —
+ * см. `matrixCategoryBridge.ts`. Проверка `hazard-classes-pcodes` в
+ * check:dist считает ожидание тем же мостом.
+ */
 const pCodesByKey = new Map<string, Set<string>>()
 for (const row of matrix) {
   if (!row.p_code) continue
-  const key = `${row.class_code}|${row.category_code}`
-  const set = pCodesByKey.get(key)
-  if (set) set.add(row.p_code)
-  else pCodesByKey.set(key, new Set([row.p_code]))
+  for (const cat of matrixToMappingCategories(row.class_code, row.category_code)) {
+    const key = `${row.class_code}|${cat}`
+    const set = pCodesByKey.get(key)
+    if (set) set.add(row.p_code)
+    else pCodesByKey.set(key, new Set([row.p_code]))
+  }
 }
 
 type Category = {
@@ -504,8 +540,12 @@ const breadcrumbJson = JSON.stringify({
                     </tr>
                   </thead>
                   <tbody>
+                    {/* data-cls / data-pn — маркеры для check:dist (hazard-classes-pcodes):
+                        число P-кодов в строке сверяется с clp_matrix_full. Появились
+                        после того, как обрезка PostgREST на 1 000 строк прошла сборку
+                        незамеченной (s76). */}
                     {cls.categories.filter(c => c.inClp).map(cat => (
-                      <tr data-cat={cat.categoryCode}>
+                      <tr data-cat={cat.categoryCode} data-cls={cls.class_code} data-pn={cat.pCodes.length}>
                         <td class={isCatCode(cat.categoryCode) ? 'c-code is-code' : 'c-txt'}>{cat.categoryCode}</td>
                         <td class="c-picts">
                           {cat.pictograms.length

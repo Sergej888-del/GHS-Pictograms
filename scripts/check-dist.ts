@@ -86,6 +86,7 @@ import { COMPOSITE_HEAD } from './clp-name-annotations.mjs'
 // ⚠ Подписи состояния — оттуда же, откуда свидетельства (импорт выше):
 // страница печатает ровно эту строку, и проверка ищет ровно её.
 import { erratumStatus, erratumStatusLabel } from '../src/lib/annex6Errata'
+import { matrixToMappingCategories } from '../src/lib/matrixCategoryBridge'
 // ⚠ Ошибки регламента ВНУТРИ строки (код H-фразы ≠ классу) — тот же модуль,
 // что печатает пометку под таблицей H-фраз. Второго списка нет и не будет.
 import {
@@ -6778,6 +6779,110 @@ const CHECKS: Check[] = [
               `записей списка без построенной страницы: ${noPage.length}${noPage.length ? ' — ' + noPage.join(', ') + ' (нет CAS — нет страницы)' : ''}`,
             ]
           : problems,
+      }
+    },
+  },
+
+  // ───────────────────────── /hazard-classes/ ─────────────────────────
+  {
+    id: 'hazard-classes-pcodes',
+    group: 'Hazard classes',
+    title: 'Число P-кодов у каждой категории на /hazard-classes/ равно clp_matrix_full',
+    run: async () => {
+      // ⚠⚠ Зачем проверка. Session 76: в матрицу добавились 54 строки классов
+      // 2023/707, стало 1 036 — и страница молча потеряла последние 36: запрос
+      // `range(0, 4999)` одним куском, а PostgREST отдаёт не больше 1 000.
+      // Сборка зелёная, 112 проверок зелёные, на проде «4 P-codes» вместо 9.
+      // Увидел Сергей на скриншоте. Теперь число в каждой строке сверяется с
+      // базой, а базу читаем тем же постраничным selectAll.
+      const matrix = await selectAll<{ class_code: string; category_code: string; p_code: string | null }>(
+        'clp_matrix_full',
+        'class_code, category_code, p_code',
+        (q: any) => q.not('p_code', 'is', null).order('class_code').order('category_code').order('p_code'),
+      )
+      assertNonEmpty('hazard-classes-pcodes', 'clp_matrix_full', matrix)
+      // ⚠ Ожидание считается ТЕМ ЖЕ мостом, что печатает страницу: матрица
+      // именует категории по Annex IV, реестр — по Annex I. Первый прогон этой
+      // проверки без моста показал 21 ключ матрицы без строки на странице —
+      // и это были не лишние ключи, а 21 строка с ложным «none» на проде.
+      const expected = new Map<string, Set<string>>()
+      for (const r of matrix) {
+        for (const cat of matrixToMappingCategories(r.class_code, r.category_code)) {
+          const key = `${r.class_code}|${cat}`
+          const set = expected.get(key)
+          if (set) set.add(r.p_code!)
+          else expected.set(key, new Set([r.p_code!]))
+        }
+      }
+      // Обратную сторону сверяем только по категориям, которые страница печатает:
+      // not_in_clp (Skin Irrit. 3, Eye Irrit. 2B…) на странице нет по правилу.
+      const mappingRows = await selectAll<{ category_code: string; clp_status: string | null; hazard_class_catalog: { class_code: string } | null }>(
+        'hazard_category_mapping',
+        'category_code, clp_status, hazard_class_catalog(class_code)',
+      )
+      assertNonEmpty('hazard-classes-pcodes', 'hazard_category_mapping', mappingRows)
+      const known = new Set(
+        mappingRows.filter((r) => r.hazard_class_catalog).map((r) => `${r.hazard_class_catalog!.class_code}|${r.category_code}`),
+      )
+      const printed = new Set(
+        mappingRows
+          .filter((r) => r.clp_status !== 'not_in_clp' && r.hazard_class_catalog)
+          .map((r) => `${r.hazard_class_catalog!.class_code}|${r.category_code}`),
+      )
+
+      const html = readPage('hazard-classes/index.html')
+      if (html === null) {
+        return { id: 'hazard-classes-pcodes', group: 'Hazard classes', ok: false, headline: 'нет hazard-classes/index.html', detail: [] }
+      }
+      const rows = [...html.matchAll(/<tr data-cat="([^"]*)" data-cls="([^"]*)" data-pn="(\d+)"/g)]
+      if (rows.length === 0) {
+        return {
+          id: 'hazard-classes-pcodes',
+          group: 'Hazard classes',
+          ok: false,
+          headline: 'на странице нет ни одной строки с маркером data-pn',
+          detail: ['маркер: <tr data-cat data-cls data-pn> — страница собрана старым кодом?'],
+        }
+      }
+
+      const problems: string[] = []
+      const seen = new Set<string>()
+      for (const m of rows) {
+        const [, cat, cls, pn] = m
+        const key = `${cls}|${cat}`
+        seen.add(key)
+        const want = expected.get(key)?.size ?? 0
+        if (Number(pn) !== want) problems.push(`${cls} ${cat}: на странице ${pn} P-кодов, база ожидает ${want}`)
+      }
+      // Обратная сторона: категория с P-кодами в базе, которой на странице нет
+      // вовсе. Категории not_in_clp страница не печатает — у них и P-кодов в
+      // матрице быть не должно; если появятся, это тоже расхождение.
+      for (const [key, set] of expected) {
+        if (!known.has(key)) {
+          problems.push(`${key.replace('|', ' ')}: в матрице ${set.size} P-кодов, а в реестре такой категории нет — мост matrixCategoryBridge не знает её`)
+          continue
+        }
+        if (!printed.has(key)) continue // not_in_clp — страница не печатает по правилу
+        if (!seen.has(key)) problems.push(`${key.replace('|', ' ')}: в базе ${set.size} P-кодов, на странице строки нет`)
+      }
+
+      const total = [...expected.values()].reduce((n, s) => n + s.size, 0)
+      const ok = problems.length === 0
+      return {
+        id: 'hazard-classes-pcodes',
+        group: 'Hazard classes',
+        ok,
+        headline: ok
+          ? `${rows.length} строк категорий, ${total} связок «категория ↔ P-код» сошлись с базой`
+          : `расхождений: ${problems.length}`,
+        detail: ok
+          ? [
+              'маркер: <tr data-cat data-cls data-pn>; база читается постранично по 1 000 (selectAll)',
+              'категории матрицы (Annex IV) переведены в категории реестра мостом matrixCategoryBridge — тем же, что у страницы',
+              `строк матрицы в базе: ${matrix.length}`,
+              'сверка в обе стороны: строка страницы → база и ключ базы → строка страницы',
+            ]
+          : problems.slice(0, 30),
       }
     },
   },
