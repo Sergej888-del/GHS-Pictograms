@@ -29,7 +29,7 @@ const registry = new RegistryIndex(rg.rows.map(([classCode, categoryCode, hCode]
 
 function erratumLite(index: string): RowErratumLite | null {
   const e = rowErratumFor(index);
-  return e ? { kind: e.kind, shownStatements: e.shownStatements, printedStatements: e.printedStatements, impliedClasses: e.impliedClasses } : null;
+  return e ? { kind: e.kind, shownStatements: e.shownStatements, printedStatements: e.printedStatements } : null;
 }
 
 export function runAll(): RowResult[] {
@@ -75,7 +75,7 @@ const unmatched = results.filter((r) => r.rowFlags.includes('H_UNMATCHED'));
 check('остаток H-кодов без пары — только у errata class-missing', unmatched.length === 0,
   unmatched.slice(0, 12).map((r) => `${r.indexNumber}: ${r.unmatchedH.join(' ')} · (3)=«${r.normalizedClassCat}»`).join('\n      '));
 const errataPairs = pairs.filter((p) => p.flags.includes('ERRATA_ROW'));
-check('пары по errata: ровно 6 (009-017 H260 · 609-010 H200 · 006-014 H400 · 012-002 H251 · 607-225 H242 · 602-091 H411)', errataPairs.length === 6,
+check('пары по errata: ровно 5 (009-017 H260 · 609-010 H200 · 006-014 H400 · 012-002 H251 · 607-225 H242; 602-091 — class-missing с s79, пары нет)', errataPairs.length === 5,
   errataPairs.map((p) => `${p.indexNumber} ${p.hCode}`).join(', '));
 check('errata-строк: 9', ROW_ERRATA_INDEX_NUMBERS.length === 9, String(ROW_ERRATA_INDEX_NUMBERS.length));
 
@@ -132,9 +132,12 @@ check('012-002-00-9 magnesium (errata s78) → SELF_HEATING/1:H251, H252 в ос
   pr('012-002-00-9').join(' '));
 check('607-225-00-9 (errata s78) → SELF_REACTIVE/Type C and D:H242****',
   pr('607-225-00-9')[0] === 'SELF_REACTIVE/Type C and D:H242****' && !byIndex.get('607-225-00-9')!.rowFlags.includes('H_UNMATCHED'), pr('607-225-00-9').join(' '));
-check('602-091-00-8 (errata class-omitted s78) → AQUATIC_CHRONIC/2:H411 ERRATA_ROW, остатка нет',
-  byIndex.get('602-091-00-8')!.pairs.some((p) => p.classCode === 'AQUATIC_CHRONIC' && p.categoryCode === '2' && p.hCode === 'H411' && p.flags.includes('ERRATA_ROW'))
-  && byIndex.get('602-091-00-8')!.unmatchedH.length === 0, pr('602-091-00-8').join(' '));
+check('602-091-00-8 (errata class-missing, решение s79) → нет AQUATIC_CHRONIC, H411 в остатке без H_UNMATCHED',
+  !pr('602-091-00-8').some((s) => s.startsWith('AQUATIC_CHRONIC'))
+  && byIndex.get('602-091-00-8')!.unmatchedH.includes('H411')
+  && !byIndex.get('602-091-00-8')!.rowFlags.includes('H_UNMATCHED')
+  && pr('602-091-00-8').join(' ') === 'ACUTE_TOX_ORAL/4:H302* STOT_RE/2:H373* SKIN_CORR_IRRIT/2:H315',
+  pr('602-091-00-8').join(' ') + ' rest=' + byIndex.get('602-091-00-8')!.unmatchedH.join(','));
 check('016-011-00-9 H370 (respiratory system) (inhalation) → organs',
   byIndex.get('016-011-00-9')!.pairs.find((p) => p.hCode === 'H370')?.organs === 'respiratory system; inhalation',
   String(byIndex.get('016-011-00-9')!.pairs.find((p) => p.hCode === 'H370')?.organs));

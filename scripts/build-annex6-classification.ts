@@ -86,7 +86,7 @@ if (DUMP) {
 // ── 2. разбор ────────────────────────────────────────────────────────────────
 function erratumLite(index: string): RowErratumLite | null {
   const e = rowErratumFor(index);
-  return e ? { kind: e.kind, shownStatements: e.shownStatements, printedStatements: e.printedStatements, impliedClasses: e.impliedClasses } : null;
+  return e ? { kind: e.kind, shownStatements: e.shownStatements, printedStatements: e.printedStatements } : null;
 }
 const results: RowResult[] = rows.map((r) => parseAnnex6Row(r, registry, erratumLite(r.index_number)));
 const pairs = results.flatMap((r) => r.pairs);

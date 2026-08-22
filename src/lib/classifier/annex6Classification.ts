@@ -46,13 +46,11 @@ export type RegistryRow = {
 
 /** Ошибка регламента в строке (из `annex6RowErrata.ts`), в узком виде для парсера. */
 export type RowErratumLite = {
-  kind: 'statement-mismatch' | 'statement-missing' | 'class-missing' | 'class-omitted';
+  kind: 'statement-mismatch' | 'statement-missing' | 'class-missing';
   /** Коды, которые СЛЕДУЮТ из напечатанных классов (что показываем). */
   shownStatements: string[];
   /** Коды, как напечатаны в колонке (4). */
   printedStatements: string[];
-  /** `class-omitted`: пропущенные классы в сокращениях Annex VI («Aquatic Chronic 2»). */
-  impliedClasses?: string[];
 };
 
 export type PairFlag =
@@ -246,19 +244,12 @@ export function parseAnnex6Row(
     : [];
 
   const pairs: ClassificationPair[] = [];
-  // Классы, пропущенные регламентом (errata `class-omitted`), читаются тем же
-  // словарём и встают в конец строки с флагом ERRATA_ROW.
-  const implied = erratum?.kind === 'class-omitted' && erratum.impliedClasses?.length
-    ? tokenizeClassCat(erratum.impliedClasses).tokens
-    : [];
-  const allTokens: Array<{ tok: ClassToken; implied: boolean }> = [
-    ...cc.tokens.map((tok) => ({ tok, implied: false })),
-    ...implied.map((tok) => ({ tok, implied: true })),
-  ];
-  allTokens.forEach(({ tok, implied: isImplied }, i) => {
+  // ⚠ Пары выводятся ТОЛЬКО из колонки (3). Вид errata `class-omitted` (s78:
+  // «класс пропущен, выводим из кода») снят решением s79 — строго по классу;
+  // напечатанный код без класса остаётся в `unmatchedH` как ожидаемый остаток.
+  cc.tokens.forEach((tok, i) => {
     const want = expectedH(tok, registry);
     const flags: PairFlag[] = [...tok.flags];
-    if (isImplied) flags.push('ERRATA_ROW');
     let classCode = tok.classCode;
     let categoryCode = tok.categoryCode;
     let h: HToken | null = null;
@@ -335,4 +326,4 @@ export function parseAnnex6Row(
 }
 
 /** Версия парсера — пишется в таблицу; менять при любой правке словаря или правил. */
-export const ANNEX6_CLASSIFICATION_PARSER_VERSION = 'a0-parser 1.0 (s78)';
+export const ANNEX6_CLASSIFICATION_PARSER_VERSION = 'a0-parser 1.1 (s79: class-omitted retired)';

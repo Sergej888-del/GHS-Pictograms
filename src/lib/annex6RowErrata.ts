@@ -32,6 +32,7 @@
 // кодом ВНУТРИ одной строки при одинаковых кодах в обеих таблицах
 // (012-002-00-9 Self-heat. 1 с H252; 607-225-00-9 Self-react. C с H241;
 // 602-091-00-8 H411 без класса). Все три — с акта 2008 года, перепечатаны 2018/669.
+// ⚠ s79: 602-091-00-8 переведена в `class-missing` (строго по классу), H411 снят.
 //
 // ⭐⭐⭐ ПРАВИЛО, ПО КОТОРОМУ ВЫБРАНО, ЧТО ПЕЧАТАТЬ (решение Сергея, session 76):
 // база и страница показывают H-фразы, которые СЛЕДУЮТ ИЗ НАПЕЧАТАННЫХ КЛАССОВ
@@ -61,15 +62,13 @@ export type RowErratumKind =
   | 'statement-mismatch'
   /** Класс напечатан, а закреплённая за ним фраза в колонке кодов пропущена. */
   | 'statement-missing'
-  /** Код фразы напечатан, а класса, за которым он закреплён, в строке нет. */
-  | 'class-missing'
   /**
-   * Код фразы напечатан, класса в строке нет, НО Table 3.2 того же акта
-   * подтверждает именно эту опасность (N; R51-53 → Aquatic Chronic 2 по
-   * Annex VII): пропущено имя класса, а не добавлен чужой код. Фразу
-   * показываем, класс выводим из кода и помечаем (решение s78, см. 602-091-00-8).
+   * Код фразы напечатан, а класса, за которым он закреплён, в строке нет.
+   * ⚠ Сюда же 602-091-00-8, хотя Table 3.2 подтверждает пропущенный класс:
+   * вид `class-omitted` («выводим класс из кода») жил одну сессию (s78) и снят
+   * решением s79 — база строго по напечатанному классу, без исключений.
    */
-  | 'class-omitted';
+  | 'class-missing';
 
 export type RowErratumSource = {
   /** CELEX акта, которым введён действующий текст строки. ⚠ У всех шести — 32018R0669. */
@@ -114,13 +113,6 @@ export type RowErratum = {
    */
   note: string;
   source: RowErratumSource;
-  /**
-   * Только для `class-omitted`: класс(ы) в сокращениях Annex VI, которые
-   * следуют из напечатанного кода и Table 3.2 («Aquatic Chronic 2»). Их
-   * читает парсер A0 (`annex6Classification.ts`) тем же словарём, что и
-   * колонку (3), и помечает пару `ERRATA_ROW`.
-   */
-  impliedClasses?: string[];
 };
 
 /** Действующий текст всех девяти строк — Регламент 2018/669. */
@@ -233,14 +225,20 @@ const ROW_ERRATA: Record<string, RowErratum> = {
     note: 'Table 3.1 prints H241, the statement of self-reactive substances of Type B, against the hazard class Self-react. C. Under Annex I, Table 2.8.1, Types C and D carry H242 (“Heating may cause a fire”); H241 belongs to Type B, which also requires the pictogram GHS01 — the same row prints GHS02 only, as Type C does. The reference **** means the type itself is to be confirmed by testing (Annex VI, 1.2.4). Of the 12 rows of Annex VI classified Self-react. C, this is the only one that does not print H242. This page shows H242.',
     source: { act: ACT_2018, oj: OJ_2018, page: 268, origin: { act: ACT_2008, oj: OJ_2008, page31: 558, page32: 1090 } },
   },
+  // ⚠⚠ Решение Сергея, session 79: СТРОГО ПО КЛАССУ, как у 649-175/176/315.
+  // В s78 эта строка была заведена как отдельный вид `class-omitted` («класс
+  // пропущен, но Table 3.2 его подтверждает → выводим класс из кода»). Вид
+  // снят: единственная запись переведена в `class-missing`, H411 не печатаем,
+  // пара Aquatic Chronic 2 в A0 не выводится. Довод Table 3.2 (N; R51-53)
+  // остаётся в свидетельстве — это материал для корриджендума, не для базы.
+  // Колонка пиктограмм строки согласуется с этим решением: GHS09 не напечатан.
   '602-091-00-8': {
-    kind: 'class-omitted',
+    kind: 'class-missing',
     printedClasses: ['Acute Tox. 4 *', 'STOT RE 2 *', 'Skin Irrit. 2'],
     printedStatements: ['H302', 'H373 **', 'H315', 'H411'],
-    shownStatements: ['H302', 'H373', 'H315', 'H411'],
+    shownStatements: ['H302', 'H373', 'H315'],
     table32: 'Xn; R22-48/20/22 — Xi; R38 — N; R51-53',
-    impliedClasses: ['Aquatic Chronic 2'],
-    note: 'Table 3.1 prints H411, the statement of chronic aquatic hazard Category 2, in both the classification and the labelling columns, but lists no Aquatic Chronic class in this row. Under Annex I, Table 4.1.0, H411 belongs to Aquatic Chronic 2. Table 3.2 of the original Regulation (EC) No 1272/2008 classifies the substance N; R51-53, which converts to Aquatic Chronic 2 under Annex VII — the hazard is intended and only the class name is omitted (the pictogram column, however, prints no GHS09). Of the 581 rows of Annex VI that print H411, this is the only one without Aquatic Chronic 2 in the class column. This page shows H411 and treats the entry as Aquatic Chronic 2.',
+    note: 'Table 3.1 prints H411, the statement of chronic aquatic hazard Category 2, in both the classification and the labelling columns, but lists no Aquatic Chronic class in this row; under Annex I, Table 4.1.0, H411 belongs to Aquatic Chronic 2. The pictogram column of the same row prints no GHS09, which Aquatic Chronic 2 would require. Table 3.2 of the original Regulation (EC) No 1272/2008 classifies the substance N; R51-53, which converts to Aquatic Chronic 2 under Annex VII, so the class name, not the code, appears to have been dropped. Of the 581 rows of Annex VI that print H411, this is the only one without Aquatic Chronic 2 in the class column. This page shows the statements that follow from the printed classes, H302, H373 and H315, and does not show H411.',
     source: { act: ACT_2018, oj: OJ_2018, page: 172, origin: { act: ACT_2008, oj: OJ_2008, page31: 475, page32: 1024 } },
   },
 };
@@ -252,7 +250,6 @@ export const ROW_ERRATUM_LEAD: Record<RowErratumKind, string> = {
   'statement-mismatch': 'Annex VI prints a different hazard statement code in this row.',
   'statement-missing': 'Annex VI omits a hazard statement code in this row.',
   'class-missing': 'Annex VI prints a hazard statement code without its hazard class in this row.',
-  'class-omitted': 'Annex VI prints a hazard statement code in this row but omits the name of its hazard class.',
 };
 
 /**
