@@ -1,0 +1,339 @@
+---
+// CLP Mixture Classifier — /tools/clp-mixture-classifier/ (session 81).
+//
+// ⭐⭐⭐ ПОЧЕМУ ЭТОТ СЛАГ И ЭТОТ TITLE. Замер Сергея (22.08.2026,
+// `claude/semrush-classifier-keywords.md`): у инструмента НЕТ головного термина —
+// `mixture classification calculator` 0, `clp mixture classification calculator` 0,
+// `ghs mixture classification` 10. Ровно случай ATE-калькулятора (s9): инструмент
+// живёт на интенте конкурентов и на AI-цитировании, а не на объёме.
+// Единственный денежный термин во всём наборе — **`sds section 2`: 720 US, CPC
+// $7,44**, поэтому он стоит в title и ведёт на хаб `/sds-sections/`.
+// ⛔ НЕ брать в слаг: `clp calculator` (электричество Гонконга и свечи),
+// `mixture classifier` (машинное обучение), `scl calculator` (контактные линзы).
+//
+// ⚠ Вёрстка страницы — дизайн-система (hub.css + design-tokens.css), своих
+// <style> нет намеренно (правило страницы /hazard-classes/, session 29).
+// Остров говорит семьёй `mx-*` из `src/styles/mixture-classifier.css`.
+// Акцент раздела — `class` (синий), объявлен в `src/lib/sectionAccent.ts`.
+//
+// ⚠⚠ «HOW TO USE», ДИСКЛЕЙМЕР И «RELATED TOOLS» ЖИВУТ В ОСТРОВЕ, А НЕ ЗДЕСЬ —
+// так они стоят в утверждённом прототипе s80, рядом с полями, к которым
+// относятся. Astro рендерит остров на сборке, поэтому этот текст лежит в
+// готовом HTML и виден краулеру. ⛔ Не дублировать их на странице: одна и та же
+// инструкция дважды на одном адресе — это не «усиление», а шум.
+export const prerender = true
+
+import Layout from '../../layouts/Layout.astro'
+import MixtureClassifier from '../../components/MixtureClassifier'
+import { supabase } from '../../lib/supabase'
+
+const SITE = 'https://ghspictograms.com'
+const canonical = `${SITE}/tools/clp-mixture-classifier/`
+
+const title = 'CLP Mixture Classification Calculator — SDS Section 2'
+const description =
+  'Free CLP mixture classification calculator with a full audit trail. Enter the composition, and it pulls each ingredient’s harmonised Annex VI classification, applies specific and generic concentration limits, and returns the hazard classes and categories for SDS Section 2 — every line quoting the rule it rests on, verbatim, with the per-ingredient contributions behind the number. No registration.'
+
+/* ── реестр классов для острова ───────────────────────────────────────────
+ *
+ * ⭐⭐ Реестр собирается ЗДЕСЬ, на сборке, и уезжает в остров пропсом. Причина:
+ * ответ `/api/classify` несёт `classCode`, но не человеческое имя класса —
+ * печатать «STOT_SE» посетителю нельзя, а второй сетевой запрос ради подписи
+ * лишний. Тот же список нужен форме поставщика: пары выбираются из реестра, а
+ * не набираются текстом (design-doc §4.2).
+ *
+ * ⚠ Обе таблицы ОТКРЫТЫ для anon (проверено запросом к
+ * `information_schema.role_table_grants`, s81) — в отличие от таблиц движка
+ * (`annex6_table3`, `annex6_classification`, `clp_generic_limits`,
+ * `data_release`), которые закрыты с session 78 и со сборки не читаются. Отсюда
+ * же ограничение на цифры в шапке: 4 419 строк Annex VI и 13 512 пар взять
+ * НЕЧЕМ, поэтому в чипах стоят числа, которые действительно можно посчитать.
+ */
+type CatalogRow = {
+  id: string
+  class_code: string
+  name_en: string
+  group_type: string
+  eu_only: boolean
+  display_order: number | null
+}
+type MappingRow = {
+  hazard_class_id: string
+  category_code: string
+  pictogram_code: string | null
+  signal_word: string | null
+  h_statement_code: string | null
+  clp_status: string | null
+}
+
+const [catalogRes, mappingRes, subsRes] = await Promise.all([
+  supabase
+    .from('hazard_class_catalog')
+    .select('id, class_code, name_en, group_type, eu_only, display_order')
+    .order('display_order'),
+  supabase
+    .from('hazard_category_mapping')
+    .select('hazard_class_id, category_code, pictogram_code, signal_word, h_statement_code, clp_status'),
+  supabase
+    .from('substances')
+    .select('id', { count: 'exact', head: true })
+    .not('index_number', 'is', null),
+])
+
+if (catalogRes.error) throw new Error(`[clp-mixture-classifier] hazard_class_catalog: ${catalogRes.error.message}`)
+if (mappingRes.error) throw new Error(`[clp-mixture-classifier] hazard_category_mapping: ${mappingRes.error.message}`)
+
+const catalog = (catalogRes.data ?? []) as CatalogRow[]
+const mapping = (mappingRes.data ?? []) as MappingRow[]
+const harmonisedSubstances = subsRes.count ?? 0
+
+if (subsRes.error) throw new Error(`[clp-mixture-classifier] substances count: ${subsRes.error.message}`)
+
+if (!catalog.length || !mapping.length || !harmonisedSubstances) {
+  // ⚠⚠ Пустой реестр — это не «пустая страница»: остров потеряет имена классов и
+  // форму поставщика МОЛЧА, а в шапке встанет «0 substances». Ровно тот отказ,
+  // ради которого заведено правило «зелёная сборка не доказывает, что данные
+  // приехали» (Appendix E §1): на ноутбуке с перехватом TLS сборка проходит с
+  // пустой базой. Поэтому падаем здесь, а не печатаем нули.
+  throw new Error('[clp-mixture-classifier] the hazard registry or the substance count came back empty — check the Supabase connection (NODE_OPTIONS=--use-system-ca) before building')
+}
+
+const byClass = new Map<string, MappingRow[]>()
+for (const m of mapping) {
+  const a = byClass.get(m.hazard_class_id)
+  if (a) a.push(m)
+  else byClass.set(m.hazard_class_id, [m])
+}
+
+const registry = catalog.map((c) => ({
+  code: c.class_code,
+  name: c.name_en,
+  group: c.group_type,
+  euOnly: c.eu_only,
+  categories: (byClass.get(c.id) ?? [])
+    // ⚠ Категории, не принятые в CLP (`not_in_clp`, 9 строк — например Acute
+    // Tox. 5), из выбора поставщика УБРАНЫ: v1 считает только EU CLP
+    // (design-doc §8), и предложить их означало бы позвать человека ввести
+    // классификацию, которой в его юрисдикции не существует. Движок их
+    // принимает — ограничение здесь сознательное, а не техническое.
+    .filter((m) => m.clp_status !== 'not_in_clp')
+    .map((m) => ({
+      code: m.category_code,
+      h: m.h_statement_code,
+      pic: m.pictogram_code,
+      signal: m.signal_word,
+    })),
+}))
+
+const classCount = catalog.length
+const categoryCount = mapping.length
+
+/* ── контракт версии (design-doc §8) ─────────────────────────────────────── */
+
+const DOES = [
+  'Acute toxicity — oral, dermal and inhalation, by the additivity formula of Annex I 3.1.3.6.1, with the 10 % unknown-toxicity correction and harmonised ATE values from Annex VI.',
+  'Provenance on every line: the rule key, the verbatim text of the rule as the regulation prints it, and the contribution of each ingredient.',
+  'Specific concentration limits ahead of generic ones — an ingredient carrying its own SCL in Annex VI is judged by that SCL, and the generic limit is shown beside it as checked and outranked.',
+  'An honest, named gap for every class this version does not compute yet, with the ingredients of your mixture that carry it.',
+]
+
+const DOES_NOT = [
+  'Physical hazards. They are not derivable from composition at all — they need testing. Ingredient physical classes are listed as a hint, never as a result.',
+  'Bridging principles (dilution, batching, concentration, interpolation, similar mixtures, aerosols). Planned; not guessed at in the meantime.',
+  'A mixture used as an ingredient of another mixture — break it down into substances.',
+  'Annex VI notes (A–F, 1–7, P …). Their text is shown on the ingredient; the engine does not apply them.',
+  'The ECHA C&L Inventory. Self-classifications by notifiers are a hint, never a source of a calculation.',
+  'Jurisdictions other than EU CLP. UN GHS, OSHA HCS and WHMIS differ in the limits, and one engine pretending to cover all of them would be wrong in three places at once.',
+]
+
+const faq = [
+  {
+    q: 'How is a mixture classified under CLP?',
+    a:
+      'CLP Annex I gives three routes, in order of precedence. Where test data exist for the mixture itself, they decide. Where they do not, the bridging principles may carry a classification across from a tested mixture. Where neither applies — the ordinary case for a new formulation — the classification is calculated from the composition: each ingredient contributes according to its own harmonised classification and its concentration, judged against the concentration limits of that hazard class. Some classes are decided by a simple cut-off, some by summation across ingredients, and acute toxicity by an additivity formula over the reciprocals of the ingredient estimates. This tool computes the third route and states which classes it has not computed.',
+  },
+  {
+    q: 'What goes in SDS Section 2 for a mixture?',
+    a:
+      'Section 2 of a safety data sheet carries the classification of the mixture under CLP — every hazard class and category — together with the label elements that follow from it: pictograms, signal word, hazard statements and precautionary statements, plus any supplemental EUH information. Section 2 is a consequence of the classification, not an independent piece of authoring: once class and category are settled, the label elements are fixed by the regulation. That is why the output here is class and category first, with the label elements derived from them, a route into the label maker, and a “Copy for SDS Section 2” button that carries the note about what was not evaluated.',
+  },
+  {
+    q: 'What does the calculator compute today, and what does it not?',
+    a:
+      'Today it computes acute toxicity across the oral, dermal and inhalation routes, with the full additivity formula, the 10 % unknown-toxicity correction and harmonised ATE values from Annex VI. Every other hazard class is printed with an explicit “not computed in this version”, the module that will own it, and the ingredients in your mixture that carry that class — so an empty cell can never be mistaken for “not hazardous”. Physical hazards will stay uncomputed permanently: they require testing, and no engine can derive them from a composition.',
+  },
+  {
+    q: 'What is a specific concentration limit, and why does it outrank the generic limit?',
+    a:
+      'A specific concentration limit is a threshold set for one named substance in Annex VI, replacing the generic limit of that hazard class for that substance. Methanol, for example, carries STOT SE 1 from 10 % and STOT SE 2 from 3 % — while the generic table would start counting it at 1 %. The SCL is the legal rule for that ingredient, so it is the rule quoted in the report; the generic limit is shown beside it, marked as checked and outranked. It cuts both ways: an ingredient with its own SCL does not also enter the generic summation, or it would be counted twice under two different thresholds.',
+  },
+  {
+    q: 'Why does every result quote the regulation verbatim?',
+    a:
+      'Because a classification that cannot be audited is worth very little in an inspection. A number on its own asks to be trusted; a number with the rule key, the exact sentence of the regulation behind it, and the arithmetic that produced it can be checked by whoever reads the safety data sheet next — including a regulator. It also protects against silent drift: when the wording behind a line is printed next to the line, a rule that changes with an ATP becomes visible instead of quietly changing an answer.',
+  },
+  {
+    q: 'Is my composition stored anywhere?',
+    a:
+      'The calculation itself keeps nothing — the composition is sent to the server, classified, returned and forgotten. There is no account, no sign-up and no email gate. A rate limit of thirty calculations an hour is counted against a one-way hash of your IP address, not the address itself, so that a busy hour cannot be traced back to you.',
+  },
+]
+
+const faqJson = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faq.map((f) => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  })),
+})
+
+const appJson = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'CLP Mixture Classification Calculator',
+  url: canonical,
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Any (web)',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  description,
+})
+
+const breadcrumbJson = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE}/` },
+    { '@type': 'ListItem', position: 2, name: 'Tools', item: `${SITE}/tools/` },
+    { '@type': 'ListItem', position: 3, name: 'CLP mixture classifier', item: canonical },
+  ],
+})
+---
+
+<Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
+  <script type="application/ld+json" slot="head" set:html={appJson} />
+  <script type="application/ld+json" slot="head" set:html={faqJson} />
+  <script type="application/ld+json" slot="head" set:html={breadcrumbJson} />
+
+  <section class="hub-hero">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+
+    <div class="hub-wrap hub-hero-inner">
+      <p class="hub-crumb">
+        <a href="/tools/">Tools</a><span class="sep">/</span>CLP mixture classifier
+      </p>
+      <p class="hub-hero-eyebrow">Classification · CLP Annex I</p>
+      <h1>CLP Mixture Classification Calculator</h1>
+      <p class="hub-hero-sub">
+        Enter the composition, get the hazard classes for SDS Section 2 — with the regulation text, the
+        ingredient contributions and the threshold behind every line.
+      </p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">{harmonisedSubstances.toLocaleString('en-GB').replace(/,/g, ' ')} substances with a harmonised classification</span>
+        <span class="hub-hero-chip">{classCount} hazard classes · {categoryCount} registry categories</span>
+        <span class="hub-hero-chip">Free · no sign-up</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-tool">
+    <div class="hub-wrap">
+      <MixtureClassifier registry={registry} client:load />
+    </div>
+  </section>
+
+  <section class="hub-sec-b">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">01 · The contract</p>
+      <h2 class="hub-h2">What this version computes, and what it deliberately does not</h2>
+      <p class="hub-sub">
+        This list is on the page, not buried in a FAQ, because a tool that quietly skips a hazard class is worse
+        than no tool. Anything not computed is printed as a row of its own in the result, with the reason and the
+        ingredients of your mixture that carry it.
+      </p>
+
+      <div class="hub-cards">
+        <div class="hub-card static">
+          <p class="tag">Computed</p>
+          <h3>What you get today</h3>
+          <ul class="copy">
+            {DOES.map((item) => <li>{item}</li>)}
+          </ul>
+        </div>
+        <div class="hub-card static">
+          <p class="tag">Not computed</p>
+          <h3>What it will not pretend to know</h3>
+          <ul class="copy">
+            {DOES_NOT.map((item) => <li>{item}</li>)}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">02 · Method</p>
+      <h2 class="hub-h2">Where the numbers come from</h2>
+      <p class="hub-sub">
+        Three tables and one rule of precedence do most of the work. None of them is retyped into this tool: the
+        thresholds are read from our copy of the regulation on the server, and every result names the row it used.
+      </p>
+
+      <div class="hub-cards">
+        <div class="hub-card static">
+          <p class="tag">Ingredients</p>
+          <h3>Annex VI Table 3</h3>
+          <p class="copy">
+            The harmonised classification of a substance across the EU — class, category, hazard statements, and
+            where they exist its specific concentration limits, M-factors and acute toxicity estimates. An
+            ingredient’s classification is read on the server by its index number; it is never taken from what
+            the browser sent.
+          </p>
+        </div>
+        <div class="hub-card static">
+          <p class="tag">Thresholds</p>
+          <h3>Annex I limits</h3>
+          <p class="copy">
+            Cut-off values from Table 1.1, the generic concentration limits of each hazard class, the summation
+            tables and the additivity formula. Each row is stored with its verbatim wording, and that wording is
+            what the result quotes — so the tool cannot paraphrase a rule into something it does not say.
+          </p>
+        </div>
+        <div class="hub-card static">
+          <p class="tag">Precedence</p>
+          <h3>SCL before generic</h3>
+          <p class="copy">
+            For each ingredient and each class: its own specific concentration limit if Annex VI sets one,
+            otherwise the lower of the cut-off and the generic limit. The limit that was not used is still shown,
+            marked as checked and outranked — that is the provenance, not decoration.
+          </p>
+        </div>
+      </div>
+
+      <p class="hub-fine">
+        References: Regulation (EC) No 1272/2008 (CLP) Annex I — 1.1 (cut-off values), 3.1.3 (acute toxicity of
+        mixtures) and the summation tables of the health and environmental chapters; Annex VI Table 3 (harmonised
+        classification and labelling). The release of the data behind any given result is printed under it.
+      </p>
+    </div>
+  </section>
+
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">03 · Questions</p>
+      <h2 class="hub-h2">Frequently asked questions</h2>
+      <div class="hub-faq">
+        {faq.map((item) => (
+          <div class="hub-faq-item">
+            <p class="q">{item.q}</p>
+            <p>{item.a}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+</Layout>

@@ -65,11 +65,12 @@ export const ACCENT_SECTIONS: AccentSection[] = [
   {
     key: 'class',
     badge: 'Classification',
-    means: 'classification: hazard classes, H- and P-statements, mixture ATE',
+    means: 'classification: hazard classes, H- and P-statements, mixture classification',
     prefixes: [
       '/hazard-classes/',
       '/h-statements/',
       '/p-statements/',
+      '/tools/clp-mixture-classifier/',
       '/tools/ate-mixture-calculator/',
       '/tools/ghs-calculator',
     ],

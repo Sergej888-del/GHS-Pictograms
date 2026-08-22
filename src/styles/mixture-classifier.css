@@ -1,0 +1,716 @@
+/* ── Семья `mx-*` — остров классификатора смесей (session 81) ────────────────
+ *
+ * ⚠⚠ ОТДЕЛЬНЫЙ ФАЙЛ, А НЕ КУСОК hub.css. Правило CLAUDE.md: не переписывать
+ * файл, который не прочитан целиком; hub.css весит 152 КБ. Подключается одной
+ * строкой в global.css СРАЗУ ПОСЛЕ hub.css и, как и он, остаётся ВНЕ слоёв —
+ * поэтому переопределяет и preflight Tailwind, и `.tool-*`.
+ *
+ * ⚠⚠ ЦВЕТА — ТОЛЬКО ИЗ ТОКЕНОВ (`design-tokens.css`). Ни одного шестнадцатеричного
+ * литерала: раздел этого инструмента — `class` (синий), и меняться он должен в
+ * одном месте. Исключение — прозрачности `rgba()`, у которых токена нет.
+ *
+ * СМЫСЛ ЦВЕТА (тройка вердиктов дизайн-системы, §3):
+ *   роза   — classified, «Danger», пиктограммы: строка, которая поедет на этикетку;
+ *   янтарь — provisional / minimum classification / warning: ответ есть, но с оговоркой;
+ *   бирюза — действие и «not classified»: проверено, порог не достигнут;
+ *   нейтраль — not computed: не считалось вовсе.
+ * ⛔ Оранжевый — ТОЛЬКО кнопка в Label Maker (§2.7 дизайн-системы).
+ */
+
+/* ── каркас ──────────────────────────────────────────────────────────────── */
+
+.mx-tool {
+  --mx-acc: var(--acc-class);
+  --mx-acc-line: var(--acc-class-border);
+  --mx-acc-soft: var(--acc-class-soft);
+  --mx-acc-ink: var(--acc-class-ink);
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.mx-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 24px;
+}
+.mx-tab {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color 200ms ease, border-color 200ms ease;
+}
+.mx-tab .n {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-3);
+  margin-right: 4px;
+}
+.mx-tab:hover { color: var(--ink-2); }
+.mx-tab.on { color: var(--ink); border-bottom-color: var(--mx-acc); }
+.mx-tab.on .n { color: var(--mx-acc-ink); }
+
+.mx-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 22px;
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .mx-grid { grid-template-columns: 340px minmax(0, 1fr); }
+  /* ⚠ Вкладка «Result» ОТДАЁТ ВСЮ ШИРИНУ таблице: у неё пять колонок и раскрытие
+     «Why» с таблицей вкладов внутри — в 60 % ширины оно читается вдвое хуже. */
+  .mx-grid.wide { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ── панели левой колонки ────────────────────────────────────────────────── */
+
+.mx-panel {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 16px;
+  box-shadow: 0 4px 14px rgba(15, 23, 41, .06);
+}
+.mx-panel + .mx-panel { margin-top: 14px; }
+.mx-panel.help {
+  background: var(--mx-acc-soft);
+  border-color: var(--mx-acc-line);
+  box-shadow: none;
+}
+
+.mx-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 12px;
+}
+.mx-panel-head.as-button {
+  border: 0;
+  background: none;
+  padding: 0;
+  margin-bottom: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mx-panel.help.closed .mx-panel-head.as-button { margin-bottom: 0; }
+.mx-panel-head.as-button .a { color: var(--mx-acc-ink); font-size: 12px; }
+.mx-panel.help.closed .mx-panel-head.as-button .a { transform: rotate(180deg); display: inline-block; }
+
+.mx-panel-title,
+.mx-lab {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.mx-panel.help .mx-panel-title { color: var(--mx-acc-ink); }
+.mx-panel-side {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--mx-acc-ink);
+}
+.mx-lab { display: block; margin: 16px 0 7px; }
+.mx-lab:first-child { margin-top: 0; }
+
+/* ── «How to use» ────────────────────────────────────────────────────────── */
+
+.mx-help { margin-top: 12px; font-size: 13px; line-height: 1.6; color: var(--ink-2); }
+.mx-help .have {
+  margin: 0 0 12px;
+  padding-left: 10px;
+  border-left: 2px solid var(--mx-acc-line);
+}
+.mx-help ol { margin: 0; padding-left: 20px; }
+.mx-help li { margin-bottom: 9px; }
+.mx-help li::marker { font-family: var(--font-mono); font-size: 11px; color: var(--mx-acc-ink); }
+.mx-help b { color: var(--ink); }
+
+/* ── поиск и кандидаты ───────────────────────────────────────────────────── */
+
+.mx-search {
+  width: 100%;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 10px 12px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+.mx-search::placeholder { color: #94a3b8; }
+.mx-search:focus { border-color: var(--mx-acc); box-shadow: 0 0 0 3px rgba(29, 78, 216, .14); }
+
+.mx-cands { list-style: none; margin: 10px 0 0; padding: 0; max-height: 300px; overflow-y: auto; }
+.mx-cand {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-left: 3px solid transparent;
+  background: none;
+  padding: 9px 10px;
+  cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease;
+}
+.mx-cand:hover { background: var(--mx-acc-soft); border-left-color: var(--mx-acc); }
+.mx-cand .n { display: block; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.mx-cand .m { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3); }
+
+/* ── строка состава ──────────────────────────────────────────────────────── */
+
+.mx-ing {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 11px 12px;
+  margin-bottom: 10px;
+  background: #ffffff;
+}
+.mx-ing-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.mx-ing-id { min-width: 0; }
+.mx-ing-name { margin: 0; font-size: 14.5px; font-weight: 700; color: var(--ink); }
+.mx-ing-name-input {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  padding: 1px 4px;
+  margin-left: -4px;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.mx-ing-name-input:hover { border-color: var(--line); }
+.mx-ing-name-input:focus { border-color: var(--mx-acc); outline: none; background: #ffffff; }
+.mx-ing-meta { margin: 2px 0 0; font-size: 10.5px; color: var(--ink-3); }
+
+.mx-ing-conc { display: flex; align-items: center; gap: 5px; flex: 0 0 auto; }
+.mx-num {
+  width: 62px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  text-align: right;
+  color: var(--ink);
+  outline: none;
+}
+.mx-num:focus { border-color: var(--mx-acc); box-shadow: 0 0 0 3px rgba(29, 78, 216, .12); }
+.mx-ing-conc .pc, .mx-range .pc { font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); }
+
+.mx-x {
+  border: 0;
+  background: none;
+  padding: 0 3px;
+  font-size: 17px;
+  line-height: 1;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.mx-x:hover { color: var(--verdict-never-ink); }
+.mx-x.small { font-size: 13px; margin-left: 5px; }
+
+.mx-range { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+.mx-range label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
+.mx-range .mx-hint { flex-basis: 100%; margin-top: 2px; }
+
+.mx-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  margin-top: 7px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--mx-acc-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* ── чипы классификации ──────────────────────────────────────────────────── */
+
+.mx-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.mx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid var(--mx-acc-line);
+  border-radius: 5px;
+  background: var(--mx-acc-soft);
+  padding: 3px 7px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--mx-acc-ink);
+}
+/* Янтарь = «*» минимальной классификации: категория — пол, а не потолок. */
+.mx-chip.star { border-color: #fde68a; background: var(--verdict-sep-bg); color: var(--verdict-sep-ink); }
+.mx-chip.count { border-color: var(--teal-200); background: var(--verdict-ok-bg); color: var(--verdict-ok-ink); }
+.mx-chip.none { border-color: var(--line); background: #f8fafc; color: var(--ink-3); }
+
+/* ── чекбоксы, поля, переключатели ───────────────────────────────────────── */
+
+.mx-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.mx-check input { margin-top: 2px; flex: 0 0 auto; accent-color: var(--mx-acc); }
+
+.mx-input {
+  width: 100%;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  padding: 9px 11px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink);
+  outline: none;
+}
+.mx-input:focus { border-color: var(--mx-acc); box-shadow: 0 0 0 3px rgba(29, 78, 216, .12); }
+.mx-input::placeholder { color: #94a3b8; }
+
+.mx-select {
+  width: 100%;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: #ffffff;
+}
+
+.mx-hint { margin: 6px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-3); }
+.mx-note { margin: 8px 0 0; font-size: 12px; line-height: 1.55; color: var(--ink-3); }
+.mx-note.err { color: var(--verdict-never-ink); }
+
+/* Сегменты — состояние и форма: выбор из трёх, а не список из трёх. */
+.mx-seg { display: flex; gap: 6px; }
+.mx-seg.wrap { flex-wrap: wrap; }
+.mx-seg-b {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+.mx-seg-b:hover { border-color: var(--teal-200); background: var(--teal-50); }
+.mx-seg-b.on { background: var(--teal-600); border-color: var(--teal-600); color: #ffffff; }
+
+/* ── итоги состава ───────────────────────────────────────────────────────── */
+
+.mx-tot { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.mx-tot-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; font-size: 13px; color: var(--ink-2); }
+.mx-tot-row b { font-family: var(--font-mono); color: var(--ink); }
+/* ⚠ Янтарь, а не роза: превышение суммы или Σ C(unknown) — не опасность смеси,
+   а состояние ввода, о котором надо знать. Роза здесь читалась бы как вердикт. */
+.mx-tot-row b.over { color: var(--verdict-sep-ink); }
+
+/* ── кнопки ──────────────────────────────────────────────────────────────── */
+
+.mx-btns { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.mx-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 8px 13px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+.mx-btn:hover { border-color: var(--teal-200); background: var(--teal-50); color: var(--teal-700); }
+.mx-btn[disabled] { opacity: .5; cursor: not-allowed; }
+.mx-btn[disabled]:hover { border-color: var(--line); background: #ffffff; color: var(--ink-2); }
+
+.mx-btn.go {
+  width: 100%;
+  justify-content: center;
+  background: var(--teal-600);
+  border-color: var(--teal-600);
+  color: #ffffff;
+  padding: 11px 16px;
+  font-size: 14px;
+  box-shadow: 0 8px 18px rgba(13, 148, 136, .22);
+}
+.mx-btn.go:hover { background: var(--teal-700); border-color: var(--teal-700); color: #ffffff; }
+
+/* ⛔ Оранжевый — ТОЛЬКО уход в конструктор этикеток (дизайн-система §2.7). */
+.mx-btn.label {
+  background: var(--acc-label);
+  border-color: var(--acc-label);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(249, 115, 22, .24);
+}
+.mx-btn.label:hover { background: var(--acc-label-ink); border-color: var(--acc-label-ink); color: #ffffff; }
+
+.mx-run { margin-top: 14px; }
+
+/* ── правая колонка: пустое состояние и устаревание ──────────────────────── */
+
+.mx-blank {
+  border: 1px dashed var(--line-2);
+  border-radius: 14px;
+  padding: 30px 24px;
+  background: #f8fafc;
+  color: var(--ink-3);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.mx-blank .t { margin: 0 0 6px; font-family: var(--font-heading); font-size: 17px; font-weight: 700; color: var(--ink-2); }
+.mx-blank p { margin: 0; }
+
+/* Карточка №108: результат, посчитанный не по тому, что сейчас на экране. */
+.mx-stale {
+  margin: 0 0 14px;
+  border: 1px solid #fde68a;
+  border-left: 3px solid var(--verdict-sep-ink);
+  border-radius: 10px;
+  background: var(--verdict-sep-bg);
+  padding: 10px 13px;
+  font-size: 13px;
+  color: var(--verdict-sep-ink);
+}
+
+/* ── вердикт ─────────────────────────────────────────────────────────────── */
+
+.mx-verdict {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  border: 1px solid var(--mx-acc-line);
+  border-top: 2px solid var(--mx-acc);
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--mx-acc-soft) 0%, #ffffff 70%);
+  padding: 20px 22px;
+}
+.mx-verdict-main { min-width: 0; }
+.mx-verdict h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(20px, 2.2vw, 26px);
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--ink);
+}
+.mx-verdict .sub { margin: 7px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+
+.mx-verdict-label { flex: 0 0 auto; text-align: right; }
+.mx-verdict-label .sig {
+  margin: 0 0 8px;
+  font-family: var(--font-heading);
+  font-size: 22px;
+  font-weight: 700;
+}
+.mx-verdict-label .sig.danger { color: var(--verdict-never-ink); }
+.mx-verdict-label .sig.warning { color: var(--verdict-sep-ink); }
+.mx-verdict-label .pics { display: flex; gap: 6px; justify-content: flex-end; }
+
+.mx-picto { width: 52px; height: 52px; color: var(--verdict-never-ink); }
+.mx-picto polygon { fill: #ffffff; stroke: currentColor; stroke-width: 6; }
+.mx-picto text { font-family: var(--font-mono); font-size: 17px; fill: currentColor; }
+
+.mx-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+.mx-badge {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #ffffff;
+  padding: 4px 9px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.mx-badge.amber { border-color: #fde68a; background: var(--verdict-sep-bg); color: var(--verdict-sep-ink); }
+.mx-badge.teal { border-color: var(--teal-200); background: var(--verdict-ok-bg); color: var(--verdict-ok-ink); }
+
+/* ── лента «what changed» ────────────────────────────────────────────────── */
+
+.mx-changed {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 14px 16px;
+}
+.mx-changed-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.mx-changed ol { list-style: none; margin: 0; padding: 0; }
+.mx-changed li { display: flex; gap: 12px; padding: 7px 0; }
+.mx-changed li + li { border-top: 1px solid var(--line); }
+.mx-changed .k { flex: 0 0 34px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+.mx-changed .v { min-width: 0; }
+.mx-changed .a { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.mx-changed .none { margin: 3px 0 0; font-size: 12.5px; color: var(--ink-3); }
+.mx-changed .v ul { margin: 4px 0 0; padding-left: 16px; }
+.mx-changed .v li { display: list-item; border: 0; padding: 1px 0; font-size: 12.5px; color: var(--ink-2); }
+.mx-changed .v li.rule { color: var(--mx-acc-ink); }
+.mx-changed .v li.category, .mx-changed .v li.status { color: var(--verdict-never-ink); }
+
+/* ── таблица результата ──────────────────────────────────────────────────── */
+
+.mx-table {
+  width: 100%;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  background: #ffffff;
+}
+.mx-table thead th {
+  padding: 9px 14px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.mx-table td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; font-size: 13.5px; }
+.mx-table tr:last-child td { border-bottom: 0; }
+.mx-table .cls { margin: 0; font-size: 14.5px; font-weight: 700; color: var(--ink); }
+.mx-table .sub { margin: 2px 0 0; font-size: 10.5px; color: var(--ink-3); }
+.mx-table .h { color: var(--mx-acc-ink); }
+.mx-table td.act { width: 34px; text-align: right; }
+.mx-table.quiet { margin-top: 10px; }
+.mx-table.quiet .cls { font-size: 13.5px; font-weight: 600; }
+.mx-table.quiet .sub { font-size: 12px; }
+.mx-row.not_computed td { color: var(--ink-3); }
+
+.mx-st {
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 3px 7px;
+  margin: 1px 4px 1px 0;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-3);
+}
+.mx-st.classified { border-color: #fecdd3; background: var(--verdict-never-bg); color: var(--verdict-never-ink); }
+.mx-st.not_classified { border-color: var(--teal-200); background: var(--verdict-ok-bg); color: var(--verdict-ok-ink); }
+.mx-st.insufficient_data, .mx-st.provisional { border-color: #fde68a; background: var(--verdict-sep-bg); color: var(--verdict-sep-ink); }
+
+.mx-caret {
+  border: 0;
+  background: none;
+  padding: 2px 4px;
+  font-size: 13px;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: transform 180ms ease, color 180ms ease;
+}
+.mx-caret:hover { color: var(--mx-acc-ink); }
+.mx-caret.on { transform: rotate(180deg); color: var(--mx-acc-ink); }
+
+.mx-why-row td { background: var(--mx-acc-soft); padding: 0; }
+
+/* ── раскрытие «Why» ─────────────────────────────────────────────────────── */
+
+.mx-why { padding: 16px 18px; }
+.mx-why-rule { margin: 0; font-size: 11.5px; color: var(--mx-acc-ink); }
+.mx-why-rule b { font-size: 12.5px; }
+.mx-why-reason { margin: 8px 0 0; font-size: 13px; color: var(--ink-2); }
+
+/* ⚠⚠ ЦИТАТА РЕГЛАМЕНТА — МОНО И БЕЗ ВЕРХНЕГО РЕГИСТРА (дизайн-система §3).
+   Это дословный текст закона: любое `text-transform` здесь — редактирование
+   источника, а спор с инспектором идёт как раз про буквы. */
+.mx-quote {
+  display: block;
+  margin: 9px 0 0;
+  border-left: 2px solid var(--mx-acc-line);
+  padding: 6px 0 6px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  text-transform: none;
+  color: var(--ink-2);
+}
+.mx-quote::before, .mx-quote::after { content: none; }
+
+.mx-formula {
+  margin: 10px 0 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px 11px;
+  font-size: 12px;
+  color: var(--ink);
+  overflow-x: auto;
+}
+
+.mx-contrib { width: 100%; margin-top: 12px; border-collapse: collapse; background: #ffffff; }
+.mx-contrib th {
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.mx-contrib td { padding: 7px 9px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--ink-2); }
+/* Строка, не пошедшая в расчёт: серым, но С ПРИЧИНОЙ в последней колонке. */
+.mx-contrib tr.out td { color: var(--ink-3); background: #f8fafc; }
+
+.mx-cands-checked { margin-top: 12px; }
+.mx-cands-checked ul { margin: 6px 0 0; padding-left: 16px; font-size: 12.5px; }
+.mx-cands-checked li.pass { color: var(--verdict-ok-ink); }
+.mx-cands-checked li.fail { color: var(--ink-3); }
+
+.mx-warn { margin: 8px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--ink-2); }
+.mx-warn b { font-size: 10.5px; letter-spacing: .06em; }
+.mx-warn.caution { color: var(--verdict-sep-ink); }
+.mx-warn.critical { color: var(--verdict-never-ink); }
+
+/* ── сворачиваемые блоки ─────────────────────────────────────────────────── */
+
+.mx-fold { margin-top: 12px; border: 1px solid var(--line); border-radius: 14px; background: #ffffff; overflow: hidden; }
+.mx-fold-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 14px 16px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mx-fold-head .t { flex: 1 1 auto; font-size: 15px; font-weight: 600; color: var(--ink); }
+.mx-fold-head .c {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.mx-fold-head .a { color: var(--ink-3); font-size: 12px; transition: transform 180ms ease; }
+.mx-fold.on .mx-fold-head .a { transform: rotate(180deg); }
+.mx-fold-body { padding: 0 16px 14px; }
+
+.mx-supp { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.mx-supp:first-child { border-top: 0; }
+.mx-supp p { margin: 0; flex: 1 1 auto; font-size: 13px; line-height: 1.55; color: var(--ink-2); }
+.mx-supp .tag {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* ── выходы, дисклеймер, связанное ───────────────────────────────────────── */
+
+.mx-out { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+
+.mx-disc {
+  margin-top: 16px;
+  border: 1px solid #fde68a;
+  border-left: 3px solid var(--verdict-sep-ink);
+  border-radius: 12px;
+  background: var(--verdict-sep-bg);
+  padding: 15px 18px;
+}
+.mx-disc-head {
+  margin: 0 0 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--verdict-sep-ink);
+}
+.mx-disc p { margin: 0 0 8px; font-size: 13px; line-height: 1.6; color: var(--verdict-sep-ink); }
+.mx-disc p:last-child { margin-bottom: 0; }
+
+.mx-related { margin-top: 16px; border: 1px solid var(--line); border-radius: 14px; background: #ffffff; padding: 15px 18px; }
+.mx-related ul { margin: 10px 0 0; padding-left: 18px; }
+.mx-related li { margin-bottom: 8px; font-size: 13px; line-height: 1.6; color: var(--ink-2); }
+.mx-related a { color: var(--mx-acc-ink); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+
+.mx-release {
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+
+/* ── общее ───────────────────────────────────────────────────────────────── */
+
+.mx-tool .mono { font-family: var(--font-mono); }
+.mx-tool .sr {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .mx-verdict { flex-direction: column; }
+  .mx-verdict-label { text-align: left; }
+  .mx-verdict-label .pics { justify-content: flex-start; }
+  .mx-table thead { display: none; }
+  .mx-table td { display: block; border-bottom: 0; padding: 4px 14px; }
+  .mx-table tr { display: block; border-bottom: 1px solid var(--line); padding: 8px 0; }
+  .mx-table td.act { position: absolute; right: 12px; }
+  .mx-table .mx-why-row td { display: block; padding: 0; }
+}
