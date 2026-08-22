@@ -366,3 +366,74 @@ $$;
 
 revoke all on function public.classifier_share_put(jsonb, text, text) from public, anon, authenticated;
 revoke all on function public.classifier_share_get(text) from public, anon, authenticated;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 4. s80_classifier_lookup_ranking — правка после первой живой проверки
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ⚠⚠ ДЕФЕКТ, найденный Сергеем первым же запросом на проде: `?q=methano`
+-- НЕ возвращал метанол. Причина — плоское ранжирование: все совпадения по
+-- имени получали rank 3 и сортировались по алфавиту, а в Annex VI сотни
+-- производных, чьи имена начинаются со скобки («(1S,4R)-4-(2-Amino-6-chloro-
+-- 9H-purin-9-yl)-2-cyclopentene-1-methanol hydrochloride»). Скобка сортируется
+-- раньше буквы «m» — само вещество не попадало в десятку.
+--
+-- ⭐ Лечение: ступени совпадения (точное имя → начинается с запроса → запрос
+-- отдельным словом → просто содержит) плюс ДЛИНА ИМЕНИ вторым ключом —
+-- базовое вещество почти всегда короче производных («methanol» 8 знаков
+-- против 60). Эвристика стоит ПОСЛЕ точных совпадений (index/CAS/EC/имя),
+-- которые эвристикой не являются.
+-- ⚠ Экранирование `%` и `_`: без него запрос «%» выгружал бы весь справочник.
+--
+-- Замер после правки: methano → Methanol первым · methanol → Methanol первым ·
+-- 67-56-1 → только Methanol · sodium hydrox → только Sodium Hydroxide ·
+-- toluene → Toluene первым · «%» → только вещества со знаком % в имени.
+
+create or replace function public.classifier_lookup(p_q text, p_limit integer default 10)
+returns jsonb
+language sql stable security definer set search_path to 'public'
+as $$
+  with n as (
+    select
+      nullif(btrim(p_q), '') as q,
+      upper(regexp_replace(coalesce(p_q, ''), '\s', '', 'g')) as compact,
+      replace(replace(replace(lower(btrim(coalesce(p_q, ''))), '\', '\\'), '%', '\%'), '_', '\_') as esc
+  ),
+  hits as (
+    select s.index_number,
+           coalesce(s.display_name_short, s.common_name, s.iupac_name) as name,
+           s.cas_primary, s.ec_primary, s.h_statement_codes,
+           case
+             when upper(s.index_number) = n.compact then 0
+             when replace(coalesce(s.cas_primary, ''), ' ', '') = n.compact then 1
+             when replace(coalesce(s.ec_primary, ''), ' ', '') = n.compact then 2
+             when lower(coalesce(s.display_name_short, s.common_name, s.iupac_name)) = lower(n.q) then 3
+             when lower(coalesce(s.display_name_short, s.common_name, s.iupac_name)) like n.esc || '%' escape '\' then 4
+             when lower(coalesce(s.display_name_short, s.common_name, s.iupac_name))
+                  ~ ('(^|[ \-\(\),;])' || regexp_replace(lower(n.q), '([.^$*+?()\[\]{}|\\])', '\\\1', 'g')) then 5
+             else 6
+           end as rank,
+           length(coalesce(s.display_name_short, s.common_name, s.iupac_name)) as name_len
+    from substances s cross join n
+    where n.q is not null
+      and s.index_number is not null
+      and (upper(s.index_number) = n.compact
+        or replace(coalesce(s.cas_primary, ''), ' ', '') = n.compact
+        or replace(coalesce(s.ec_primary, ''), ' ', '') = n.compact
+        or lower(coalesce(s.display_name_short, s.common_name, s.iupac_name))
+           like '%' || n.esc || '%' escape '\')
+    order by rank, name_len, name
+    limit least(coalesce(p_limit, 10), 25)
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'indexNumber', h.index_number, 'name', h.name,
+    'casPrimary', h.cas_primary, 'ecPrimary', h.ec_primary, 'hCodes', h.h_statement_codes,
+    'formsSharingCas', (
+      select count(*) from substances s2
+      where h.cas_primary is not null and s2.cas_primary = h.cas_primary),
+    'pairs', (select count(*) from annex6_classification c where c.index_number = h.index_number)
+  ) order by h.rank, h.name_len, h.name), '[]'::jsonb)
+  from hits h;
+$$;
+
+revoke all on function public.classifier_lookup(text, integer) from public, anon, authenticated;
