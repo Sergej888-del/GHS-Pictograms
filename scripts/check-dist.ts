@@ -6886,6 +6886,101 @@ const CHECKS: Check[] = [
       }
     },
   },
+
+  /**
+   * ⭐⭐⭐ №113 — СЕКРЕТ В БАНДЛЕ (session 81).
+   *
+   * До этой проверки правило «service-ключ живёт только в
+   * `functions/api/classify/_shared.ts`» держалось на одном грепе, который надо
+   * не забыть повторить: «из `src/` этот файл никто не импортирует». Греп —
+   * не сторож. Один `import` ради удобства в островe — и ключ, дающий полный
+   * обход RLS на все 70 таблиц, уезжает в `dist/_astro/*.js` и читается по
+   * Ctrl+U. Отменить такую утечку нельзя: ключ придётся ротировать.
+   *
+   * ⚠ Ищем ТРИ разные вещи, потому что утечь может каждая по-своему:
+   *   1. имя переменной (`SUPABASE_SERVICE_ROLE_KEY`) и слово `service_role` —
+   *      так выглядит сборка, затянувшая `_shared.ts` или `supabaseServer.ts`;
+   *   2. САМ КЛЮЧ: JWT, в чьём payload стоит `"role":"service_role"`. Слова
+   *      `service_role` в бандле при этом НЕТ — оно внутри base64. Проверка,
+   *      которая ищет только подстроку, такую утечку не увидит;
+   *   3. новый формат ключей Supabase (`sb_secret_…`) — у него ни JWT, ни слова.
+   *
+   * ⚠ Обходим ВЕСЬ dist, а не только html и `_astro/*.js`: секрет может осесть
+   * в json, xml, `.map` или манифесте. Двоичные расширения пропускаем по списку.
+   *
+   * ⚠ Анонимный ключ — это НЕ находка: он публичен по устройству и лежит в
+   * бандле законно. Поэтому JWT разбираются, а не считаются скопом: красным
+   * становится только `service_role`.
+   */
+  {
+    id: 'no-service-key-in-dist',
+    group: 'Секреты',
+    title: 'service-ключ Supabase не попал в собранный сайт',
+    run: async () => {
+      const TEXT_EXT = ['.html', '.js', '.mjs', '.cjs', '.json', '.txt', '.xml', '.css', '.map', '.webmanifest', '.svg']
+
+      // ⚠⚠ Файлы НЕ копятся в массив: в dist больше четырёх тысяч страниц, и
+      // сложить их тексты в память означало бы съесть гигабайты ради поиска
+      // подстроки. Каждый файл читается, проверяется и отпускается.
+      const hits: string[] = []
+      let files = 0
+      let jwtSeen = 0
+      const rolesSeen = new Set<string>()
+
+      // base64url payload JWT: разбираем и смотрим роль.
+      // ⚠ `atob` в Node 22 есть; padding base64url восстанавливаем вручную.
+      const roleOf = (payload: string): string | null => {
+        try {
+          const b64 = payload.replace(/-/g, '+').replace(/_/g, '/')
+          const json = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4))
+          const role = /"role"\s*:\s*"([^"]+)"/.exec(json)
+          return role ? role[1] : null
+        } catch { return null }
+      }
+
+      const scan = (rel: string, text: string): void => {
+        for (const needle of ['SUPABASE_SERVICE_ROLE_KEY', 'service_role']) {
+          if (text.includes(needle)) hits.push(`${rel}: строка ${needle}`)
+        }
+        // ⚠ Регулярка создаётся на каждый файл: у /g есть lastIndex, и общий
+        // экземпляр между файлами терял бы совпадения через одно.
+        for (const m of text.matchAll(/eyJ[A-Za-z0-9_-]{8,}\.(eyJ[A-Za-z0-9_-]{8,})\.[A-Za-z0-9_-]{8,}/g)) {
+          jwtSeen++
+          const role = roleOf(m[1])
+          if (role === 'service_role') hits.push(`${rel}: JWT с ролью service_role`)
+          else if (role) rolesSeen.add(role)
+        }
+        if (/\bsb_secret_[A-Za-z0-9_-]{8,}/.test(text)) hits.push(`${rel}: ключ формата sb_secret_…`)
+      }
+
+      const walk = (dir: string, prefix: string): void => {
+        for (const e of readdirSync(dir, { withFileTypes: true })) {
+          if (e.isDirectory()) { walk(join(dir, e.name), `${prefix}${e.name}/`); continue }
+          if (!TEXT_EXT.some((x) => e.name.toLowerCase().endsWith(x))) continue
+          files++
+          scan(`${prefix}${e.name}`, readFileSync(join(dir, e.name), 'utf8'))
+        }
+      }
+      walk(DIST, '')
+
+      const ok = hits.length === 0
+      return {
+        id: 'no-service-key-in-dist',
+        group: 'Секреты',
+        ok,
+        headline: ok
+          ? `чисто: ${files} текстовых файлов dist, ${jwtSeen} JWT — роли ${[...rolesSeen].sort().join(', ') || 'нет'}`
+          : `⛔ НАЙДЕН СЕКРЕТ В dist (${hits.length}) — не деплоить, ключ ротировать`,
+        detail: ok
+          ? [
+              'ищем: строку SUPABASE_SERVICE_ROLE_KEY, слово service_role, JWT с "role":"service_role", ключ sb_secret_…',
+              'анонимный ключ находкой не считается: он публичен по устройству',
+              'правило, которое это сторожит: service-ключ живёт только в functions/api/classify/_shared.ts и в бандл сайта не собирается',
+            ]
+          : [...new Set(hits)].slice(0, 30),
+      }
+    },
+  },
 ]
 // ─────────────────────────── прогон ───────────────────────────
 
