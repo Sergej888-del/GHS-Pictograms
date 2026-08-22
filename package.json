@@ -27,6 +27,7 @@
     "check:label-fit": "node --experimental-strip-types scripts/check-label-fit.ts",
     "check:live": "node --use-system-ca --experimental-strip-types scripts/check-live.ts",
     "check:classifier": "node --experimental-strip-types scripts/check-classifier.ts",
+    "check:ate": "node --experimental-strip-types scripts/check-ate.ts",
     "build:annex6-classification": "node --use-system-ca --experimental-strip-types scripts/build-annex6-classification.ts"
   },
   "dependencies": {
