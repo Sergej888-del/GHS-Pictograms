@@ -56,7 +56,13 @@ interface ProfilePair {
 
 interface ProfileScl { raw: string; needsReview: boolean }
 interface ProfileM { raw: string; value: number; scope: string | null; needsReview: boolean }
-interface ProfileAte { route: string; value: number; unit: string; form?: string | null }
+/**
+ * ⚠ `unit` и `form` НУЛЛЯЕМЫ, и это не перестраховка: одна строка Annex VI
+ * печатает ATE без единицы вовсе («ATE = 700 (gases)»), единицу выводит уже
+ * движок по форме ингаляции. Объявить здесь `string` — значит однажды
+ * напечатать в карточке «oral 700 null».
+ */
+interface ProfileAte { route: string; value: number; unit: string | null; form?: string | null }
 
 interface Profile {
   substance: { name: string | null; casPrimary: string | null; ecPrimary: string | null; hCodes: string[] | null } | null
@@ -114,9 +120,20 @@ interface Row {
 }
 
 interface LedgerTransition { text: string; kind: 'rule' | 'category' | 'status' }
+/** Действие человека, ждущее следующего расчёта. `key` — поле, по которому схлопывать повтор. */
+interface PendingAction { key?: string; text: string }
 interface LedgerEntry { id: number; actions: string[]; transitions: LedgerTransition[] }
 
-type Tab = 'composition' | 'properties' | 'result'
+/**
+ * ⚠⚠ ВКЛАДОК ДВЕ, А НЕ ТРИ (решение Сергея, s81, после первого взгляда на прод).
+ * В прототипе была третья — «03 Result», — но результат показан ВСЕГДА, справа,
+ * при любой вкладке: это прямое требование «видеть, что происходит после
+ * каждой операции». Значит третья вкладка не открывала ничего нового, она лишь
+ * прятала левую колонку и растягивала таблицу — то есть была кнопкой «пошире»
+ * с именем шага. ⛔ Управляющий элемент, который обещает содержимое и не даёт
+ * его, хуже отсутствующего.
+ */
+type Tab = 'composition' | 'properties'
 
 const STATES: { value: PhysicalState; label: string }[] = [
   { value: 'solid', label: 'Solid' },
@@ -181,6 +198,26 @@ function shortReason(reason: string | null): string {
   if (!reason) return ''
   const at = reason.indexOf('yet.')
   return at >= 0 ? reason.slice(at + 4).trim() || reason : reason
+}
+
+/**
+ * Имя для ЛЕНТЫ, не для карточки. Записи Annex VI бывают под двести символов
+ * («tetrasodium [7-(2,5-dihydroxy-KO2-7-sulfonato-6-[4-…]cuprate(II)»), и в
+ * строке ленты такое имя стоит дважды — «добавил» и «пометил», — превращая
+ * карточку в простыню. ⚠ Режем по границе слова и ставим многоточие: в
+ * карточке состава имя остаётся ПОЛНЫМ, обрезка живёт только в журнале.
+ */
+function shortName(name: string, max = 44): string {
+  if (name.length <= max) return name
+  const cut = name.slice(0, max)
+  const at = cut.lastIndexOf(' ')
+  return `${(at > max * 0.6 ? cut.slice(0, at) : cut).trimEnd()}…`
+}
+
+/** Есть ли у компонента хоть одна гармонизированная пара острой токсичности. */
+function hasHarmonisedAcute(r: Row): boolean {
+  return (r.profile?.pairs ?? []).some((p) => p.classCode.startsWith('ACUTE_TOX'))
+    || r.pairs.some((p) => p.classCode.startsWith('ACUTE_TOX'))
 }
 
 /** Эффективная концентрация строки: верх диапазона, иначе одно число. */
@@ -290,7 +327,10 @@ function WarningLine({ w }: { w: Warning }) {
 
 export default function MixtureClassifier({ registry }: Props) {
   const [tab, setTab] = useState<Tab>('composition')
-  const [helpOpen, setHelpOpen] = useState(true)
+  // ⚠ Инструкция закрыта по умолчанию: шесть шагов с пояснениями — это экран
+  // текста над рабочей панелью, и при открытом состоянии состав уезжает вниз.
+  // Закрытая она остаётся кнопкой, которую видно сразу (решение Сергея s81).
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const [rows, setRows] = useState<Row[]>([])
   const [physicalState, setPhysicalState] = useState<PhysicalState>('liquid')
@@ -318,7 +358,7 @@ export default function MixtureClassifier({ registry }: Props) {
   const [copied, setCopied] = useState(false)
 
   const [ledger, setLedger] = useState<LedgerEntry[]>([])
-  const pending = useRef<string[]>([])
+  const pending = useRef<PendingAction[]>([])
   const ledgerId = useRef(0)
 
   const classNameOf = useCallback(
@@ -326,13 +366,26 @@ export default function MixtureClassifier({ registry }: Props) {
     [registry],
   )
 
-  /** Записать действие человека. Печатается в ленте при следующем расчёте. */
-  const note = useCallback((text: string) => {
-    pending.current = [...pending.current, text]
+  /**
+   * Записать действие человека. Печатается в ленте при следующем расчёте.
+   *
+   * ⚠ `key` схлопывает повтор по ОДНОМУ И ТОМУ ЖЕ полю: переключить состояние
+   * на газ и обратно на жидкость — это ноль изменений, а лента печатала обе
+   * строки и выглядела так, будто произошло два события. Остаётся последнее.
+   */
+  const note = useCallback((text: string, key?: string) => {
+    const list = pending.current
+    pending.current = key && list.length && list[list.length - 1]?.key === key
+      ? [...list.slice(0, -1), { key, text }]
+      : [...list, { key, text }]
     setStale(true)
   }, [])
 
   const touch = useCallback(() => setStale(true), [])
+
+  const toggleWhy = useCallback((classCode: string) => {
+    setOpenWhy((s) => ({ ...s, [classCode]: !s[classCode] }))
+  }, [])
 
   /* ── поиск ────────────────────────────────────────────────────────────── */
 
@@ -381,7 +434,7 @@ export default function MixtureClassifier({ registry }: Props) {
       cas: c.casPrimary, ec: c.ecPrimary,
       profile: profiles[c.indexNumber] ?? null, formsSharingCas: c.formsSharingCas,
     })])
-    note(`added ${c.name} (${c.indexNumber})`)
+    note(`added ${shortName(c.name)} (${c.indexNumber})`)
     setQuery(''); setCandidates([])
   }
 
@@ -393,7 +446,7 @@ export default function MixtureClassifier({ registry }: Props) {
       // 3.1.3.6.2.3 на пустом месте (урок аудита №100). Флаг виден и снимается.
       knownNonhazard: !withPairs,
     })])
-    note(`added ${name} as a supplier entry`)
+    note(`added ${shortName(name)} as a supplier entry`)
     setQuery(''); setCandidates([])
   }
 
@@ -404,7 +457,7 @@ export default function MixtureClassifier({ registry }: Props) {
   const remove = (key: string) => {
     const row = rows.find((x) => x.key === key)
     setRows((r) => r.filter((x) => x.key !== key))
-    if (row) note(`removed ${row.name}`)
+    if (row) note(`removed ${shortName(row.name)}`)
   }
 
   const reset = () => {
@@ -438,7 +491,7 @@ export default function MixtureClassifier({ registry }: Props) {
         setError('The example could not be loaded — the lookup service did not answer.')
       } else {
         setRows(built); setResult(null); setLedger([]); setStale(true)
-        pending.current = ['example mixture loaded — methanol 25 %, sodium hydroxide 5 %, water 70 %']
+        pending.current = [{ text: 'example mixture loaded — methanol 25 %, sodium hydroxide 5 %, water 70 %' }]
       }
     } catch {
       setError('The example could not be loaded — the lookup service is unreachable.')
@@ -483,7 +536,13 @@ export default function MixtureClassifier({ registry }: Props) {
             name: r.name,
             conc: min,
             concMax: max != null && max > min ? max : null,
-            knownNonhazard: r.knownNonhazard,
+            // ⚠ Флаг гасится, если у компонента есть гармонизированная
+            // Acute Tox.: галочку он мог получить раньше (строка поставщика
+            // заводится с ней), а после добавления пары она перестаёт быть
+            // законной, и интерфейс её уже не показывает. Движок её и так не
+            // применит — но посылать серверу утверждение, которого на экране
+            // нет, нельзя: оно уедет в эхо входа и в отчёт для аудита.
+            knownNonhazard: r.knownNonhazard && !hasHarmonisedAcute(r),
             classifications: r.source === 'supplier' ? r.pairs : [],
           }
         }),
@@ -507,13 +566,12 @@ export default function MixtureClassifier({ registry }: Props) {
 
       const next: ClassifierResult = data.result
       const transitions = diffResults(result, next, classNameOf)
-      const actions = pending.current
+      const actions = pending.current.map((a) => a.text)
       pending.current = []
       ledgerId.current += 1
       setLedger((l) => [{ id: ledgerId.current, actions, transitions }, ...l].slice(0, 20))
       setResult(next)
       setStale(false)
-      setTab('result')
     } catch {
       setError('The classifier is unreachable from here. The API runs in the Cloudflare Pages build, not in the Astro dev server.')
     } finally {
@@ -640,7 +698,6 @@ export default function MixtureClassifier({ registry }: Props) {
         {([
           ['composition', '01', 'Composition'],
           ['properties', '02', 'Mixture properties'],
-          ['result', '03', 'Result'],
         ] as [Tab, string, string][]).map(([id, n, label]) => (
           <button key={id} type="button" className={`mx-tab ${tab === id ? 'on' : ''}`}
             onClick={() => setTab(id)} aria-current={tab === id ? 'step' : undefined}>
@@ -649,18 +706,18 @@ export default function MixtureClassifier({ registry }: Props) {
         ))}
       </nav>
 
-      <div className={`mx-grid ${tab === 'result' ? 'wide' : ''}`}>
+      <div className="mx-grid">
 
         {/* ── ЛЕВАЯ КОЛОНКА ───────────────────────────────────────────── */}
-        {tab !== 'result' && (
-          <div className="mx-side">
+        <div className="mx-side">
 
             {tab === 'composition' && (
               <>
                 <section className={`mx-panel help ${helpOpen ? '' : 'closed'}`}>
                   <button type="button" className="mx-panel-head as-button" onClick={() => setHelpOpen((v) => !v)} aria-expanded={helpOpen}>
                     <span className="mx-panel-title">How to use this calculator</span>
-                    <span className="a" aria-hidden="true">▴</span>
+                    <span className="mx-panel-side">{helpOpen ? 'hide' : '6 steps'}</span>
+                    <span className="a" aria-hidden="true">▾</span>
                   </button>
                   {helpOpen && (
                     <div className="mx-help">
@@ -812,7 +869,7 @@ export default function MixtureClassifier({ registry }: Props) {
                       {totals.remainder > 0.0001 && (
                         <label className="mx-check">
                           <input type="checkbox" checked={remainderStated}
-                            onChange={(e) => { setRemainderStated(e.target.checked); note(`remainder ${fmt(totals.remainder)} % ${e.target.checked ? 'stated non-hazardous' : 'no longer stated non-hazardous'}`) }} />
+                            onChange={(e) => { setRemainderStated(e.target.checked); note(`remainder ${fmt(totals.remainder)} % ${e.target.checked ? 'stated non-hazardous' : 'no longer stated non-hazardous'}`, 'remainder') }} />
                           <span>The remaining {fmt(totals.remainder)} % is stated non-hazardous</span>
                         </label>
                       )}
@@ -840,7 +897,7 @@ export default function MixtureClassifier({ registry }: Props) {
                       onClick={() => {
                         setPhysicalState(s.value)
                         if (!formTouched) setInhalForm(defaultForm(s.value))
-                        note(`physical state set to ${s.label.toLowerCase()}`)
+                        note(`physical state set to ${s.label.toLowerCase()}`, 'state')
                       }}>{s.label}</button>
                   ))}
                 </div>
@@ -849,7 +906,7 @@ export default function MixtureClassifier({ registry }: Props) {
                 <div className="mx-seg wrap">
                   {FORMS.map((f) => (
                     <button key={f.value} type="button" className={`mx-seg-b ${inhalForm === f.value ? 'on' : ''}`}
-                      onClick={() => { setInhalForm(f.value); setFormTouched(true); note(`inhalation form set to ${FORM_SHORT[f.value]}`) }}>
+                      onClick={() => { setInhalForm(f.value); setFormTouched(true); note(`inhalation form set to ${FORM_SHORT[f.value]}`, 'form') }}>
                       {f.label}
                     </button>
                   ))}
@@ -902,8 +959,7 @@ export default function MixtureClassifier({ registry }: Props) {
               {error && <p className="mx-note err">{error}</p>}
               {rate && <p className="mx-note">{rate.remaining} of {rate.limit} free calculations left this hour</p>}
             </div>
-          </div>
-        )}
+        </div>
 
         {/* ── ПРАВАЯ КОЛОНКА ──────────────────────────────────────────── */}
         <div className="mx-main">
@@ -998,7 +1054,24 @@ export default function MixtureClassifier({ registry }: Props) {
                       // <tr> того же класса, и без ключа на обёртке React
                       // пересобирал бы раскрытые строки при каждом расчёте.
                       <Fragment key={d.classCode}>
-                        <tr className={`mx-row ${d.status}`}>
+                        {/*
+                          ⚠⚠ КЛИКАБЕЛЬНА ВСЯ СТРОКА, а не только галочка справа
+                          (замечание Сергея, s81): «малюсенький треугольничек не
+                          видно». Треугольник остаётся ИНДИКАТОРОМ состояния и
+                          из порядка обхода убран (`aria-hidden`) — иначе на
+                          строке-кнопке появилась бы вложенная кнопка, и с
+                          клавиатуры один и тот же ряд открывался бы дважды.
+                        */}
+                        <tr
+                          className={`mx-row ${d.status} ${open ? 'on' : ''}`}
+                          role="button"
+                          tabIndex={0}
+                          aria-expanded={open}
+                          onClick={() => toggleWhy(d.classCode)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleWhy(d.classCode) }
+                          }}
+                        >
                           <td>
                             <p className="cls">{classNameOf(d.classCode)}</p>
                             <p className="sub mono">
@@ -1008,15 +1081,15 @@ export default function MixtureClassifier({ registry }: Props) {
                             </p>
                           </td>
                           <td>{d.categoryCode ? `Category ${d.categoryCode}` : '—'}</td>
-                          <td className="mono h">{d.hCode ?? '—'}</td>
+                          {/* ⚠ Прочерк — не H-код: синий цвет колонки на нём читался
+                              бы как ссылка, которой нет. */}
+                          <td className={`mono h ${d.hCode ? '' : 'none'}`}>{d.hCode ?? '—'}</td>
                           <td>
                             <span className={`mx-st ${d.status}`}>{STATUS_LABEL[d.status]}</span>
                             {d.provisional && <span className="mx-st provisional">Provisional</span>}
                           </td>
                           <td className="act">
-                            <button type="button" className={`mx-caret ${open ? 'on' : ''}`}
-                              onClick={() => setOpenWhy((s) => ({ ...s, [d.classCode]: !open }))}
-                              aria-expanded={open} aria-label={`Why ${classNameOf(d.classCode)}`}>▾</button>
+                            <span className={`mx-caret ${open ? 'on' : ''}`} aria-hidden="true">▾</span>
                           </td>
                         </tr>
                         {open && (
@@ -1145,22 +1218,37 @@ function IngredientCard({
   row: Row
   registry: RegistryClassProp[]
   onPatch: (next: Partial<Row>) => void
-  onNote: (text: string) => void
+  onNote: (text: string, key?: string) => void
   onRemove: () => void
 }) {
   const pairs = r.profile?.pairs ?? []
   const sclCount = r.profile?.scl?.length ?? 0
   const mCount = r.profile?.mFactors?.length ?? 0
   const ateCount = r.profile?.ate?.length ?? 0
+  /**
+   * ⭐⭐⭐ ГАЛОЧКА «data available, not classified» ЕСТЬ ТОЛЬКО ТАМ, ГДЕ ОНА
+   * РАБОТАЕТ (решение Сергея, s81: «вещества с классификацией галочку не имеют,
+   * это ложный путь»).
+   *
+   * Annex I 3.1.3.6.1(b) разрешает не считать ингредиент, который **считается
+   * не обладающим острой токсичностью** (вода, сахар). Вещество с гармонизированной
+   * `Acute Tox.` таковым не считается по определению — и `ate.ts` после аудита
+   * №100 ведёт себя строго так: `knownNonhazard` НЕ перебивает путь, по которому
+   * данные есть. Значит галочка на таком веществе молча ничего не делает.
+   * ⛔ Управляющий элемент, который выглядит работающим и не работает, — хуже
+   * отсутствующего: человек решит, что учёл воду, а учтён токсикант.
+   */
+  const harmonisedAcute = hasHarmonisedAcute(r)
+  const longName = r.name.length > 48
 
   return (
     <div className="mx-ing">
       <div className="mx-ing-top">
         <div className="mx-ing-id">
           {r.source === 'supplier'
-            ? <input className="mx-ing-name-input" value={r.name} aria-label="Ingredient name"
+            ? <input className={`mx-ing-name-input ${longName ? 'long' : ''}`} value={r.name} aria-label="Ingredient name"
                 onChange={(e) => onPatch({ name: e.target.value })} />
-            : <p className="mx-ing-name">{r.name}</p>}
+            : <p className={`mx-ing-name ${longName ? 'long' : ''}`}>{r.name}</p>}
           <p className="mx-ing-meta mono">
             {r.source === 'annex6'
               ? <>{r.indexNumber}{r.cas ? ` · CAS ${r.cas}` : ''}{r.formsSharingCas > 1 ? ` · ${r.formsSharingCas} forms share this CAS` : ''}</>
@@ -1171,7 +1259,7 @@ function IngredientCard({
           <input className="mx-num" inputMode="decimal" value={r.conc} aria-label="Concentration"
             onChange={(e) => onPatch({ conc: e.target.value })} />
           <span className="pc">%</span>
-          <button type="button" className="mx-x" onClick={onRemove} aria-label={`Remove ${r.name}`}>×</button>
+          <button type="button" className="mx-x" onClick={onRemove} aria-label={`Remove ${shortName(r.name)}`}>×</button>
         </div>
       </div>
 
@@ -1191,11 +1279,21 @@ function IngredientCard({
 
       {r.source === 'annex6' ? (
         <div className="mx-chips">
+          {/*
+            ⚠⚠ H-КОД ОБЯЗАН СТОЯТЬ РЯДОМ С КЛАССОМ. Дословная ячейка Annex VI
+            печатает «Acute Tox. 4» — БЕЗ пути, потому что путь в этой колонке
+            кодируется H-кодом (H302 оральный, H312 кожный, H332 ингаляционный).
+            В классификаторе смесей путь и есть главное: без него строка состава
+            не говорит, во что именно ингредиент внесёт вклад.
+          */}
           {pairs.map((p, i) => (
-            <span key={i} className={`mx-chip ${p.star ? 'star' : ''}`}>{p.raw}</span>
+            <span key={i} className={`mx-chip ${p.star ? 'star' : ''}`}>
+              {p.raw}{p.hCode && !p.raw.includes(p.hCode) ? ` · ${p.hCode}` : ''}
+            </span>
           ))}
           {sclCount > 0 && <span className="mx-chip count">{sclCount} SCL</span>}
-          {mCount > 0 && <span className="mx-chip count">{mCount} M</span>}
+          {/* ⚠ «1 M» читается как «одномолярный». Пишем словом. */}
+          {mCount > 0 && <span className="mx-chip count">{mCount} M-factor{mCount > 1 ? 's' : ''}</span>}
           {ateCount > 0 && <span className="mx-chip count">{ateCount} ATE</span>}
           {!pairs.length && <span className="mx-chip none">no harmonised classification in Annex VI</span>}
         </div>
@@ -1211,17 +1309,27 @@ function IngredientCard({
         </>
       )}
 
-      <label className="mx-check">
-        <input type="checkbox" checked={r.knownNonhazard}
-          onChange={(e) => {
-            onPatch({ knownNonhazard: e.target.checked })
-            onNote(`${r.name} ${e.target.checked ? 'marked “data available, not classified for acute toxicity”' : 'no longer marked “data available, not classified”'}`)
-          }} />
-        <span>
-          Data available, not classified for acute toxicity (3.1.3.6.1(b) — out of the formula and out of
-          Σ C<sub>unknown</sub>)
-        </span>
-      </label>
+      {harmonisedAcute ? (
+        <p className="mx-hint">
+          Acute toxicity is harmonised for this ingredient, so it enters the additivity formula by its own
+          category — it cannot be declared outside it under 3.1.3.6.1(b).
+        </p>
+      ) : (
+        <label className="mx-check">
+          <input type="checkbox" checked={r.knownNonhazard}
+            onChange={(e) => {
+              onPatch({ knownNonhazard: e.target.checked })
+              onNote(
+                `${shortName(r.name)} ${e.target.checked ? 'marked “data available, not classified for acute toxicity”' : 'no longer marked “data available, not classified”'}`,
+                `nonhazard:${r.key}`,
+              )
+            }} />
+          <span>
+            Data available, not classified for acute toxicity (3.1.3.6.1(b) — out of the formula and out of
+            Σ C<sub>unknown</sub>)
+          </span>
+        </label>
+      )}
 
       {r.profile?.notes?.length ? (
         <p className="mx-hint">Annex VI notes, shown but not applied: {r.profile.notes.join('; ')}</p>
@@ -1256,7 +1364,7 @@ function SupplierPairs({
               <span key={`${p.classCode}-${p.categoryCode}`} className="mx-chip">
                 {c?.name ?? p.classCode} {p.categoryCode}{cat?.h ? ` · ${cat.h}` : ''}
                 <button type="button" className="mx-x small"
-                  onClick={() => onChange(pairs.filter((_, j) => j !== i), `${name}: removed ${p.classCode} ${p.categoryCode}`)}
+                  onClick={() => onChange(pairs.filter((_, j) => j !== i), `${shortName(name)}: removed ${p.classCode} ${p.categoryCode}`)}
                   aria-label="Remove classification">×</button>
               </span>
             )
@@ -1274,7 +1382,7 @@ function SupplierPairs({
             const cat = e.target.value
             if (!cat) return
             if (pairs.some((p) => p.classCode === cls && p.categoryCode === cat)) return
-            onChange([...pairs, { classCode: cls, categoryCode: cat }], `${name}: added ${cls} ${cat}`)
+            onChange([...pairs, { classCode: cls, categoryCode: cat }], `${shortName(name)}: added ${cls} ${cat}`)
           }}>
           <option value="">— category —</option>
           {cats.map((c) => <option key={c.code} value={c.code}>{c.code}{c.h ? ` · ${c.h}` : ''}</option>)}
