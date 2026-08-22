@@ -39,6 +39,25 @@ const flagship = [
     cta: 'Classify a Mixture →',
   },
   {
+    // ⚠ Синяя лестница — это раздел `class` из sectionAccent.ts (классификация:
+    // классы опасности, H/P-фразы, ATE, классификатор смесей). ⚠⚠ Тот же синий
+    // стоит у карточки «UN Number Reference», хотя по карте разделов транспорт —
+    // голубой `transport`: этот хаб раскрашивался в session 12, ДО появления
+    // карты, и цвета здесь до сих пор выбраны «для разнообразия», а не по теме
+    // (ATE — тоже раздел `class`, а карточка бирюзовая). Это расхождение хаба
+    // с картой, а не ошибка этой строки; нормализовать все шесть карточек —
+    // отдельное решение Сергея.
+    name: 'CLP Mixture Classifier',
+    href: '/tools/clp-mixture-classifier/',
+    badge: 'Mixture classification',
+    acc: '#1d4ed8',
+    line: '#bfdbfe',
+    soft: '#eff6ff',
+    ink: '#1d4ed8',
+    desc: 'Classify a whole mixture under EU CLP and get the hazard classes for SDS Section 2. Pulls each ingredient’s harmonised Annex VI classification, applies specific and generic concentration limits, and prints the rule behind every line — quoted from the regulation, with the contribution of each ingredient and an honest “not computed” for every class it has not evaluated.',
+    cta: 'Open the classifier →',
+  },
+  {
     name: 'GHS Pictogram Selector',
     href: '/pictogram-selector/',
     badge: 'Jurisdiction-aware',
@@ -103,7 +122,7 @@ const itemList = {
 ---
 <Layout
   title="Free GHS Tools & Software — Label Maker, Calculators, Selector"
-  description="14 free online GHS compliance tools: ATE mixture calculator, chemical storage compatibility matrix, label maker, pictogram selector, 9 classification calculators (flash point, LD50, pH, aquatic toxicity) and a GHS vs ADR/DOT inspector. No signup, no install — built on a 4,000+ substance CLP database."
+  description="15 free online GHS compliance tools: CLP mixture classifier, ATE mixture calculator, chemical storage compatibility matrix, label maker, pictogram selector, UN number reference and 9 classification calculators (flash point, LD50, pH, aquatic toxicity). No signup, no install — built on a 4,000+ substance CLP database."
   canonical="https://ghspictograms.com/tools/"
 >
   {/* Animated navy hero (v2) */}
@@ -121,7 +140,10 @@ const itemList = {
         substances with harmonised CLP classifications.
       </p>
       <div class="hub-hero-chips">
-        <span class="hub-hero-chip">14 tools</span>
+        {/* ⚠ Счётчик руками: 6 флагманов + 9 калькуляторов = 15. Число стоит
+            ещё и в meta description — менять ОБА (правило «не заводить
+            расхождение счётчика», §7 CLAUDE.md). */}
+        <span class="hub-hero-chip">15 tools</span>
         <span class="hub-hero-chip">4,178 substances</span>
         <span class="hub-hero-chip">CLP Annex VI data</span>
       </div>

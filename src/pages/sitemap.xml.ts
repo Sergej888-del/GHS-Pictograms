@@ -36,6 +36,11 @@ const STATIC_PAGES = [
   { url: '/blog/', changefreq: 'weekly', priority: '0.8' },
   { url: '/tools/', changefreq: 'weekly', priority: '0.85' },
   { url: '/tools/ate-mixture-calculator/', changefreq: 'weekly', priority: '0.85' },
+  // ⚠ session 81: классификатор смесей. Забыть эту строку было НЕ безобидно —
+  // `check:seo` покраснел двумя проверками сразу (sitemap-both-ways и orphans),
+  // и это правильное поведение: страница без записи в карте и без входящей
+  // ссылки не существует для краулера, сколько бы её ни собрали.
+  { url: '/tools/clp-mixture-classifier/', changefreq: 'weekly', priority: '0.85' },
   { url: '/ghs-label-maker/', changefreq: 'weekly', priority: '0.9' },
   { url: '/ghs-label-maker/templates/', changefreq: 'monthly', priority: '0.8' },
   { url: '/pictogram-selector/', changefreq: 'weekly', priority: '0.85' },

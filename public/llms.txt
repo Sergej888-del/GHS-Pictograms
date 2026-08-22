@@ -1,10 +1,11 @@
 # GHS Pictograms
 
-> GHS pictogram library, substance SDS library, label builder, ATE mixture calculator, UN number transport reference and compliance hub for chemical safety professionals serving GHS, CLP, OSHA HCS 2024 and SDS workflows.
+> GHS pictogram library, substance SDS library, label builder, CLP mixture classifier with a full audit trail, ATE mixture calculator, UN number transport reference and compliance hub for chemical safety professionals serving GHS, CLP, OSHA HCS 2024 and SDS workflows.
 
 ## Tools
 
 - [Chemical Storage Compatibility](https://ghspictograms.com/tools/chemical-storage-compatibility/): Check GHS storage segregation for any substance — never-store/keep-separate verdicts across 13 hazard classes, with ADR transport data and partner-specific reaction gases
+- [CLP Mixture Classifier](https://ghspictograms.com/tools/clp-mixture-classifier/): Classify a whole mixture under EU CLP Annex I and get the hazard classes and categories for SDS Section 2 — each ingredient's harmonised Annex VI classification pulled automatically, specific concentration limits taken ahead of generic ones, and every result line carrying the rule it rests on quoted verbatim from the regulation, the ingredient-by-ingredient contributions, and an explicit "not computed in this version" for each class the engine has not evaluated
 - [ATE Mixture Calculator](https://ghspictograms.com/tools/ate-mixture-calculator/): Compute the GHS/CLP Acute Toxicity Estimate of a mixture — 5 routes (oral, dermal, inhalation as gas/vapour/dust), automatic ATE from harmonised Annex VI H-codes, the 10% unknown-ingredient rule, and the resulting label outcome (pictogram, signal word, H/P statements)
 - [GHS Label Constructor](https://ghspictograms.com/ghs-label-maker/): Build CLP-compliant chemical labels with pictograms, signal words, H/P-statements across 5 volume tiers
 - [Substance Database](https://ghspictograms.com/substances/): Search 4,178 CLP Annex VI substances with full GHS classification, pictograms and signal words
