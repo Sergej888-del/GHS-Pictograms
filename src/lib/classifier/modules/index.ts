@@ -11,6 +11,7 @@
 
 import type { ClassifierModule, ModuleOutput } from '../types.ts';
 import { acuteToxModule } from './acuteTox.ts';
+import { cutoffModule } from './cutoff.ts';
 
 /** Заглушка: объявляет владение классами, ничего не считает. */
 function stub(key: string, title: string, classes: string[]): ClassifierModule {
@@ -21,17 +22,11 @@ function stub(key: string, title: string, classes: string[]): ClassifierModule {
 }
 
 /**
- * A4 — классы «по отсечке» (design-doc §5.4). Следующий модуль в очереди:
- * ни одной формулы, но прогоняет весь контур — lookup, пары A0, приоритет SCL,
- * провенанс, предупреждения, выход в Label Maker.
+ * A4 — классы «по отсечке» (design-doc §5.4) живёт в `./cutoff.ts`. Заход s82
+ * считает восемь классов (CMR, ED HH/ENV, PBT/vPvB, PMT/vPvM, озон); остальные
+ * пять он держит за собой и печатает `not_computed` с конкретной причиной —
+ * см. `DEFERRED_CLASSES` там же.
  */
-export const cutoffModule = stub('A4', 'Cut-off classes', [
-  'MUTAGEN', 'CARCINOGEN', 'REPRO_TOX',
-  'SKIN_SENS', 'RESP_SENS',
-  'STOT_SE', 'STOT_RE',
-  'ASPIRATION',
-  'ED_HH', 'ED_ENV', 'PBT_VPVB', 'PMT_VPVM', 'OZONE',
-]);
 
 /** A3 — водная среда: суммирование Tables 4.1.1/4.1.2 и M-факторы. */
 export const aquaticModule = stub('A3', 'Aquatic environment', ['AQUATIC_ACUTE', 'AQUATIC_CHRONIC']);
@@ -58,4 +53,4 @@ export const DEFAULT_MODULES: ClassifierModule[] = [
   physicalModule,
 ];
 
-export { acuteToxModule };
+export { acuteToxModule, cutoffModule };
