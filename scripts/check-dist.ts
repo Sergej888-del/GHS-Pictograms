@@ -2899,6 +2899,11 @@ const CHECKS: Check[] = [
         { rel: 'tools/ate-mixture-calculator/index.html', sid: 'gpmgmt' },
         { rel: 'tools/chemical-storage-compatibility/index.html', sid: 'sttool' },
         { rel: 'p-statements/selector/index.html', sid: 'pselect' },
+        // ⚠ Классификатор смесей (№124, s82). Свой sid, а не `gpmgmt` соседнего
+        // ATE: сюда приходят классифицировать состав целиком, а не считать один
+        // класс, и путь дальше другой — не «управлять библиотекой SDS», а
+        // «вписать полученную классификацию в раздел 2».
+        { rel: 'tools/clp-mixture-classifier/index.html', sid: 'gpclass' },
       ]
 
       const problems: string[] = []
@@ -6997,6 +7002,64 @@ const CHECKS: Check[] = [
               'заведено в s82 после дефекта s81: зелёный чек-лист не видит того, чего в HTML нет',
             ]
           : detail,
+      }
+    },
+  },
+
+  /**
+   * ⭐⭐ СЧЁТЧИК ИНСТРУМЕНТОВ СТОИТ В ЧЕТЫРЁХ МЕСТАХ (session 82).
+   *
+   * Число «сколько у нас инструментов» напечатано на главной дважды
+   * (подзаголовок секции и ссылка «All N tools») и на `/tools/` дважды (чип
+   * шапки и meta description). В s81 инструмент добавили и поправили ДВА места
+   * из четырёх — главная полгода обещала 14 при пятнадцати живых. Ни одна из
+   * 114 проверок этого не заметила, потому что каждая сверяет напечатанное с
+   * базой, а числа инструментов в базе нет.
+   *
+   * ⚠ Проверка НЕ знает, сколько инструментов «на самом деле», и не должна:
+   * подсчёт карточек хаба был бы вторым источником истины и разошёлся бы с
+   * замыслом (девять калькуляторов по пиктограммам считаются одним пунктом или
+   * девятью — это решение человека). Она сторожит РОВНО ОДНО: чтобы все четыре
+   * места говорили одно и то же. Разойдутся — красная.
+   */
+  {
+    id: 'tools-counter',
+    group: 'Tools',
+    title: 'Счётчик инструментов одинаков на главной и на хабе (4 места)',
+    run: async () => {
+      const home = readPage('index.html')
+      const hub = readPage('tools/index.html')
+      if (!home || !hub) {
+        return { id: 'tools-counter', group: 'Tools', ok: false, headline: 'нет index.html или tools/index.html', detail: [] }
+      }
+      const spots: { where: string; re: RegExp; html: string }[] = [
+        { where: 'главная · подзаголовок секции', re: /(\d+)\s+free tools\./, html: home },
+        { where: 'главная · ссылка «All N tools»', re: /All\s+(\d+)\s+tools/, html: home },
+        { where: '/tools/ · чип шапки', re: /hub-hero-chip">(\d+)\s+tools</, html: hub },
+        { where: '/tools/ · meta description', re: /(\d+)\s+free online GHS compliance tools/, html: hub },
+      ]
+      const found: { where: string; n: string | null }[] = spots.map((s) => {
+        const m = s.re.exec(s.html)
+        return { where: s.where, n: m ? m[1] : null }
+      })
+      const missing = found.filter((f) => f.n === null)
+      const values = [...new Set(found.filter((f) => f.n !== null).map((f) => f.n as string))]
+      const ok = missing.length === 0 && values.length === 1
+      return {
+        id: 'tools-counter',
+        group: 'Tools',
+        ok,
+        headline: ok
+          ? `все четыре места говорят «${values[0]} tools»`
+          : missing.length
+            ? `счётчик не найден в ${missing.length} из 4 мест`
+            : `счётчики разошлись: ${values.join(' / ')}`,
+        detail: ok
+          ? [
+              'проверка сторожит СОГЛАСИЕ мест, а не «правильное» число: сколько считать инструментами — решение человека',
+              ...found.map((f) => `${f.where}: ${f.n}`),
+            ]
+          : found.map((f) => `${f.where}: ${f.n ?? 'НЕ НАЙДЕН — изменилась формулировка?'}`),
       }
     },
   },
