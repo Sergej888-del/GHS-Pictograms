@@ -368,7 +368,20 @@ export function applyProfiles(input: MixtureInput, profiles: ProfileMap): void {
       continue;
     }
     if (p.substance) {
-      c.name = c.name || p.substance.name || p.substance.iupacName || c.name;
+      // ⭐⭐⭐ №125 — ИМЯ КОМПОНЕНТА ANNEX VI БЕРЁТСЯ ИЗ БАЗЫ, А НЕ ОТ БРАУЗЕРА.
+      // Здесь стояло `c.name || p.substance.name`, и присланное имя всегда
+      // побеждало. В интерфейсе это незаметно (имя приходит из карточки
+      // поиска, то есть из той же базы), но через короткую ссылку или прямой
+      // POST в отчёт уезжало любое имя — а живая проба s83 показала, куда оно
+      // доходит: EUH208 печатает «Contains <name>» НА ЭТИКЕТКЕ (Annex II 2.8),
+      // где имя вещества и есть суть фразы. Правовой идентификатор не может
+      // приходить из запроса — то же правило, что у классификаций (§9 п.7
+      // каркаса): Function подтягивает их по `index_number` и не верит клиенту.
+      // ⚠ `p.substance.name` — это `coalesce(display_name_short, common_name,
+      // iupac_name)` из RPC, то есть ЧЕЛОВЕЧЕСКОЕ имя по тому же правилу, что
+      // на всех страницах сайта. Сырую строку Annex VI печатать нельзя: у
+      // 615-005-00-9 это четыре имени с [1]…[4] и переводами строк.
+      c.name = p.substance.name || p.substance.iupacName || c.name;
       c.casPrimary = p.substance.casPrimary;
       c.ecPrimary = p.substance.ecPrimary;
       c.hCodes = p.substance.hCodes;
