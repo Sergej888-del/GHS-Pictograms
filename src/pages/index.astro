@@ -1731,18 +1731,32 @@ const roles = [
             <div>
               <div class="hp-class-table">
                 <div class="hp-class-head"><span>Hazard class</span><span>H</span><span>Rule</span></div>
-                <div class="hp-class-row">
+                {/* ⚠⚠ `data-class` — не украшение разметки, а ПОДПИСЬ СТРОКИ ДЛЯ
+                    СТОРОЖА. `classifier-showcase` в `check:dist` читает эти коды
+                    и спрашивает у самих модулей, считается ли класс: строка с
+                    пометкой `off` обязана называть непосчитанный класс, строка
+                    без пометки — посчитанный. Убрать атрибут — значит ослепить
+                    проверку, и витрина снова начнёт стареть молча. */}
+                <div class="hp-class-row" data-class="REPRO_TOX">
                   <p class="cls">Reproductive toxicity 1B</p>
                   <span class="h">H360</span>
                   <p class="rule">Table 3.7.2 · ≥ 0,3 %</p>
                 </div>
-                <div class="hp-class-row">
+                <div class="hp-class-row" data-class="REPRO_TOX">
                   <p class="cls">+ effects on or via lactation</p>
                   <span class="h">H362</span>
                   <p class="rule">Table 3.7.2 · additional category</p>
                 </div>
-                <div class="hp-class-row off">
-                  <p class="cls">Aspiration hazard</p>
+                {/* ⚠⚠ ЭТА СТРОКА ПЕРЕЕЗЖАЕТ ВМЕСТЕ С ДВИЖКОМ. В s82 здесь стояла
+                    аспирация — она тогда действительно не считалась. Заход A4-2
+                    (s83) её посчитал, и строка стала бы неправдой на главной
+                    странице сайта. Сейчас здесь класс модуля A2, который ещё не
+                    написан; когда A2 выйдет (s85), строку снова надо будет
+                    заменить на честно непосчитанный класс — иначе витрина
+                    начнёт занижать инструмент вместо того, чтобы объявлять его
+                    границу. */}
+                <div class="hp-class-row off" data-class="SKIN_CORR_IRRIT">
+                  <p class="cls">Skin corrosion / irritation</p>
                   <span class="h">—</span>
                   <p class="rule">not computed in this version</p>
                 </div>

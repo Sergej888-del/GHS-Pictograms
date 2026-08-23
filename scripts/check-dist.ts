@@ -55,6 +55,12 @@ import { productNameVariants, defaultLabelIdentifiers } from '../src/lib/labelPr
 import {
   buildOfficialNames, NAME_TRANSLATION_COLUMNS, type NameTranslationRow,
 } from '../src/lib/nameForms'
+// ⚠⚠ Что движок УМЕЕТ считать, берётся из самого движка, а не из головы автора
+// проверки. Витрина на главной обещает классы; список обещаний обязан сверяться
+// с реестром модулей, иначе он стареет молча — ровно так строка «Aspiration
+// hazard · not computed» пережила заход A4-2 и осталась бы неправдой (s83).
+import { acuteToxModule } from '../src/lib/classifier/modules/acuteTox'
+import { CUTOFF_PLANS } from '../src/lib/classifier/modules/cutoff'
 import {
   erratumFor, erratumLanguages, erratumCitation,
   ERRATA_INDEX_NUMBERS, ERRATA_COUNT, ERRATA_TABLE_NOTE,
@@ -7083,6 +7089,81 @@ const CHECKS: Check[] = [
               ...hits.map((h) => `${h.page}: ${h.context}`),
             ]
           : hits.map((h) => `${h.page}: [${h.n}] ${h.context}`),
+      }
+    },
+  },
+
+  /**
+   * ⭐⭐⭐ ВИТРИНА КЛАССИФИКАТОРА НА ГЛАВНОЙ СВЕРЯЕТСЯ С РЕЕСТРОМ МОДУЛЕЙ (s83).
+   *
+   * Карточка на главной печатает выдержку настоящего ответа движка: две строки
+   * посчитанных классов и одну — непосчитанного («витрина обязана показывать и
+   * неудачное», урок s76/s82). Обе половины стареют по-разному и обе — молча:
+   * в s82 третьей строкой стояла аспирация, в s83 движок её посчитал, и главная
+   * страница сайта начала занижать собственный инструмент. Ни одна зелёная
+   * проверка этого не увидела — нашлось чтением файла руками.
+   *
+   * ⚠ Поэтому проверка НЕ перечисляет ожидаемые классы (это подтверждало бы
+   * ожидание автора, а не факт — главный урок s82). Она читает `data-class`
+   * каждой строки витрины и спрашивает у САМИХ МОДУЛЕЙ, считается этот класс
+   * или нет: строка с пометкой `off` обязана называть НЕпосчитанный класс,
+   * строка без пометки — посчитанный. Плюс обе половины должны быть на месте.
+   */
+  {
+    id: 'classifier-showcase',
+    group: 'Classifier',
+    title: 'Витрина классификатора на главной согласована с реестром модулей',
+    run: async () => {
+      const rel = 'index.html'
+      const html = readPage(rel)
+      if (!html) {
+        return { id: 'classifier-showcase', group: 'Classifier', ok: false, headline: `нет ${rel}`, detail: [] }
+      }
+
+      const computed = new Set<string>([
+        ...acuteToxModule.classes,
+        ...CUTOFF_PLANS.map((p) => p.classCode),
+      ])
+
+      // Сплошной обход, а не список мест: ищутся ВСЕ строки витрины.
+      const RE = /<div class="(hp-class-row[^"]*)"[^>]*data-class="([A-Za-z0-9_]+)"/g
+      const rows: { off: boolean; code: string; label: string }[] = []
+      for (const m of html.matchAll(RE)) {
+        const at = m.index ?? 0
+        rows.push({
+          off: m[1].split(/\s+/).includes('off'),
+          code: m[2],
+          // Текст вокруг — чтобы красная проверка САМА называла место.
+          label: html.slice(at, at + 260).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 90),
+        })
+      }
+
+      const wrongOff = rows.filter((r) => r.off && computed.has(r.code))
+      const wrongOn = rows.filter((r) => !r.off && !computed.has(r.code))
+      const offCount = rows.filter((r) => r.off).length
+      const onCount = rows.length - offCount
+
+      const problems: string[] = []
+      if (!rows.length) problems.push('строк витрины не найдено — изменилась разметка или пропал data-class')
+      if (rows.length && !offCount) problems.push('в витрине не осталось строки про НЕпосчитанный класс — она показывает только удачное')
+      if (rows.length && !onCount) problems.push('в витрине не осталось ни одной посчитанной строки')
+      for (const r of wrongOff) problems.push(`строка «not computed» называет класс ${r.code}, который движок УЖЕ считает: ${r.label}`)
+      for (const r of wrongOn) problems.push(`строка результата называет класс ${r.code}, которого движок НЕ считает: ${r.label}`)
+
+      const ok = problems.length === 0
+      return {
+        id: 'classifier-showcase',
+        group: 'Classifier',
+        ok,
+        headline: ok
+          ? `${rows.length} строк витрины: ${onCount} посчитанных, ${offCount} непосчитанных — все согласованы с ${computed.size} классами модулей`
+          : problems[0],
+        detail: ok
+          ? [
+              'принадлежность класса берётся из реестра модулей, а не из списка в проверке',
+              ...rows.map((r) => `${r.off ? 'not computed' : 'computed  '} · ${r.code} · ${r.label}`),
+            ]
+          : problems,
       }
     },
   },
