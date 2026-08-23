@@ -35,6 +35,15 @@ export const prerender = true
 import Layout from '../../layouts/Layout.astro'
 import MixtureClassifier from '../../components/MixtureClassifier'
 import { supabase } from '../../lib/supabase'
+// ⚠⚠ Число посчитанных классов НЕ ПИШЕТСЯ РУКАМИ. Захардкоженное «11 классов»
+// — это обязательство перечитывать страницу после каждого дописанного модуля,
+// а такие обязательства не выполняются (урок `oxidizers.md`: «Of the 50
+// oxidizers…»). Берём его у самих модулей: A1 отвечает за три пути острой
+// токсичности, A4 — за столько классов, сколько строк в его плане.
+// ⛔ Оба модуля — чистый TypeScript без единого обращения к базе; сюда они
+// тянутся на СБОРКЕ и в браузер не уезжают.
+import { acuteToxModule } from '../../lib/classifier/modules/acuteTox.ts'
+import { CUTOFF_PLANS } from '../../lib/classifier/modules/cutoff.ts'
 
 const SITE = 'https://ghspictograms.com'
 const canonical = `${SITE}/tools/clp-mixture-classifier/`
@@ -139,8 +148,12 @@ const categoryCount = mapping.length
 
 /* ── контракт версии (design-doc §8) ─────────────────────────────────────── */
 
+/** Сколько классов реестра инструмент действительно считает — из самих модулей. */
+const computedClasses = acuteToxModule.classes.length + CUTOFF_PLANS.length
+
 const DOES = [
   'Acute toxicity — oral, dermal and inhalation, by the additivity formula of Annex I 3.1.3.6.1, with the 10 % unknown-toxicity correction and harmonised ATE values from Annex VI.',
+  'The classes decided by a concentration cut-off on a single ingredient: carcinogenicity, germ cell mutagenicity, reproductive toxicity — including the separate category for effects on or via lactation — endocrine disruption for human health and for the environment, PBT/vPvB, PMT/vPvM, and hazard to the ozone layer.',
   'Provenance on every line: the rule key, the verbatim text of the rule as the regulation prints it, and the contribution of each ingredient.',
   'Specific concentration limits ahead of generic ones — an ingredient carrying its own SCL in Annex VI is judged by that SCL, and the generic limit is shown beside it as checked and outranked.',
   'An honest, named gap for every class this version does not compute yet, with the ingredients of your mixture that carry it.',
@@ -169,7 +182,7 @@ const faq = [
   {
     q: 'What does the calculator compute today, and what does it not?',
     a:
-      'Today it computes acute toxicity across the oral, dermal and inhalation routes, with the full additivity formula, the 10 % unknown-toxicity correction and harmonised ATE values from Annex VI. Every other hazard class is printed with an explicit “not computed in this version”, the module that will own it, and the ingredients in your mixture that carry that class — so an empty cell can never be mistaken for “not hazardous”. Physical hazards will stay uncomputed permanently: they require testing, and no engine can derive them from a composition.',
+      `Today it computes ${computedClasses} of the ${classCount} hazard classes in the registry: acute toxicity across the oral, dermal and inhalation routes, with the full additivity formula, the 10 % unknown-toxicity correction and harmonised ATE values from Annex VI; and the classes settled by a concentration cut-off on a single ingredient — carcinogenicity, germ cell mutagenicity, reproductive toxicity with its separate category for effects on or via lactation, endocrine disruption for human health and for the environment, PBT/vPvB, PMT/vPvM and hazard to the ozone layer. Every other hazard class is printed with an explicit “not computed in this version”, the module that will own it, and the ingredients in your mixture that carry that class — so an empty cell can never be mistaken for “not hazardous”. Skin and eye corrosion, sensitisation, specific target organ toxicity, aspiration and the aquatic classes are next; physical hazards will stay uncomputed permanently, because they require testing and no engine can derive them from a composition.`,
   },
   {
     q: 'What is a specific concentration limit, and why does it outrank the generic limit?',

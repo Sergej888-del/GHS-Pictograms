@@ -1085,10 +1085,30 @@ export default function MixtureClassifier({ registry }: Props) {
                               {` · module ${d.module}`}
                             </p>
                           </td>
-                          <td>{d.categoryCode ? `Category ${d.categoryCode}` : '—'}</td>
+                          {/*
+                            ⚠⚠ СОПУТСТВУЮЩИЕ КАТЕГОРИИ ПЕЧАТАЮТСЯ ЗДЕСЬ ЖЕ (s82).
+                            Внутри класса CLP бывают категории, которые не спорят
+                            за место, а складываются: Repr. 1A/1B/2 + «Lact.»
+                            (H362), STOT SE «3» + «3 narcotic» (H336). Они уже
+                            уехали в `labelPairs` — значит стоят на этикетке, в
+                            копии для SDS и в ссылке на конструктор. Строка,
+                            которая о них молчит, врала бы читателю о том, что
+                            инструмент посчитал.
+                          */}
+                          <td>
+                            {d.categoryCode ? `Category ${d.categoryCode}` : '—'}
+                            {(d.additional ?? []).map((a) => (
+                              <p key={a.categoryCode} className="sub">+ {a.categoryCode}</p>
+                            ))}
+                          </td>
                           {/* ⚠ Прочерк — не H-код: синий цвет колонки на нём читался
                               бы как ссылка, которой нет. */}
-                          <td className={`mono h ${d.hCode ? '' : 'none'}`}>{d.hCode ?? '—'}</td>
+                          <td className={`mono h ${d.hCode ? '' : 'none'}`}>
+                            {d.hCode ?? '—'}
+                            {(d.additional ?? []).map((a) => (
+                              a.hCode ? <p key={a.categoryCode} className="sub mono">{a.hCode}</p> : null
+                            ))}
+                          </td>
                           <td>
                             <span className={`mx-st ${d.status}`}>{STATUS_LABEL[d.status]}</span>
                             {d.provisional && <span className="mx-st provisional">Provisional</span>}
@@ -1464,6 +1484,34 @@ function Why({ decision: d }: { decision: Decision }) {
           </tbody>
         </table>
       )}
+
+      {/*
+        ⚠⚠ У СОПУТСТВУЮЩЕЙ КАТЕГОРИИ СВОЁ ПРАВИЛО И СВОЯ ЦИТАТА. Она не
+        приписка к строке выше: H362 — самостоятельная классификация, и
+        читатель обязан увидеть, каким пределом она получена, ровно как у
+        основной. Контракт провенанса на неё распространяется целиком.
+      */}
+      {(d.additional ?? []).map((a) => (
+        <div className="mx-why-extra" key={a.categoryCode}>
+          <p className="mx-lab">
+            Additional category of the same class: {a.categoryCode}
+            {a.hCode ? ` · ${a.hCode}` : ''}
+          </p>
+          <p className="mx-why-rule mono">
+            <b>{a.ruleKey ?? 'no rule key'}</b>
+            {a.sourceRef && <span> · {a.sourceRef}</span>}
+            {a.marker && <span> · {a.marker}</span>}
+          </p>
+          {a.raw && <q className="mx-quote">{a.raw}</q>}
+          {a.aggregate && (
+            <p className="mx-formula mono">
+              {a.aggregate.expr}
+              {a.aggregate.threshold != null && ` — threshold ${a.aggregate.threshold}${a.aggregate.unit ? ` ${a.aggregate.unit}` : ''}`}
+            </p>
+          )}
+          {a.warnings.map((w, i) => <WarningLine key={i} w={w} />)}
+        </div>
+      ))}
 
       {d.candidates?.length ? (
         <div className="mx-cands-checked">

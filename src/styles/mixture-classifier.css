@@ -724,6 +724,15 @@ details.mx-panel.help[open] .mx-panel-head.as-button .a { transform: rotate(180d
   color: var(--ink-3);
 }
 
+/* Сопутствующая категория того же класса в раскрытии «Why» (session 82).
+   Отделена пунктиром: без границы её правило читалось бы как продолжение
+   правила основной строки, а это два разных предела и два разных H-кода. */
+.mx-tool .mx-why-extra {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+
 /* ── общее ───────────────────────────────────────────────────────────────── */
 
 .mx-tool .mono { font-family: var(--font-mono); }
