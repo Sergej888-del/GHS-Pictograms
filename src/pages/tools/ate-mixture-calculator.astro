@@ -130,6 +130,18 @@ const jsonLd = {
         point estimates follow Table 3.1.2; cut-off ranges follow Table 3.1.1. This tool is a computed aid for SDS
         authoring — always review the outcome against each ingredient's safety data sheet and Annex VI entry.
       </p>
+      {/* ⚠ №111 — статическая половина связи с классификатором (s82). Внутри
+          острова такая же плашка стоит прямо под числами, но она лежит в ветке
+          `{result && …}` и в собранный HTML не попадает — Astro рендерит остров
+          на сборке один раз, без результата. Для краулера и для человека, до
+          расчёта не дошедшего, связь держит ЭТОТ абзац. */}
+      <p class="mt-4 text-sm text-gray-700 leading-relaxed">
+        Acute toxicity is one of the 37 hazard classes in CLP, and this page settles that one.
+        <a href="/tools/clp-mixture-classifier/" class="font-semibold text-teal-700 hover:underline"> The CLP
+        mixture classification calculator</a> applies the concentration limits of Annex I to the whole
+        composition — carcinogenicity, germ cell mutagenicity, reproductive toxicity and the rest — with the
+        rule quoted on every line, and it uses this same engine as its acute-toxicity module.
+      </p>
     </div>
   </section>
 

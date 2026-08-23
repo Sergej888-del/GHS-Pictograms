@@ -755,6 +755,35 @@ export default function AteMixtureCalculator() {
             ))}
           </div>
 
+          {/* ⭐⭐ №111 — ОБРАТНАЯ КНОПКА В КЛАССИФИКАТОР (session 82).
+              Стоит СРАЗУ под числами, а не в подвале: именно здесь у человека
+              возникает вопрос «а это всё?». Острая токсичность — один класс из
+              37, и промолчать об этом значит дать прочитать результат как
+              полную классификацию смеси.
+              ⚠⚠ ССЫЛКА НЕ ОБЕЩАЕТ ПЕРЕНОСА СОСТАВА, и это написано прямо.
+              Классификатор пока не читает `?mix=`, а управляющий элемент,
+              который обещает содержимое и не даёт его, хуже отсутствующего
+              (урок s81 про третью вкладку). Перенос — карточка №126.
+              ⚠ Блок лежит ВНУТРИ `{result && …}`, значит в собранный HTML он не
+              попадает: для краулера ту же связь держит статическая ссылка на
+              странице `/tools/ate-mixture-calculator/`. */}
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+            <p className="text-sm text-indigo-900">
+              Acute toxicity is <b>one of 37 hazard classes</b> in CLP. Whether the same mixture is also a
+              carcinogen, a reproductive toxicant, a sensitiser or hazardous to the aquatic environment is
+              decided by other tables of Annex I — this calculator does not look at them.
+            </p>
+            <a
+              href="/tools/clp-mixture-classifier/"
+              className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-700 hover:text-indigo-800"
+            >
+              Classify the whole mixture →
+            </a>
+            <p className="mt-1 text-[11px] text-indigo-700/80">
+              The composition is not carried across yet — you enter it once more there.
+            </p>
+          </div>
+
           {hStatements.length > 0 && (
             <div>
               <h4 className="mb-2 text-sm font-semibold text-gray-700">Hazard statements</h4>

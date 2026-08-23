@@ -1214,9 +1214,20 @@ export const CROSS_LINKS: CrossLink[] = [
     kind: 'tool',
   },
   {
+    // ⭐⭐ Классификатор стоит ПЕРЕД ATE-калькулятором (s82): у человека с
+    // рецептурой и без классификации первый вопрос — «во что попадает вся
+    // смесь», а не «какова её острая токсичность». ATE остаётся отдельной
+    // карточкой, потому что там один класс разобран глубже: каждая строка
+    // Cᵢ/ATEᵢ, обе формы ингаляции рядом и свой PDF.
+    href: '/tools/clp-mixture-classifier/',
+    title: 'CLP Mixture Classifier',
+    desc: 'You have a composition and no classification: this applies the concentration limits of Annex I to the whole mixture and returns the hazard classes for SDS Section 2, each line quoting the rule it rests on — and naming the classes it did not compute instead of leaving them blank. Start here.',
+    kind: 'tool',
+  },
+  {
     href: '/tools/ate-mixture-calculator/',
     title: 'ATE Mixture Calculator',
-    desc: 'Classify a mixture for acute toxicity: the additivity formula across oral, dermal and inhalation routes, the 10% unknown rule, and the resulting category, H statement and pictogram. Start here when you have a formulation and no classification yet.',
+    desc: 'One class in depth: acute toxicity by the additivity formula across oral, dermal and inhalation routes, the 10% unknown rule, every Cᵢ/ATEᵢ line shown, and the resulting category, H statement and pictogram. The same engine the classifier uses as its acute-toxicity module.',
     kind: 'tool',
   },
   {

@@ -1873,6 +1873,19 @@ const cardLabelCls = 'text-[10px] uppercase tracking-[0.08em] text-gray-400'
             Pictograms, signal word and H-statements combined into a compliant label layout →
           </p>
         </a>
+        {/* ⚠ Четвёртая карточка (s82) заодно доводит сетку до 2×2: при трёх
+            карточках в двух колонках третья оставалась сиротой во втором ряду.
+            Текст говорит про РАЗНИЦУ между этой страницей и инструментом —
+            «вещество само по себе» против «вещество в составе»; ссылка «см.
+            также» без этой разницы была бы шумом. */}
+        <a href="/tools/clp-mixture-classifier/" class="rounded-xl border border-indigo-200 bg-indigo-50/50 p-5 hover:border-indigo-300 transition-colors">
+          <p class="text-[11px] font-bold uppercase tracking-wide text-indigo-700" style={mono}>Mixture classifier</p>
+          <p class="mt-1 text-sm font-semibold text-gray-900">{name} inside a formulation</p>
+          <p class="mt-1 text-xs text-gray-600">
+            This sheet classifies {name} on its own. In a mixture its concentration decides: the calculator
+            applies the Annex I limits to the whole composition and quotes the rule behind every class →
+          </p>
+        </a>
       </section>
 
       {/* §16 SOURCES + DISCLAIMER */}
