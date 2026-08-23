@@ -327,10 +327,6 @@ function WarningLine({ w }: { w: Warning }) {
 
 export default function MixtureClassifier({ registry }: Props) {
   const [tab, setTab] = useState<Tab>('composition')
-  // ⚠ Инструкция закрыта по умолчанию: шесть шагов с пояснениями — это экран
-  // текста над рабочей панелью, и при открытом состоянии состав уезжает вниз.
-  // Закрытая она остаётся кнопкой, которую видно сразу (решение Сергея s81).
-  const [helpOpen, setHelpOpen] = useState(false)
 
   const [rows, setRows] = useState<Row[]>([])
   const [physicalState, setPhysicalState] = useState<PhysicalState>('liquid')
@@ -713,13 +709,22 @@ export default function MixtureClassifier({ registry }: Props) {
 
             {tab === 'composition' && (
               <>
-                <section className={`mx-panel help ${helpOpen ? '' : 'closed'}`}>
-                  <button type="button" className="mx-panel-head as-button" onClick={() => setHelpOpen((v) => !v)} aria-expanded={helpOpen}>
+                {/*
+                  ⚠⚠⚠ НАТИВНЫЙ <details>, А НЕ СОСТОЯНИЕ REACT. Панель закрыта по
+                  умолчанию, и при `{helpOpen && …}` её содержимое НЕ ПОПАДАЛО БЫ
+                  В HTML вовсе: Astro рендерит остров на сборке ровно один раз, в
+                  закрытом состоянии. Поймано живой выдачей прода (s81) — ровно
+                  тот отказ, про который правило страницы /hazard-classes/:
+                  «список, отрисованный JS-ом, для краулера не существует».
+                  ⭐ Побочная выгода: раскрытие работает ДО гидратации острова.
+                */}
+                <details className="mx-panel help">
+                  <summary className="mx-panel-head as-button">
                     <span className="mx-panel-title">How to use this calculator</span>
-                    <span className="mx-panel-side">{helpOpen ? 'hide' : '6 steps'}</span>
+                    <span className="mx-panel-side">6 steps</span>
                     <span className="a" aria-hidden="true">▾</span>
-                  </button>
-                  {helpOpen && (
+                  </summary>
+                  {(
                     <div className="mx-help">
                       <p className="have">
                         <b>Have ready:</b> section 3 of the safety data sheet of every raw material (ingredient
@@ -759,7 +764,7 @@ export default function MixtureClassifier({ registry }: Props) {
                       </ol>
                     </div>
                   )}
-                </section>
+                </details>
 
                 <section className="mx-panel">
                   <div className="mx-panel-head">
@@ -1147,51 +1152,6 @@ export default function MixtureClassifier({ registry }: Props) {
                 {ateHref && <a className="mx-btn" href={ateHref}>Open in the ATE calculator</a>}
               </div>
 
-              <section className="mx-disc">
-                <p className="mx-disc-head">Disclaimer — read before you use this result</p>
-                <p>
-                  This calculator applies the classification rules of <b>CLP Annex I</b> to the composition you
-                  enter. It is a calculation, <b>not a legal classification decision and not advice</b>. Under
-                  <b> Article 4 of Regulation (EC) No 1272/2008</b> the supplier remains responsible for
-                  classifying, labelling and packaging the mixture before placing it on the market.
-                </p>
-                <p>
-                  The result depends entirely on what you enter: an ingredient left out, a wrong concentration, or
-                  a supplier classification that has since changed will change it. <b>Physical hazards are never
-                  derived from composition</b> — they require testing. Classes marked <b>not computed</b> were not
-                  evaluated at all. Where the classification is not obvious, CLP 1.1.1 expects expert judgement,
-                  and this tool does not replace it.
-                </p>
-              </section>
-
-              <section className="mx-related">
-                <p className="mx-panel-title">Related tools on this site</p>
-                <ul>
-                  <li>
-                    <a href="/tools/ate-mixture-calculator/">ATE Mixture Calculator</a> — the same three
-                    acute-toxicity routes, in depth: every C<sub>i</sub>/ATE<sub>i</sub> line, the inhalation form
-                    side by side, its own PDF. <b>Same engine, same numbers</b> — this calculator uses it as
-                    module A1, so the composition travels between the two without being retyped.
-                  </li>
-                  <li>
-                    <a href="/ghs-label-maker/">GHS Label Maker</a> — turns the classified pairs above into a
-                    printable label after the P-statement precedence engine has run.
-                  </li>
-                  <li>
-                    <a href="/sds-sections/section-2-hazards-identification/">SDS Section 2</a> — what a
-                    classification looks like once it is written into a safety data sheet.
-                  </li>
-                  <li>
-                    {/* ⚠ Числа берутся из реестра, пришедшего со сборки, а не пишутся
-                        руками: захардкоженное «37 классов» — это обязательство
-                        перечитывать страницу после каждого ATP (урок oxidizers.md). */}
-                    <a href="/hazard-classes/">Hazard classes and categories</a> — all {registry.length} classes
-                    and {registry.reduce((n, c) => n + c.categories.length, 0)} categories of CLP, with the
-                    H-statements and pictograms each one carries.
-                  </li>
-                </ul>
-              </section>
-
               {result.release && (
                 <p className="mx-release mono">
                   Data release {result.release.releaseKey} · annex6 {result.release.annex6Consolidation} ·
@@ -1204,6 +1164,60 @@ export default function MixtureClassifier({ registry }: Props) {
               )}
             </>
           )}
+
+          {/*
+            ⚠⚠⚠ ДИСКЛЕЙМЕР И «RELATED TOOLS» — ВНЕ ветки `{result && …}`.
+            Пока они стояли внутри неё, в собранном HTML их не было ВООБЩЕ:
+            остров рендерится на сборке без результата. Для дисклеймера это
+            прямое нарушение решения s80 («дисклеймер обязателен на странице»),
+            для ссылок — потеря межстраничной сетки, ради которой они и стоят.
+            Оба блока говорят об ИНСТРУМЕНТЕ, а не о конкретном расчёте, значит
+            их место — на странице всегда.
+          */}
+            <section className="mx-disc">
+              <p className="mx-disc-head">Disclaimer — read before you use any result from this tool</p>
+              <p>
+                This calculator applies the classification rules of <b>CLP Annex I</b> to the composition you
+                enter. It is a calculation, <b>not a legal classification decision and not advice</b>. Under
+                <b> Article 4 of Regulation (EC) No 1272/2008</b> the supplier remains responsible for
+                classifying, labelling and packaging the mixture before placing it on the market.
+              </p>
+              <p>
+                The result depends entirely on what you enter: an ingredient left out, a wrong concentration, or
+                a supplier classification that has since changed will change it. <b>Physical hazards are never
+                derived from composition</b> — they require testing. Classes marked <b>not computed</b> were not
+                evaluated at all. Where the classification is not obvious, CLP 1.1.1 expects expert judgement,
+                and this tool does not replace it.
+              </p>
+            </section>
+
+            <section className="mx-related">
+              <p className="mx-panel-title">Related tools on this site</p>
+              <ul>
+                <li>
+                  <a href="/tools/ate-mixture-calculator/">ATE Mixture Calculator</a> — the same three
+                  acute-toxicity routes, in depth: every C<sub>i</sub>/ATE<sub>i</sub> line, the inhalation form
+                  side by side, its own PDF. <b>Same engine, same numbers</b> — this calculator uses it as
+                  module A1, so the composition travels between the two without being retyped.
+                </li>
+                <li>
+                  <a href="/ghs-label-maker/">GHS Label Maker</a> — turns the classified pairs above into a
+                  printable label after the P-statement precedence engine has run.
+                </li>
+                <li>
+                  <a href="/sds-sections/section-2-hazards-identification/">SDS Section 2</a> — what a
+                  classification looks like once it is written into a safety data sheet.
+                </li>
+                <li>
+                  {/* ⚠ Числа берутся из реестра, пришедшего со сборки, а не пишутся
+                      руками: захардкоженное «37 классов» — это обязательство
+                      перечитывать страницу после каждого ATP (урок oxidizers.md). */}
+                  <a href="/hazard-classes/">Hazard classes and categories</a> — all {registry.length} classes
+                  and {registry.reduce((n, c) => n + c.categories.length, 0)} categories of CLP, with the
+                  H-statements and pictograms each one carries.
+                </li>
+              </ul>
+            </section>
         </div>
       </div>
     </div>

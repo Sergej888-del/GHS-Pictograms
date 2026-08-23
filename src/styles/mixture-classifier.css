@@ -101,12 +101,16 @@
   cursor: pointer;
 }
 /* ⚠⚠ ЗАКРЫТАЯ ПАНЕЛЬ ДОЛЖНА ЧИТАТЬСЯ КАК КНОПКА, а не как выключенный
-   заголовок (замечание Сергея s81). Отсюда рамка, курсор и подсветка на
-   наведении: шесть шагов с пояснениями — это экран текста, и по умолчанию он
-   закрыт, значит человек обязан с первого взгляда понять, что его можно
-   открыть. */
-.mx-panel.help.closed { padding: 12px 16px; }
-.mx-panel.help.closed:hover { border-color: var(--mx-acc); background: #ffffff; }
+   заголовок (замечание Сергея s81). Отсюда курсор, подсветка на наведении и
+   видимый фокус: шесть шагов с пояснениями — это экран текста, по умолчанию он
+   закрыт, и человек обязан с первого взгляда понять, что его можно открыть.
+
+   ⚠⚠ Раскрытие — нативный <details>/<summary>, а не состояние React: иначе
+   текст инструкции не попадает в собранный HTML (поймано на проде, s81). */
+details.mx-panel.help:not([open]) { padding: 12px 16px; }
+details.mx-panel.help:hover { border-color: var(--mx-acc); }
+details.mx-panel.help:not([open]):hover { background: #ffffff; }
+
 .mx-panel-head.as-button { align-items: center; cursor: pointer; }
 .mx-panel-head.as-button .mx-panel-title { flex: 1 1 auto; }
 .mx-panel-head.as-button .a {
@@ -115,7 +119,12 @@
   display: inline-block;
   transition: transform 180ms ease;
 }
-.mx-panel.help:not(.closed) .mx-panel-head.as-button .a { transform: rotate(180deg); }
+/* ⚠ Свой треугольник — значит чужой убрать, иначе их будет два. */
+summary.mx-panel-head { list-style: none; }
+summary.mx-panel-head::-webkit-details-marker { display: none; }
+summary.mx-panel-head::marker { content: ''; }
+summary.mx-panel-head:focus-visible { outline: 2px solid var(--mx-acc); outline-offset: 2px; border-radius: 6px; }
+details.mx-panel.help[open] .mx-panel-head.as-button .a { transform: rotate(180deg); }
 
 .mx-panel-title,
 .mx-lab {
