@@ -552,6 +552,19 @@ details.mx-panel.help[open] .mx-panel-head.as-button .a { transform: rotate(180d
 .mx-table.quiet .sub { font-size: 12px; }
 .mx-row.not_computed td { color: var(--ink-3); }
 
+/* ⚠⚠ `insufficient_data` — единственный статус, который ПРОСИТ человека что-то
+   ввести (аспирация без кинематической вязкости не считается ни в какую
+   сторону). Его текст стоит прямо в строке, а не за раскрытием «Why», и набран
+   крупнее обычной подписи и тем же янтарём, что бейдж статуса: в 10,5 px серого
+   просьба утонула бы, и вопрос остался бы заданным, но не увиденным. */
+.mx-table .sub.need {
+  margin-top: 5px;
+  max-width: 46em;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--verdict-sep-ink);
+}
+
 .mx-st {
   display: inline-block;
   border: 1px solid var(--line);

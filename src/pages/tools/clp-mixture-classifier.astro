@@ -150,11 +150,43 @@ const categoryCount = mapping.length
 /* ── контракт версии (design-doc §8) ─────────────────────────────────────── */
 
 /** Сколько классов реестра инструмент действительно считает — из самих модулей. */
-const computedClasses = acuteToxModule.classes.length + CUTOFF_PLANS.length
+const computedCodes = new Set<string>([...acuteToxModule.classes, ...CUTOFF_PLANS.map((p) => p.classCode)])
+const computedClasses = computedCodes.size
+/** Сколько из них считает модуль концентрационных пределов (A4). */
+const limitClasses = CUTOFF_PLANS.length
+
+/**
+ * ⭐⭐⭐ ЗНАМЕНАТЕЛЬ — 20, А НЕ 37 (решение Сергея, s82).
+ *
+ * «11 из 37» честно по букве и вводит в заблуждение по сути: 17 классов
+ * реестра — ФИЗИЧЕСКИЕ опасности, и они не выводятся из состава ни у нас, ни у
+ * кого бы то ни было — их устанавливают испытанием. Считать их в знаменателе
+ * значит обещать то, чего регламент не позволяет, и заодно занижать инструмент
+ * ровно на ту величину, которую никто никогда не закроет.
+ *
+ * ⚠ Оба числа считаются, а не пишутся: группа берётся из `hazard_class_catalog`
+ * (`PHYSICAL` / `HEALTH` / `ENVIRONMENTAL`). Появится класс в каталоге — числа
+ * поедут сами.
+ */
+const derivable = catalog.filter((c) => c.group_type !== 'PHYSICAL')
+const derivableClasses = derivable.length
+const physicalClasses = classCount - derivableClasses
+
+/**
+ * ⭐⭐⭐ СПИСОК КЛАССОВ НА СТРАНИЦЕ ТОЖЕ НЕ ПИШЕТСЯ РУКАМИ (s83, развитие урока
+ * s82 про числа). Пока абзац «что считается / что дальше» перечислял классы
+ * вручную, он был единственным местом, которое могло соврать беззвучно: заход
+ * A4-2 сделал сенсибилизацию, STOT и аспирацию посчитанными, а фраза «are next»
+ * осталась бы прежней и пережила бы любую зелёную проверку. Теперь перечисляется
+ * только НЕПОСЧИТАННОЕ, и перечисляется из каталога против реестра модулей.
+ */
+const pendingNames = derivable.filter((c) => !computedCodes.has(c.class_code)).map((c) => c.name_en)
+const enumerate = (xs: string[]): string =>
+  xs.length < 2 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`
 
 const DOES = [
   'Acute toxicity — oral, dermal and inhalation, by the additivity formula of Annex I 3.1.3.6.1, with the 10 % unknown-toxicity correction and harmonised ATE values from Annex VI.',
-  'The classes decided by a concentration cut-off on a single ingredient: carcinogenicity, germ cell mutagenicity, reproductive toxicity — including the separate category for effects on or via lactation — endocrine disruption for human health and for the environment, PBT/vPvB, PMT/vPvM, and hazard to the ozone layer.',
+  `The ${limitClasses} classes decided by concentration limits on the ingredients — by a cut-off on a single ingredient, by a concentration band, or by a summation across ingredients, whichever the class calls for. Categories that coexist rather than compete are kept apart: effects on or via lactation, and narcotic effects beside respiratory tract irritation.`,
   'Provenance on every line: the rule key, the verbatim text of the rule as the regulation prints it, and the contribution of each ingredient.',
   'Specific concentration limits ahead of generic ones — an ingredient carrying its own SCL in Annex VI is judged by that SCL, and the generic limit is shown beside it as checked and outranked.',
   'An honest, named gap for every class this version does not compute yet, with the ingredients of your mixture that carry it.',
@@ -183,7 +215,7 @@ const faq = [
   {
     q: 'What does the calculator compute today, and what does it not?',
     a:
-      `Today it computes ${computedClasses} of the ${classCount} hazard classes in the registry: acute toxicity across the oral, dermal and inhalation routes, with the full additivity formula, the 10 % unknown-toxicity correction and harmonised ATE values from Annex VI; and the classes settled by a concentration cut-off on a single ingredient — carcinogenicity, germ cell mutagenicity, reproductive toxicity with its separate category for effects on or via lactation, endocrine disruption for human health and for the environment, PBT/vPvB, PMT/vPvM and hazard to the ozone layer. Every other hazard class is printed with an explicit “not computed in this version”, the module that will own it, and the ingredients in your mixture that carry that class — so an empty cell can never be mistaken for “not hazardous”. Skin and eye corrosion, sensitisation, specific target organ toxicity, aspiration and the aquatic classes are next; physical hazards will stay uncomputed permanently, because they require testing and no engine can derive them from a composition.`,
+      `Today it computes ${computedClasses} of the ${derivableClasses} hazard classes that can be derived from a composition at all — the other ${physicalClasses} in the registry are physical hazards, and no engine derives those: they are established by testing. What it does compute: acute toxicity across the oral, dermal and inhalation routes, with the full additivity formula, the 10 % unknown-toxicity correction and harmonised ATE values from Annex VI; and the ${limitClasses} classes settled by concentration limits on the ingredients, whether the rule is a cut-off on a single ingredient, a band between two concentrations, or a summation across ingredients. Every hazard class it does not compute is printed with an explicit “not computed in this version”, the module that will own it, and the ingredients in your mixture that carry that class — so an empty cell can never be mistaken for “not hazardous”. Still to come: ${enumerate(pendingNames)}. Physical hazards will stay uncomputed permanently, because they require testing and no engine can derive them from a composition.`,
   },
   {
     q: 'What is a specific concentration limit, and why does it outrank the generic limit?',
