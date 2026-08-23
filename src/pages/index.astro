@@ -178,8 +178,11 @@ const sdsRows = [
 // ⚠⚠ GHS LABEL MAKER ОТСЮДА УБРАН НАМЕРЕННО (session 45). Он стал флагманом
 // выше, и оставить его ещё и здесь значило бы показать один инструмент на
 // главной дважды.
-// ⚠ Заголовок «All 14 tools →» не трогать: четырнадцать — это счёт по
-// `/tools/`, а не по этому массиву.
+// ⚠ Заголовок «All 15 tools →» не трогать наугад: пятнадцать — это счёт по
+// `/tools/`, а не по этому массиву. ⚠⚠ Число стоит на главной ДВАЖДЫ (подзаголовок
+// секции и ссылка «All N tools») и на `/tools/` тоже дважды (чип и meta
+// description) — четыре места. В s81 добавили инструмент, поправили два из
+// четырёх, и главная полгода обещала 14. Сторож — `tools-counter` в `check:dist`.
 const otherTools = [
   {
     href: '/pictogram-selector/',
@@ -785,6 +788,98 @@ const roles = [
         text-transform: uppercase;
         color: #1e3a8a;
       }
+      /* ── Флагман · CLP Mixture Classifier (session 82) ───────────────────
+         ⚠⚠ `grid-column: 1 / -1` — как у конструктора: карточка занимает весь
+         ряд. Третьей колонкой её поставить нельзя по той же причине — сетка
+         ряда жёстко в две колонки, и третья карточка сжала бы и матрицу, и ATE.
+         ⚠ Карточка СВЕТЛАЯ намеренно. Второй тёмно-синий блок подряд читался бы
+         как продолжение первого, и ряд потерял бы ритм: тёмный флагман →
+         светлый флагман → две светлые колонки. Синяя полоса слева — акцент
+         раздела `class` из sectionAccent.ts, тот же, что у страницы инструмента. */
+      .hp-card-class {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 30px;
+        align-items: center;
+        border: 1px solid var(--line);
+        border-left: 4px solid #1e3a8a;
+        border-radius: 16px;
+        background: #ffffff;
+        padding: 28px 30px;
+        box-shadow: 0 2px 6px rgba(15, 23, 41, 0.05);
+        transition: all 400ms ease-out;
+      }
+      .hp-card-class:hover {
+        transform: translateY(-4px);
+        border-color: #1e3a8a;
+        box-shadow: 0 18px 34px rgba(15, 23, 41, 0.12);
+      }
+      @media (max-width: 900px) {
+        .hp-card-class {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .hp-class-table {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .hp-class-head,
+      .hp-class-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1.3fr) 68px minmax(0, 1.2fr);
+        gap: 10px;
+        align-items: center;
+      }
+      .hp-class-head {
+        padding: 10px 14px;
+        background: #f1f5f9;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-2);
+      }
+      .hp-class-row {
+        padding: 11px 14px;
+        border-bottom: 1px solid #f1f5f9;
+      }
+      .hp-class-row:last-child {
+        border-bottom: 0;
+      }
+      .hp-class-row .cls {
+        margin: 0;
+        font-size: 13.5px;
+        color: var(--ink);
+      }
+      .hp-class-row .h {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        font-weight: 600;
+        color: #1e3a8a;
+      }
+      .hp-class-row .rule {
+        margin: 0;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        line-height: 1.45;
+        color: var(--ink-2);
+      }
+      /* Строка, которую инструмент НЕ посчитал. Приглушена, но не спрятана:
+         пустая ячейка читается как «неопасно», и на витрине тоже. */
+      .hp-class-row.off {
+        background: #f8fafc;
+      }
+      .hp-class-row.off .cls {
+        color: var(--ink-2);
+      }
+      .hp-class-row.off .h {
+        color: var(--ink-3);
+        font-weight: 400;
+      }
+
       /* ── Флагман · GHS Label Maker ──────────────────────────────────────
          ⚠⚠ `grid-column: 1 / -1` — карточка занимает ВЕСЬ ряд. Разбор в
          разметке: третья обычная колонка сжала бы соседние до 320 px. */
@@ -1554,8 +1649,9 @@ const roles = [
         <p class="hp-eyebrow">01 · Tools</p>
         <h2 class="hp-h2">Working tools, not calculators that dodge the answer.</h2>
         <p class="hp-sub">
-          14 free tools. Two of them do work no other public tool does — a per-substance storage
-          verdict and full acute-toxicity classification of mixtures.
+          15 free tools. Three of them do work no other public tool does — a per-substance storage
+          verdict, acute-toxicity classification of mixtures, and a full CLP mixture classification
+          that quotes the regulation on every line.
         </p>
 
         <div class="hp-flagships">
@@ -1600,6 +1696,63 @@ const roles = [
                   Drawn by the same engine the tool uses.
                 </figcaption>
               </figure>
+            </div>
+          </div>
+
+          {/* ── ФЛАГМАН · CLP MIXTURE CLASSIFIER (session 82) ───────────────
+              ⚠⚠ ЧИСЛА И ПРАВИЛА В ТАБЛИЦЕ — НЕ ДЕКОРАЦИЯ. Это выдержка
+              настоящего ответа `/api/classify` на состав «теллур 0,5 % в воде»,
+              снятого с прода 23.08.2026 (`SCL:` не участвует — у теллура своих
+              пределов нет, обе категории идут по Table 3.7.2). Придуманная
+              строка на главной — это обещание, которого инструмент может не
+              сдержать; если движок изменит ответ, таблица обязана измениться
+              вместе с ним.
+              ⚠ Третья строка — намеренно про НЕпосчитанный класс. Витрина, на
+              которой видно только удачное, врёт тем же способом, что пустая
+              ячейка в результате (урок s76). */}
+          <div class="hp-card-class">
+            <div>
+              <div class="hp-badge-row">
+                <span class="hp-badge">New tool</span>
+                <span class="hp-badge-note">CLP Annex I · audit trail</span>
+              </div>
+              <h3 class="hp-card-title">CLP Mixture Classification Calculator</h3>
+              <p class="hp-card-copy">
+                Enter the composition and read the hazard classes for SDS Section 2 — each line
+                quoting the rule it rests on, the threshold it was compared against and what every
+                ingredient contributed. An ingredient that carries its own specific concentration
+                limit in Annex VI is judged by that limit and not by the generic one: at 1 %,
+                2-(2-methoxyethoxy)ethanol is <strong>not</strong> a reproductive toxicant, because
+                its own entry starts at 3 % — and the generic 0,3 % is printed beside it, marked
+                checked and outranked.
+              </p>
+              <a href="/tools/clp-mixture-classifier/" class="hp-card-link navy">Classify a mixture →</a>
+            </div>
+            <div>
+              <div class="hp-class-table">
+                <div class="hp-class-head"><span>Hazard class</span><span>H</span><span>Rule</span></div>
+                <div class="hp-class-row">
+                  <p class="cls">Reproductive toxicity 1B</p>
+                  <span class="h">H360</span>
+                  <p class="rule">Table 3.7.2 · ≥ 0,3 %</p>
+                </div>
+                <div class="hp-class-row">
+                  <p class="cls">+ effects on or via lactation</p>
+                  <span class="h">H362</span>
+                  <p class="rule">Table 3.7.2 · additional category</p>
+                </div>
+                <div class="hp-class-row off">
+                  <p class="cls">Aspiration hazard</p>
+                  <span class="h">—</span>
+                  <p class="rule">not computed in this version</p>
+                </div>
+              </div>
+              <p class="hp-card-footnote">
+                Worked example: tellurium 0,5 % in water. Two categories of one class can coexist —
+                Annex I prints the effects on or via lactation in a column of its own, so H362
+                travels to the label beside H360. The third row is the tool saying plainly what it
+                did not evaluate.
+              </p>
             </div>
           </div>
 
@@ -1741,7 +1894,7 @@ const roles = [
                   ))
                 }
               </div>
-              <a href="/tools/" class="all">All 14 tools →</a>
+              <a href="/tools/" class="all">All 15 tools →</a>
             </div>
           </div>
         </div>
