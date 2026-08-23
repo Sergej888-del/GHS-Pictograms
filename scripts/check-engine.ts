@@ -122,6 +122,126 @@ const RULES: GenericLimitRow[] = [
     raw: 'A mixture shall be classified as a PMT or vPvM where at least one of its components has been classified as a PMT or vPvM and is present at or above 0,1 % (weight/weight).' }),
   rule({ ruleKey: 'T5.1-OZONE', kind: 'GCL', classCode: 'OZONE', marker: 'M2', sourceRef: 'Table 5.1',
     operator: '>=', limitLow: 0.1, unit: '%', raw: 'Hazardous to the ozone layer (Category 1) | C ≥ 0,1 %' }),
+
+  /* ── правила захода 2 (session 83) ─────────────────────────────────────────
+     ⚠ Тридцать три строки, снятые из `clp_generic_limits` в s83: ключи, пороги,
+     ВЕРХНИЕ границы полос, предельная вязкость и дословный текст. Числа здесь —
+     ЦИТАТА, а не настройка теста: если база скажет другое, расходиться должна
+     покраснеть эта фикстура, а не молча посчитаться прод. */
+
+  // Table 3.4.5 — сенсибилизация кожи. Колонка «All physical states».
+  rule({ ruleKey: 'T3.4.5-SKIN1A', kind: 'GCL', classCode: 'SKIN_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.5', physicalState: 'all', operator: '>=', limitLow: 0.1, unit: '%',
+    raw: 'Skin sensitiser Sub-category 1A | | | ≥ 0,1 %' }),
+  rule({ ruleKey: 'T3.4.5-SKIN1B', kind: 'GCL', classCode: 'SKIN_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.5', physicalState: 'all', operator: '>=', limitLow: 1.0, unit: '%',
+    raw: 'Skin sensitiser Sub-category 1B | | | ≥ 1,0 %' }),
+  rule({ ruleKey: 'T3.4.5-SKIN1', kind: 'GCL', classCode: 'SKIN_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.5', physicalState: 'all', operator: '>=', limitLow: 1.0, unit: '%',
+    raw: 'Skin sensitiser Category 1 | | | ≥ 1,0 %' }),
+  // Table 3.4.6 — пределы ЭЛИСИТАЦИИ: не классификация, а EUH208 (Annex II 2.8).
+  rule({ ruleKey: 'T3.4.6-SKIN1A', kind: 'ELICITATION', classCode: 'SKIN_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.6', physicalState: 'all', operator: '>=', limitLow: 0.01, unit: '%',
+    raw: 'Skin sensitiser Sub-category 1A | | | ≥ 0,01 % (Note 1)' }),
+  rule({ ruleKey: 'T3.4.6-SKIN1B', kind: 'ELICITATION', classCode: 'SKIN_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.6', physicalState: 'all', operator: '>=', limitLow: 0.1, unit: '%',
+    raw: 'Skin sensitiser Sub-category 1B | | | ≥ 0,1 % (Note 1)' }),
+  rule({ ruleKey: 'T3.4.6-SKIN1', kind: 'ELICITATION', classCode: 'SKIN_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.6', physicalState: 'all', operator: '>=', limitLow: 0.1, unit: '%',
+    raw: 'Skin sensitiser Category 1 | | | ≥ 0,1 % (Note 1)' }),
+
+  // ⚠⚠ Table 3.4.5 — сенсибилизация дыхательных путей: ДВЕ КОЛОНКИ, и предел
+  // категории 1 отличается впятеро между твёрдой/жидкой смесью и газовой.
+  rule({ ruleKey: 'T3.4.5-RESP1A-SL', kind: 'GCL', classCode: 'RESP_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.5', physicalState: 'solid/liquid', operator: '>=', limitLow: 0.1, unit: '%',
+    raw: 'Respiratory sensitiser Sub-category 1A | ≥ 0,1 % | ≥ 0,1 % |' }),
+  rule({ ruleKey: 'T3.4.5-RESP1A-GAS', kind: 'GCL', classCode: 'RESP_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.5', physicalState: 'gas', operator: '>=', limitLow: 0.1, unit: '%',
+    raw: 'Respiratory sensitiser Sub-category 1A | ≥ 0,1 % | ≥ 0,1 % |' }),
+  rule({ ruleKey: 'T3.4.5-RESP1B-SL', kind: 'GCL', classCode: 'RESP_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.5', physicalState: 'solid/liquid', operator: '>=', limitLow: 1.0, unit: '%',
+    raw: 'Respiratory sensitiser Sub-category 1B | ≥ 1,0 % | ≥ 0,2 % |' }),
+  rule({ ruleKey: 'T3.4.5-RESP1B-GAS', kind: 'GCL', classCode: 'RESP_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.5', physicalState: 'gas', operator: '>=', limitLow: 0.2, unit: '%',
+    raw: 'Respiratory sensitiser Sub-category 1B | ≥ 1,0 % | ≥ 0,2 % |' }),
+  rule({ ruleKey: 'T3.4.5-RESP1-SL', kind: 'GCL', classCode: 'RESP_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.5', physicalState: 'solid/liquid', operator: '>=', limitLow: 1.0, unit: '%',
+    raw: 'Respiratory sensitiser Category 1 | ≥ 1,0 % | ≥ 0,2 % |' }),
+  rule({ ruleKey: 'T3.4.5-RESP1-GAS', kind: 'GCL', classCode: 'RESP_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.5', physicalState: 'gas', operator: '>=', limitLow: 0.2, unit: '%',
+    raw: 'Respiratory sensitiser Category 1 | ≥ 1,0 % | ≥ 0,2 % |' }),
+  rule({ ruleKey: 'T3.4.6-RESP1A-SL', kind: 'ELICITATION', classCode: 'RESP_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.6', physicalState: 'solid/liquid', operator: '>=', limitLow: 0.01, unit: '%',
+    raw: 'Respiratory sensitiser Sub-category 1A | ≥ 0,01 % (Note 1) | ≥ 0,01 % (Note 1) |' }),
+  rule({ ruleKey: 'T3.4.6-RESP1A-GAS', kind: 'ELICITATION', classCode: 'RESP_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.6', physicalState: 'gas', operator: '>=', limitLow: 0.01, unit: '%',
+    raw: 'Respiratory sensitiser Sub-category 1A | ≥ 0,01 % (Note 1) | ≥ 0,01 % (Note 1) |' }),
+  rule({ ruleKey: 'T3.4.6-RESP1B-SL', kind: 'ELICITATION', classCode: 'RESP_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.6', physicalState: 'solid/liquid', operator: '>=', limitLow: 0.1, unit: '%',
+    raw: 'Respiratory sensitiser Sub-category 1B | ≥ 0,1 % (Note 1) | ≥ 0,1 % (Note 1) |' }),
+  rule({ ruleKey: 'T3.4.6-RESP1B-GAS', kind: 'ELICITATION', classCode: 'RESP_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.6', physicalState: 'gas', operator: '>=', limitLow: 0.1, unit: '%',
+    raw: 'Respiratory sensitiser Sub-category 1B | ≥ 0,1 % (Note 1) | ≥ 0,1 % (Note 1) |' }),
+  rule({ ruleKey: 'T3.4.6-RESP1-SL', kind: 'ELICITATION', classCode: 'RESP_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.6', physicalState: 'solid/liquid', operator: '>=', limitLow: 0.1, unit: '%',
+    raw: 'Respiratory sensitiser Category 1 | ≥ 0,1 % (Note 1) | ≥ 0,1 % (Note 1) |' }),
+  rule({ ruleKey: 'T3.4.6-RESP1-GAS', kind: 'ELICITATION', classCode: 'RESP_SENS', ghsChapter: '3.4', marker: 'M2',
+    sourceRef: 'Table 3.4.6', physicalState: 'gas', operator: '>=', limitLow: 0.1, unit: '%',
+    raw: 'Respiratory sensitiser Category 1 | ≥ 0,1 % (Note 1) | ≥ 0,1 % (Note 1) |' }),
+
+  // Table 3.8.3 — STOT SE, категории 1 и 2. ⚠ Средняя строка — ПОЛОСА.
+  rule({ ruleKey: 'T3.8.3-1-GE10', kind: 'GCL', classCode: 'STOT_SE', ghsChapter: '3.8', sourceRef: 'Table 3.8.3',
+    operator: '>=', limitLow: 10, unit: '%',
+    raw: 'Category 1 Specific Target Organ Toxicant | Concentration ≥ 10 % | 1,0 % ≤ concentration < 10 %' }),
+  rule({ ruleKey: 'T3.8.3-1-1-10', kind: 'GCL', classCode: 'STOT_SE', ghsChapter: '3.8', sourceRef: 'Table 3.8.3',
+    operator: '>=..<', limitLow: 1.0, limitHigh: 10, unit: '%',
+    raw: 'Category 1 Specific Target Organ Toxicant | Concentration ≥ 10 % | 1,0 % ≤ concentration < 10 %' }),
+  rule({ ruleKey: 'T3.8.3-2-GE10', kind: 'GCL', classCode: 'STOT_SE', ghsChapter: '3.8', sourceRef: 'Table 3.8.3',
+    operator: '>=', limitLow: 10, unit: '%',
+    raw: 'Category 2 Specific Target Organ Toxicant | | Concentration ≥ 10 % [(Note 1)]' }),
+  rule({ ruleKey: 'T3.8.3-2-SDS', kind: 'SDS_TRIGGER', classCode: 'STOT_SE', ghsChapter: '3.8', sourceRef: 'Table 3.8.3 Note 1',
+    operator: '>=', limitLow: 1.0, unit: '%',
+    raw: 'If a Category 2 specific target organ toxicant is present in the mixture as an ingredient at a concentration ≥ 1,0 % a SDS shall be available for the mixture upon request.' }),
+  // ⚠⚠ Категория 3 — СУММА, и источник сам называет её порог «appropriate».
+  rule({ ruleKey: '3.8.3.4.5-CAT3-GCL20', kind: 'GCL', classCode: 'STOT_SE', ghsChapter: '3.8', sourceRef: '3.8.3.4.5',
+    operator: '>=', limitLow: 20, unit: '%',
+    raw: 'Care shall be exercised when extrapolating toxicity of a mixture that contains Category 3 ingredient(s). A generic concentration limit of 20 % is appropriate; however, it shall be recognised that this concentration limit may be higher or lower depending on the Category 3 ingredient(s) and that some effects such as respiratory tract irritation may not occur below a certain concentration while other effects such as narcotic effects may occur below this 20 % value. Expert judgement shall be exercised. Respiratory tract irritation and narcotic effects are to be evaluated separately in accordance with the criteria given in section 3.8.2.2. When conducting classifications for these hazards, the contribution of each component should be considered additive, unless there is evidence that the effects are not additive.' }),
+  rule({ ruleKey: '3.8.3.4.6-CAT3-RELEVANT', kind: 'RELEVANT', classCode: 'STOT_SE', ghsChapter: '3.8', marker: 'M19', sourceRef: '3.8.3.4.6',
+    operator: '>=', limitLow: 1, unit: '% (w/w solids, liquids, dusts, mists, vapours; v/v gases)',
+    raw: 'In cases where the additivity approach is used for Category 3 ingredients, the ‘relevant ingredients’ of a mixture are those which are present in concentrations ≥ 1 % (w/w for solids, liquids, dusts, mists, and vapours and v/v for gases), unless there is a reason to suspect that an ingredient present at a concentration < 1 % is still relevant when classifying the mixture for respiratory tract irritation or narcotic effects.' }),
+  rule({ ruleKey: 'T1.1-STOT_SE-CAT3', kind: 'CUTOFF', classCode: 'STOT_SE', ghsChapter: '1.1', marker: 'M19', sourceRef: 'Table 1.1',
+    operator: '>=', limitLow: 1, unit: '%', raw: 'Specific target organ toxicity, single exposure, Category 3 | 1 % (3)' }),
+
+  // Table 3.9.4 — STOT RE: та же арифметика полос, без категории 3.
+  rule({ ruleKey: 'T3.9.4-1-GE10', kind: 'GCL', classCode: 'STOT_RE', ghsChapter: '3.9', sourceRef: 'Table 3.9.4',
+    operator: '>=', limitLow: 10, unit: '%',
+    raw: 'Category 1 Specific Target Organ Toxicant | Concentration ≥ 10 % | 1,0 % ≤ concentration < 10 %' }),
+  rule({ ruleKey: 'T3.9.4-1-1-10', kind: 'GCL', classCode: 'STOT_RE', ghsChapter: '3.9', sourceRef: 'Table 3.9.4',
+    operator: '>=..<', limitLow: 1.0, limitHigh: 10, unit: '%',
+    raw: 'Category 1 Specific Target Organ Toxicant | Concentration ≥ 10 % | 1,0 % ≤ concentration < 10 %' }),
+  rule({ ruleKey: 'T3.9.4-2-GE10', kind: 'GCL', classCode: 'STOT_RE', ghsChapter: '3.9', sourceRef: 'Table 3.9.4',
+    operator: '>=', limitLow: 10, unit: '%',
+    raw: 'Category 2 Specific Target Organ Toxicant | | Concentration ≥ 10 % [(Note 1)]' }),
+  rule({ ruleKey: 'T3.9.4-2-SDS', kind: 'SDS_TRIGGER', classCode: 'STOT_RE', ghsChapter: '3.9', sourceRef: 'Table 3.9.4 Note 1',
+    operator: '>=', limitLow: 1.0, unit: '%',
+    raw: 'If a Category 2 specific target organ toxicant is present in the mixture as an ingredient at a concentration ≥ 1,0 % a SDS shall be available for the mixture upon request.' }),
+
+  // ⚠⚠ Аспирация — ДВА условия: сумма категории 1 И вязкость. Предельная
+  // вязкость лежит в колонке `value` той же строки, а не в коде модуля.
+  rule({ ruleKey: '3.10.3.3.1.2-CAT1', kind: 'GCL', classCode: 'ASPIRATION', ghsChapter: '3.10', marker: 'M19',
+    sourceRef: '3.10.3.3.1.2', operator: '>=', limitLow: 10, unit: '%',
+    value: 20.5, valueUnit: 'mm2/s at 40 °C (kinematic viscosity, ≤)', formulaRaw: 'Sum of Category 1 ingredients',
+    raw: 'A mixture is classified as Category 1 when the sum of the concentrations of Category 1 ingredients is ≥ 10 % and the mixture has a kinematic viscosity ≤ 20,5 mm2/s, measured at 40 °C.' }),
+  rule({ ruleKey: '3.10.3.3.1.3-LAYERS', kind: 'GCL', classCode: 'ASPIRATION', ghsChapter: '3.10', marker: 'M19',
+    sourceRef: '3.10.3.3.1.3', operator: '>=', limitLow: 10, unit: '%',
+    value: 20.5, valueUnit: 'mm2/s at 40 °C (kinematic viscosity, ≤)',
+    formulaRaw: 'Sum of Category 1 ingredients in any distinct layer',
+    raw: 'In the case of a mixture which separates into two or more distinct layers, the entire mixture is classified as Category 1 if in any distinct layer the sum of the concentrations of Category 1 ingredients is ≥ 10 %, and it has a kinematic viscosity ≤ 20,5 mm2/s, measured at 40 °C.' }),
+  rule({ ruleKey: '3.10.3.3.1.1-RELEVANT', kind: 'RELEVANT', classCode: 'ASPIRATION', ghsChapter: '3.10', marker: 'M19',
+    sourceRef: '3.10.3.3.1.1', operator: '>=', limitLow: 1, unit: '%',
+    raw: 'The ‘relevant ingredients’ of a mixture are those which are present in concentrations ≥ 1 %.' }),
+  rule({ ruleKey: 'T1.1-ASPIRATION', kind: 'CUTOFF', classCode: 'ASPIRATION', ghsChapter: '1.1', marker: 'M19',
+    sourceRef: 'Table 1.1', operator: '>=', limitLow: 1, unit: '%', raw: 'Aspiration toxicity | 1 %' }),
 ];
 
 /* ── фикстура реестра ────────────────────────────────────────────────────────
@@ -173,6 +293,16 @@ const REAL_CATEGORIES: Record<string, [string, string | null, string | null, str
   PBT_VPVB: [['PBT', 'EUH440', null, 'Danger'], ['vPvB', 'EUH441', null, 'Danger']],
   PMT_VPVM: [['PMT', 'EUH450', null, 'Danger'], ['vPvM', 'EUH451', null, 'Danger']],
   OZONE: [['1', 'H420', 'GHS07', 'Warning']],
+  // ── классы захода 2 (session 83), дословно из `hazard_category_mapping` ──
+  // ⚠ У обеих сенсибилизаций подкатегории 1A и 1B несут ТОТ ЖЕ H-код, что и «1»:
+  // разница между ними — точность, а не строгость, и старшинства между ними
+  // движок не выдумывает (правило каркаса §2.1).
+  RESP_SENS: [['1', 'H334', 'GHS08', 'Danger'], ['1A', 'H334', 'GHS08', 'Danger'], ['1B', 'H334', 'GHS08', 'Danger']],
+  SKIN_SENS: [['1', 'H317', 'GHS07', 'Warning'], ['1A', 'H317', 'GHS07', 'Warning'], ['1B', 'H317', 'GHS07', 'Warning']],
+  STOT_RE: [['1', 'H372', 'GHS08', 'Danger'], ['2', 'H373', 'GHS08', 'Warning']],
+  // ⚠ Категория 2 аспирации (H305) есть в реестре, но EU CLP её не присваивает:
+  // Annex I 3.10.3.3 даёт смеси только категорию 1. Модуль её и не считает.
+  ASPIRATION: [['1', 'H304', 'GHS08', 'Danger'], ['2', 'H305', null, 'Warning']],
 };
 
 const REGISTRY: RegistryEntry[] = CLASS_ORDER.flatMap(([classCode, className, displayOrder]) => {
@@ -206,6 +336,20 @@ function methanol(conc: number): ComponentInput {
       { classCode: 'ACUTE_TOX_DERMAL', categoryCode: '3', hCode: 'H311', star: true, raw: 'Acute Tox. 3' },
       { classCode: 'ACUTE_TOX_ORAL', categoryCode: '3', hCode: 'H301', star: true, raw: 'Acute Tox. 3' },
       { classCode: 'STOT_SE', categoryCode: '1', hCode: 'H370', raw: 'STOT SE 1' },
+    ],
+    // ⭐⭐⭐ НАСТОЯЩИЕ пределы метанола из Annex VI (сняты из базы в s83) —
+    // эталонный регрессионный набор §16.4 CLAUDE.md: 25 % → STOT SE 1,
+    // 5 % → STOT SE 2 (ПОЛОСА 3–10 %), 2 % → не классифицировано, потому что
+    // общий порог Table 3.8.3 (1,0 %) к нему НЕ ПРИМЕНЯЕТСЯ.
+    scl: [
+      {
+        raw: 'STOT SE 1; H370: C≥10 %', classCat: 'STOT SE 1', hCode: 'H370',
+        limitLow: 10, limitHigh: null, conditionText: 'C≥10 %', needsReview: false,
+      },
+      {
+        raw: 'STOT SE 2; H371: 3 % ≤ C<10 %', classCat: 'STOT SE 2', hCode: 'H371',
+        limitLow: 3, limitHigh: 10, conditionText: '3 % ≤ C<10 %', needsReview: false,
+      },
     ],
   };
 }
@@ -284,6 +428,108 @@ function phenolphthalein(conc: number): ComponentInput {
   };
 }
 
+/* ── фикстура состава для A4 захода 2 (session 83) ───────────────────────────
+   Четыре вещества, и все четыре — реальные строки Annex VI, снятые из базы в
+   s83 вместе с их пределами. Выдуманный пример проверял бы наше представление
+   о регламенте, а не регламент. */
+
+/**
+ * ⭐⭐⭐ Толуол, 601-021-00-3 — три класса захода 2 в одном веществе и НИ ОДНОГО
+ * собственного предела: `Asp. Tox. 1` (сумма + вязкость), `STOT RE 2` со
+ * звёздочкой (отсечка Table 3.9.4) и `STOT SE 3` В НАРКОТИЧЕСКОЙ ветке — H336,
+ * не H335. Именно на нём видно, что две суммы категории 3 считаются порознь.
+ */
+function toluene(conc: number): ComponentInput {
+  return {
+    id: 'toluene', source: 'annex6', indexNumber: '601-021-00-3', casPrimary: '108-88-3',
+    name: 'toluene', conc,
+    classifications: [
+      { classCode: 'FLAM_LIQ', categoryCode: '2', hCode: 'H225', raw: 'Flam. Liq. 2' },
+      { classCode: 'REPRO_TOX', categoryCode: '2', hCode: 'H361', raw: 'Repr. 2' },
+      { classCode: 'ASPIRATION', categoryCode: '1', hCode: 'H304', raw: 'Asp. Tox. 1' },
+      { classCode: 'STOT_RE', categoryCode: '2', hCode: 'H373', star: true, raw: 'STOT RE 2' },
+      { classCode: 'SKIN_CORR_IRRIT', categoryCode: '2', hCode: 'H315', raw: 'Skin Irrit. 2' },
+      { classCode: 'STOT_SE', categoryCode: '3 narcotic', hCode: 'H336', raw: 'STOT SE 3' },
+    ],
+  };
+}
+
+/**
+ * ⭐⭐ n-гексан, 601-037-00-0 — `STOT RE 1` без собственного предела: на нём
+ * проверяется ПОЛОСА Table 3.9.4 (компонент категории 1 между 1,0 % и 10 %
+ * делает смесь категорией 2, а не 1). Плюс вторая половина суммы аспирации и
+ * второй наркотический компонент.
+ */
+function hexane(conc: number): ComponentInput {
+  return {
+    id: 'hexane', source: 'annex6', indexNumber: '601-037-00-0', casPrimary: '110-54-3',
+    name: 'n-hexane', conc,
+    classifications: [
+      { classCode: 'FLAM_LIQ', categoryCode: '2', hCode: 'H225', raw: 'Flam. Liq. 2' },
+      { classCode: 'REPRO_TOX', categoryCode: '2', hCode: 'H361', raw: 'Repr. 2' },
+      { classCode: 'ASPIRATION', categoryCode: '1', hCode: 'H304', raw: 'Asp. Tox. 1' },
+      { classCode: 'STOT_SE', categoryCode: '3 narcotic', hCode: 'H336', raw: 'STOT SE 3' },
+      { classCode: 'STOT_RE', categoryCode: '1', hCode: 'H372', raw: 'STOT RE 1' },
+      { classCode: 'SKIN_CORR_IRRIT', categoryCode: '2', hCode: 'H315', raw: 'Skin Irrit. 2' },
+      { classCode: 'AQUATIC_CHRONIC', categoryCode: '2', hCode: 'H411', raw: 'Aquatic Chronic 2' },
+    ],
+  };
+}
+
+/**
+ * ⭐⭐⭐ MDI, 615-005-00-9 — обе сенсибилизации разом, и собственный предел
+ * только у одной. `Resp. Sens. 1; H334: C ≥ 0,1 %` СТРОЖЕ общего (1,0 % для
+ * жидкой смеси) — зеркало случая DEGME, где свой предел был мягче общего.
+ * `Skin Sens. 1` своего предела не имеет и судится по Table 3.4.5, а между
+ * пределом элиситации и пределом классификации даёт EUH208. Третий предел —
+ * `STOT SE 3; H335: C ≥ 5 %` — проверяет, что компонент со своим пределом НЕ
+ * входит в сумму 3.8.3.4.5.
+ */
+function mdi(conc: number): ComponentInput {
+  return {
+    id: 'mdi', source: 'annex6', indexNumber: '615-005-00-9', casPrimary: '101-68-8',
+    name: 'diphenylmethane-4,4-diisocyanate', conc,
+    classifications: [
+      { classCode: 'CARCINOGEN', categoryCode: '2', hCode: 'H351', raw: 'Carc. 2' },
+      { classCode: 'ACUTE_TOX_INHAL', categoryCode: '4', hCode: 'H332', star: true, raw: 'Acute Tox. 4' },
+      { classCode: 'STOT_RE', categoryCode: '2', hCode: 'H373', star: true, raw: 'STOT RE 2' },
+      { classCode: 'EYE_DAMAGE_IRRIT', categoryCode: '2A', hCode: 'H319', raw: 'Eye Irrit. 2' },
+      { classCode: 'STOT_SE', categoryCode: '3', hCode: 'H335', raw: 'STOT SE 3' },
+      { classCode: 'SKIN_CORR_IRRIT', categoryCode: '2', hCode: 'H315', raw: 'Skin Irrit. 2' },
+      { classCode: 'RESP_SENS', categoryCode: '1', hCode: 'H334', raw: 'Resp. Sens. 1' },
+      { classCode: 'SKIN_SENS', categoryCode: '1', hCode: 'H317', raw: 'Skin Sens. 1' },
+    ],
+    // ⚠ Порядок строк — как в Annex VI: `SCL:615-005-00-9:3` — респираторная
+    // сенсибилизация, `:4` — STOT SE 3. Номер в ключе провенанса и есть seq.
+    scl: [
+      { raw: 'Eye Irrit. 2; H319: C ≥ 5 %', classCat: 'Eye Irrit. 2', hCode: 'H319', limitLow: 5, limitHigh: null, conditionText: 'C ≥ 5 %', needsReview: false },
+      { raw: 'Skin Irrit. 2; H315: C ≥ 5 %', classCat: 'Skin Irrit. 2', hCode: 'H315', limitLow: 5, limitHigh: null, conditionText: 'C ≥ 5 %', needsReview: false },
+      { raw: 'Resp. Sens. 1; H334: C ≥ 0,1 %', classCat: 'Resp. Sens. 1', hCode: 'H334', limitLow: 0.1, limitHigh: null, conditionText: 'C ≥ 0,1 %', needsReview: false },
+      { raw: 'STOT SE 3; H335: C ≥ 5 %', classCat: 'STOT SE 3', hCode: 'H335', limitLow: 5, limitHigh: null, conditionText: 'C ≥ 5 %', needsReview: false },
+    ],
+  };
+}
+
+/**
+ * ⭐⭐ Фталевый ангидрид, 607-009-00-4 — `Resp. Sens. 1` и `Skin Sens. 1` БЕЗ
+ * собственных пределов (проверяет обе колонки Table 3.4.5 и элиситацию Table
+ * 3.4.6), плюс `STOT SE 3` в ветке H335 — раздражение дыхательных путей.
+ */
+function phthalicAnhydride(conc: number): ComponentInput {
+  return {
+    id: 'phthalic', source: 'annex6', indexNumber: '607-009-00-4', casPrimary: '85-44-9',
+    name: 'phthalic anhydride', conc,
+    classifications: [
+      { classCode: 'ACUTE_TOX_ORAL', categoryCode: '4', hCode: 'H302', star: true, raw: 'Acute Tox. 4' },
+      { classCode: 'STOT_SE', categoryCode: '3', hCode: 'H335', raw: 'STOT SE 3' },
+      { classCode: 'SKIN_CORR_IRRIT', categoryCode: '2', hCode: 'H315', raw: 'Skin Irrit. 2' },
+      { classCode: 'EYE_DAMAGE_IRRIT', categoryCode: '1', hCode: 'H318', raw: 'Eye Dam. 1' },
+      { classCode: 'RESP_SENS', categoryCode: '1', hCode: 'H334', raw: 'Resp. Sens. 1' },
+      { classCode: 'SKIN_SENS', categoryCode: '1', hCode: 'H317', raw: 'Skin Sens. 1' },
+    ],
+  };
+}
+
 function mixture(components: ComponentInput[], over: Partial<MixtureInput['properties']> = {}): MixtureInput {
   return { components, properties: { physicalState: 'liquid', inhalForm: 'vapour', ...over }, audience: 'professional' };
 }
@@ -352,8 +598,10 @@ const noReason = r1.decisions.filter((d) => (d.status === 'insufficient_data' ||
 check('у insufficient_data / not_computed есть причина', noReason.length === 0,
   noReason.map((d) => d.classCode).join(', '));
 
-const unknownKey = r1.decisions.filter((d) => d.ruleKey && !rules.has(d.ruleKey));
-check('каждый rule_key результата существует в таблице правил', unknownKey.length === 0,
+// ⚠ `SCL:<index>:<seq>` живёт не в таблице правил, а в строке Annex VI самого
+// вещества, и дословный текст приходит с компонента — у него свой формат ключа.
+const unknownKey = r1.decisions.filter((d) => d.ruleKey && !d.ruleKey.startsWith('SCL:') && !rules.has(d.ruleKey));
+check('каждый rule_key результата существует в таблице правил (SCL — свой формат)', unknownKey.length === 0,
   unknownKey.map((d) => `${d.classCode}:${d.ruleKey}`).join(', '));
 
 const CRITICAL = ['RULE_MISSING', 'REASON_MISSING', 'REGISTRY_GAP', 'MODULE_CONFLICT', 'MODULE_OVERLAP',
@@ -517,17 +765,19 @@ check('фенолфталеин 0,5 % → НЕ канцероген: общий 
 check('и это видно в кандидатах: T3.6.2-1B проверен и уступил',
   (of(a6, 'CARCINOGEN')?.candidates ?? []).some((c) => c.ruleKey === 'T3.6.2-1B' && (c.note ?? '').includes('outranked')));
 
-// 7.5 Пять отложенных классов A4 — честная строка с причиной, а не «неопасно».
+// 7.5 ⭐ Отложенных классов у A4 не осталось (заход 2, s83): все пять теперь
+// СЧИТАЮТСЯ, а не печатают «not computed». Проверка сторожит именно это — чтобы
+// откат модуля к заглушкам не проехал зелёным.
 const a7 = run(mixture([methanol(25), water(75, true)]));
-const stotSe = of(a7, 'STOT_SE')!;
-check('STOT SE — not_computed от модуля A4 с конкретной причиной',
-  stotSe.status === 'not_computed' && stotSe.module === 'A4' && (stotSe.reason ?? '').includes('3.8.3.4.5'),
-  `${stotSe.module} ${stotSe.status}`);
-check('причина называет компонент, который несёт класс',
-  (stotSe.reason ?? '').includes('methanol'), stotSe.reason ?? '');
-check('все пять отложенных классов на месте и все от A4',
+check('ни один класс A4 больше не выдаёт not_computed',
+  ['SKIN_SENS', 'RESP_SENS', 'STOT_SE', 'STOT_RE', 'ASPIRATION',
+    'CARCINOGEN', 'MUTAGEN', 'REPRO_TOX', 'ED_HH', 'ED_ENV', 'PBT_VPVB', 'PMT_VPVM', 'OZONE']
+    .every((cls) => of(a7, cls)?.module === 'A4' && of(a7, cls)?.status !== 'not_computed'),
   ['SKIN_SENS', 'RESP_SENS', 'STOT_SE', 'STOT_RE', 'ASPIRATION']
-    .every((cls) => of(a7, cls)?.status === 'not_computed' && of(a7, cls)?.module === 'A4'));
+    .map((cls) => `${cls}:${of(a7, cls)?.status}`).join(', '));
+check('not_computed остались только у объявленных заглушек A2/A3/A6',
+  a7.decisions.filter((d) => d.status === 'not_computed').every((d) => ['A2', 'A3', 'A6'].includes(d.module)),
+  a7.decisions.filter((d) => d.status === 'not_computed').map((d) => `${d.classCode}:${d.module}`).join(', '));
 
 // 7.6 Контракт выдачи на составе, где работают оба модуля.
 const a8 = run(mixture([phenolphthalein(2), degme(5), tellurium(0.5), water(92.5, true)]));
@@ -543,6 +793,184 @@ const a8Crit = criticalOf(a8);
 check('ни одного критического предупреждения на смешанном составе', a8Crit.length === 0, a8Crit.join(', '));
 check('строк по-прежнему ровно по числу классов реестра',
   a8.decisions.length === registry.classes().length, `${a8.decisions.length}`);
+
+/* ── 8. A4 заход 2: полосы, суммы, колонки и элиситация ─────────────────── */
+console.log('\n8. A4 заход 2 — сенсибилизация, STOT, аспирация (session 83)');
+
+// 8.1 ⭐⭐⭐ Эталонный регрессионный набор §16.4 CLAUDE.md — настоящий метанол.
+const m25 = of(run(mixture([methanol(25), water(75, true)])), 'STOT_SE')!;
+check('метанол 25 % → STOT SE 1 по своему пределу «C≥10 %»',
+  m25.status === 'classified' && m25.categoryCode === '1' && m25.ruleKey === 'SCL:603-001-00-X:1' && m25.hCode === 'H370',
+  `${m25.status} ${m25.categoryCode} ${m25.ruleKey}`);
+const m5 = of(run(mixture([methanol(5), water(95, true)])), 'STOT_SE')!;
+check('метанол 5 % → STOT SE 2: ПОЛОСА «3 % ≤ C<10 %» своего предела',
+  m5.status === 'classified' && m5.categoryCode === '2' && m5.ruleKey === 'SCL:603-001-00-X:2' && m5.hCode === 'H371',
+  `${m5.status} ${m5.categoryCode} ${m5.ruleKey}`);
+const m2 = of(run(mixture([methanol(2), water(98, true)])), 'STOT_SE')!;
+check('метанол 2 % → НЕ классифицировано: общий порог Table 3.8.3 к нему не применяется',
+  m2.status === 'not_classified' && !!m2.ruleKey && !!m2.raw,
+  `${m2.status} ${m2.categoryCode} ${m2.ruleKey}`);
+check('обе ступени Table 3.8.3 показаны как проверенные и уступившие',
+  ['T3.8.3-1-GE10', 'T3.8.3-1-1-10']
+    .every((k) => (m2.candidates ?? []).some((c) => c.ruleKey === k && (c.note ?? '').includes('outranked'))),
+  JSON.stringify((m2.candidates ?? []).map((c) => `${c.ruleKey}:${c.passed}`)));
+
+// 8.2 ⭐⭐ ПОЛОСА общего предела: Table 3.9.4, компонент категории 1.
+const h15 = of(run(mixture([hexane(15), water(85, true)])), 'STOT_RE')!;
+check('n-гексан 15 % (STOT RE 1) → смесь STOT RE 1',
+  h15.categoryCode === '1' && h15.ruleKey === 'T3.9.4-1-GE10' && h15.hCode === 'H372',
+  `${h15.categoryCode} ${h15.ruleKey}`);
+const h5 = of(run(mixture([hexane(5), water(95, true)])), 'STOT_RE')!;
+check('n-гексан 5 % → смесь STOT RE 2, а НЕ 1: полоса 1,0–10 %',
+  h5.categoryCode === '2' && h5.ruleKey === 'T3.9.4-1-1-10' && h5.hCode === 'H373',
+  `${h5.categoryCode} ${h5.ruleKey}`);
+const h05 = of(run(mixture([hexane(0.5), water(99.5, true)])), 'STOT_RE')!;
+check('n-гексан 0,5 % → ниже нижней границы полосы, не классифицировано',
+  h05.status === 'not_classified', `${h05.status} ${h05.categoryCode}`);
+const t12 = run(mixture([toluene(12), water(88, true)], { viscosityMm2s40c: 1.2 }));
+check('толуол 12 % (STOT RE 2) → смесь STOT RE 2 по отсечке ≥ 10 %',
+  of(t12, 'STOT_RE')?.ruleKey === 'T3.9.4-2-GE10' && of(t12, 'STOT_RE')?.categoryCode === '2',
+  `${of(t12, 'STOT_RE')?.categoryCode} ${of(t12, 'STOT_RE')?.ruleKey}`);
+check('триггер SDS Table 3.9.4 Note 1 уехал в supplemental',
+  t12.supplemental.some((s) => s.kind === 'SDS_TRIGGER' && s.ruleKey === 'T3.9.4-2-SDS' && !!s.raw),
+  JSON.stringify(t12.supplemental.map((s) => s.ruleKey)));
+
+// 8.3 ⭐⭐⭐ ДВЕ СУММЫ КАТЕГОРИИ 3 СЧИТАЮТСЯ ПОРОЗНЬ (3.8.3.4.5).
+const sep = of(run(mixture([phthalicAnhydride(15), hexane(15), water(70, true)])), 'STOT_SE')!;
+check('H335 15 % и H336 15 % → НЕ классифицировано: суммы не складываются друг с другом',
+  sep.status === 'not_classified', `${sep.status} ${sep.categoryCode}`);
+check('причина называет обе суммы порознь',
+  (sep.reason ?? '').includes('category 3 add up to 15.0 %') && (sep.reason ?? '').includes('category 3 narcotic add up to 15.0 %'),
+  sep.reason ?? '');
+const irr = of(run(mixture([phthalicAnhydride(25), water(75, true)])), 'STOT_SE')!;
+check('фталевый ангидрид 25 % → STOT SE 3 (H335) по сумме 3.8.3.4.5',
+  irr.categoryCode === '3' && irr.hCode === 'H335' && irr.ruleKey === '3.8.3.4.5-CAT3-GCL20',
+  `${irr.categoryCode} ${irr.hCode} ${irr.ruleKey}`);
+check('в агрегате видна сама сумма, а не только вердикт',
+  (irr.aggregate?.expr ?? '').includes('25.0 %') && irr.aggregate?.threshold === 20,
+  irr.aggregate?.expr ?? '');
+check('⚠ сказано, что 20 % — не абсолютный порог (3.8.3.4.5 требует expert judgement)',
+  irr.warnings.some((w) => w.code === 'LIMIT_NOT_ABSOLUTE'),
+  JSON.stringify(irr.warnings.map((w) => w.code)));
+const nar = of(run(mixture([phthalicAnhydride(12), hexane(12), toluene(12), water(64, true)])), 'STOT_SE')!;
+check('12 % + 12 % наркотических → STOT SE 3 narcotic (H336), а раздражение — нет',
+  nar.categoryCode === '3 narcotic' && nar.hCode === 'H336' && (nar.additional ?? []).length === 0,
+  `${nar.categoryCode} ${nar.hCode} +${(nar.additional ?? []).length}`);
+const both = run(mixture([phthalicAnhydride(25), hexane(25), water(50, true)], { viscosityMm2s40c: 1.2 }));
+const bothSe = of(both, 'STOT_SE')!;
+check('обе ветки категории 3 сработали → основная строка и сопутствующая',
+  bothSe.categoryCode === '3' && (bothSe.additional ?? []).length === 1 && bothSe.additional![0]!.categoryCode === '3 narcotic',
+  `${bothSe.categoryCode} + ${JSON.stringify((bothSe.additional ?? []).map((a) => a.categoryCode))}`);
+check('H335 и H336 доехали до этикетки оба',
+  both.labelPairs.some((p) => p.hCode === 'H335') && both.labelPairs.some((p) => p.hCode === 'H336'),
+  JSON.stringify(both.labelPairs.filter((p) => p.classCode === 'STOT_SE')));
+check('у сопутствующей категории свой агрегат с её собственной суммой',
+  (bothSe.additional![0]!.aggregate?.expr ?? '').includes('25.0 %'),
+  bothSe.additional![0]!.aggregate?.expr ?? '');
+
+// 8.4 ⭐⭐⭐ Компонент со СВОИМ пределом в общую сумму НЕ входит.
+const outSum = of(run(mixture([mdi(4), phthalicAnhydride(18), water(78, true)])), 'STOT_SE')!;
+check('MDI 4 % (свой предел «C ≥ 5 %») не добавился к 18 % → 22 %: не классифицировано',
+  outSum.status === 'not_classified', `${outSum.status} ${outSum.categoryCode}`);
+check('и это сказано в кандидатах: предел заменён, компонент вне суммы',
+  (outSum.candidates ?? []).some((c) => c.ruleKey === '3.8.3.4.5-CAT3-GCL20' && (c.note ?? '').includes('not part of this sum')),
+  JSON.stringify((outSum.candidates ?? []).map((c) => c.note)));
+const inScl = of(run(mixture([mdi(6), water(94, true)])), 'STOT_SE')!;
+check('MDI 6 % → STOT SE 3 по СВОЕМУ пределу, цитата — строка Annex VI',
+  inScl.categoryCode === '3' && inScl.ruleKey === 'SCL:615-005-00-9:4' && inScl.raw === 'STOT SE 3; H335: C ≥ 5 %',
+  `${inScl.categoryCode} ${inScl.ruleKey} ${inScl.raw}`);
+
+// 8.5 ⭐⭐⭐ ДВЕ КОЛОНКИ Table 3.4.5: один и тот же состав, разное состояние.
+const pLiq = of(run(mixture([phthalicAnhydride(0.5), water(99.5, true)], { physicalState: 'liquid' })), 'RESP_SENS')!;
+check('фталевый ангидрид 0,5 % в ЖИДКОЙ смеси → не классифицировано (колонка solid/liquid, 1,0 %)',
+  pLiq.status === 'not_classified' && pLiq.ruleKey === 'T3.4.5-RESP1-SL',
+  `${pLiq.status} ${pLiq.ruleKey}`);
+const pGas = of(run(mixture([phthalicAnhydride(0.5), water(99.5, true)], { physicalState: 'gas', inhalForm: 'gas' })), 'RESP_SENS')!;
+check('тот же 0,5 % в ГАЗОВОЙ смеси → Resp. Sens. 1 (колонка gas, 0,2 %)',
+  pGas.status === 'classified' && pGas.categoryCode === '1' && pGas.ruleKey === 'T3.4.5-RESP1-GAS' && pGas.hCode === 'H334',
+  `${pGas.status} ${pGas.categoryCode} ${pGas.ruleKey}`);
+
+// 8.6 ⭐⭐⭐ Элиситация Table 3.4.6 → EUH208, и одна десятая своего предела.
+const el = run(mixture([phthalicAnhydride(0.5), water(99.5, true)]));
+check('кожная сенсибилизация 0,5 % < 1,0 % → не классифицировано',
+  of(el, 'SKIN_SENS')?.status === 'not_classified');
+const euh = el.supplemental.filter((s) => s.code === 'EUH208');
+check('но EUH208 выставлен: 0,5 % выше предела элиситации 0,1 %',
+  euh.length === 1 && euh[0]!.text.includes('phthalic anhydride') && euh[0]!.ruleKey === 'T3.4.6-SKIN1' && !!euh[0]!.raw,
+  JSON.stringify(el.supplemental.map((s) => `${s.code}:${s.ruleKey}`)));
+check('⚠ вещество-сенсибилизатор кожи И дыхательных путей даёт ОДНУ фразу, а не две',
+  euh.length === 1 && euh[0]!.text.includes('T3.4.6-RESP1-SL'),
+  euh[0]?.text ?? '');
+check('респираторная сенсибилизация того же компонента тоже не классифицирована',
+  of(el, 'RESP_SENS')?.status === 'not_classified', `${of(el, 'RESP_SENS')?.status}`);
+const el2 = run(mixture([phthalicAnhydride(2), water(98, true)]));
+check('при 2 % смесь классифицирована как сенсибилизатор — и EUH208 больше не нужен',
+  of(el2, 'SKIN_SENS')?.categoryCode === '1' && !el2.supplemental.some((s) => s.code === 'EUH208'),
+  `${of(el2, 'SKIN_SENS')?.categoryCode} / ${el2.supplemental.filter((s) => s.code === 'EUH208').length}`);
+const mSens = of(run(mixture([mdi(0.5), water(99.5, true)])), 'RESP_SENS')!;
+check('⭐ MDI 0,5 % → Resp. Sens. 1 по СВОЕМУ пределу 0,1 % — общий (1,0 %) не сработал бы',
+  mSens.status === 'classified' && mSens.ruleKey === 'SCL:615-005-00-9:3',
+  `${mSens.status} ${mSens.ruleKey}`);
+const tenth = run(mixture([mdi(0.05), water(99.95, true)]));
+check('MDI 0,05 % → не классифицировано, но EUH208 по 1/10 своего предела (Note 1)',
+  of(tenth, 'RESP_SENS')?.status === 'not_classified'
+  && tenth.supplemental.some((s) => s.code === 'EUH208' && s.text.includes('tenth')),
+  JSON.stringify(tenth.supplemental.map((s) => `${s.code}:${s.ruleKey}`)));
+
+// 8.7 ⭐⭐⭐ Аспирация: сумма И вязкость, а без вязкости — «данных не хватает».
+const aspOk = of(run(mixture([toluene(6), hexane(6), water(88, true)], { viscosityMm2s40c: 1.2 })), 'ASPIRATION')!;
+check('6 % + 6 % = 12 % при вязкости 1,2 → Asp. Tox. 1',
+  aspOk.status === 'classified' && aspOk.categoryCode === '1' && aspOk.hCode === 'H304'
+  && aspOk.ruleKey === '3.10.3.3.1.2-CAT1',
+  `${aspOk.status} ${aspOk.categoryCode} ${aspOk.ruleKey}`);
+check('в агрегате видны и сумма, и вязкость',
+  (aspOk.aggregate?.expr ?? '').includes('12.0 %') && (aspOk.aggregate?.expr ?? '').includes('20.5'),
+  aspOk.aggregate?.expr ?? '');
+const aspNo = of(run(mixture([toluene(6), hexane(6), water(88, true)])), 'ASPIRATION')!;
+check('⭐ та же смесь без вязкости → insufficient_data, а НЕ «не классифицировано»',
+  aspNo.status === 'insufficient_data' && !!aspNo.raw && aspNo.ruleKey === '3.10.3.3.1.2-CAT1',
+  `${aspNo.status} ${aspNo.ruleKey}`);
+check('причина называет ровно то число, которого не хватает',
+  (aspNo.reason ?? '').includes('kinematic viscosity') && (aspNo.reason ?? '').includes('20.5'),
+  aspNo.reason ?? '');
+const aspThick = of(run(mixture([toluene(6), hexane(6), water(88, true)], { viscosityMm2s40c: 30 })), 'ASPIRATION')!;
+check('вязкость 30 > 20,5 → не классифицировано, и причина говорит почему',
+  aspThick.status === 'not_classified' && (aspThick.reason ?? '').includes('is above'),
+  `${aspThick.status} — ${aspThick.reason}`);
+const aspLow = of(run(mixture([toluene(0.5), water(99.5, true)], { viscosityMm2s40c: 1.2 })), 'ASPIRATION')!;
+check('компонент ниже предела релевантности 1 % выпал из суммы — и об этом сказано',
+  aspLow.status === 'not_classified' && aspLow.warnings.some((w) => w.code === 'BELOW_RELEVANCE'),
+  JSON.stringify(aspLow.warnings.map((w) => w.code)));
+const aspLayers = of(run(mixture([toluene(5), water(95, true)], { viscosityMm2s40c: 1.2, separatesIntoLayers: true })), 'ASPIRATION')!;
+check('⭐ расслаивающаяся смесь ниже порога → insufficient_data по 3.10.3.3.1.3, а не «неопасно»',
+  aspLayers.status === 'insufficient_data' && aspLayers.ruleKey === '3.10.3.3.1.3-LAYERS' && !!aspLayers.raw,
+  `${aspLayers.status} ${aspLayers.ruleKey}`);
+
+// 8.8 Контракт выдачи на составе, где работают все три вида арифметики.
+const big = run(mixture(
+  [methanol(5), toluene(12), hexane(8), mdi(4), phthalicAnhydride(3), water(68, true)],
+  { viscosityMm2s40c: 2.0 },
+));
+const bigNoRule = big.decisions.filter((d) => (d.status === 'classified' || d.status === 'not_classified') && (!d.ruleKey || !d.raw));
+check('у каждой строки есть rule_key И дословный raw', bigNoRule.length === 0,
+  bigNoRule.map((d) => `${d.classCode}:${d.ruleKey}`).join(', '));
+const bigNoReason = big.decisions.filter((d) => (d.status === 'insufficient_data' || d.status === 'not_computed') && !d.reason);
+check('у каждой строки без ответа есть причина', bigNoReason.length === 0,
+  bigNoReason.map((d) => d.classCode).join(', '));
+const bigUnknown = big.decisions
+  .flatMap((d) => [d.ruleKey, ...(d.additional ?? []).map((x) => x.ruleKey)])
+  .filter((k): k is string => !!k && !k.startsWith('SCL:') && !rules.has(k));
+check('каждый rule_key существует в таблице правил', bigUnknown.length === 0, bigUnknown.join(', '));
+const bigCrit = criticalOf(big);
+check('ни одного критического предупреждения на смешанном составе', bigCrit.length === 0, bigCrit.join(', '));
+check('строк по-прежнему ровно по числу классов реестра',
+  big.decisions.length === registry.classes().length, `${big.decisions.length}`);
+check('смесь получила и полосу, и сумму, и отсечку разом',
+  of(big, 'STOT_SE')?.categoryCode === '2'
+  && (of(big, 'STOT_SE')?.additional ?? []).some((a) => a.categoryCode === '3 narcotic')
+  && of(big, 'ASPIRATION')?.categoryCode === '1'
+  && of(big, 'RESP_SENS')?.categoryCode === '1',
+  `${of(big, 'STOT_SE')?.categoryCode} / ${of(big, 'ASPIRATION')?.categoryCode} / ${of(big, 'RESP_SENS')?.categoryCode}`);
 
 console.log(`\n${failed ? `✗ ПРОВАЛЕНО: ${failed} из ${total}` : `✓ каркас зелёный — ${total} проверок`}`);
 process.exit(failed ? 1 : 0);
