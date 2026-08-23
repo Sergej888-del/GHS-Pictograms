@@ -61,6 +61,67 @@ const RULES: GenericLimitRow[] = [
     operator: '>=', limitLow: 0.1, unit: '%', raw: '— Category 1-3 | 0,1 %' }),
   rule({ ruleKey: 'T1.1-ACUTE_TOX-CAT4', kind: 'CUTOFF', marker: 'M19', sourceRef: 'Table 1.1',
     operator: '>=', limitLow: 1, unit: '%', raw: '— Category 4 | 1 %' }),
+
+  /* ── правила модуля A4 (session 82) ────────────────────────────────────────
+     ⚠ Ключи, пороги и дословный текст СПИСАНЫ ИЗ ЖИВОЙ БАЗЫ (замер s82,
+     `clp_generic_limits`). Если строка в базе изменится, а здесь останется
+     старой, покраснеет не эта фикстура, а сверка `check:dist`/прод — поэтому
+     менять числа тут «на глаз» нельзя: они цитата, а не настройка. */
+  rule({ ruleKey: 'T3.5.2-1A', kind: 'GCL', classCode: 'MUTAGEN', marker: 'M4', sourceRef: 'Table 3.5.2',
+    operator: '>=', limitLow: 0.1, unit: '% (w/w; v/v gases)', raw: 'Category 1A mutagen | ≥ 0,1 % | — | —' }),
+  rule({ ruleKey: 'T3.5.2-1B', kind: 'GCL', classCode: 'MUTAGEN', marker: 'M4', sourceRef: 'Table 3.5.2',
+    operator: '>=', limitLow: 0.1, unit: '% (w/w; v/v gases)', raw: 'Category 1B mutagen | — | ≥ 0,1 % | —' }),
+  rule({ ruleKey: 'T3.5.2-2', kind: 'GCL', classCode: 'MUTAGEN', marker: 'M4', sourceRef: 'Table 3.5.2',
+    operator: '>=', limitLow: 1.0, unit: '% (w/w; v/v gases)', raw: 'Category 2 mutagen | — | — | ≥ 1,0 %' }),
+  rule({ ruleKey: 'T3.6.2-1A', kind: 'GCL', classCode: 'CARCINOGEN', marker: 'M4', sourceRef: 'Table 3.6.2',
+    operator: '>=', limitLow: 0.1, unit: '% (w/w; v/v gases)', raw: 'Category 1A carcinogen | ≥ 0,1 % | — | —' }),
+  rule({ ruleKey: 'T3.6.2-1B', kind: 'GCL', classCode: 'CARCINOGEN', marker: 'M4', sourceRef: 'Table 3.6.2',
+    operator: '>=', limitLow: 0.1, unit: '% (w/w; v/v gases)', raw: 'Category 1B carcinogen | — | ≥ 0,1 % | —' }),
+  rule({ ruleKey: 'T3.6.2-2', kind: 'GCL', classCode: 'CARCINOGEN', marker: 'M4', sourceRef: 'Table 3.6.2',
+    operator: '>=', limitLow: 1.0, unit: '% (w/w; v/v gases)', raw: 'Category 2 carcinogen | — | — | ≥ 1,0 % [Note 1]' }),
+  rule({ ruleKey: 'T3.6.2-2-SDS', kind: 'SDS_TRIGGER', classCode: 'CARCINOGEN', marker: 'B', sourceRef: 'Table 3.6.2 Note 1',
+    operator: '>=', limitLow: 0.1, unit: '%',
+    raw: 'If a Category 2 carcinogen is present in the mixture as an ingredient at a concentration ≥ 0,1 % a SDS shall be available for the mixture upon request.' }),
+  rule({ ruleKey: 'T3.7.2-1A', kind: 'GCL', classCode: 'REPRO_TOX', marker: 'M4', sourceRef: 'Table 3.7.2',
+    operator: '>=', limitLow: 0.3, unit: '% (w/w; v/v gases)', raw: 'Category 1A reproductive toxicant | ≥ 0,3 % [Note 1] | | |' }),
+  rule({ ruleKey: 'T3.7.2-1B', kind: 'GCL', classCode: 'REPRO_TOX', marker: 'M4', sourceRef: 'Table 3.7.2',
+    operator: '>=', limitLow: 0.3, unit: '% (w/w; v/v gases)', raw: 'Category 1B reproductive toxicant | | ≥ 0,3 % [Note 1] | |' }),
+  rule({ ruleKey: 'T3.7.2-2', kind: 'GCL', classCode: 'REPRO_TOX', marker: 'M4', sourceRef: 'Table 3.7.2',
+    operator: '>=', limitLow: 3.0, unit: '% (w/w; v/v gases)', raw: 'Category 2 reproductive toxicant | | | ≥ 3,0 % [Note 1] |' }),
+  rule({ ruleKey: 'T3.7.2-LACT', kind: 'GCL', classCode: 'REPRO_TOX', marker: 'M4', sourceRef: 'Table 3.7.2',
+    operator: '>=', limitLow: 0.3, unit: '% (w/w; v/v gases)',
+    raw: 'Additional category for effects on or via lactation | | | | ≥ 0,3 % [Note 1]' }),
+  rule({ ruleKey: 'T3.7.2-SDS', kind: 'SDS_TRIGGER', classCode: 'REPRO_TOX', marker: 'M4', sourceRef: 'Table 3.7.2 Note 1',
+    operator: '>=', limitLow: 0.1, unit: '%',
+    raw: 'Note 1: If a Category 1 or Category 2 reproductive toxicant or a substance classified for effects on or via lactation is present in the mixture as an ingredient at a concentration at or above 0,1 %, a SDS shall be available for the mixture upon request.' }),
+  rule({ ruleKey: 'T3.11.2-1', kind: 'GCL', classCode: 'ED_HH', marker: 'M32', sourceRef: 'Table 3.11.2',
+    operator: '>=', limitLow: 0.1, unit: '% (w/w; v/v gases)', raw: 'Category 1 endocrine disruptor for human health | ≥ 0,1 % |' }),
+  rule({ ruleKey: 'T3.11.2-2', kind: 'GCL', classCode: 'ED_HH', marker: 'M32', sourceRef: 'Table 3.11.2',
+    operator: '>=', limitLow: 1, unit: '% (w/w; v/v gases)', raw: 'Category 2 endocrine disruptor for human health | | ≥ 1 % [Note 1]' }),
+  rule({ ruleKey: 'T3.11.2-2-SDS', kind: 'SDS_TRIGGER', classCode: 'ED_HH', marker: 'M32', sourceRef: 'Table 3.11.2 Note 1',
+    operator: '>=', limitLow: 0.1, unit: '%',
+    raw: 'Note 1: If a Category 2 endocrine disruptor for human health is present in the mixture as an ingredient at a concentration ≥ 0,1 % a SDS shall be available for the mixture upon request.' }),
+  rule({ ruleKey: 'T4.2.2-1', kind: 'GCL', classCode: 'ED_ENV', marker: 'M32', sourceRef: 'Table 4.2.2',
+    operator: '>=', limitLow: 0.1, unit: '% (w/w; v/v gases)', raw: 'Category 1 endocrine disruptor for the environment | ≥ 0,1 % |' }),
+  rule({ ruleKey: 'T4.2.2-2', kind: 'GCL', classCode: 'ED_ENV', marker: 'M32', sourceRef: 'Table 4.2.2',
+    operator: '>=', limitLow: 1, unit: '% (w/w; v/v gases)', raw: 'Category 2 endocrine disruptor for the environment | | ≥ 1 % [Note 1 ]' }),
+  rule({ ruleKey: 'T4.2.2-2-SDS', kind: 'SDS_TRIGGER', classCode: 'ED_ENV', marker: 'M32', sourceRef: 'Table 4.2.2 Note 1',
+    operator: '>=', limitLow: 0.1, unit: '%',
+    raw: 'Note 1: If a Category 2 endocrine disruptor for the environment is present in the mixture as an ingredient at a concentration ≥ 0,1 % a SDS shall be available for the mixture upon request.' }),
+  rule({ ruleKey: '4.3.3.1-PBT', kind: 'GCL', classCode: 'PBT_VPVB', marker: 'M32', sourceRef: '4.3.3.1',
+    operator: '>=', limitLow: 0.1, unit: '% w/w',
+    raw: 'A mixture shall be classified respectively as a PBT or vPvB when at least one component contained in the mixture has been classified respectively as a PBT or vPvB and is present at or above 0,1 % (weight/weight).' }),
+  rule({ ruleKey: '4.3.3.1-VPVB', kind: 'GCL', classCode: 'PBT_VPVB', marker: 'M32', sourceRef: '4.3.3.1',
+    operator: '>=', limitLow: 0.1, unit: '% w/w',
+    raw: 'A mixture shall be classified respectively as a PBT or vPvB when at least one component contained in the mixture has been classified respectively as a PBT or vPvB and is present at or above 0,1 % (weight/weight).' }),
+  rule({ ruleKey: '4.4.3.1-PMT', kind: 'GCL', classCode: 'PMT_VPVM', marker: 'M32', sourceRef: '4.4.3.1',
+    operator: '>=', limitLow: 0.1, unit: '% w/w',
+    raw: 'A mixture shall be classified as a PMT or vPvM where at least one of its components has been classified as a PMT or vPvM and is present at or above 0,1 % (weight/weight).' }),
+  rule({ ruleKey: '4.4.3.1-VPVM', kind: 'GCL', classCode: 'PMT_VPVM', marker: 'M32', sourceRef: '4.4.3.1',
+    operator: '>=', limitLow: 0.1, unit: '% w/w',
+    raw: 'A mixture shall be classified as a PMT or vPvM where at least one of its components has been classified as a PMT or vPvM and is present at or above 0,1 % (weight/weight).' }),
+  rule({ ruleKey: 'T5.1-OZONE', kind: 'GCL', classCode: 'OZONE', marker: 'M2', sourceRef: 'Table 5.1',
+    operator: '>=', limitLow: 0.1, unit: '%', raw: 'Hazardous to the ozone layer (Category 1) | C ≥ 0,1 %' }),
 ];
 
 /* ── фикстура реестра ────────────────────────────────────────────────────────
@@ -101,6 +162,17 @@ const REAL_CATEGORIES: Record<string, [string, string | null, string | null, str
   ACUTE_TOX_DERMAL: [['1', 'H310', 'GHS06', 'Danger'], ['2', 'H310', 'GHS06', 'Danger'], ['3', 'H311', 'GHS06', 'Danger'], ['4', 'H312', 'GHS07', 'Warning'], ['5', 'H313', null, 'Warning']],
   ACUTE_TOX_INHAL: [['1', 'H330', 'GHS06', 'Danger'], ['2', 'H330', 'GHS06', 'Danger'], ['3', 'H331', 'GHS06', 'Danger'], ['4', 'H332', 'GHS07', 'Warning'], ['5', 'H333', null, 'Warning']],
   STOT_SE: [['1', 'H370', 'GHS08', 'Danger'], ['2', 'H371', 'GHS08', 'Warning'], ['3', 'H335', 'GHS07', 'Warning'], ['3 narcotic', 'H336', 'GHS07', 'Warning']],
+  // ── классы модуля A4 (session 82), дословно из `hazard_category_mapping` ──
+  MUTAGEN: [['1A', 'H340', 'GHS08', 'Danger'], ['1B', 'H340', 'GHS08', 'Danger'], ['2', 'H341', 'GHS08', 'Warning']],
+  CARCINOGEN: [['1A', 'H350', 'GHS08', 'Danger'], ['1B', 'H350', 'GHS08', 'Danger'], ['2', 'H351', 'GHS08', 'Warning']],
+  // ⚠ «Lactation» — H362 без пиктограммы и без сигнального слова: так в реестре,
+  // и именно поэтому её нельзя «слить» с Repr. 1A/1B/2 в одну строку.
+  REPRO_TOX: [['1A', 'H360', 'GHS08', 'Danger'], ['1B', 'H360', 'GHS08', 'Danger'], ['2', 'H361', 'GHS08', 'Warning'], ['Lactation', 'H362', null, null]],
+  ED_HH: [['1', 'EUH380', null, 'Danger'], ['2', 'EUH381', null, 'Warning']],
+  ED_ENV: [['1', 'EUH430', null, 'Danger'], ['2', 'EUH431', null, 'Warning']],
+  PBT_VPVB: [['PBT', 'EUH440', null, 'Danger'], ['vPvB', 'EUH441', null, 'Danger']],
+  PMT_VPVM: [['PMT', 'EUH450', null, 'Danger'], ['vPvM', 'EUH451', null, 'Danger']],
+  OZONE: [['1', 'H420', 'GHS07', 'Warning']],
 };
 
 const REGISTRY: RegistryEntry[] = CLASS_ORDER.flatMap(([classCode, className, displayOrder]) => {
@@ -148,6 +220,70 @@ function water(conc: number, stated = false): ComponentInput {
   return { id: 'water', source: 'supplier', name: 'water (carrier)', conc, classifications: [], knownNonhazard: stated };
 }
 
+/* ── фикстура состава для A4 (session 82) ────────────────────────────────────
+   Все три вещества и все их пределы — РЕАЛЬНЫЕ строки Annex VI, снятые из базы
+   в s82. Выдуманный пример здесь был бы проверкой нашего представления о
+   регламенте, а не регламента. */
+
+/**
+ * ⭐⭐⭐ 2-(2-methoxyethoxy)ethanol (DEGME), 603-107-00-6 — ГЛАВНЫЙ ПРИМЕР ЗАХОДА.
+ * Annex VI даёт ему `Repr. 1B` и СВОЙ предел «C ≥ 3 %», тогда как общий предел
+ * Table 3.7.2 для 1B — 0,3 %. Если бы компонент со своим SCL заодно судился по
+ * общему порогу, смесь с 1 % этого растворителя уехала бы в Repr. 1B — то есть
+ * была бы классифицирована ВДЕСЯТЕРО раньше, чем предписывает Annex VI.
+ * Это тот же отказ, о котором предупреждает §5 `classifier-scaffold-s80.md`
+ * на примере метанола, только здесь он бьёт в другую сторону — в лишнюю строгость.
+ */
+function degme(conc: number): ComponentInput {
+  return {
+    id: 'degme', source: 'annex6', indexNumber: '603-107-00-6', casPrimary: '111-77-3',
+    name: '2-(2-methoxyethoxy)ethanol', conc,
+    classifications: [{ classCode: 'REPRO_TOX', categoryCode: '1B', hCode: 'H360', raw: 'Repr. 1B' }],
+    scl: [{
+      raw: 'Repr. 1B; H360D: C ≥ 3 %', classCat: 'Repr. 1B', hCode: 'H360D',
+      limitLow: 3, limitHigh: null, conditionText: 'C ≥ 3 %', needsReview: false,
+    }],
+  };
+}
+
+/**
+ * ⭐⭐ Теллур, 052-001-00-0 — две категории ОДНОГО класса, которые сосуществуют:
+ * `Repr. 1B` (H360) и `Lact.` (H362). Своих пределов у него нет, обе считаются
+ * по Table 3.7.2 (0,3 %). Проверяет `Decision.additional[]`.
+ */
+function tellurium(conc: number): ComponentInput {
+  return {
+    id: 'tellurium', source: 'annex6', indexNumber: '052-001-00-0', casPrimary: '13494-80-9',
+    name: 'tellurium', conc,
+    classifications: [
+      { classCode: 'REPRO_TOX', categoryCode: '1B', hCode: 'H360', raw: 'Repr. 1B' },
+      { classCode: 'REPRO_TOX', categoryCode: 'Lactation', hCode: 'H362', raw: 'Lact.' },
+    ],
+  };
+}
+
+/**
+ * ⭐⭐ Фенолфталеин, 604-076-00-1 — три класса сразу (`Carc. 1B`, `Muta. 2`,
+ * `Repr. 2`) и СВОЙ предел только у одного из них: «Carc. 1B; H350: C ≥1 %»
+ * против общего 0,1 %. Проверяет, что приоритет SCL действует ПОКЛАССНО:
+ * канцерогенность судится по своему пределу, мутагенность — по общему.
+ */
+function phenolphthalein(conc: number): ComponentInput {
+  return {
+    id: 'phenolphthalein', source: 'annex6', indexNumber: '604-076-00-1', casPrimary: '77-09-8',
+    name: 'phenolphthalein', conc,
+    classifications: [
+      { classCode: 'CARCINOGEN', categoryCode: '1B', hCode: 'H350', raw: 'Carc. 1B' },
+      { classCode: 'MUTAGEN', categoryCode: '2', hCode: 'H341', raw: 'Muta. 2' },
+      { classCode: 'REPRO_TOX', categoryCode: '2', hCode: 'H361', raw: 'Repr. 2' },
+    ],
+    scl: [{
+      raw: 'Carc. 1B; H350: C ≥1 %', classCat: 'Carc. 1B', hCode: 'H350',
+      limitLow: 1, limitHigh: null, conditionText: 'C ≥1 %', needsReview: false,
+    }],
+  };
+}
+
 function mixture(components: ComponentInput[], over: Partial<MixtureInput['properties']> = {}): MixtureInput {
   return { components, properties: { physicalState: 'liquid', inhalForm: 'vapour', ...over }, audience: 'professional' };
 }
@@ -181,7 +317,8 @@ check('у каждого класса реестра есть модуль-вл�
 const ghost = [...owned.keys()].filter((c) => !registry.hasClass(c));
 check('модули не заявляют классов, которых нет в реестре', ghost.length === 0, ghost.join(', '));
 
-check('реализован ровно один модуль (A1)', DEFAULT_MODULES.filter((m) => m.implemented).map((m) => m.key).join(',') === 'A1');
+check('реализованы A1 и A4', DEFAULT_MODULES.filter((m) => m.implemented).map((m) => m.key).join(',') === 'A1,A4',
+  DEFAULT_MODULES.filter((m) => m.implemented).map((m) => m.key).join(','));
 
 /* ── 2. нормализация ────────────────────────────────────────────────────── */
 console.log('\n2. Нормализация входа');
@@ -219,13 +356,21 @@ const unknownKey = r1.decisions.filter((d) => d.ruleKey && !rules.has(d.ruleKey)
 check('каждый rule_key результата существует в таблице правил', unknownKey.length === 0,
   unknownKey.map((d) => `${d.classCode}:${d.ruleKey}`).join(', '));
 
-const CRITICAL = ['RULE_MISSING', 'REASON_MISSING', 'REGISTRY_GAP', 'MODULE_CONFLICT', 'MODULE_OVERLAP'];
-const crit = r1.decisions.flatMap((d) => d.warnings.filter((w) => CRITICAL.includes(w.code)).map((w) => `${d.classCode}:${w.code}`))
-  .concat(r1.warnings.filter((w) => CRITICAL.includes(w.code)).map((w) => w.code));
+const CRITICAL = ['RULE_MISSING', 'REASON_MISSING', 'REGISTRY_GAP', 'MODULE_CONFLICT', 'MODULE_OVERLAP',
+  'RULE_INCOMPLETE', 'ADDITIONAL_DUPLICATE', 'SCL_CATEGORY_UNPLACED'];
+/** Критические предупреждения ответа, включая сопутствующие категории (s82). */
+const criticalOf = (r: ClassifierResult): string[] => r.decisions
+  .flatMap((d) => [
+    ...d.warnings.filter((w) => CRITICAL.includes(w.code)).map((w) => `${d.classCode}:${w.code}`),
+    ...(d.additional ?? []).flatMap((a) => a.warnings.filter((w) => CRITICAL.includes(w.code))
+      .map((w) => `${d.classCode}/${a.categoryCode}:${w.code}`)),
+  ])
+  .concat(r.warnings.filter((w) => CRITICAL.includes(w.code)).map((w) => w.code));
+const crit = criticalOf(r1);
 check('ни одного критического предупреждения каркаса', crit.length === 0, crit.join(', '));
 
 check('у not_computed назван модуль-владелец',
-  r1.decisions.filter((d) => d.status === 'not_computed').every((d) => /module A[1-6]/.test(d.reason ?? '')));
+  r1.decisions.filter((d) => d.status === 'not_computed').every((d) => /[Mm]odule A[1-6]/.test(d.reason ?? '')));
 check('not_computed про Skin corr. называет компонент, который несёт класс',
   (of(r1, 'SKIN_CORR_IRRIT')?.reason ?? '').includes('sodium hydroxide'), of(r1, 'SKIN_CORR_IRRIT')?.reason ?? '');
 check('версия движка и релиз доехали в ответ', r1.engineVersion === ENGINE_VERSION && r1.release?.releaseKey === 'fixture');
@@ -296,6 +441,108 @@ check('сумма больше 100 % — критическое предупре
   rOver.warnings.some((w) => w.code === 'SUM_OVER_100' && w.level === 'critical'));
 check('worst case из диапазона — предупреждение',
   run(mixture([rangeComp])).warnings.some((w) => w.code === 'WORST_CASE'));
+
+/* ── 7. A4: классы по отсечке ───────────────────────────────────────────── */
+console.log('\n7. A4 — классы по отсечке (session 82)');
+
+// 7.1 ⭐⭐⭐ SCL не «уточняет» общий предел, а ЗАМЕНЯЕТ его.
+const a1 = run(mixture([degme(1), water(99, true)]));
+const repro1 = of(a1, 'REPRO_TOX')!;
+check('DEGME 1 % → НЕ Repr. 1B: у вещества свой предел 3 %, общий 0,3 % к нему не применяется',
+  repro1.status === 'not_classified' && repro1.categoryCode === null,
+  `${repro1.status} ${repro1.categoryCode}`);
+check('общий предел показан кандидатом с пометкой «checked and outranked»',
+  (repro1.candidates ?? []).some((c) => c.ruleKey === 'T3.7.2-1B' && !c.passed && (c.note ?? '').includes('outranked')),
+  JSON.stringify((repro1.candidates ?? []).map((c) => `${c.ruleKey}:${c.passed}`)));
+check('SCL тоже показан кандидатом и не сработал',
+  (repro1.candidates ?? []).some((c) => c.ruleKey === 'SCL:603-107-00-6:1' && !c.passed));
+check('строка «не классифицировано» несёт правило и дословный текст',
+  !!repro1.ruleKey && !!repro1.raw && !!repro1.reason, `${repro1.ruleKey} / ${repro1.raw}`);
+check('вклад компонента помечен источником предела SCL',
+  repro1.contributions.some((c) => c.componentId === 'degme' && c.limitSource === 'SCL' && c.limit === 3 && !c.counted));
+
+// 7.2 Тот же компонент выше своего предела — классифицирован, и цитата — SCL.
+const a2 = run(mixture([degme(5), water(95, true)]));
+const repro2 = of(a2, 'REPRO_TOX')!;
+check('DEGME 5 % → Repr. 1B по СВОЕМУ пределу',
+  repro2.status === 'classified' && repro2.categoryCode === '1B' && repro2.ruleKey === 'SCL:603-107-00-6:1',
+  `${repro2.status} ${repro2.categoryCode} ${repro2.ruleKey}`);
+check('в строке стоит дословный текст SCL, а не общего предела',
+  repro2.raw === 'Repr. 1B; H360D: C ≥ 3 %', String(repro2.raw));
+check('H-код и пиктограмма пришли из реестра', repro2.hCode === 'H360' && repro2.pictogramCode === 'GHS08');
+
+// 7.3 ⭐⭐⭐ Две категории одного класса, которые сосуществуют (решение Сергея s82).
+const a3 = run(mixture([tellurium(0.5), water(99.5, true)]));
+const repro3 = of(a3, 'REPRO_TOX')!;
+check('теллур 0,5 % → Repr. 1B по Table 3.7.2',
+  repro3.status === 'classified' && repro3.categoryCode === '1B' && repro3.ruleKey === 'T3.7.2-1B',
+  `${repro3.status} ${repro3.categoryCode} ${repro3.ruleKey}`);
+check('«Lact.» пришла отдельной сопутствующей категорией, а не потерялась',
+  (repro3.additional ?? []).length === 1 && repro3.additional![0]!.categoryCode === 'Lactation',
+  JSON.stringify((repro3.additional ?? []).map((x) => x.categoryCode)));
+check('у сопутствующей категории своё правило и свой дословный текст',
+  repro3.additional![0]!.ruleKey === 'T3.7.2-LACT' && !!repro3.additional![0]!.raw,
+  `${repro3.additional![0]!.ruleKey} / ${repro3.additional![0]!.raw}`);
+check('H362 доехал до этикетки наравне с H360',
+  a3.labelPairs.some((p) => p.classCode === 'REPRO_TOX' && p.hCode === 'H360')
+  && a3.labelPairs.some((p) => p.classCode === 'REPRO_TOX' && p.hCode === 'H362'),
+  JSON.stringify(a3.labelPairs.filter((p) => p.classCode === 'REPRO_TOX')));
+check('пар в этикетке столько же, сколько строк-категорий',
+  a3.labelPairs.length === a3.decisions.filter((d) => d.status === 'classified').length
+    + a3.decisions.reduce((n, d) => n + (d.additional?.length ?? 0), 0));
+
+const a4 = run(mixture([tellurium(0.2), water(99.8, true)]));
+const repro4 = of(a4, 'REPRO_TOX')!;
+check('теллур 0,2 % → не классифицировано, и причина называет компонент',
+  repro4.status === 'not_classified' && (repro4.reason ?? '').includes('tellurium'), repro4.reason ?? '');
+
+// 7.4 Приоритет SCL действует ПОКЛАССНО, а не на весь компонент целиком.
+const a5 = run(mixture([phenolphthalein(2), water(98, true)]));
+check('фенолфталеин 2 % → Carc. 1B по своему пределу «C ≥1 %»',
+  of(a5, 'CARCINOGEN')?.categoryCode === '1B' && of(a5, 'CARCINOGEN')?.ruleKey === 'SCL:604-076-00-1:1',
+  `${of(a5, 'CARCINOGEN')?.categoryCode} ${of(a5, 'CARCINOGEN')?.ruleKey}`);
+check('мутагенность того же компонента считается по ОБЩЕМУ пределу Table 3.5.2',
+  of(a5, 'MUTAGEN')?.categoryCode === '2' && of(a5, 'MUTAGEN')?.ruleKey === 'T3.5.2-2',
+  `${of(a5, 'MUTAGEN')?.categoryCode} ${of(a5, 'MUTAGEN')?.ruleKey}`);
+check('репротоксичность 2 % < 3,0 % → не классифицировано',
+  of(a5, 'REPRO_TOX')?.status === 'not_classified');
+check('триггер SDS по Table 3.7.2 Note 1 уехал в supplemental, а не в классификацию',
+  a5.supplemental.some((s) => s.kind === 'SDS_TRIGGER' && s.ruleKey === 'T3.7.2-SDS' && !!s.raw),
+  JSON.stringify(a5.supplemental.map((s) => s.ruleKey)));
+
+const a6 = run(mixture([phenolphthalein(0.5), water(99.5, true)]));
+check('фенолфталеин 0,5 % → НЕ канцероген: общий 0,1 % заменён его пределом 1 %',
+  of(a6, 'CARCINOGEN')?.status === 'not_classified',
+  `${of(a6, 'CARCINOGEN')?.status} ${of(a6, 'CARCINOGEN')?.categoryCode}`);
+check('и это видно в кандидатах: T3.6.2-1B проверен и уступил',
+  (of(a6, 'CARCINOGEN')?.candidates ?? []).some((c) => c.ruleKey === 'T3.6.2-1B' && (c.note ?? '').includes('outranked')));
+
+// 7.5 Пять отложенных классов A4 — честная строка с причиной, а не «неопасно».
+const a7 = run(mixture([methanol(25), water(75, true)]));
+const stotSe = of(a7, 'STOT_SE')!;
+check('STOT SE — not_computed от модуля A4 с конкретной причиной',
+  stotSe.status === 'not_computed' && stotSe.module === 'A4' && (stotSe.reason ?? '').includes('3.8.3.4.5'),
+  `${stotSe.module} ${stotSe.status}`);
+check('причина называет компонент, который несёт класс',
+  (stotSe.reason ?? '').includes('methanol'), stotSe.reason ?? '');
+check('все пять отложенных классов на месте и все от A4',
+  ['SKIN_SENS', 'RESP_SENS', 'STOT_SE', 'STOT_RE', 'ASPIRATION']
+    .every((cls) => of(a7, cls)?.status === 'not_computed' && of(a7, cls)?.module === 'A4'));
+
+// 7.6 Контракт выдачи на составе, где работают оба модуля.
+const a8 = run(mixture([phenolphthalein(2), degme(5), tellurium(0.5), water(92.5, true)]));
+const a8NoRule = a8.decisions.filter((d) => (d.status === 'classified' || d.status === 'not_classified') && (!d.ruleKey || !d.raw));
+check('у каждой строки A4 есть rule_key И дословный raw', a8NoRule.length === 0,
+  a8NoRule.map((d) => `${d.classCode}:${d.ruleKey}`).join(', '));
+const a8Unknown = a8.decisions
+  .flatMap((d) => [d.ruleKey, ...(d.additional ?? []).map((x) => x.ruleKey)])
+  .filter((k): k is string => !!k && !k.startsWith('SCL:') && !rules.has(k));
+check('каждый rule_key из базы существует в таблице правил (SCL — свой формат)',
+  a8Unknown.length === 0, a8Unknown.join(', '));
+const a8Crit = criticalOf(a8);
+check('ни одного критического предупреждения на смешанном составе', a8Crit.length === 0, a8Crit.join(', '));
+check('строк по-прежнему ровно по числу классов реестра',
+  a8.decisions.length === registry.classes().length, `${a8.decisions.length}`);
 
 console.log(`\n${failed ? `✗ ПРОВАЛЕНО: ${failed} из ${total}` : `✓ каркас зелёный — ${total} проверок`}`);
 process.exit(failed ? 1 : 0);
