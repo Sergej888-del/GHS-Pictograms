@@ -6888,6 +6888,120 @@ const CHECKS: Check[] = [
   },
 
   /**
+   * ⭐⭐⭐ №122 — МАРКЕРНЫЙ СТОРОЖ СТРАНИЦЫ КЛАССИФИКАТОРА (session 82).
+   *
+   * Заведён после главного дефекта session 81: инструкция «How to use», весь
+   * дисклеймер и четыре исходящие ссылки ОТСУТСТВОВАЛИ в собранном HTML при
+   * полностью зелёном прогоне. Astro рендерит остров на сборке ровно один раз,
+   * в НАЧАЛЬНОМ состоянии: всё, что стояло за `{helpOpen && …}` и
+   * `{result && …}`, в `dist/` не попадало вовсе. Нашлось живым запросом к
+   * проду, а не проверкой.
+   *
+   * ⚠⚠ Ни одна из 114 проверок этого не искала — и это не их изъян: они
+   * сверяют НАПЕЧАТАННОЕ с базой, а про пропущенный текст им никто не сказал,
+   * что он обязателен. Список ниже и есть то самое объявление: пока кусок
+   * назван здесь поимённо, «пропало из HTML» краснеет на сборке, а не
+   * обнаруживается через неделю на проде.
+   *
+   * ⚠ Маркеры взяты БЕЗ разметки: `<b>` внутри абзаца рвёт подстроку, а JSX
+   * склеивает перенос строки с отступом в один пробел. Ищем ровно тот текст,
+   * который в HTML лежит одним куском.
+   */
+  {
+    id: 'classifier-page',
+    group: 'Classifier',
+    title: 'Страница классификатора несёт инструкцию, дисклеймер и четыре исходящие ссылки',
+    run: async () => {
+      const rel = 'tools/clp-mixture-classifier/index.html'
+      const html = readPage(rel)
+      if (!html) {
+        return { id: 'classifier-page', group: 'Classifier', ok: false, headline: `нет ${rel}`, detail: [] }
+      }
+
+      // Раскрытие инструкции — нативный <details>, поэтому его содержимое
+      // обязано быть в HTML независимо от гидратации.
+      const HELP = ['How to use this calculator', '6 steps']
+      // Шесть шагов — по жирному началу каждого пункта.
+      const STEPS = [
+        'Add every ingredient.',
+        'Enter each concentration.',
+        'Say what you know about ingredients without data.',
+        'Set the mixture properties.',
+        'Read the result.',
+        'Keep the record.',
+      ]
+      // Дисклеймер: заголовок и та строка, ради которой он вообще стоит.
+      const DISCLAIMER = [
+        'read before you use any result from this tool',
+        'Article 4 of Regulation (EC) No 1272/2008',
+      ]
+      // Четыре ссылки — межстраничная сетка, ради неё блок и вынесен из ветки результата.
+      const LINKS = [
+        'href="/tools/ate-mixture-calculator/"',
+        'href="/ghs-label-maker/"',
+        'href="/sds-sections/section-2-hazards-identification/"',
+        'href="/hazard-classes/"',
+      ]
+      // Честность выдачи: раздел «The contract» и формула, которой помечены
+      // непосчитанные классы. Пустая ячейка читается как «неопасно» (урок s76).
+      const HONESTY = ['The contract', 'not computed in this version']
+
+      const groups: [string, string[]][] = [
+        ['инструкция', HELP],
+        ['шаги инструкции', STEPS],
+        ['дисклеймер', DISCLAIMER],
+        ['исходящие ссылки', LINKS],
+        ['контракт версии', HONESTY],
+      ]
+      const all = groups.flatMap(([, markers]) => markers)
+      assertAscii('classifier-page', all)
+
+      const detail: string[] = []
+      let missing = 0
+      for (const [name, markers] of groups) {
+        const gone = markers.filter((m) => !html.includes(m))
+        if (gone.length) {
+          missing += gone.length
+          detail.push(`${name}: нет в HTML (${gone.length}) — ${gone.join(' | ')}`)
+        }
+      }
+
+      // Остров и его бандл — тем же приёмом, что `storage-tool`: ссылка на
+      // отсутствующий файл означает живую вёрстку и мёртвый расчёт.
+      const island = html.match(/component-url="(\/_astro\/MixtureClassifier\.[A-Za-z0-9_-]+\.js)"/)
+      let bundle = ''
+      if (!island) {
+        missing++
+        detail.push('остров: на странице нет <astro-island> с MixtureClassifier')
+      } else {
+        bundle = island[1].replace(/^\//, '')
+        if (!existsSync(join(DIST, bundle))) {
+          missing++
+          detail.push(`остров: бандл ${bundle} — ФАЙЛА НЕТ`)
+        }
+      }
+
+      const ok = missing === 0
+      return {
+        id: 'classifier-page',
+        group: 'Classifier',
+        ok,
+        headline: ok
+          ? `${all.length} обязательных маркеров на месте, остров и бандл существуют`
+          : `не хватает ${missing}`,
+        detail: ok
+          ? [
+              `${STEPS.length} шагов инструкции — нативный <details>, а не состояние React`,
+              'дисклеймер и Related tools стоят ВНЕ ветки результата: иначе их нет в собранном HTML',
+              `бандл острова: ${bundle}`,
+              'заведено в s82 после дефекта s81: зелёный чек-лист не видит того, чего в HTML нет',
+            ]
+          : detail,
+      }
+    },
+  },
+
+  /**
    * ⭐⭐⭐ №113 — СЕКРЕТ В БАНДЛЕ (session 81).
    *
    * До этой проверки правило «service-ключ живёт только в
