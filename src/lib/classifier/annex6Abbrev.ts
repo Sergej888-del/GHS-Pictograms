@@ -101,6 +101,26 @@ export const SOURCE_TYPOS: ReadonlyArray<readonly [printed: RegExp, read: string
   [/Self-React\. C/g, 'Self-react. C', 'capital R'],
   [/Carc\. 2\. Repr\. 1B/g, 'Carc. 2 Repr. 1B', 'extra full stop after the category'],
   [/Unst\. Expl(?![.a-z])/g, 'Unst. Expl.', 'missing full stop — 609-010-00-5 and two more rows print "Unst. Expl"'],
+  // ── формы из КОЛОНКИ ПРЕДЕЛОВ, не из колонки (3) — добавлено в session 82 ──
+  // ⭐⭐ Модуль A4 читает `annex6_limits.class_cat` (специальные пределы, SCL)
+  // ТЕМ ЖЕ словарём: сокращения там те же самые, легенда Table 1.1 одна на весь
+  // Annex VI. Замер s82 по 474 строкам SCL: 39 различных форм ячейки, 14 из них
+  // словарь не знал. Одиннадцать — те же пропущенные пробелы и точки, что уже
+  // собраны выше; они внесены сюда поимённо. Оставшиеся три («Eye Irrit.»,
+  // «Resp. Sens.», «Skin Sens.») категории НЕ НЕСУТ вовсе — их разбор обязан
+  // остаться неудачным, и A4 в этом случае считает компонент по общему пределу
+  // с предупреждением, а не выдумывает подкатегорию.
+  [/Carc 1B\b/g, 'Carc. 1B', 'missing full stop in an SCL cell — 015-200-00-3'],
+  [/Repr\.1A\b/g, 'Repr. 1A', 'missing space in an SCL cell — 082-002-00-1'],
+  [/Repr\.2\b/g, 'Repr. 2', 'missing space in an SCL cell — 082-001-00-6'],
+  [/Eye Irrit 2\b/g, 'Eye Irrit. 2', 'missing full stop in an SCL cell'],
+  [/Eye Irrit\.2\b/g, 'Eye Irrit. 2', 'missing space in an SCL cell'],
+  [/EyeIrrit\. 2\b/g, 'Eye Irrit. 2', 'missing space after the class name in an SCL cell'],
+  [/Skin Irrit 2\b/g, 'Skin Irrit. 2', 'missing full stop in an SCL cell'],
+  [/Skin Irrit\.2\b/g, 'Skin Irrit. 2', 'missing space in an SCL cell'],
+  [/Skin Sens\.1/g, 'Skin Sens. 1', 'missing space in an SCL cell'],
+  [/STOT SE3\b/g, 'STOT SE 3', 'missing space in an SCL cell'],
+  [/STOTSE 3\b/g, 'STOT SE 3', 'missing space in the class name in an SCL cell'],
 ];
 
 /**
