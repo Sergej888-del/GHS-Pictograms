@@ -34,6 +34,7 @@ export const prerender = true
 
 import Layout from '../../layouts/Layout.astro'
 import MixtureClassifier from '../../components/MixtureClassifier'
+import SdsManagerCard from '../../components/SdsManagerCard.astro'
 import { supabase } from '../../lib/supabase'
 // ⚠⚠ Число посчитанных классов НЕ ПИШЕТСЯ РУКАМИ. Захардкоженное «11 классов»
 // — это обязательство перечитывать страницу после каждого дописанного модуля,
@@ -341,6 +342,23 @@ const breadcrumbJson = JSON.stringify({
         mixtures) and the summation tables of the health and environmental chapters; Annex VI Table 3 (harmonised
         classification and labelling). The release of the data behind any given result is printed under it.
       </p>
+
+      {/* ⚠⚠ №124 — ПАРТНЁРСКАЯ КАРТОЧКА. §8 CLAUDE.md: «placement, not pressure».
+          Место выбрано так, чтобы оно было честным САМО ПО СЕБЕ: человек уже
+          прочитал, откуда берутся числа, и уже увидел раздел «01 · The contract»
+          с перечнем того, чего инструмент НЕ считает. Карточка стоит НИЖЕ
+          расчёта и ничего в нём не заслоняет.
+          ⛔ Ни одно предупреждение, ни дисклеймер, ни строка «not computed» ради
+          этой карточки не ослаблены и не будут: ослабление верной информации об
+          опасности ради клика — единственное, что в §8 запрещено прямо.
+          ⚠ У страницы СВОЙ `fp_sid=gpclass`, а не sid раздела: без него клик
+          доедет до партнёра безымянным. Строка о нём — в SINGLES проверки
+          `affiliate-placement` (`check:dist`), иначе размещение не сторожится. */}
+      <SdsManagerCard
+        service="authoring"
+        body="This calculator does one mixture at a time, and it stops where the regulation stops being arithmetic: the classification still has to be written into a safety data sheet, kept in step with every ATP, and repeated for each product in the range and each language it is sold in. For doing that once rather than per product — classification, label elements and the sheet held together — the solution we recommend is SDS Manager (ExactSDS). It also offers SDS management and a broader EHS suite."
+        href="https://sdsmanager.com/us/sds-authoring?fpr=ghs3&fp_sid=gpclass"
+      />
     </div>
   </section>
 
