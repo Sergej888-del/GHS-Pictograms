@@ -933,6 +933,20 @@ check('⭐ та же смесь без вязкости → insufficient_data, �
 check('причина называет ровно то число, которого не хватает',
   (aspNo.reason ?? '').includes('kinematic viscosity') && (aspNo.reason ?? '').includes('20.5'),
   aspNo.reason ?? '');
+// ⚠⚠ НЕГАТИВНЫЕ МАРКЕРЫ, заведённые по живой пробе s83. Первая версия текста
+// подставляла `value_unit` целиком — а это ОПИСАНИЕ КОЛОНКИ, а не единица, — и
+// на проде вышло «its kinematic viscosity not entered (the limit is 20.5 mm2/s
+// at 40 °C (kinematic viscosity, ≤))»: пояснение в скобках повторяло сказанное
+// словами. Зелёная проверка этого не видела: она искала подстроки, а не
+// читаемость. Теперь сторожатся сами признаки повтора.
+check('в причине нет ни повтора «kinematic viscosity», ни вложенных скобок',
+  ((aspNo.reason ?? '').match(/kinematic viscosity/g) ?? []).length === 1
+  && !(aspNo.reason ?? '').includes('((') && !(aspNo.reason ?? '').includes(', ≤)'),
+  aspNo.reason ?? '');
+check('в агрегате стоит единица, а не подпись колонки базы',
+  (aspOk.aggregate?.expr ?? '').includes('mm2/s at 40 °C')
+  && !(aspOk.aggregate?.expr ?? '').includes('(kinematic viscosity'),
+  aspOk.aggregate?.expr ?? '');
 const aspThick = of(run(mixture([toluene(6), hexane(6), water(88, true)], { viscosityMm2s40c: 30 })), 'ASPIRATION')!;
 check('вязкость 30 > 20,5 → не классифицировано, и причина говорит почему',
   aspThick.status === 'not_classified' && (aspThick.reason ?? '').includes('is above'),

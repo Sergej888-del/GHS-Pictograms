@@ -361,6 +361,20 @@ function fmtNum(n: number): string {
   return Number(n.toPrecision(4)).toString();
 }
 
+/**
+ * Единица числа-шлюза без пояснения в скобках.
+ *
+ * ⚠⚠ `clp_generic_limits.value_unit` — это ОПИСАНИЕ КОЛОНКИ, а не единица:
+ * «mm2/s at 40 °C (kinematic viscosity, ≤)». Подставленное в предложение
+ * целиком, оно повторяет то, что уже сказано словами, и порождает вложенные
+ * скобки. Берём часть до первой скобки; нет скобки — берём как есть.
+ */
+function unitOf(row: GenericLimitRow | null): string {
+  const u = row?.valueUnit ?? '';
+  const at = u.indexOf(' (');
+  return (at >= 0 ? u.slice(0, at) : u).trim();
+}
+
 /** Человеческое имя категории компонента для строки провенанса. */
 function pairLabel(p: ClassCat): string {
   return p.raw && p.raw.trim() ? p.raw.trim() : `${p.classCode} ${p.categoryCode ?? ''}`.trim();
@@ -665,21 +679,29 @@ function classDecision(
       // Шлюз: свойство смеси, которое решает наравне с суммой.
       let gatePassed: boolean | null = null;
       let gateText: string | null = null;
+      let gateMax: number | null = null;
+      let gateUnit = '';
       if (step.gate === 'viscosity') {
         const row = rowOf(ruleKey);
-        const max = row?.value ?? null;
-        const unit = row?.valueUnit ?? '';
+        gateMax = row?.value ?? null;
+        // ⚠⚠ `value_unit` в базе — ОПИСАНИЕ КОЛОНКИ, а не единица:
+        // «mm2/s at 40 °C (kinematic viscosity, ≤)». Вставленное в предложение
+        // целиком, оно дало на проде (живая проба s83) неудобочитаемое
+        // «its kinematic viscosity not entered (the limit is 20.5 mm2/s at
+        // 40 °C (kinematic viscosity, ≤))» — пояснение в скобках повторяло то,
+        // что уже сказано словами. Берём только единицу, до первой скобки.
+        gateUnit = unitOf(row);
         const have = input.properties.viscosityMm2s40c ?? null;
-        if (max == null) {
+        if (gateMax == null) {
           warnings.push({
             code: 'RULE_INCOMPLETE', level: 'critical', ruleKey,
             message: 'The viscosity condition this class rests on carries no number in the rule table — report this result.',
           });
         } else if (have == null) {
-          gateText = `kinematic viscosity not entered (the limit is ${fmtNum(max)} ${unit})`;
+          gateText = `kinematic viscosity not entered; the rule caps it at ${fmtNum(gateMax)} ${gateUnit}`;
         } else {
-          gatePassed = have <= max;
-          gateText = `kinematic viscosity ${fmtNum(have)} ${gatePassed ? 'is at or below' : 'is above'} ${fmtNum(max)} ${unit}`;
+          gatePassed = have <= gateMax;
+          gateText = `the kinematic viscosity ${fmtNum(have)} ${gateUnit} is ${gatePassed ? 'at or below' : 'above'} the limit of ${fmtNum(gateMax)}`;
         }
       }
 
@@ -711,7 +733,9 @@ function classDecision(
         // назвать недостающее число и попросить его (решение Сергея s83).
         blockers.push({
           ruleKey,
-          reason: `The ingredients that carry this class add up to ${fmtPct(sum)} %, at or above the limit of ${fmtPct(limit ?? 0)} % — but this class also depends on a property of the mixture that has not been entered: its ${gateText ?? 'missing property'}. Enter it on the mixture properties tab and run the calculation again; until then this class is neither classified nor ruled out.`,
+          // ⚠ Причина строится ЗДЕСЬ, а не из `gateText`: та фраза написана для
+          // строки кандидата и внутри предложения повторяла бы саму себя.
+          reason: `The ingredients that carry this class add up to ${fmtPct(sum)} %, at or above the limit of ${fmtPct(limit ?? 0)} %. This class also depends on the kinematic viscosity of the mixture, and that has not been entered: the rule classifies only at or below ${gateMax == null ? 'the limit it names' : `${fmtNum(gateMax)} ${gateUnit}`}. Enter it on the mixture properties tab and run the calculation again; until then this class is neither classified nor ruled out.`,
         });
       }
     });
