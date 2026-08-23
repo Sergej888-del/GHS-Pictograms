@@ -248,6 +248,39 @@ export interface Candidate {
   note?: string;
 }
 
+/**
+ * Сопутствующая категория ТОГО ЖЕ класса. ⭐⭐⭐ Решение Сергея (s82).
+ *
+ * Каркас держит правило «один класс — одна строка», и оно верное: движок не
+ * умеет и не должен решать, что «хуже» — Skin Corr. «1» или «1A». Но внутри
+ * двух классов CLP печатает категории, которые вообще НЕ сравниваются как
+ * степени, потому что описывают разные эффекты и живут в разных колонках
+ * таблицы:
+ *   • REPRO_TOX — Repr. 1A/1B/2 (H360/H361) **и** «Lact.» (H362), последняя
+ *     колонка Table 3.7.2 названа «Additional category»;
+ *   • STOT_SE — «3» (H335, раздражение дыхательных путей) **и** «3 narcotic»
+ *     (H336, наркотическое действие).
+ * «Худшая из двух» здесь была бы не строгостью, а потерей: H362 и H336 просто
+ * исчезли бы с этикетки, а инструмент промолчал бы о реальной классификации.
+ *
+ * ⚠ Контракт провенанса на сопутствующую строку РАСПРОСТРАНЯЕТСЯ ЦЕЛИКОМ: свой
+ * `ruleKey`, свой дословный `raw`, своя таблица вкладов. Иначе она была бы
+ * припиской к чужому решению — ровно тем, чего не допускает `decide()`.
+ */
+export interface AdditionalCategory {
+  categoryCode: string;
+  hCode: string | null;
+  pictogramCode: string | null;
+  signalWord: string | null;
+  ruleKey: string | null;
+  raw: string | null;
+  sourceRef: string | null;
+  marker: string | null;
+  contributions: Contribution[];
+  aggregate?: Aggregate | null;
+  warnings: Warning[];
+}
+
 export interface Decision {
   classCode: string;
   categoryCode: string | null;
@@ -268,6 +301,12 @@ export interface Decision {
   aggregate?: Aggregate | null;
   candidates?: Candidate[];
   warnings: Warning[];
+  /**
+   * Категории того же класса, которые СОСУЩЕСТВУЮТ с основной, а не спорят с
+   * ней за место (Lact. H362, STOT SE «3 narcotic» H336). Едут в `labelPairs`
+   * наравне с основной строкой — см. `AdditionalCategory`.
+   */
+  additional?: AdditionalCategory[];
   /** Ключ модуля, выдавшего строку («A1»). */
   module: string;
   /** Результат опирается на коррекцию неизвестных (3.1.3.6.2.3). */

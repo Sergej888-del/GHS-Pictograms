@@ -13,7 +13,7 @@
 // ⛔ Строки для человека — по-английски (урок s68: литералы лежат в бандле).
 
 import type {
-  ClassifierData, Decision, DecisionStatus, GenericLimitRow, RegistryEntry,
+  AdditionalCategory, ClassifierData, Decision, DecisionStatus, GenericLimitRow, RegistryEntry,
   Contribution, Aggregate, Candidate, Warning, LabelPair, RuleLookup, RegistryLookup,
 } from './types.ts';
 
@@ -105,15 +105,31 @@ export interface DecideInput {
   raw?: string | null;
   sourceRef?: string | null;
   marker?: string | null;
+  /**
+   * Категории того же класса, сосуществующие с основной (Lact., «3 narcotic»).
+   * Каждая проходит тот же разбор правила, что и основная строка.
+   */
+  additional?: AdditionalInput[];
 }
 
-/**
- * Единственный конструктор `Decision`. Достаёт `raw`/`source_ref`/`marker` из
- * снимка по `ruleKey`; если ключа в таблице нет и текст не передан явно —
- * строка получает предупреждение `RULE_MISSING`, а не тихо остаётся без цитаты.
- */
-export function decide(p: DecideInput, rules: RuleLookup, registry: RegistryLookup): Decision {
-  const warnings = [...(p.warnings ?? [])];
+/** Вход сопутствующей категории — тот же контракт провенанса, что у основной. */
+export interface AdditionalInput {
+  categoryCode: string;
+  ruleKey?: string | null;
+  raw?: string | null;
+  sourceRef?: string | null;
+  marker?: string | null;
+  contributions?: Contribution[];
+  aggregate?: Aggregate | null;
+  warnings?: Warning[];
+}
+
+/** Текст правила из снимка + предупреждения разбора. Общий для основной и сопутствующих строк. */
+function resolveRule(
+  p: { ruleKey?: string | null; raw?: string | null; sourceRef?: string | null; marker?: string | null },
+  rules: RuleLookup,
+): { raw: string | null; sourceRef: string | null; marker: string | null; warnings: Warning[] } {
+  const warnings: Warning[] = [];
   let raw = p.raw ?? null;
   let sourceRef = p.sourceRef ?? null;
   let marker = p.marker ?? null;
@@ -137,6 +153,20 @@ export function decide(p: DecideInput, rules: RuleLookup, registry: RegistryLook
       });
     }
   }
+  return { raw, sourceRef, marker, warnings };
+}
+
+/**
+ * Единственный конструктор `Decision`. Достаёт `raw`/`source_ref`/`marker` из
+ * снимка по `ruleKey`; если ключа в таблице нет и текст не передан явно —
+ * строка получает предупреждение `RULE_MISSING`, а не тихо остаётся без цитаты.
+ */
+export function decide(p: DecideInput, rules: RuleLookup, registry: RegistryLookup): Decision {
+  const main = resolveRule(p, rules);
+  const warnings = [...(p.warnings ?? []), ...main.warnings];
+  const raw = main.raw;
+  const sourceRef = main.sourceRef;
+  const marker = main.marker;
 
   const entry = registry.entry(p.classCode, p.categoryCode);
   const needsRule = p.status === 'classified' || p.status === 'not_classified';
@@ -159,6 +189,53 @@ export function decide(p: DecideInput, rules: RuleLookup, registry: RegistryLook
     });
   }
 
+  // ── сопутствующие категории того же класса ───────────────────────────────
+  // ⚠ Проверяются ровно так же, как основная строка: правило, дословный текст,
+  // наличие пары в реестре. Плюс одно правило сверх: сопутствующая не может
+  // повторять основную категорию — это была бы вторая строка об одном и том же.
+  let additional: AdditionalCategory[] | undefined;
+  if (p.additional?.length) {
+    additional = [];
+    const seen = new Set<string>(p.categoryCode != null ? [p.categoryCode] : []);
+    for (const a of p.additional) {
+      const r = resolveRule(a, rules);
+      const aWarn = [...(a.warnings ?? []), ...r.warnings];
+      if (!a.ruleKey) {
+        aWarn.push({
+          code: 'RULE_MISSING', level: 'critical',
+          message: 'An additional category was produced without a rule reference — report this result.',
+        });
+      }
+      const aEntry = registry.entry(p.classCode, a.categoryCode);
+      if (!aEntry) {
+        aWarn.push({
+          code: 'REGISTRY_GAP', level: 'critical',
+          message: `Category ${a.categoryCode} is not in our registry for this class — report this result.`,
+        });
+      }
+      if (seen.has(a.categoryCode)) {
+        aWarn.push({
+          code: 'ADDITIONAL_DUPLICATE', level: 'critical',
+          message: `Category ${a.categoryCode} is already the category of this line — report this result.`,
+        });
+      }
+      seen.add(a.categoryCode);
+      additional.push({
+        categoryCode: a.categoryCode,
+        hCode: aEntry?.hCode ?? null,
+        pictogramCode: aEntry?.pictogramCode ?? null,
+        signalWord: aEntry?.signalWord ?? null,
+        ruleKey: a.ruleKey ?? null,
+        raw: r.raw,
+        sourceRef: r.sourceRef,
+        marker: r.marker,
+        contributions: a.contributions ?? [],
+        aggregate: a.aggregate ?? null,
+        warnings: aWarn,
+      });
+    }
+  }
+
   return {
     classCode: p.classCode,
     categoryCode: p.categoryCode,
@@ -174,13 +251,19 @@ export function decide(p: DecideInput, rules: RuleLookup, registry: RegistryLook
     contributions: p.contributions ?? [],
     aggregate: p.aggregate ?? null,
     candidates: p.candidates,
+    additional,
     warnings,
     module: p.module,
     provisional: p.provisional,
   };
 }
 
-/** Пары для конвейера этикетки — только из классифицированных строк. */
+/**
+ * Пары для конвейера этикетки — только из классифицированных строк.
+ * ⚠ Сопутствующие категории (Lact., «3 narcotic») едут ЗДЕСЬ ЖЕ: они не
+ * украшение строки, а самостоятельная классификация со своим H-кодом, и на
+ * этикетке им место наравне с основной (решение Сергея s82).
+ */
 export function labelPairs(decisions: ReadonlyArray<Decision>): LabelPair[] {
   const out: LabelPair[] = [];
   for (const d of decisions) {
@@ -192,6 +275,15 @@ export function labelPairs(decisions: ReadonlyArray<Decision>): LabelPair[] {
       pictogramCode: d.pictogramCode,
       signalWord: d.signalWord,
     });
+    for (const a of d.additional ?? []) {
+      out.push({
+        classCode: d.classCode,
+        categoryCode: a.categoryCode,
+        hCode: a.hCode,
+        pictogramCode: a.pictogramCode,
+        signalWord: a.signalWord,
+      });
+    }
   }
   return out;
 }
