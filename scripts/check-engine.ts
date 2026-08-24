@@ -20,6 +20,9 @@
 import { classifyMixture, normalize, ENGINE_VERSION } from '../src/lib/classifier/engine.ts';
 import { DEFAULT_MODULES } from '../src/lib/classifier/modules/index.ts';
 import { RuleIndex, Registry } from '../src/lib/classifier/data.ts';
+import { buildReport, resultFingerprint } from '../src/lib/classifier/report.ts';
+import { reportPdfHtml } from '../src/lib/classifier/reportHtml.ts';
+import { A0_PARSER_VERSION } from '../src/lib/classifier/version.ts';
 import type {
   ClassifierData, ClassifierResult, ComponentInput, GenericLimitRow, MixtureInput, RegistryEntry,
 } from '../src/lib/classifier/types.ts';
@@ -319,8 +322,11 @@ const DATA: ClassifierData = {
   registry: REGISTRY,
   release: {
     releaseKey: 'fixture', annex6Consolidation: '02008R1272-20260501', atp: 'fixture',
-    engineVersion: ENGINE_VERSION, parserVersion: null, gclMd5: null, limitsMd5: null,
+    engineVersion: ENGINE_VERSION, parserVersion: A0_PARSER_VERSION, gclMd5: null, limitsMd5: null,
     classificationMd5: null, releasedAt: '2026-08-22T00:00:00Z', note: 'check-engine fixture',
+    // ⚠ Числа релиза (№116) — настоящие, снятые из `data_release` в s84: отчёт
+    // печатает их как объём данных, на которых считали.
+    annex6Rows: 4419, classificationPairs: 13512, registryCategories: 121,
   },
 };
 
@@ -985,6 +991,177 @@ check('смесь получила и полосу, и сумму, и отсеч
   && of(big, 'ASPIRATION')?.categoryCode === '1'
   && of(big, 'RESP_SENS')?.categoryCode === '1',
   `${of(big, 'STOT_SE')?.categoryCode} / ${of(big, 'ASPIRATION')?.categoryCode} / ${of(big, 'RESP_SENS')?.categoryCode}`);
+
+/* ── 9. отчёт (№118, session 84) ────────────────────────────────────────── */
+console.log('\n9. Печатный отчёт');
+
+const className = (c: string): string => registry.className(c);
+const rRep = run(mixture(
+  [methanol(25), tellurium(0.5), toluene(6), hexane(6), water(62.5)],
+  { viscosityMm2s40c: 1.2 },
+));
+const rep = buildReport(rRep, { className });
+
+// 9.1 ⭐⭐⭐ Отчёт не может ТИХО не напечатать класс: строк в разделах ровно
+// столько же, сколько решений в ответе. Именно так теряются целые классы —
+// не ошибкой в правиле, а разделом, который «не подошёл».
+const linesInReport = rep.sections.reduce((s, x) => s + x.lines.length, 0);
+check('в отчёте столько же строк, сколько решений в ответе',
+  linesInReport === rRep.decisions.length, `${linesInReport} vs ${rRep.decisions.length}`);
+check('раздел «assigned» стоит всегда, даже когда он пуст',
+  rep.sections.some((s) => s.key === 'classified'));
+check('у каждого раздела есть фраза, объясняющая, чего он стоит',
+  rep.sections.every((s) => s.lead.length > 40));
+
+// 9.2 Контракт провенанса переехал в отчёт целиком.
+const repNoRule = rep.sections
+  .filter((s) => s.key === 'classified' || s.key === 'not_classified')
+  .flatMap((s) => s.lines)
+  .filter((l) => l.rule.ruleKey === 'no rule key' || !l.rule.raw);
+check('у каждой печатаемой строки класса есть ключ правила и дословный текст',
+  repNoRule.length === 0, repNoRule.map((l) => l.classCode).join(', '));
+const repNoReason = rep.sections
+  .filter((s) => s.key === 'insufficient_data' || s.key === 'not_computed')
+  .flatMap((s) => s.lines)
+  .filter((l) => !l.reason);
+check('у каждой строки без ответа причина доехала до отчёта',
+  repNoReason.length === 0, repNoReason.map((l) => l.classCode).join(', '));
+
+// 9.3 Эхо входа: что ввели и что взяли в расчёт — ОБЕ величины.
+check('в отчёте столько же ингредиентов, сколько ввели', rep.composition.lines.length === 5);
+const repRange = buildReport(run(mixture([rangeComp])), { className }).composition.lines[0]!;
+check('при диапазоне печатаются обе границы и то, чем считали',
+  repRange.entered === '10 – 30 %' && repRange.used === '30 %' && repRange.worstCase,
+  `${repRange.entered} → ${repRange.used}`);
+check('свойства смеси печатаются ВСЕ, включая незаполненные',
+  rep.composition.properties.some((p) => p.label === 'pH' && p.value === 'not entered'),
+  JSON.stringify(rep.composition.properties.map((p) => p.label)));
+check('пределы компонента доехали в эхо (SCL метанола)',
+  (rep.composition.lines.find((l) => l.name === 'methanol')?.scl ?? []).some((s) => s.includes('C≥10 %')));
+
+// 9.4 Сопутствующая категория печатается со своим правилом (s82 → отчёт).
+const repRepro = rep.sections.flatMap((s) => s.lines).find((l) => l.classCode === 'REPRO_TOX')!;
+check('сопутствующая категория в отчёте несёт СВОЁ правило и СВОЮ цитату',
+  repRepro.additional.length === 1
+  && repRepro.additional[0]!.rule.ruleKey === 'T3.7.2-LACT'
+  && !!repRepro.additional[0]!.rule.raw,
+  JSON.stringify(repRepro.additional.map((a) => a.rule.ruleKey)));
+
+// 9.5 Штамп версии.
+check('штамп несёт движок, релиз, консолидацию и версию парсера',
+  ['Engine', 'Data release', 'Annex VI consolidation', 'Annex VI parser']
+    .every((k) => rep.stamp.lines.some((l) => l.label === k)),
+  JSON.stringify(rep.stamp.lines.map((l) => l.label)));
+check('⭐ №116: объём данных релиза печатается из ответа, а не пишется руками',
+  (rep.stamp.lines.find((l) => l.label === 'Data volume')?.value ?? '').includes('13512'),
+  rep.stamp.lines.find((l) => l.label === 'Data volume')?.value ?? '');
+check('совпадающие штампы молчат', rep.stamp.notes.length === 0, rep.stamp.notes.join(' | '));
+
+// 9.6 ⭐⭐⭐ №110: РАСХОЖДЕНИЕ ШТАМПОВ ВИДНО, А НЕ ВЫБИРАЕТСЯ МОЛЧА. Ровно этот
+// дефект жил в базе: там стояло `a0-parser 1.0`, в коде `1.1`, и заметить это
+// было нечем — а печатается он в самом заметном месте аудиторского отчёта.
+const DRIFT: ClassifierData = {
+  ...DATA,
+  release: { ...DATA.release!, engineVersion: 'classifier 0.9', parserVersion: 'a0-parser 1.0 (s78)' },
+};
+const rDrift = classifyMixture(mixture([methanol(25), water(75, true)]), DRIFT, { computedAt: '2026-08-22T00:00:00Z' });
+const repDrift = buildReport(rDrift, { className });
+check('расхождение версии движка и версии парсера — два отдельных предупреждения',
+  rDrift.warnings.filter((w) => w.code === 'ENGINE_STAMP_DRIFT' || w.code === 'PARSER_STAMP_DRIFT').length === 2,
+  JSON.stringify(rDrift.warnings.map((w) => w.code)));
+check('в отчёте они стоят в подвале версии, а не в списке замечаний к смеси',
+  repDrift.stamp.notes.length === 2
+  && !repDrift.warnings.some((w) => w.code.endsWith('STAMP_DRIFT')),
+  `${repDrift.stamp.notes.length} / ${repDrift.warnings.map((w) => w.code).join(',')}`);
+check('обе строки версии напечатаны, ни одна не выброшена',
+  repDrift.stamp.notes.join(' ').includes('classifier 0.9')
+  && repDrift.stamp.notes.join(' ').includes(ENGINE_VERSION)
+  && repDrift.stamp.notes.join(' ').includes('a0-parser 1.0 (s78)'));
+
+// 9.7 Отпечаток результата: чем он обязан быть и чем НЕ обязан.
+check('отпечаток детерминирован: тот же вход → тот же отпечаток',
+  resultFingerprint(rRep) === resultFingerprint(run(mixture(
+    [methanol(25), tellurium(0.5), toluene(6), hexane(6), water(62.5)], { viscosityMm2s40c: 1.2 }))));
+check('⭐ метка времени в отпечаток НЕ входит — иначе каждая копия расчёта была бы «другим результатом»',
+  resultFingerprint(rRep)
+  === resultFingerprint(classifyMixture(
+    mixture([methanol(25), tellurium(0.5), toluene(6), hexane(6), water(62.5)], { viscosityMm2s40c: 1.2 }),
+    DATA, { computedAt: '2030-01-01T00:00:00Z' })));
+check('смена ответа меняет отпечаток (DEGME 1 % против 5 %)',
+  resultFingerprint(run(mixture([degme(1), water(99, true)])))
+  !== resultFingerprint(run(mixture([degme(5), water(95, true)]))));
+check('отпечаток — 16 hex-знаков', /^[0-9a-f]{16}$/.test(rep.fingerprint), rep.fingerprint);
+
+// 9.8 ⚠⚠ НЕГАТИВНЫЕ МАРКЕРЫ ФОРМЫ ТЕКСТА — урок s83 («подстрока ≠ читаемость»).
+// Отчёт собирается из десятков необязательных полей; первая же забытая проверка
+// на `null` печатает читателю «undefined» вместо числа, и подстроковая проверка
+// этого не увидит, потому что искала бы то, что есть, а не то, чего быть не должно.
+const repText = JSON.stringify(rep);
+const BAD = ['undefined', 'null', 'NaN', '[object Object]', ': ,', '  '];
+const badFound = BAD.filter((b) => repText.includes(`"${b}`) || repText.includes(`${b}"`) || repText.includes(` ${b} `));
+check('в напечатанном отчёте нет ни undefined, ни null, ни NaN, ни object Object',
+  badFound.length === 0, badFound.join(', '));
+check('прочерк там, где значения нет, а не пустая строка',
+  rep.sections.flatMap((s) => s.lines).every((l) => l.category.length > 0 && l.hCode.length > 0));
+
+// 9.9 ⭐⭐⭐ АГРЕГАТ И ТАБЛИЦА ВКЛАДОВ НЕ МОГУТ ПРОТИВОРЕЧИТЬ ДРУГ ДРУГУ.
+// Дефект s84, найденный чтением отчёта: аспирация печатала «toluene 6.0 % +
+// n-hexane 6.0 % = 12.0 % >= 10.0 %», а те же два компонента в таблице стояли
+// как «not counted». Проверка общая, а не про аспирацию: если компонент назван
+// в арифметике, он обязан быть помечен учтённым — в любом классе и любом модуле.
+const contradictions = rRep.decisions.flatMap((d) => {
+  const expr = d.aggregate?.expr ?? '';
+  if (!expr) return [];
+  return d.contributions
+    .filter((c) => !c.counted && c.name && expr.includes(c.name))
+    .map((c) => `${d.classCode}: ${c.name}`);
+});
+check('компонент, названный в арифметике, помечен учтённым', contradictions.length === 0,
+  contradictions.join(', '));
+const aspContrib = of(rRep, 'ASPIRATION')!.contributions.filter((c) => c.counted);
+check('оба члена суммы аспирации учтены, и провенанс называет сумму',
+  aspContrib.length === 2 && aspContrib.every((c) => c.provenance.includes('counted in the sum of this class')),
+  aspContrib.map((c) => `${c.name}: ${c.provenance}`).join(' | '));
+const aspBelow = of(run(mixture([toluene(0.5), water(99.5, true)], { viscosityMm2s40c: 1.2 })), 'ASPIRATION')!;
+check('отсеянный по релевантности в сумму НЕ попал и учтённым не помечен',
+  aspBelow.contributions.every((c) => !c.counted),
+  aspBelow.contributions.map((c) => `${c.name}:${c.counted}`).join(', '));
+
+// 9.10 Согласование в числе там, где число подставляется в предложение.
+const oneCarrier = of(run(mixture([hexane(5), water(95, true)])), 'AQUATIC_CHRONIC')!;
+check('«1 ingredient … carries it», а не «carry it»',
+  (oneCarrier.reason ?? '').includes('1 ingredient in this mixture carries it')
+  && !(oneCarrier.reason ?? '').includes('carry it'),
+  oneCarrier.reason ?? '');
+const twoCarriers = of(run(mixture([toluene(5), hexane(5), water(90, true)])), 'SKIN_CORR_IRRIT')!;
+check('«2 ingredients … carry it» — множественное на месте',
+  (twoCarriers.reason ?? '').includes('2 ingredients in this mixture carry it'),
+  twoCarriers.reason ?? '');
+
+// 9.11 PDF — та же модель строкой.
+const html = reportPdfHtml(rep);
+check('PDF-разметка несёт вердикт, эхо входа, разделы и штамп',
+  ['CLP mixture classification report', 'What was entered', 'Data release and engine', 'Hazard classes assigned']
+    .every((s) => html.includes(s)));
+check('⭐ в PDF-разметке нет ни одного токена и ни одного oklch — html2canvas 1.4.1 их не разбирает (урок s79)',
+  !html.includes('var(--') && !/oklch|oklab|color-mix/i.test(html));
+check('данные ответа экранированы, а не вставлены как разметка',
+  !buildAndRender('<script>alert(1)</script>').includes('<script>alert(1)</script>'));
+// ⚠ Та же негативная проверка, но по ГОТОВОЙ разметке: в модели `null` законен
+// (поля необязательные), а в напечатанном листе — нет.
+check('в PDF-разметке нет ни undefined, ни NaN, ни [object Object]',
+  !/undefined|NaN|\[object Object\]/.test(html));
+check('строка отчёта и строка PDF говорят об одном и том же классе',
+  html.includes(className('ASPIRATION')) && rep.sections.flatMap((s) => s.lines).some((l) => l.classCode === 'ASPIRATION'));
+
+/**
+ * Прогон с ингредиентом, чьё имя — разметка. ⛔ Имя приходит из базы (№125), но
+ * `supplier`-строку человек печатает сам, и она попадает и в отчёт, и в PDF.
+ */
+function buildAndRender(name: string): string {
+  const evil: ComponentInput = { id: 'evil', source: 'supplier', name, conc: 5, classifications: [], knownNonhazard: true };
+  return reportPdfHtml(buildReport(run(mixture([evil, water(95, true)])), { className }));
+}
 
 console.log(`\n${failed ? `✗ ПРОВАЛЕНО: ${failed} из ${total}` : `✓ каркас зелёный — ${total} проверок`}`);
 process.exit(failed ? 1 : 0);

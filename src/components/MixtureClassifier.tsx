@@ -32,6 +32,8 @@ import type { ReactNode } from 'react'
 import type {
   Audience, ClassifierResult, Decision, InhalForm, PhysicalState, Warning,
 } from '../lib/classifier/types'
+import { buildReport, resultFingerprint, stampTime } from '../lib/classifier/report'
+import MixtureReport from './MixtureReport'
 import { labelMakerHref } from '../lib/labelMakerLink'
 
 /* ── контракт с Function ─────────────────────────────────────────────────── */
@@ -74,6 +76,45 @@ interface Profile {
 }
 
 interface RateInfo { remaining: number; limit: number; resetAt: string }
+
+/**
+ * Тело запроса к `/api/classify`. ⭐⭐⭐ Оно же — то, что хранит короткая ссылка
+ * (решение s80: хранится ВХОД, не результат). Поэтому тип объявлен отдельно и
+ * используется в обе стороны: собрали → посчитали → отдали в `share`; получили
+ * из `share` → посчитали тем же кодом. Две разные сборки тела означали бы, что
+ * по ссылке считается не то, что считал автор.
+ */
+interface RequestBody {
+  components: {
+    id: string
+    source: RowSource
+    indexNumber: string | null
+    name: string
+    conc: number
+    concMax: number | null
+    knownNonhazard: boolean
+    classifications: { classCode: string; categoryCode: string }[]
+  }[]
+  properties: {
+    physicalState: PhysicalState
+    inhalForm: InhalForm
+    ph: number | null
+    acidAlkaliReserve: boolean
+    viscosityMm2s40c: number | null
+    separatesIntoLayers: boolean
+  }
+  audience: Audience
+  remainderStatedNonhazard: boolean
+}
+
+/** Что известно про открытую короткую ссылку и чем её ответ отличается от нашего. */
+interface OpenedShare {
+  createdAt: string
+  releaseKey: string
+  /** `null` — отпечаток не сохранялся (ссылка старше №118). */
+  storedHash: string | null
+  verdict: 'same' | 'changed' | 'unknown'
+}
 
 /* ── реестр классов (приходит со сборки, см. страницу) ───────────────────── */
 
@@ -353,6 +394,23 @@ export default function MixtureClassifier({ registry }: Props) {
   const [openWhy, setOpenWhy] = useState<Record<string, boolean>>({})
   const [copied, setCopied] = useState(false)
 
+  /* ── отчёт, PDF и короткая ссылка (№118) ──────────────────────────────── */
+
+  const [showReport, setShowReport] = useState(false)
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const [pdfError, setPdfError] = useState<string | null>(null)
+  /**
+   * ⚠ Тело, которым получен ТЕКУЩИЙ результат, а не то, что набрано слева.
+   * Делиться надо ровно тем расчётом, который человек видит: состав мог
+   * измениться после него (для этого и живёт пометка «out of date»).
+   */
+  const [lastBody, setLastBody] = useState<RequestBody | null>(null)
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [shareBusy, setShareBusy] = useState(false)
+  const [shareError, setShareError] = useState<string | null>(null)
+  const [shareCopied, setShareCopied] = useState(false)
+  const [opened, setOpened] = useState<OpenedShare | null>(null)
+
   const [ledger, setLedger] = useState<LedgerEntry[]>([])
   const pending = useRef<PendingAction[]>([])
   const ledgerId = useRef(0)
@@ -462,6 +520,10 @@ export default function MixtureClassifier({ registry }: Props) {
     setReserve(false); setLayers(false); setRemainderStated(false)
     setPhysicalState('liquid'); setInhalForm('vapour'); setFormTouched(false)
     setTab('composition')
+    // ⚠ Отчёт, ссылка и пометка «открыто по ссылке» относились к сброшенному
+    // расчёту. Оставить их — значит показать штамп одного расчёта над другим.
+    setShowReport(false); setLastBody(null); setShareUrl(null); setShareError(null)
+    setShareCopied(false); setPdfError(null); setOpened(null)
     pending.current = []
   }
 
@@ -518,10 +580,9 @@ export default function MixtureClassifier({ registry }: Props) {
 
   /* ── расчёт ───────────────────────────────────────────────────────────── */
 
-  const classify = async () => {
-    setBusy(true); setError(null)
-    try {
-      const body = {
+  /** Тело запроса из того, что набрано слева. Одна сборка на все пути. */
+  const buildBody = useCallback((): RequestBody => {
+    return {
         components: rows.map((r) => {
           const min = num(r.conc) ?? 0
           const max = r.range ? num(r.concMax) : null
@@ -549,7 +610,18 @@ export default function MixtureClassifier({ registry }: Props) {
         },
         audience,
         remainderStatedNonhazard: remainderStated,
-      }
+    }
+  }, [rows, physicalState, inhalForm, ph, reserve, viscosity, layers, audience, remainderStated])
+
+  /**
+   * Расчёт. ⭐ Принимает ГОТОВОЕ тело: по короткой ссылке считается то, что
+   * прислал автор, а не то, что успело собраться из восстановленных полей.
+   * Возвращает результат — открывшему ссылку его надо сверить с отпечатком.
+   */
+  const classify = async (override?: RequestBody): Promise<ClassifierResult | null> => {
+    setBusy(true); setError(null)
+    try {
+      const body = override ?? buildBody()
 
       const res = await fetch('/api/classify', {
         method: 'POST',
@@ -558,7 +630,7 @@ export default function MixtureClassifier({ registry }: Props) {
       })
       const data = await res.json()
       if (data.rateLimit) setRate(data.rateLimit)
-      if (!data.ok) { setError(data.error?.message ?? 'The classification could not be completed.'); return }
+      if (!data.ok) { setError(data.error?.message ?? 'The classification could not be completed.'); return null }
 
       const next: ClassifierResult = data.result
       const transitions = diffResults(result, next, classNameOf)
@@ -567,9 +639,14 @@ export default function MixtureClassifier({ registry }: Props) {
       ledgerId.current += 1
       setLedger((l) => [{ id: ledgerId.current, actions, transitions }, ...l].slice(0, 20))
       setResult(next)
+      setLastBody(body)
       setStale(false)
+      // ⚠ Ссылка относилась к ПРЕДЫДУЩЕМУ расчёту — после нового она бы врала.
+      setShareUrl(null); setShareError(null); setShareCopied(false)
+      return next
     } catch {
       setError('The classifier is unreachable from here. The API runs in the Cloudflare Pages build, not in the Astro dev server.')
+      return null
     } finally {
       setBusy(false)
     }
@@ -669,6 +746,230 @@ export default function MixtureClassifier({ registry }: Props) {
     }
   }
 
+  /* ── отчёт, PDF, короткая ссылка (№118) ───────────────────────────────── */
+
+  /**
+   * ⭐⭐⭐ Модель отчёта — ЧИСТАЯ ФУНКЦИЯ ОТ ОТВЕТА (решение Сергея, s80).
+   * Ни одного запроса, ни одной величины помимо той, что уже приехала. Экран
+   * (`MixtureReport`) и PDF (`reportPdfHtml`) читают ЕЁ ЖЕ — разойтись им нечем.
+   */
+  const report = useMemo(
+    () => (result ? buildReport(result, { className: classNameOf, shareUrl }) : null),
+    [result, classNameOf, shareUrl],
+  )
+
+  const downloadPdf = async () => {
+    if (!report) return
+    setPdfBusy(true); setPdfError(null)
+    try {
+      // Оба модуля — динамическим import(): html2pdf весит больше страницы,
+      // а разметка отчёта нужна только тому, кто нажал кнопку.
+      const html2pdf = (await import('html2pdf.js')).default as any
+      const { reportPdfHtml } = await import('../lib/classifier/reportHtml')
+
+      const holder = document.createElement('div')
+      holder.style.cssText = 'position:fixed;left:-10000px;top:0;color:#0f172a;background:#ffffff;'
+      holder.innerHTML = reportPdfHtml(report)
+      document.body.appendChild(holder)
+
+      // ⚠⚠ s79, повторно: html2pdf клонирует фрагмент в `document.body`, а
+      // html2canvas 1.4.1 разбирает computed-цвет КАЖДОГО узла — включая
+      // унаследованный от body `oklch(…)` Tailwind v4, которого он не знает
+      // («Attempting to parse an unsupported color function "oklch"»), и молча
+      // роняет кнопку. Лечение — hex прямо в клоне документа.
+      const neutralise = (doc: Document) => {
+        const roots = [doc.documentElement, doc.body,
+          ...Array.from(doc.querySelectorAll<HTMLElement>('.html2pdf__overlay, .html2pdf__container'))]
+        for (const el of roots) {
+          if (!el) continue
+          el.style.color = '#0f172a'
+          el.style.backgroundColor = '#ffffff'
+          el.style.borderColor = '#e2e8f0'
+        }
+        const win = doc.defaultView
+        if (!win) return
+        const PROPS: Array<[string, string]> = [
+          ['color', '#0f172a'], ['backgroundColor', 'transparent'],
+          ['borderTopColor', '#e2e8f0'], ['borderRightColor', '#e2e8f0'],
+          ['borderBottomColor', '#e2e8f0'], ['borderLeftColor', '#e2e8f0'],
+          ['textDecorationColor', '#0f172a'], ['outlineColor', 'transparent'],
+        ]
+        doc.querySelectorAll<HTMLElement>('.html2pdf__container, .html2pdf__container *').forEach((el) => {
+          const cs = win.getComputedStyle(el)
+          for (const [prop, fallback] of PROPS) {
+            const v = (cs as any)[prop] as string | undefined
+            if (v && /oklch|oklab|color-mix|lab\(|lch\(/i.test(v)) (el.style as any)[prop] = fallback
+          }
+        })
+      }
+
+      const stamp = (result?.computedAt ?? new Date().toISOString()).slice(0, 10)
+      try {
+        await html2pdf()
+          .set({
+            margin: [10, 10, 12, 10],
+            filename: `clp-mixture-classification-report-${stamp}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', onclone: neutralise },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            // ⚠ s79: `avoid-all` уносил целые таблицы на новую страницу, оставляя
+            // заголовок над пустотой. Неразрывны только строки и карточка класса.
+            pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.cl', '.vd'] },
+          })
+          .from(holder.firstElementChild as HTMLElement)
+          .save()
+      } finally {
+        holder.remove()
+      }
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : String(err))
+      // ⚠ Сообщение об ошибке обещает, что отчёт есть на странице — значит он
+      // обязан быть РАСКРЫТ. Обещание, которого не видно, — то же, что ложь.
+      setShowReport(true)
+    } finally {
+      setPdfBusy(false)
+    }
+  }
+
+  /**
+   * ⭐⭐⭐ Ссылка хранит ВХОД, а рядом — отпечаток результата (решение s80).
+   * Открывший её получит не «релиз другой», а «результат тот же» либо
+   * «результат изменился»: расчёт повторится по текущему релизу, и отпечатки
+   * сравнятся.
+   */
+  const makeShareLink = async () => {
+    if (!result || !lastBody) return
+    setShareBusy(true); setShareError(null)
+    try {
+      const res = await fetch('/api/classify/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payload: lastBody,
+          releaseKey: result.release?.releaseKey ?? 'unknown',
+          resultHash: resultFingerprint(result),
+        }),
+      })
+      const data = await res.json()
+      if (!data.ok) { setShareError(data.error?.message ?? 'The link could not be created.'); return }
+      setShareUrl(data.url)
+      // ⚠ Ссылка ПЕЧАТАЕТСЯ рядом в любом случае: буфер обмена недоступен в
+      // части браузеров, и «Copied» без видимой ссылки не даёт ничего.
+      try {
+        await navigator.clipboard.writeText(data.url)
+        setShareCopied(true)
+        setTimeout(() => setShareCopied(false), 2200)
+      } catch { /* ссылка видна текстом — этого достаточно */ }
+    } catch {
+      setShareError('The link could not be created — the sharing service is unreachable.')
+    } finally {
+      setShareBusy(false)
+    }
+  }
+
+  /**
+   * ⭐⭐ Открытие короткой ссылки `?s=…`: достать вход, восстановить левую
+   * колонку, ПЕРЕСЧИТАТЬ по текущему релизу и сказать, тот ли это результат.
+   * ⚠ Один раз за загрузку страницы: `[]` намеренно.
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const token = new URLSearchParams(window.location.search).get('s')
+    if (!token) return
+    let cancelled = false
+
+    void (async () => {
+      setBusy(true); setError(null)
+      try {
+        const res = await fetch(`/api/classify/share?s=${encodeURIComponent(token)}`)
+        const data = await res.json()
+        if (cancelled) return
+        if (!data.ok) {
+          setError(data.error?.message ?? 'This link could not be opened.')
+          return
+        }
+        const payload = data.payload as RequestBody
+        if (!payload?.components?.length) {
+          setError('This link carries no composition — ask whoever sent it for a new one.')
+          return
+        }
+
+        const restored: Row[] = payload.components.map((c) => blank({
+          source: c.source === 'supplier' ? 'supplier' : 'annex6',
+          indexNumber: c.indexNumber ?? null,
+          name: c.name,
+          conc: String(c.conc),
+          concMax: c.concMax != null ? String(c.concMax) : '',
+          range: c.concMax != null,
+          knownNonhazard: !!c.knownNonhazard,
+          pairs: c.source === 'supplier' ? (c.classifications ?? []) : [],
+        }))
+        setRows(restored)
+        const p = payload.properties
+        if (p) {
+          setPhysicalState(p.physicalState); setInhalForm(p.inhalForm); setFormTouched(true)
+          setPh(p.ph == null ? '' : String(p.ph))
+          setReserve(!!p.acidAlkaliReserve)
+          setViscosity(p.viscosityMm2s40c == null ? '' : String(p.viscosityMm2s40c))
+          setLayers(!!p.separatesIntoLayers)
+        }
+        setAudience(payload.audience === 'general_public' ? 'general_public' : 'professional')
+        setRemainderStated(!!payload.remainderStatedNonhazard)
+        // ⚠ Дата приходит от сервера и может не прийти вовсе — тогда честное
+        // «earlier», а не строка «undefined» в ленте и в шапке.
+        const createdAt = typeof data.createdAt === 'string' ? data.createdAt : ''
+        pending.current = [{ text: `opened from a shared link created ${stampTime(createdAt) || 'earlier'}` }]
+
+        const fresh = await classify(payload)
+        if (cancelled || !fresh) return
+
+        // ⭐ Личность компонентов Annex VI берётся из ЭХО ОТВЕТА, а не из
+        // ссылки: имя и пределы приезжают из базы (№125), и карточки состава
+        // показывают ровно то, чем считали. Сверка по порядку — движок его не
+        // меняет, а ключи строк у нас теперь свои.
+        setRows((prev) => prev.map((row, i) => {
+          const echo = fresh.input.components[i]
+          if (!echo) return row
+          return {
+            ...row,
+            name: echo.name,
+            cas: echo.casPrimary,
+            ec: echo.ecPrimary,
+            profile: row.source === 'annex6' ? {
+              substance: { name: echo.name, casPrimary: echo.casPrimary, ecPrimary: echo.ecPrimary, hCodes: null },
+              pairs: echo.classifications.map((x) => ({
+                classCode: x.classCode, categoryCode: x.categoryCode, hCode: x.hCode,
+                star: !!x.star, raw: x.raw ?? `${x.classCode} ${x.categoryCode ?? ''}`.trim(),
+              })),
+              scl: echo.scl.map((s) => ({ raw: s.raw, needsReview: s.needsReview })),
+              mFactors: echo.mFactors.map((m) => ({ raw: m.raw, value: m.value, scope: m.scope, needsReview: m.needsReview })),
+              ate: echo.ate.map((a) => ({ route: a.route, value: a.value, unit: a.unit, form: a.form })),
+              notes: echo.notes,
+            } : null,
+          }
+        }))
+
+        const storedHash: string | null = typeof data.resultHash === 'string' ? data.resultHash : null
+        setOpened({
+          createdAt,
+          releaseKey: typeof data.releaseKey === 'string' ? data.releaseKey : 'unknown',
+          storedHash,
+          verdict: storedHash == null
+            ? 'unknown'
+            : storedHash === resultFingerprint(fresh) ? 'same' : 'changed',
+        })
+        setShowReport(true)
+      } catch {
+        if (!cancelled) setError('This link could not be opened — the sharing service is unreachable.')
+      } finally {
+        if (!cancelled) setBusy(false)
+      }
+    })()
+
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   /* ── разбивка результата ──────────────────────────────────────────────── */
 
   const computed = result ? result.decisions.filter((d) => d.status !== 'not_computed') : []
@@ -757,9 +1058,13 @@ export default function MixtureClassifier({ registry }: Props) {
                           <b> not computed</b> were not evaluated — they are not a clean bill of health.
                         </li>
                         <li>
-                          <b>Keep the record.</b> Every result carries the data release it was computed with, and
-                          <b> Copy for SDS Section 2</b> takes the classification into the sheet together with the
-                          note about what was not evaluated.
+                          <b>Keep the record.</b> <b>Full report</b> prints the whole audit trail — what you
+                          entered, what was taken into the calculation, every rule with its text, and what was
+                          not computed and why — and <b>Download PDF</b> saves that same report as a file.
+                          <b> Share link</b> keeps the composition rather than the answer: whoever opens it gets
+                          the calculation repeated on the data release current that day, and is told whether it
+                          still comes out the same. <b>Copy for SDS Section 2</b> takes the classification into
+                          the sheet together with the note about what was not evaluated.
                         </li>
                       </ol>
                     </div>
@@ -956,7 +1261,9 @@ export default function MixtureClassifier({ registry }: Props) {
             )}
 
             <div className="mx-run">
-              <button type="button" className="mx-btn go" onClick={classify} disabled={!canClassify || busy}>
+              {/* ⚠ Обёртка, а не `onClick={classify}`: расчёт принимает ГОТОВОЕ
+                  тело (короткая ссылка), и событие мыши уехало бы в него телом. */}
+              <button type="button" className="mx-btn go" onClick={() => { void classify() }} disabled={!canClassify || busy}>
                 {busy ? 'Classifying…' : result ? 'Re-classify' : 'Classify mixture'}
               </button>
               {!canClassify && rows.length > 0 && <p className="mx-note">Every ingredient needs a concentration above zero.</p>}
@@ -986,6 +1293,40 @@ export default function MixtureClassifier({ registry }: Props) {
                 <p className="mx-stale">
                   The composition changed after this result was produced — it is out of date. Press
                   “Re-classify”.
+                </p>
+              )}
+
+              {/*
+                ⭐⭐⭐ ОТВЕТ НА ВОПРОС «А ЧТО ВИДЕЛ ЧЕЛОВЕК В ТОТ ДЕНЬ». Короткая
+                ссылка хранит ВХОД, поэтому открывший её получает расчёт по
+                СЕГОДНЯШНЕМУ релизу — и обязан узнать, тот ли это результат.
+                ⛔ Молчание здесь было бы худшим из вариантов: человек решил бы,
+                что видит копию присланного, а видел бы пересчёт.
+              */}
+              {opened && (
+                <p className={`mx-shared ${opened.verdict}`}>
+                  {opened.verdict === 'same' && (
+                    <>
+                      Opened from a link created {stampTime(opened.createdAt) || "earlier"}. The
+                      composition was classified again on the current data release and{' '}
+                      <b>the result is the same</b> as the one whoever sent it saw.
+                    </>
+                  )}
+                  {opened.verdict === 'changed' && (
+                    <>
+                      Opened from a link created {stampTime(opened.createdAt) || "earlier"} on data
+                      release <span className="mono">{opened.releaseKey}</span>. Classified again on{' '}
+                      <span className="mono">{result.release?.releaseKey ?? 'the current release'}</span>,{' '}
+                      <b>the result is not the same</b> — compare the report below with the copy you were sent.
+                    </>
+                  )}
+                  {opened.verdict === 'unknown' && (
+                    <>
+                      Opened from a link created {stampTime(opened.createdAt) || "earlier"}. No result
+                      fingerprint was stored with it, so this calculation cannot be compared with the one its
+                      author saw — only the composition came across.
+                    </>
+                  )}
                 </p>
               )}
 
@@ -1178,6 +1519,16 @@ export default function MixtureClassifier({ registry }: Props) {
               </Fold>
 
               <div className="mx-out">
+                {/* ⚠ Отчёт первым: это то, ради чего расчёт и делали (№118). */}
+                <button type="button" className="mx-btn go" onClick={() => setShowReport((v) => !v)}>
+                  {showReport ? 'Hide the full report' : 'Full report'}
+                </button>
+                <button type="button" className="mx-btn" onClick={downloadPdf} disabled={pdfBusy}>
+                  {pdfBusy ? 'Building the PDF…' : 'Download PDF'}
+                </button>
+                <button type="button" className="mx-btn" onClick={makeShareLink} disabled={shareBusy || !lastBody}>
+                  {shareBusy ? 'Creating…' : shareCopied ? 'Link copied' : 'Share link'}
+                </button>
                 {labelHref && <a className="mx-btn label" href={labelHref}>Open in GHS Label Maker →</a>}
                 <button type="button" className="mx-btn" onClick={copySds}>
                   {copied ? 'Copied' : 'Copy for SDS Section 2'}
@@ -1185,11 +1536,43 @@ export default function MixtureClassifier({ registry }: Props) {
                 {ateHref && <a className="mx-btn" href={ateHref}>Open in the ATE calculator</a>}
               </div>
 
+              {pdfError && (
+                <p className="mx-note err">
+                  The PDF could not be built: {pdfError}. The report is on this page in full — nothing is
+                  missing from it.
+                </p>
+              )}
+              {shareError && <p className="mx-note err">{shareError}</p>}
+              {shareUrl && (
+                <p className="mx-share-url">
+                  {/* ⚠ Ссылка ВИДНА, а не только «скопирована»: буфер обмена
+                      доступен не везде, и невидимая ссылка — это её отсутствие. */}
+                  <span className="mono">{shareUrl}</span>{' '}
+                  <span className="hint">
+                    keeps the composition, not the result: whoever opens it gets the calculation repeated on
+                    the release current that day, and is told whether it still comes out the same.
+                  </span>
+                </p>
+              )}
+
+              {showReport && report && <MixtureReport model={report} />}
+
               {result.release && (
                 <p className="mx-release mono">
                   Data release {result.release.releaseKey} · annex6 {result.release.annex6Consolidation} ·
                   atp {result.release.atp} · engine {result.engineVersion}
+                  {result.release.parserVersion ? ` · ${result.release.parserVersion}` : ''}
                   {result.release.gclMd5 ? ` · gcl ${result.release.gclMd5}` : ''}
+                  {/* ⭐ №116: объём данных приезжает в ответе, а не пишется на
+                      странице руками — `data_release` закрыт для сборки (s78). */}
+                  {result.release.annex6Rows != null && (
+                    <>
+                      <br />
+                      {result.release.annex6Rows} Annex VI rows ·{' '}
+                      {result.release.classificationPairs ?? '—'} harmonised class/category pairs ·{' '}
+                      {result.release.registryCategories ?? '—'} registry categories
+                    </>
+                  )}
                   <br />
                   Every result carries the release it was computed with. Physical hazards are not derived from
                   composition.

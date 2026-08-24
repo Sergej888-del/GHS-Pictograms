@@ -188,6 +188,11 @@ const DOES = [
   'Acute toxicity — oral, dermal and inhalation, by the additivity formula of Annex I 3.1.3.6.1, with the 10 % unknown-toxicity correction and harmonised ATE values from Annex VI.',
   `The ${limitClasses} classes decided by concentration limits on the ingredients — by a cut-off on a single ingredient, by a concentration band, or by a summation across ingredients, whichever the class calls for. Categories that coexist rather than compete are kept apart: effects on or via lactation, and narcotic effects beside respiratory tract irritation.`,
   'Provenance on every line: the rule key, the verbatim text of the rule as the regulation prints it, and the contribution of each ingredient.',
+  // ⚠⚠ Абзац описывает то, ЧТО инструмент делает, а не сколько классов считает —
+  // поэтому он не устаревает от нового модуля. Маркеры «Full report», «Download
+  // PDF» и «Share link» сторожатся `classifier-page` в `check:dist`: текст о
+  // возможности, которой на странице нет, — тот же дефект, что в s81.
+  'A printable report of the whole calculation, in three forms: on the page, as a PDF, and behind a short link. The report echoes what you entered and what was actually taken into the calculation, prints every rule with its wording, states what was not computed and why, and stamps the release of the data it used. The link keeps the composition rather than the answer, so whoever opens it gets it classified again on the release current that day — and is told whether it still comes out the same.',
   'Specific concentration limits ahead of generic ones — an ingredient carrying its own SCL in Annex VI is judged by that SCL, and the generic limit is shown beside it as checked and outranked.',
   'An honest, named gap for every class this version does not compute yet, with the ingredients of your mixture that carry it.',
 ]

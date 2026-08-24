@@ -459,6 +459,8 @@ function classDecision(
   const outranked = new Map<string, string[]>();
   /** Компоненты общего пути, ждущие суммарной ступени: `<track>:<step>` → состав. */
   const sumMembers = new Map<string, NormalizedComponent[]>();
+  /** Кого уже пометили как вошедшего в сумму — чтобы не приписать провенанс дважды. */
+  const sumCounted = new Set<string>();
   /** Разбор SCL считается один раз на компонент: он нужен и расчёту, и элиситации. */
   const sclCache = new Map<string, SclSplit>();
 
@@ -710,6 +712,28 @@ function classDecision(
         candidatesCount: mine.length, passed, gatePassed, gateText,
       };
       sums.push(evaluated);
+
+      // ⭐⭐⭐ ЧЛЕН СУММЫ — УЧТЁН, И ТАК ОН И ДОЛЖЕН БЫТЬ ПОМЕЧЕН (дефект s84).
+      // Найден чтением печатного отчёта, а не проверкой: агрегат печатал
+      // «toluene 6.0 % + n-hexane 6.0 % = 12.0 % >= 10.0 %», а таблица вкладов
+      // тех же двух компонентов — «not counted». Причина структурная: в цикле по
+      // компонентам суммарная ступень откладывается на потом (`return` до того,
+      // как выставится `counted`), и флаг оставался ложным навсегда. Читатель
+      // видел две строки, противоречащие друг другу, — ровно то, чего не должен
+      // допускать аудиторский след.
+      // ⚠ Помечаем ЧЛЕНОВ, а не «сумму, которая прошла»: компонент, вошедший в
+      // сумму, посчитан независимо от того, взяла ли сумма порог. Отсеянный по
+      // релевантности (`below`) остаётся непосчитанным — о нём говорит
+      // предупреждение ниже.
+      for (const m of members) {
+        const row = contributions.find((x) => x.componentId === m.id);
+        if (!row || sumCounted.has(m.id)) continue;
+        sumCounted.add(m.id);
+        row.counted = true;
+        if (row.limit == null) row.limit = limit;
+        const head = row.provenance.split(' — ')[0] ?? row.provenance;
+        row.provenance = `${head} — counted in the sum of this class: ${fmtPct(sum)} % against ${limit == null ? 'the limit of this rule' : `${fmtPct(limit)} %`}`;
+      }
 
       if (below.length && relevance != null) {
         warnings.push({

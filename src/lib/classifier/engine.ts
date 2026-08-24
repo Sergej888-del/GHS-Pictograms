@@ -13,14 +13,20 @@
 // ⛔ Строки для человека — по-английски (урок s68).
 
 import { RuleIndex, Registry, decide, labelPairs } from './data.ts';
+import { A0_PARSER_VERSION, ENGINE_VERSION } from './version.ts';
 import type {
   Audience, ClassifierData, ClassifierModule, ClassifierResult, CompositionSummary,
-  Decision, InhalForm, MixtureInput, ModuleContext, NormalizedComponent, NormalizedInput,
-  PhysicalState, RegistryLookup, ReportInput, RuleLookup, Supplemental, Warning,
+  DataRelease, Decision, InhalForm, MixtureInput, ModuleContext, NormalizedComponent,
+  NormalizedInput, PhysicalState, RegistryLookup, ReportInput, RuleLookup, Supplemental,
+  Warning,
 } from './types.ts';
 
-/** Версия движка — печатается в ответе и в PDF (design-doc §3.3). */
-export const ENGINE_VERSION = 'classifier 1.0';
+/**
+ * Версия движка — печатается в ответе и в PDF (design-doc §3.3).
+ * ⚠ Объявлена в `version.ts` вместе с версией парсера A0: три копии одной
+ * строки (движок, парсер, база) разошлись молча — см. №110 и комментарий там.
+ */
+export { ENGINE_VERSION };
 
 /** Форма ингаляции по умолчанию — из агрегатного состояния смеси. */
 export function defaultInhalForm(state: PhysicalState): InhalForm {
@@ -99,6 +105,39 @@ function compositionWarnings(n: NormalizedInput): Warning[] {
 }
 
 /**
+ * ⭐⭐⭐ ШТАМП ВЕРСИИ НЕ ВЫБИРАЕТ МЕЖДУ ДВУМЯ ОТВЕТАМИ (№110, s84). Строка версии
+ * лежит и в коде, и в строке релиза базы. Если они разошлись, отчёт обязан
+ * напечатать ОБЕ и сказать об этом: молчаливый выбор одной из них — это и есть
+ * тот дефект, ради которого №110 заведена (в базе стоял `a0-parser 1.0`, в коде
+ * `1.1`, и заметить это было нечем).
+ *
+ * ⚠ Уровень `caution`, не `critical`: расчёт от расхождения штампов не портится,
+ * а вот аудиторский след — да.
+ */
+function stampWarnings(release: DataRelease | null): Warning[] {
+  if (!release) {
+    return [{
+      code: 'DATA_STAMP_MISSING', level: 'caution',
+      message: 'This result carries no data-release stamp, so the report cannot say which copy of the regulation produced it. Treat it as a draft, not as an audit record.',
+    }];
+  }
+  const out: Warning[] = [];
+  if (release.engineVersion && release.engineVersion !== ENGINE_VERSION) {
+    out.push({
+      code: 'ENGINE_STAMP_DRIFT', level: 'caution',
+      message: `The data release names engine “${release.engineVersion}”, and this result was computed by “${ENGINE_VERSION}”. Both are printed in the report; neither is silently preferred.`,
+    });
+  }
+  if (release.parserVersion && release.parserVersion !== A0_PARSER_VERSION) {
+    out.push({
+      code: 'PARSER_STAMP_DRIFT', level: 'caution',
+      message: `The harmonised classifications in the database are stamped “${release.parserVersion}”, while this engine reads them with “${A0_PARSER_VERSION}”. Both are printed in the report.`,
+    });
+  }
+  return out;
+}
+
+/**
  * `not_computed` для каждого класса реестра, за который в этой версии никто не
  * отвечает. ⛔ Пустая строка запрещена (урок s76: пустая ячейка читается как
  * «неопасно»), поэтому у каждой такой строки есть причина И подсказка, кто из
@@ -118,8 +157,11 @@ function notComputed(
     const carriers = n.components.filter(
       (c) => c.conc > 0 && c.classifications.some((p) => p.classCode === classCode),
     );
+    // ⚠ Согласование в числе: на проде печаталось «1 ingredient in this mixture
+    // CARRY it» (найдено чтением отчёта в s84). Мелочь ровно до того момента,
+    // пока строку не читает инспектор — а именно ему отчёт и адресован.
     const who = carriers.length
-      ? ` ${carriers.length} ingredient${carriers.length > 1 ? 's' : ''} in this mixture carry it: ${carriers.map((c) => c.name).join(', ')}.`
+      ? ` ${carriers.length} ingredient${carriers.length > 1 ? 's' : ''} in this mixture carr${carriers.length > 1 ? 'y' : 'ies'} it: ${carriers.map((c) => c.name).join(', ')}.`
       : ' No ingredient in this mixture carries it.';
     out.push(decide({
       module: owner ? owner.key : '—',
@@ -196,7 +238,7 @@ export function classifyMixture(
     }
   }
 
-  const warnings: Warning[] = compositionWarnings(n);
+  const warnings: Warning[] = [...compositionWarnings(n), ...stampWarnings(data.release)];
   if (overlaps.length) {
     warnings.push({
       code: 'MODULE_OVERLAP', level: 'critical',

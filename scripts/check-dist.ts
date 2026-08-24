@@ -6956,6 +6956,17 @@ const CHECKS: Check[] = [
       // Честность выдачи: раздел «The contract» и формула, которой помечены
       // непосчитанные классы. Пустая ячейка читается как «неопасно» (урок s76).
       const HONESTY = ['The contract', 'not computed in this version']
+      // ⭐⭐ Печатный отчёт (№118, s84). Кнопки живут В ВЕТКЕ РЕЗУЛЬТАТА, значит
+      // в собранном HTML их нет и быть не может — сторожится ОБЕЩАНИЕ отчёта:
+      // шаг 6 инструкции и абзац «What you get today». Обещание, пережившее
+      // удаление возможности, — ровно тот дефект, ради которого заведена эта
+      // проверка (s81: элемент обещал содержимое и не давал его).
+      const REPORT = [
+        'Full report',
+        'Download PDF',
+        'Share link',
+        'A printable report of the whole calculation',
+      ]
 
       const groups: [string, string[]][] = [
         ['инструкция', HELP],
@@ -6963,6 +6974,7 @@ const CHECKS: Check[] = [
         ['дисклеймер', DISCLAIMER],
         ['исходящие ссылки', LINKS],
         ['контракт версии', HONESTY],
+        ['печатный отчёт', REPORT],
       ]
       const all = groups.flatMap(([, markers]) => markers)
       assertAscii('classifier-page', all)

@@ -746,6 +746,105 @@ details.mx-panel.help[open] .mx-panel-head.as-button .a { transform: rotate(180d
   border-top: 1px dashed var(--line);
 }
 
+/* ── отчёт (№118, session 84) ────────────────────────────────────────────────
+ *
+ * ⚠ Экранный отчёт НЕ повторяет оформление PDF: в файле цвета шестнадцатеричные
+ * (html2canvas 1.4.1 не знает `oklch`), здесь — токены, как во всём острове.
+ * Общая у них только МОДЕЛЬ; лист А4 и колонка на экране живут по разным
+ * правилам вёрстки, и делать вид, что это одно и то же, не надо.
+ */
+
+.mx-rep {
+  margin-top: 18px;
+  border: 1px solid var(--mx-acc-line);
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 20px 22px;
+}
+.mx-rep-top { padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.mx-rep-title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.mx-rep-meta { margin: 4px 0 0; font-size: 11px; color: var(--ink-3); }
+
+.mx-rep-sec { margin-top: 20px; }
+.mx-rep-h {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--mx-acc-ink);
+}
+.mx-rep-lead { margin: 6px 0 10px; font-size: 12.5px; line-height: 1.6; color: var(--ink-3); }
+
+/* Пары «подпись — значение»: эхо свойств смеси, итоги и штамп версии. */
+.mx-rep-kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; margin-bottom: 12px; }
+.mx-rep-kv p {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.mx-rep-kv b { color: var(--ink-2); text-align: right; overflow-wrap: anywhere; }
+
+/* Строка класса: карточка с правилом, цитатой и таблицей вкладов. */
+.mx-rep-line {
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.mx-rep-line.classified { border-left-color: var(--verdict-never-ink); }
+.mx-rep-line.insufficient_data { border-left-color: var(--verdict-sep-ink); }
+.mx-rep-line.not_classified { border-left-color: var(--verdict-ok-ink); }
+.mx-rep-line-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; }
+.mx-rep-line-head b { font-size: 14px; color: var(--ink); }
+.mx-rep-cat { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+.mx-rep-fp { margin: 8px 0 0; font-size: 11px; color: var(--ink-3); }
+
+/* ⚠ Подстрочник в таблице эха: `.mx-table .sub` сюда не достаёт — эхо входа
+   печатается в `.mx-contrib`, а не в таблице результата. */
+.mx-rep .mx-contrib .sub { margin: 2px 0 0; font-size: 11px; line-height: 1.5; color: var(--ink-3); }
+.mx-rep .mx-contrib td b { color: var(--ink); }
+
+/* Открыто по короткой ссылке: тот же результат или уже другой. */
+.mx-shared {
+  margin: 0 0 14px;
+  border: 1px solid var(--mx-acc-line);
+  border-left: 3px solid var(--mx-acc);
+  border-radius: 10px;
+  background: var(--mx-acc-soft);
+  padding: 10px 13px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.mx-shared.changed {
+  border-color: #fde68a;
+  border-left-color: var(--verdict-sep-ink);
+  background: var(--verdict-sep-bg);
+  color: var(--verdict-sep-ink);
+}
+
+.mx-share-url { margin: 10px 0 0; font-size: 12px; line-height: 1.6; color: var(--ink-2); overflow-wrap: anywhere; }
+.mx-share-url .hint { color: var(--ink-3); }
+
+@media (max-width: 640px) {
+  .mx-rep { padding: 16px 14px; }
+  .mx-rep-kv { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* ── общее ───────────────────────────────────────────────────────────────── */
 
 .mx-tool .mono { font-family: var(--font-mono); }

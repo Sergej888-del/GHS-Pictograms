@@ -182,6 +182,20 @@ export interface DataRelease {
   classificationMd5: string | null;
   releasedAt: string;
   note: string | null;
+  /**
+   * ⭐⭐ Числа релиза (№116, s84): строк Annex VI Table 3, пар A0 и категорий
+   * реестра. Они лежат в `data_release` с самого начала, но в ответ не ехали —
+   * а взять их на сборке НЕЧЕМ: `data_release` закрыт для anon с s78, и шапка
+   * страницы поэтому печатала только то, что можно посчитать по открытым
+   * таблицам. В отчёте они и нужны: штамп «на чём считали» без объёма данных
+   * неполон.
+   *
+   * ⚠ Поля НЕОБЯЗАТЕЛЬНЫЕ намеренно: RPC и код деплоятся врозь, и ответ старой
+   * функции обязан оставаться законным, а не падать на разборе.
+   */
+  annex6Rows?: number | null;
+  classificationPairs?: number | null;
+  registryCategories?: number | null;
 }
 
 export interface ClassifierData {

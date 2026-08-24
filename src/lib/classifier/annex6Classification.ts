@@ -28,6 +28,7 @@
 // на H-коде — в `hMarker` (Annex VI 1.2.2 / 1.2.3).
 
 import { tokenizeClassCat, type ClassToken, type TokenFlag } from './annex6Abbrev.ts';
+import { A0_PARSER_VERSION } from './version.ts';
 
 /** Строка `annex6_table3`, как её читает скрипт. */
 export type Annex6Row = {
@@ -325,5 +326,9 @@ export function parseAnnex6Row(
   };
 }
 
-/** Версия парсера — пишется в таблицу; менять при любой правке словаря или правил. */
-export const ANNEX6_CLASSIFICATION_PARSER_VERSION = 'a0-parser 1.1 (s79: class-omitted retired)';
+/**
+ * Версия парсера — пишется в таблицу; менять при любой правке словаря или правил.
+ * ⚠ Сама строка объявлена в `version.ts`: её печатает ещё и отчёт, и её же хранит
+ * `data_release`. Три копии одной строки уже разошлись молча — это и есть №110.
+ */
+export const ANNEX6_CLASSIFICATION_PARSER_VERSION = A0_PARSER_VERSION;
