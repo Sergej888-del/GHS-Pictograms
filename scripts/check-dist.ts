@@ -7025,6 +7025,131 @@ const CHECKS: Check[] = [
   },
 
   /**
+   * ⭐⭐⭐ НАСТОЯЩИЕ ПИКТОГРАММЫ ДОЕХАЛИ ДО СОБРАННОЙ СТРАНИЦЫ (s84).
+   *
+   * Решение Сергея: в вердикте, в отчёте и в PDF должен стоять символ Annex V,
+   * а не наш ромб с кодом внутри. Символы читает СТРАНИЦА на сборке и отдаёт
+   * острову пропсом — значит они лежат в `dist/…/index.html`, и это можно
+   * сверить с базой, а не с памятью.
+   *
+   * ⚠ Зачем сторож: остров рисует ромб, когда символа нет. Это правильное
+   * поведение (пустое место читалось бы как «пиктограммы нет») — и ровно
+   * поэтому пропажа пропса была бы НЕЗАМЕТНА: страница осталась бы «рабочей»,
+   * просто перестала бы печатать настоящие знаки. Тот же класс дефекта, что
+   * §16.3: молчаливая деградация при зелёном прогоне.
+   */
+  {
+    id: 'classifier-pictograms',
+    group: 'Classifier',
+    title: 'Настоящие пиктограммы уехали в остров классификатора и сходятся с базой',
+    run: async () => {
+      const id = 'classifier-pictograms'
+      const group = 'Classifier'
+      const rel = 'tools/clp-mixture-classifier/index.html'
+      const html = readPage(rel)
+      if (!html) return { id, group, ok: false, headline: `нет ${rel}`, detail: [] }
+
+      // Пропсы острова Astro кладёт в атрибут `props` HTML-экранированным JSON.
+      const m = html.match(/<astro-island[^>]*component-export="default"[^>]*props="([^"]*)"/)
+        ?? html.match(/<astro-island[^>]*props="([^"]*)"[^>]*component-url="\/_astro\/MixtureClassifier[^"]*"/)
+      if (!m) {
+        return { id, group, ok: false, headline: 'на странице не нашлись пропсы острова', detail: [] }
+      }
+      const json = m[1]
+        .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+      let props: Record<string, unknown>
+      try {
+        props = JSON.parse(json) as Record<string, unknown>
+      } catch (err) {
+        return { id, group, ok: false, headline: `пропсы острова не разобрались: ${(err as Error).message}`, detail: [] }
+      }
+      /**
+       * ⚠⚠ Astro помечает типом НЕ ТОЛЬКО сам пропс, но и КАЖДОЕ вложенное
+       * значение: в разметке лежит `{"GHS01":[0,"<svg…>"]}`, а не
+       * `{"GHS01":"<svg…>"}`. Первая версия этой проверки разворачивала только
+       * верхний уровень и сравнивала строку из базы с массивом — девять
+       * «расхождений» подряд и падение на `.replace` (s84). Разворачиваем
+       * рекурсивно; строка SVG массивом быть не может, так что двусмысленности
+       * тут нет.
+       */
+      const unwrap = (v: unknown): unknown =>
+        Array.isArray(v) && v.length === 2 && typeof v[0] === 'number' ? unwrap(v[1]) : v
+      const rawProp = unwrap(props.pictograms)
+      const raw = rawProp && typeof rawProp === 'object' ? (rawProp as Record<string, unknown>) : null
+      const inPage: [string, string][] = []
+      const notStrings: string[] = []
+      for (const [code, value] of Object.entries(raw ?? {})) {
+        const svg = unwrap(value)
+        if (typeof svg === 'string') inPage.push([code, svg])
+        else notStrings.push(`${code}: в пропсе не строка, а ${Object.prototype.toString.call(svg)}`)
+      }
+
+      const { data, error } = await supabase
+        .from('pictograms_signals')
+        .select('code, svg_content')
+        .like('code', 'GHS%')
+        .order('code')
+      if (error) return { id, group, ok: false, headline: `база: ${error.message}`, detail: [] }
+      const inBase = (data ?? []).filter((p) => !!p.svg_content) as { code: string; svg_content: string }[]
+
+      const problems: string[] = [...notStrings]
+      if (!inPage.length) problems.push('в пропсах острова НЕТ ни одной пиктограммы — страница печатала бы наши ромбы с кодами')
+      const pageCodes = new Set(inPage.map(([code]) => code))
+      for (const p of inBase) {
+        if (!pageCodes.has(p.code)) problems.push(`${p.code}: есть в базе, нет на странице`)
+      }
+      const baseCodes = new Set(inBase.map((p) => p.code))
+      for (const [code] of inPage) {
+        if (!baseCodes.has(code)) problems.push(`${code}: есть на странице, нет в базе`)
+      }
+      // ⚠ Не только имя, но и САМА разметка: обрезанный или пустой SVG рисуется
+      // как ничто, и на глаз это заметно лишь на проде.
+      const byCode = new Map(inBase.map((p) => [p.code, p.svg_content]))
+      /**
+       * ⚠ Сравниваем ПО СУЩЕСТВУ, а не побайтово: сериализация пропсов Astro
+       * законно трогает пробелы и переводы строк внутри разметки, и требовать
+       * от неё побайтового совпадения — значит сторожить сериализатор вместо
+       * символа. Нормализуем пробелы у обеих сторон; всё остальное — включая
+       * каждый `d="…"` контура — обязано совпасть.
+       */
+      const norm = (s: string): string => s.replace(/\s+/g, ' ').trim()
+      for (const [code, svg] of inPage) {
+        const base = byCode.get(code) ?? ''
+        if (norm(svg) !== norm(base)) {
+          // Первое расхождение — с обеих сторон, чтобы причина была видна сразу,
+          // а не выяснялась вторым заходом (урок s84: проверка обязана называть
+          // ЧТО именно разошлось).
+          const a = norm(svg)
+          const b = norm(base)
+          let i = 0
+          while (i < a.length && i < b.length && a[i] === b[i]) i++
+          problems.push(`${code}: разметка не сходится с базой — страница ${a.length} симв., база ${b.length}, первое расхождение на ${i}: «${a.slice(Math.max(0, i - 20), i + 30)}» против «${b.slice(Math.max(0, i - 20), i + 30)}»`)
+        }
+        if (!/<svg[\s>]/i.test(svg)) problems.push(`${code}: в пропсе не SVG`)
+      }
+
+      const bytes = inPage.reduce((n, [, svg]) => n + svg.length, 0)
+      const ok = problems.length === 0
+      return {
+        id,
+        group,
+        ok,
+        headline: ok
+          ? `${inPage.length} символов на странице, столько же в базе (${(bytes / 1024).toFixed(1)} КиБ разметки)`
+          : `расхождений: ${problems.length}`,
+        detail: ok
+          ? [
+              'символы читает страница на сборке и отдаёт острову пропсом: остров в базу не ходит, а отчёт остаётся чистой функцией от ответа',
+              'сверка идёт в обе стороны и по САМОЙ разметке, а не по числу строк',
+              'кода без символа в базе быть не должно; появится — остров нарисует ромб с кодом, и эта проверка назовёт код',
+            ]
+          : problems.slice(0, 20),
+      }
+    },
+  },
+
+  /**
    * ⭐⭐⭐ СЧЁТЧИК ИНСТРУМЕНТОВ — СПЛОШНОЙ ОБХОД, А НЕ СПИСОК МЕСТ (session 82).
    *
    * Число «сколько у нас инструментов» напечатано на сайте ШЕСТЬ раз: дважды на

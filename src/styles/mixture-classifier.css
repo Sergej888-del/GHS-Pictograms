@@ -808,6 +808,33 @@ details.mx-panel.help[open] .mx-panel-head.as-button .a { transform: rotate(180d
 .mx-rep-verdict .sig.warning { color: var(--verdict-sep-ink); }
 .mx-rep-verdict .pics { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 
+/* Настоящий символ из базы (s84). ⚠ Размер задаём обёрткой: у части строк
+   `pictograms_signals` есть свои width/height (579pt у GHS01), и без этого
+   правила символ вылез бы в натуральную величину. */
+.mx-picto-real { display: block; width: 52px; height: 52px; }
+.mx-picto-real > svg { width: 100%; height: 100%; display: block; }
+
+/* Классы, проверенные впустую: названы поимённо, но одной строкой (s84). */
+.mx-rep-compact {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 13px;
+  background: #f8fafc;
+}
+.mx-rep-compact .lb {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.mx-rep-compact .cl { margin: 5px 0 0; font-size: 13px; line-height: 1.6; color: var(--ink-2); }
+.mx-rep-compact .nt { margin: 5px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--ink-3); }
+
 .mx-rep-sec { margin-top: 20px; }
 .mx-rep-h {
   margin: 0;

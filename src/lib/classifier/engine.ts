@@ -171,6 +171,21 @@ function notComputed(
       reason: (owner
         ? `Not computed in this version — module ${owner.key} (${owner.title}) covers this class and is not built yet.`
         : 'Not computed in this version — no module covers this class yet.') + who,
+      // ⭐⭐ Носители класса — ВКЛАДАМИ, а не только фразой в причине (s84).
+      // Отчёт решает по ним, печатать ли класс полной карточкой: класс, который
+      // в этой смеси несёт хоть кто-то, — настоящий пробел, а класс, которого
+      // не несёт никто, — общая оговорка, и ей хватает одной строки. Разбирать
+      // ради этого текст причины было бы гаданием по собственной прозе.
+      contributions: carriers.map((c) => ({
+        componentId: c.id,
+        name: c.name,
+        conc: c.conc,
+        value: null,
+        limit: null,
+        limitSource: 'NONE' as const,
+        provenance: `carries ${c.classifications.filter((p) => p.classCode === classCode).map((p) => p.raw || `${p.classCode} ${p.categoryCode ?? ''}`.trim()).join(', ')} — not evaluated in this version`,
+        counted: false,
+      })),
     }, rules, registry));
   }
   return out;

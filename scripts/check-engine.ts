@@ -1006,9 +1006,17 @@ const rep = buildReport(rRep, { className });
 // 9.1 ⭐⭐⭐ Отчёт не может ТИХО не напечатать класс: строк в разделах ровно
 // столько же, сколько решений в ответе. Именно так теряются целые классы —
 // не ошибкой в правиле, а разделом, который «не подошёл».
+// ⭐⭐⭐ НИ ОДИН КЛАСС НЕ ИСЧЕЗАЕТ. С s84 отчёт печатает класс либо карточкой
+// (его несёт ингредиент), либо именем в сжатой группе (не несёт никто). Сумма
+// обоих обязана сходиться с числом решений движка — иначе «сжатие» однажды
+// станет тихой потерей, ровно тем, против чего заведено правило s76.
 const linesInReport = rep.sections.reduce((s, x) => s + x.lines.length, 0);
-check('в отчёте столько же строк, сколько решений в ответе',
-  linesInReport === rRep.decisions.length, `${linesInReport} vs ${rRep.decisions.length}`);
+const compactInReport = rep.sections.reduce((s, x) => s + x.compact.reduce((n, g) => n + g.classNames.length, 0), 0);
+check('карточки плюс сжатые имена = число решений: ни один класс не потерян',
+  linesInReport + compactInReport === rRep.decisions.length,
+  `${linesInReport} + ${compactInReport} vs ${rRep.decisions.length}`);
+check('сжатие вообще произошло — иначе проверка выше сошлась бы сама собой',
+  compactInReport > 0, String(compactInReport));
 check('раздел «assigned» стоит всегда, даже когда он пуст',
   rep.sections.some((s) => s.key === 'classified'));
 check('у каждого раздела есть фраза, объясняющая, чего он стоит',
@@ -1164,7 +1172,56 @@ function buildAndRender(name: string): string {
   return reportPdfHtml(buildReport(run(mixture([evil, water(95, true)])), { className }));
 }
 
-// 9.12 ⭐⭐⭐ ПОЛЕ МОДЕЛИ, КОТОРОЕ НИКТО НЕ ПЕЧАТАЕТ, — ЭТО МОЛЧАЛИВАЯ ПОТЕРЯ.
+// 9.12 ⭐⭐⭐ РАНЖИРОВАНИЕ ПО НОСИТЕЛЮ (решение Сергея, s84).
+// Класс, который несёт хоть один ингредиент ЭТОЙ смеси, — настоящий ответ и
+// стоит карточкой с правилом и числом. Класс, которого не несёт никто, назван
+// поимённо, но одной строкой: тридцать одинаковых карточек «ни один ингредиент
+// его не несёт» топили вердикт, а правило s76 требует не карточек, а того, чтобы
+// класс не исчезал молча.
+const secOf = (r: typeof rep, key: string) => r.sections.find((s) => s.key === key)!;
+const ncSec = secOf(rep, 'not_computed');
+const ncCards = ncSec.lines.map((l) => l.classCode);
+const ncNamed = ncSec.compact.flatMap((g) => g.classNames);
+check('непосчитанный класс, который НЕСЁТ ингредиент, стоит карточкой',
+  ncCards.includes('SKIN_CORR_IRRIT') && ncCards.includes('AQUATIC_CHRONIC'),
+  ncCards.join(', '));
+check('карточка непосчитанного класса называет ингредиент-носитель',
+  (ncSec.lines.find((l) => l.classCode === 'AQUATIC_CHRONIC')?.reason ?? '').includes('n-hexane'));
+check('класс без носителя карточки НЕ занимает, но назван в сжатой группе',
+  !ncCards.includes('EXPLOSIVES') && ncNamed.includes(className('EXPLOSIVES')),
+  ncNamed.join(', '));
+check('физические опасности сгруппированы модулем A6 и помечены «испытание, не расчёт»',
+  ncSec.compact.some((g) => g.label.includes('module A6') && g.note.includes('testing')
+    && g.classNames.length >= 15),
+  JSON.stringify(ncSec.compact.map((g) => `${g.label}:${g.classNames.length}`)));
+
+const repTell = buildReport(run(mixture([tellurium(0.2), water(99.8, true)])), { className });
+const ncSec2 = secOf(repTell, 'not_classified');
+check('«не классифицировано» с носителем — карточкой, и вклад компонента при ней',
+  ncSec2.lines.some((l) => l.classCode === 'REPRO_TOX' && l.rule.contributions.length > 0),
+  ncSec2.lines.map((l) => l.classCode).join(', '));
+check('«не классифицировано» без носителя — именем в сжатой группе',
+  !ncSec2.lines.some((l) => l.classCode === 'MUTAGEN')
+  && ncSec2.compact.flatMap((g) => g.classNames).includes(className('MUTAGEN')));
+
+// 9.13 ⭐⭐⭐ НАСТОЯЩАЯ ПИКТОГРАММА, А НЕ НАШ РОМБ С КОДОМ (решение Сергея, s84).
+// Символ приходит В МОДЕЛЬ снаружи — иначе PDF пришлось бы собирать вторым
+// запросом к базе, а он обязан быть чистой функцией от ответа.
+const STUB = '<svg width="579pt" height="579pt" viewBox="0 0 579 579" id="real-symbol"><path d="m1 1"/></svg>';
+const repPic = buildReport(rRep, { className, pictogramSvg: (c) => (c === 'GHS06' ? STUB : null) });
+const picHtml = reportPdfHtml(repPic);
+check('символ из базы доехал до модели, и только для своего кода',
+  repPic.verdict.pictograms.some((p) => p.code === 'GHS06' && !!p.svg)
+  && repPic.verdict.pictograms.some((p) => p.code !== 'GHS06' && p.svg === null),
+  repPic.verdict.pictograms.map((p) => `${p.code}:${p.svg ? 'svg' : 'none'}`).join(' '));
+check('в PDF символ вставлен разметкой, а не экранированным текстом',
+  picHtml.includes('id="real-symbol"') && !picHtml.includes('&lt;svg'));
+check('⚠ собственные размеры символа срезаны — иначе 579pt разнесло бы лист',
+  !picHtml.includes('579pt') && picHtml.includes('width="58" height="58"'));
+check('код без символа по-прежнему рисуется ромбом — пустое место читалось бы как «пиктограммы нет»',
+  picHtml.includes('<polygon points='));
+
+// 9.14 ⭐⭐⭐ ПОЛЕ МОДЕЛИ, КОТОРОЕ НИКТО НЕ ПЕЧАТАЕТ, — ЭТО МОЛЧАЛИВАЯ ПОТЕРЯ.
 // Дефект s84, найденный Сергеем на проде, а не проверкой: модель несла вердикт
 // целиком — сигнальное слово, пиктограммы, H-коды, — PDF его печатал, а экранный
 // отчёт начинался сразу с эха ввода. Обе половины были «зелёными»: одна печатала
@@ -1196,7 +1253,7 @@ check('пиктограмма в PDF нарисована ромбом, а не 
 const vd = rep.verdict;
 check('в вердикте примера есть и сигнальное слово, и пиктограммы, и H-коды',
   vd.signalWord === 'Danger' && vd.pictograms.length > 0 && vd.hCodes.length > 0,
-  `${vd.signalWord} · ${vd.pictograms.join(',')} · ${vd.hCodes.length}`);
+  `${vd.signalWord} · ${vd.pictograms.map((p) => p.code).join(',')} · ${vd.hCodes.length}`);
 
 console.log(`\n${failed ? `✗ ПРОВАЛЕНО: ${failed} из ${total}` : `✓ каркас зелёный — ${total} проверок`}`);
 process.exit(failed ? 1 : 0);

@@ -67,12 +67,39 @@ export interface ReportClassLine {
   additional: { title: string; rule: ReportRuleBlock }[];
 }
 
+/**
+ * ⭐⭐⭐ СЖАТАЯ ГРУППА: КЛАССЫ, ПРОВЕРЕННЫЕ ВПУСТУЮ (решение Сергея, s84).
+ *
+ * Правило s76 — «пустая ячейка читается как неопасно, поэтому печатаем КАЖДЫЙ
+ * класс» — верное, и оно остаётся. Но за ним выросла вторая беда: в отчёте по
+ * составу из двух веществ тридцать карточек подряд повторяли одну и ту же
+ * фразу «ни один ингредиент этот класс не несёт», и ответ тонул в них.
+ *
+ * Различие, которое всё решает, — НЕСЁТ ЛИ КЛАСС ХОТЬ ОДИН ИНГРЕДИЕНТ:
+ *   · несёт → это настоящий ответ («теллур 0,2 % против порога 0,3 %»), и он
+ *     обязан стоять карточкой с правилом, числом и запасом до порога;
+ *   · не несёт → проверять было нечего, и честная форма этого — ОДНА строка,
+ *     перечисляющая такие классы по именам.
+ * ⛔ Ничего не выбрасывается: перечисление поимённое, и число классов сходится
+ *    с числом решений движка (сторож в `check:engine`).
+ */
+export interface ReportCompactGroup {
+  /** «Checked, and no ingredient in this mixture carries the class» и т. п. */
+  label: string;
+  classNames: string[];
+  /** Почему эта группа сжата, а не выброшена. */
+  note: string;
+}
+
 export interface ReportSection {
   key: DecisionStatus;
   title: string;
   /** Зачем раздел в отчёте — одна фраза, читаемая инспектором. */
   lead: string;
+  /** Классы, которые несёт хоть один ингредиент, — полными карточками. */
   lines: ReportClassLine[];
+  /** Остальные — поимённо, но одной строкой. */
+  compact: ReportCompactGroup[];
 }
 
 export interface ReportIngredientLine {
@@ -100,7 +127,13 @@ export interface ReportModel {
     headline: string;
     assigned: string[];
     signalWord: string | null;
-    pictograms: string[];
+    /**
+     * ⭐ Код И САМ СИМВОЛ. Разметка приходит снаружи (`ReportOptions`), потому
+     * что отчёт по-прежнему не ходит в базу: пиктограммы читает страница на
+     * сборке и отдаёт острову пропсом. `svg: null` — законный случай (символа
+     * в базе нет), и тогда рисуется наш ромб с кодом.
+     */
+    pictograms: { code: string; svg: string | null }[];
     hCodes: string[];
     badges: string[];
   };
@@ -125,6 +158,12 @@ export interface ReportModel {
 export interface ReportOptions {
   /** Человеческое имя класса. ⛔ Реестр приходит снаружи: движок его не несёт. */
   className: (classCode: string) => string;
+  /**
+   * Разметка настоящей пиктограммы по коду (`pictograms_signals.svg_content`).
+   * ⚠ Тоже снаружи и по той же причине, что имя класса: отчёт остаётся чистой
+   * функцией от ответа и в базу не ходит.
+   */
+  pictogramSvg?: (code: string) => string | null;
   /** Адрес инструмента — печатается в шапке и в подвале. */
   source?: string;
   /** Короткая ссылка, если она уже создана для этого расчёта. */
@@ -156,11 +195,11 @@ const SECTION_LEAD: Record<DecisionStatus, string> = {
   classified:
     'Each line carries the rule it rests on, that rule as the regulation prints it, and the contribution of every ingredient.',
   not_classified:
-    'The rule was applied and the threshold was not met. This is a computed answer, not a gap — the arithmetic is below.',
+    'The rule was applied and the threshold was not met. This is a computed answer, not a gap. A class carried by an ingredient of this mixture is printed in full, with the arithmetic; where the composition carries nothing of the kind, the classes are named together in one line.',
   insufficient_data:
     'The rule applies to this mixture, but a value it needs was not entered. Until it is, the class is neither assigned nor ruled out.',
   not_computed:
-    'These classes were not evaluated by this version at all. An absent line is not a clean bill of health — the reason and the ingredients carrying the class are printed with each one.',
+    'These classes were not evaluated by this version at all, and an absent line is not a clean bill of health. A class that an ingredient of your mixture actually carries is printed in full, with the reason and the ingredients; the rest are named together, grouped by the module that owes them.',
 };
 
 const INHAL_FORM_LABEL: Record<string, string> = {
@@ -402,20 +441,69 @@ const DISCLAIMER = [
 const METHOD =
   'Method: CLP Annex I. Acute toxicity by the additivity formula of 3.1.3.6.1 with the correction of 3.1.3.6.2.3 for ingredients of unknown acute toxicity; the remaining classes by concentration limits on the ingredients — a cut-off on a single ingredient, a band between two concentrations, or a summation across ingredients, whichever the class calls for. A specific concentration limit from Annex VI replaces the generic limit for that ingredient and that class; the generic limit is still shown, marked as checked and outranked. Thresholds are read from our copy of the regulation, never retyped into the tool, and each line quotes the row it used.';
 
+/**
+ * Несёт ли класс хоть один ингредиент ЭТОЙ смеси. ⚠ Смотрим на вклады, а не на
+ * текст причины: вклад строится движком из состава, а текст можно переписать.
+ */
+function hasCarrier(d: Decision): boolean {
+  return d.contributions.length > 0;
+}
+
+function buildSection(key: DecisionStatus, all: Decision[], className: (c: string) => string): ReportSection {
+  const mine = all.filter((d) => d.status === key);
+  const withCarrier = mine.filter(hasCarrier);
+  const without = mine.filter((d) => !hasCarrier(d));
+  const compact: ReportCompactGroup[] = [];
+
+  if (without.length && key === 'not_classified') {
+    compact.push({
+      label: `Checked against the rule; no ingredient of this mixture carries the class (${without.length})`,
+      classNames: without.map((d) => className(d.classCode)),
+      note: 'Each of these was evaluated and came back negative for the same reason — there was nothing in the composition to compare against a threshold.',
+    });
+  }
+
+  if (without.length && key === 'not_computed') {
+    // ⚠ Группируем ПО МОДУЛЮ, а не по нашему представлению о том, что важно:
+    // физические опасности не считает никто и никогда (их устанавливают
+    // испытанием), а A2 и A3 — долг этой версии. Это разные утверждения.
+    const byModule = new Map<string, Decision[]>();
+    for (const d of without) {
+      const arr = byModule.get(d.module) ?? [];
+      arr.push(d);
+      byModule.set(d.module, arr);
+    }
+    for (const [module, list] of [...byModule].sort((a, b) => a[0].localeCompare(b[0]))) {
+      compact.push({
+        label: `Not evaluated, and no ingredient of this mixture carries the class — module ${module} (${list.length})`,
+        classNames: list.map((d) => className(d.classCode)),
+        note: module === 'A6'
+          ? 'Physical hazards are established by testing and are not derived from a composition by anyone; this line will not change in a later version.'
+          : 'This module is planned. Until it exists, these classes are neither assigned nor ruled out.',
+      });
+    }
+  }
+
+  return {
+    key,
+    title: SECTION_TITLE[key],
+    lead: SECTION_LEAD[key],
+    // ⚠ Карточками — только то, что несёт хоть один ингредиент; остальное
+    // перечислено поимённо в `compact`. Ни один класс не исчезает.
+    lines: (compact.length ? withCarrier : mine).map((d) => classLine(d, className)),
+    compact,
+  };
+}
+
 export function buildReport(result: ClassifierResult, opts: ReportOptions): ReportModel {
   const className = opts.className;
   const assigned = result.decisions.filter((d) => d.status === 'classified');
 
   const sections: ReportSection[] = (['classified', 'insufficient_data', 'not_classified', 'not_computed'] as DecisionStatus[])
-    .map((key) => ({
-      key,
-      title: SECTION_TITLE[key],
-      lead: SECTION_LEAD[key],
-      lines: result.decisions.filter((d) => d.status === key).map((d) => classLine(d, className)),
-    }))
+    .map((key) => buildSection(key, result.decisions, className))
     // ⚠ Пустой раздел не печатаем, КРОМЕ «assigned»: «ни одного класса» — это
     // ответ, и он обязан стоять на своём месте, а не исчезать вместе с разделом.
-    .filter((s) => s.lines.length > 0 || s.key === 'classified');
+    .filter((s) => s.lines.length > 0 || s.compact.length > 0 || s.key === 'classified');
 
   const badges: string[] = [];
   if (result.decisions.some((d) => d.provisional)) badges.push('provisional — correction 3.1.3.6.2.3 applied');
@@ -442,7 +530,8 @@ export function buildReport(result: ClassifierResult, opts: ReportOptions): Repo
       signalWord: result.labelPairs.some((p) => p.signalWord === 'Danger')
         ? 'Danger'
         : result.labelPairs.some((p) => p.signalWord === 'Warning') ? 'Warning' : null,
-      pictograms: [...new Set(result.labelPairs.map((p) => p.pictogramCode).filter((x): x is string => !!x))],
+      pictograms: [...new Set(result.labelPairs.map((p) => p.pictogramCode).filter((x): x is string => !!x))]
+        .map((code) => ({ code, svg: opts.pictogramSvg?.(code) ?? null })),
       hCodes: [...new Set(result.labelPairs.map((p) => p.hCode).filter((x): x is string => !!x))],
       badges,
     },

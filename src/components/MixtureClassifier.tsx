@@ -136,6 +136,14 @@ interface Props {
    * набираются текстом (design-doc §4.2).
    */
   registry: RegistryClassProp[]
+  /**
+   * ⭐⭐ Настоящие пиктограммы: код → разметка SVG из `pictograms_signals`
+   * (решение Сергея, s84). Приходят СО СБОРКИ по той же причине, что реестр:
+   * остров в базу не ходит, а отчёт обязан оставаться чистой функцией от
+   * ответа — символ едет в него пропсом, а не запросом.
+   * ⚠ Девять символов весят ≈48 КБ в разметке страницы (замер s84).
+   */
+  pictograms?: Record<string, string>
 }
 
 /* ── состояние состава ───────────────────────────────────────────────────── */
@@ -358,7 +366,7 @@ function WarningLine({ w }: { w: Warning }) {
 
 /* ── компонент ───────────────────────────────────────────────────────────── */
 
-export default function MixtureClassifier({ registry }: Props) {
+export default function MixtureClassifier({ registry, pictograms }: Props) {
   const [tab, setTab] = useState<Tab>('composition')
 
   const [rows, setRows] = useState<Row[]>([])
@@ -746,8 +754,16 @@ export default function MixtureClassifier({ registry }: Props) {
    * (`MixtureReport`) и PDF (`reportPdfHtml`) читают ЕЁ ЖЕ — разойтись им нечем.
    */
   const report = useMemo(
-    () => (result ? buildReport(result, { className: classNameOf, shareUrl }) : null),
-    [result, classNameOf, shareUrl],
+    () => (result
+      ? buildReport(result, {
+        className: classNameOf,
+        // ⚠ Символ уезжает В МОДЕЛЬ, а не в разметку отчёта: PDF собирается из
+        //    модели и обязан нести его сам, без страницы.
+        pictogramSvg: (code) => pictograms?.[code] ?? null,
+        shareUrl,
+      })
+      : null),
+    [result, classNameOf, shareUrl, pictograms],
   )
 
   const downloadPdf = async () => {
@@ -1345,7 +1361,7 @@ export default function MixtureClassifier({ registry }: Props) {
                   <div className="mx-verdict-label">
                     {danger && <p className="sig danger">Danger</p>}
                     {warning && <p className="sig warning">Warning</p>}
-                    <div className="pics">{pics.map((p) => <Picto key={p} code={p} />)}</div>
+                    <div className="pics">{pics.map((p) => <Picto key={p} code={p} svg={pictograms?.[p] ?? null} />)}</div>
                   </div>
                 )}
               </section>

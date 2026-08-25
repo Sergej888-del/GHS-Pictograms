@@ -85,7 +85,7 @@ type MappingRow = {
   clp_status: string | null
 }
 
-const [catalogRes, mappingRes, subsRes] = await Promise.all([
+const [catalogRes, mappingRes, subsRes, pictoRes] = await Promise.all([
   supabase
     .from('hazard_class_catalog')
     .select('id, class_code, name_en, group_type, eu_only, display_order')
@@ -97,6 +97,23 @@ const [catalogRes, mappingRes, subsRes] = await Promise.all([
     .from('substances')
     .select('id', { count: 'exact', head: true })
     .not('index_number', 'is', null),
+  /**
+   * ⭐⭐⭐ НАСТОЯЩИЕ ПИКТОГРАММЫ (решение Сергея, s84). До этой сессии вердикт и
+   * отчёт рисовали НАШ ромб с кодом внутри. Для таблицы это годилось, для
+   * аудиторского листа — нет: символ Annex V есть элемент этикетки, а «GHS06»
+   * в ромбе — наше изобретение.
+   * ⚠ Читаются ЗДЕСЬ, на сборке, и уезжают в остров пропсом: `pictograms_signals`
+   * открыта для anon (проверено запросом к `role_table_grants`, s84), но остров
+   * в базу не ходит по устройству, а отчёт обязан оставаться чистой функцией от
+   * ответа — иначе PDF пришлось бы собирать вторым запросом.
+   * ⚠ Только девять GHS-кодов и только две колонки: `select *` отсюда тянет
+   * десятки КБ на строку (то же предупреждение в `/pictograms/index.astro`).
+   */
+  supabase
+    .from('pictograms_signals')
+    .select('code, svg_content')
+    .like('code', 'GHS%')
+    .order('code'),
 ])
 
 if (catalogRes.error) throw new Error(`[clp-mixture-classifier] hazard_class_catalog: ${catalogRes.error.message}`)
@@ -108,13 +125,23 @@ const harmonisedSubstances = subsRes.count ?? 0
 
 if (subsRes.error) throw new Error(`[clp-mixture-classifier] substances count: ${subsRes.error.message}`)
 
-if (!catalog.length || !mapping.length || !harmonisedSubstances) {
+if (pictoRes.error) throw new Error(`[clp-mixture-classifier] pictograms_signals: ${pictoRes.error.message}`)
+
+/** Код → разметка символа. ⚠ Строки без `svg_content` не попадают: остров
+ *  нарисует прежний ромб, и это честнее пустого места. */
+const pictograms: Record<string, string> = Object.fromEntries(
+  ((pictoRes.data ?? []) as { code: string; svg_content: string | null }[])
+    .filter((p) => !!p.svg_content)
+    .map((p) => [p.code, p.svg_content as string]),
+)
+
+if (!catalog.length || !mapping.length || !harmonisedSubstances || !Object.keys(pictograms).length) {
   // ⚠⚠ Пустой реестр — это не «пустая страница»: остров потеряет имена классов и
   // форму поставщика МОЛЧА, а в шапке встанет «0 substances». Ровно тот отказ,
   // ради которого заведено правило «зелёная сборка не доказывает, что данные
   // приехали» (Appendix E §1): на ноутбуке с перехватом TLS сборка проходит с
   // пустой базой. Поэтому падаем здесь, а не печатаем нули.
-  throw new Error('[clp-mixture-classifier] the hazard registry or the substance count came back empty — check the Supabase connection (NODE_OPTIONS=--use-system-ca) before building')
+  throw new Error('[clp-mixture-classifier] the hazard registry, the substance count or the pictogram set came back empty — check the Supabase connection (NODE_OPTIONS=--use-system-ca) before building')
 }
 
 const byClass = new Map<string, MappingRow[]>()
@@ -301,7 +328,7 @@ const breadcrumbJson = JSON.stringify({
 
   <section class="hub-sec-tool">
     <div class="hub-wrap">
-      <MixtureClassifier registry={registry} client:load />
+      <MixtureClassifier registry={registry} pictograms={pictograms} client:load />
     </div>
   </section>
 

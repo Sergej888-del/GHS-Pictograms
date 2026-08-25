@@ -27,14 +27,29 @@ function esc(s: string): string {
 }
 
 /**
- * ⭐ Ромб пиктограммы — тот же знак, что рисует остров (`Picto`), только строкой.
- * ⚠ Цвета и размеры заданы атрибутами, а не классами: html2canvas разбирает
- * инлайновый SVG, но токенов и наследования он не понимает (урок s79).
+ * ⭐⭐⭐ Пиктограмма в PDF — НАСТОЯЩИЙ СИМВОЛ из базы, если он пришёл в модели,
+ * иначе прежний ромб с кодом. Лист, который показывают инспектору, обязан нести
+ * знак Annex V, а не наше изображение кода (решение Сергея, s84).
+ *
+ * ⚠⚠ Разметка символа НЕ ЭКРАНИРУЕТСЯ — это единственное место в файле, где так
+ * можно, и вот почему: она приходит из `pictograms_signals`, куда её кладём мы,
+ * а не из запроса. Всё, что пришло от браузера (имена компонентов, цитаты),
+ * по-прежнему проходит через `esc()`.
+ * ⚠ У части строк базы стоят СВОИ `width`/`height` (например `579pt`) — они
+ * перебили бы размер в листе, поэтому режем их и задаём свои.
  */
-function picto(code: string): string {
-  return `<svg class="pic" viewBox="0 0 100 100" width="58" height="58" role="img" aria-label="${esc(code)}">`
+function picto(p: { code: string; svg: string | null }): string {
+  if (p.svg) {
+    const sized = p.svg
+      .replace(/<svg\b([^>]*)>/i, (_m, attrs: string) => {
+        const cleaned = attrs.replace(/\s(width|height)="[^"]*"/gi, '');
+        return `<svg${cleaned} width="58" height="58">`;
+      });
+    return `<span class="pic" title="${esc(p.code)}">${sized}</span>`;
+  }
+  return `<svg class="pic" viewBox="0 0 100 100" width="58" height="58" role="img" aria-label="${esc(p.code)}">`
     + '<polygon points="50,3 97,50 50,97 3,50" fill="#ffffff" stroke="#b91c1c" stroke-width="7"/>'
-    + `<text x="50" y="55" text-anchor="middle" font-family="monospace" font-size="17" font-weight="700" fill="#0f172a">${esc(code)}</text>`
+    + `<text x="50" y="55" text-anchor="middle" font-family="monospace" font-size="17" font-weight="700" fill="#0f172a">${esc(p.code)}</text>`
     + '</svg>';
 }
 
@@ -60,17 +75,29 @@ function ruleHtml(r: ReportRuleBlock): string {
   return head + quote + agg + contrib + cands + warns;
 }
 
+/** Сжатые группы: класс назван, но карточки не занимает (s84). */
+function compactHtml(s: ReportSection): string {
+  return s.compact
+    .map((g) => `<div class="cg"><p class="lb">${esc(g.label)}</p>`
+      + `<p class="cl">${g.classNames.map(esc).join(' · ')}</p>`
+      + `<p class="nt">${esc(g.note)}</p></div>`)
+    .join('');
+}
+
 function sectionHtml(s: ReportSection): string {
-  if (!s.lines.length) {
+  if (!s.lines.length && !s.compact.length) {
     return `<section><h2>${esc(s.title)}</h2><p class="lead">${esc(s.lead)}</p><p class="none">None — every class computed came back with another status. The rows below say which rule decided that.</p></section>`;
   }
   // ⚠ «not computed» печатается КОРОТКО и целиком: правила у этих строк нет по
   // определению, а причина есть, и она — весь смысл строки.
   if (s.key === 'not_computed') {
     return `<section><h2>${esc(s.title)}</h2><p class="lead">${esc(s.lead)}</p>`
-      + `<table class="nc"><tbody>${s.lines
-        .map((l) => `<tr><td class="nm">${esc(l.className)}</td><td>${esc(l.reason ?? '')}</td><td class="m">module ${esc(l.module)}</td></tr>`)
-        .join('')}</tbody></table></section>`;
+      + (s.lines.length
+        ? `<table class="nc"><tbody>${s.lines
+          .map((l) => `<tr><td class="nm">${esc(l.className)}</td><td>${esc(l.reason ?? '')}</td><td class="m">module ${esc(l.module)}</td></tr>`)
+          .join('')}</tbody></table>`
+        : '')
+      + compactHtml(s) + '</section>';
   }
   return `<section><h2>${esc(s.title)}</h2><p class="lead">${esc(s.lead)}</p>`
     + s.lines
@@ -90,6 +117,7 @@ function sectionHtml(s: ReportSection): string {
           .join('')
         + '</div>')
       .join('')
+    + compactHtml(s)
     + '</section>';
 }
 
@@ -151,7 +179,12 @@ export function reportPdfHtml(m: ReportModel): string {
       .${ROOT} .sig.Warning{background:#fef9c3;color:#854d0e}
       .${ROOT} .hc{display:inline-block;margin-left:10px;font-family:monospace;font-size:11px;color:#334155}
       .${ROOT} .pics{margin-top:8px}
-      .${ROOT} .pic{display:inline-block;margin-right:8px;vertical-align:middle}
+      .${ROOT} .pic{display:inline-block;width:58px;height:58px;margin-right:8px;vertical-align:middle}
+      .${ROOT} .pic svg{width:58px;height:58px;display:block}
+      .${ROOT} .cg{margin-top:8px;border:1px solid #eef2f7;border-left:3px solid #cbd5e1;border-radius:8px;padding:8px 11px}
+      .${ROOT} .cg .lb{margin:0;font-size:10.5px;font-weight:700;color:#475569}
+      .${ROOT} .cg .cl{margin:4px 0 0;font-size:11px;color:#0f172a}
+      .${ROOT} .cg .nt{margin:4px 0 0;font-size:10px;color:#64748b}
       .${ROOT} .bd{display:inline-block;margin:8px 6px 0 0;padding:3px 9px;border:1px solid #fcd34d;background:#fffbeb;color:#92400e;border-radius:9px;font-size:10px}
       .${ROOT} .lead{margin:0 0 8px;font-size:11px;color:#64748b}
       .${ROOT} table{width:100%;border-collapse:collapse;font-size:11px}

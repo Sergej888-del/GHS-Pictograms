@@ -13,11 +13,27 @@
 import type { ReportModel, ReportRuleBlock, ReportSection } from '../lib/classifier/report'
 
 /**
- * Ромб пиктограммы. ⭐ ОДНО ОПРЕДЕЛЕНИЕ НА ДВА МЕСТА: остров импортирует его
- * отсюда, а не держит свою копию (s84). Файлы пиктограмм лежат в базе, а здесь
- * нужен знак «какие символы поедут на этикетку», а не сама этикетка.
+ * Пиктограмма. ⭐⭐⭐ НАСТОЯЩИЙ СИМВОЛ, А НЕ НАШ ЗНАК (решение Сергея, s84).
+ *
+ * До этой сессии рисовался ромб с кодом внутри — по решению s81 «здесь нужен
+ * знак, какие символы поедут на этикетку, а не сама этикетка». Для таблицы это
+ * годилось, для АУДИТОРСКОГО ОТЧЁТА нет: «GHS06» в ромбе — наше изобретение, а
+ * пиктограмма Annex V — юридический элемент этикетки, и в документе, который
+ * показывают инспектору, должен стоять он. Разметка лежит в базе
+ * (`pictograms_signals.svg_content`) и приходит со сборки пропсом.
+ *
+ * ⚠ `svg` пустой — законный случай (символа в базе нет), и тогда рисуется
+ * прежний ромб: пустое место читалось бы как «пиктограммы нет», а это неправда.
+ * ⛔ `dangerouslySetInnerHTML` здесь безопасен ровно потому, что источник — наша
+ * база, а не запрос: тем же приёмом символы печатают `/sds/`, селектор и ATE.
  */
-export function Picto({ code }: { code: string }) {
+export function Picto({ code, svg }: { code: string; svg?: string | null }) {
+  if (svg) {
+    return (
+      <span className="mx-picto-real" role="img" aria-label={code} title={code}
+        dangerouslySetInnerHTML={{ __html: svg }} />
+    )
+  }
   return (
     <svg className="mx-picto" viewBox="0 0 100 100" role="img" aria-label={code}>
       <polygon points="50,3 97,50 50,97 3,50" />
@@ -80,7 +96,7 @@ function Section({ section }: { section: ReportSection }) {
       <h3 className="mx-rep-h">{section.title}</h3>
       <p className="mx-rep-lead">{section.lead}</p>
 
-      {!section.lines.length && (
+      {!section.lines.length && !section.compact.length && (
         <p className="mx-note">
           None — every class computed came back with another status. The rows below say which rule decided that.
         </p>
@@ -128,6 +144,21 @@ function Section({ section }: { section: ReportSection }) {
           </article>
         ))
       )}
+
+      {/*
+        ⭐⭐⭐ СЖАТЫЕ ГРУППЫ. Класс, которого не несёт ни один ингредиент, всё
+        равно НАЗВАН — но одной строкой, а не карточкой с цитатой порога, к
+        которому нечего было прикладывать. Ни один класс при этом не исчезает:
+        число имён здесь плюс число карточек выше сходится с числом решений
+        движка, и это сторожится (`check:engine`).
+      */}
+      {section.compact.map((g) => (
+        <div className="mx-rep-compact" key={g.label}>
+          <p className="lb">{g.label}</p>
+          <p className="cl">{g.classNames.join(' · ')}</p>
+          <p className="nt">{g.note}</p>
+        </div>
+      ))}
     </section>
   )
 }
@@ -167,7 +198,7 @@ export default function MixtureReport({ model }: { model: ReportModel }) {
               <p className={`sig ${model.verdict.signalWord.toLowerCase()}`}>{model.verdict.signalWord}</p>
             )}
             <div className="pics">
-              {model.verdict.pictograms.map((p) => <Picto key={p} code={p} />)}
+              {model.verdict.pictograms.map((p) => <Picto key={p.code} code={p.code} svg={p.svg} />)}
             </div>
           </div>
         )}
