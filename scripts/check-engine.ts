@@ -17,6 +17,7 @@
 // ⛔ Пустая ячейка без причины — запрещена (урок session 76: «none» в колонке
 //    читается как «неопасно», а на деле это была потеря данных).
 
+import { readFileSync } from 'node:fs';
 import { classifyMixture, normalize, ENGINE_VERSION } from '../src/lib/classifier/engine.ts';
 import { DEFAULT_MODULES } from '../src/lib/classifier/modules/index.ts';
 import { RuleIndex, Registry } from '../src/lib/classifier/data.ts';
@@ -1162,6 +1163,40 @@ function buildAndRender(name: string): string {
   const evil: ComponentInput = { id: 'evil', source: 'supplier', name, conc: 5, classifications: [], knownNonhazard: true };
   return reportPdfHtml(buildReport(run(mixture([evil, water(95, true)])), { className }));
 }
+
+// 9.12 ⭐⭐⭐ ПОЛЕ МОДЕЛИ, КОТОРОЕ НИКТО НЕ ПЕЧАТАЕТ, — ЭТО МОЛЧАЛИВАЯ ПОТЕРЯ.
+// Дефект s84, найденный Сергеем на проде, а не проверкой: модель несла вердикт
+// целиком — сигнальное слово, пиктограммы, H-коды, — PDF его печатал, а экранный
+// отчёт начинался сразу с эха ввода. Обе половины были «зелёными»: одна печатала
+// то, что умеет, другая молчала о том, чего не умеет.
+// ⚠ Проверка НЕ перечисляет, что должно быть напечатано (урок s82): список полей
+// берётся из САМОЙ МОДЕЛИ, а исключения названы поимённо вместе с местом, где
+// поле печатается вместо этого.
+const SCREEN = readFileSync(new URL('../src/components/MixtureReport.tsx', import.meta.url), 'utf8');
+const PDF = readFileSync(new URL('../src/lib/classifier/reportHtml.ts', import.meta.url), 'utf8');
+/** Поля, которых на ЭКРАНЕ нет намеренно, и где они вместо этого стоят. */
+const SCREEN_ELSEWHERE: Record<string, string> = {
+  shareUrl: 'печатается строкой под кнопками острова',
+  disclaimer: 'стоит на странице вне ветки результата (s81) — второй копии быть не должно',
+  method: 'стоит в разделе «02 · Method» самой страницы',
+};
+const modelKeys = Object.keys(rep);
+check('модель отчёта не пустая и её поля можно перечислить', modelKeys.length >= 10, String(modelKeys.length));
+const pdfMissing = modelKeys.filter((k) => !PDF.includes(`m.${k}`));
+check('PDF печатает КАЖДОЕ поле модели — он уезжает один, без страницы',
+  pdfMissing.length === 0, pdfMissing.join(', '));
+const screenMissing = modelKeys.filter((k) => !SCREEN.includes(`model.${k}`) && !(k in SCREEN_ELSEWHERE));
+check('экранный отчёт печатает каждое поле модели, кроме названных исключений',
+  screenMissing.length === 0, screenMissing.join(', '));
+check('вердикт с пиктограммами и сигнальным словом есть В ОБОИХ отображениях',
+  SCREEN.includes('model.verdict.pictograms') && SCREEN.includes('model.verdict.signalWord')
+  && PDF.includes('m.verdict.pictograms') && PDF.includes('m.verdict.signalWord'));
+check('пиктограмма в PDF нарисована ромбом, а не напечатана кодом в плашке',
+  PDF.includes('<polygon points=') && html.includes('<polygon points='));
+const vd = rep.verdict;
+check('в вердикте примера есть и сигнальное слово, и пиктограммы, и H-коды',
+  vd.signalWord === 'Danger' && vd.pictograms.length > 0 && vd.hCodes.length > 0,
+  `${vd.signalWord} · ${vd.pictograms.join(',')} · ${vd.hCodes.length}`);
 
 console.log(`\n${failed ? `✗ ПРОВАЛЕНО: ${failed} из ${total}` : `✓ каркас зелёный — ${total} проверок`}`);
 process.exit(failed ? 1 : 0);

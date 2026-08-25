@@ -771,6 +771,43 @@ details.mx-panel.help[open] .mx-panel-head.as-button .a { transform: rotate(180d
 }
 .mx-rep-meta { margin: 4px 0 0; font-size: 11px; color: var(--ink-3); }
 
+/* Вердикт отчёта: то же, что в карточке результата, но внутри документа —
+   отчёт уезжает в PDF и по ссылке отдельно от страницы и обязан открываться
+   ответом, а не эхом ввода (дефект s84). */
+.mx-rep-verdict {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 16px;
+  border: 1px solid var(--mx-acc-line);
+  border-radius: 14px;
+  background: var(--mx-acc-soft);
+  padding: 16px 18px;
+}
+.mx-rep-verdict .v { min-width: 0; }
+.mx-rep-verdict .hl {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.mx-rep-verdict .as { margin: 6px 0 0; font-size: 13px; line-height: 1.55; color: var(--ink-2); }
+.mx-rep-verdict .hc { margin: 4px 0 0; font-size: 12px; color: var(--ink-3); }
+.mx-rep-verdict .bd { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.mx-rep-verdict .lbl { text-align: right; flex: 0 0 auto; }
+.mx-rep-verdict .sig {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+.mx-rep-verdict .sig.danger { color: var(--verdict-never-ink); }
+.mx-rep-verdict .sig.warning { color: var(--verdict-sep-ink); }
+.mx-rep-verdict .pics { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
 .mx-rep-sec { margin-top: 20px; }
 .mx-rep-h {
   margin: 0;

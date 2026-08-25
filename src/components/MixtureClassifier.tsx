@@ -33,7 +33,7 @@ import type {
   Audience, ClassifierResult, Decision, InhalForm, PhysicalState, Warning,
 } from '../lib/classifier/types'
 import { buildReport, resultFingerprint, stampTime } from '../lib/classifier/report'
-import MixtureReport from './MixtureReport'
+import MixtureReport, { Picto } from './MixtureReport'
 import { labelMakerHref } from '../lib/labelMakerLink'
 
 /* ── контракт с Function ─────────────────────────────────────────────────── */
@@ -330,16 +330,8 @@ function diffResults(
 
 /* ── мелкие части разметки ───────────────────────────────────────────────── */
 
-/** Ромб пиктограммы. Рисуем сами: файлы пиктограмм лежат в базе, а здесь нужен
- *  только знак «какие символы поедут на этикетку», а не сама этикетка. */
-function Picto({ code }: { code: string }) {
-  return (
-    <svg className="mx-picto" viewBox="0 0 100 100" role="img" aria-label={code}>
-      <polygon points="50,3 97,50 50,97 3,50" />
-      <text x="50" y="53" textAnchor="middle" dominantBaseline="middle">{code}</text>
-    </svg>
-  )
-}
+/* ⚠ `Picto` переехал в `MixtureReport.tsx` (s84): один ромб на два места —
+   вердикт острова и вердикт отчёта. Две копии разошлись бы. */
 
 function Fold({ title, count, children }: { title: string; count: string; children: ReactNode }) {
   const [open, setOpen] = useState(false)

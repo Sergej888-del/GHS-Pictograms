@@ -12,6 +12,20 @@
 
 import type { ReportModel, ReportRuleBlock, ReportSection } from '../lib/classifier/report'
 
+/**
+ * Ромб пиктограммы. ⭐ ОДНО ОПРЕДЕЛЕНИЕ НА ДВА МЕСТА: остров импортирует его
+ * отсюда, а не держит свою копию (s84). Файлы пиктограмм лежат в базе, а здесь
+ * нужен знак «какие символы поедут на этикетку», а не сама этикетка.
+ */
+export function Picto({ code }: { code: string }) {
+  return (
+    <svg className="mx-picto" viewBox="0 0 100 100" role="img" aria-label={code}>
+      <polygon points="50,3 97,50 50,97 3,50" />
+      <text x="50" y="53" textAnchor="middle" dominantBaseline="middle">{code}</text>
+    </svg>
+  )
+}
+
 function Rule({ rule }: { rule: ReportRuleBlock }) {
   const counted = rule.contributions.filter((c) => c.counted)
   const skipped = rule.contributions.filter((c) => !c.counted)
@@ -125,6 +139,39 @@ export default function MixtureReport({ model }: { model: ReportModel }) {
         <p className="mx-rep-title">{model.title}</p>
         <p className="mx-rep-meta mono">{model.computedAt} · {model.source}</p>
       </div>
+
+      {/*
+        ⭐⭐⭐ ВЕРДИКТ — ПЕРВОЕ, ЧТО ЧИТАЮТ. Дефект s84, найденный Сергеем на
+        проде: модель несла его целиком, PDF печатал, а этот файл начинался
+        сразу с «What was entered» — то есть отчёт открывался эхом ввода, без
+        сигнального слова и без пиктограмм. Сторож теперь сверяет ПОЛЯ МОДЕЛИ с
+        текстом обоих отображений (`check:engine`, раздел 9): поле, которое
+        никто не печатает, краснеет само.
+      */}
+      <section className="mx-rep-verdict">
+        <div className="v">
+          <p className="hl">{model.verdict.headline}</p>
+          {model.verdict.assigned.length > 0 && (
+            <p className="as">{model.verdict.assigned.join(' · ')}</p>
+          )}
+          {model.verdict.hCodes.length > 0 && (
+            <p className="hc mono">{model.verdict.hCodes.join(' · ')}</p>
+          )}
+          <div className="bd">
+            {model.verdict.badges.map((b) => <span key={b} className="mx-badge amber">{b}</span>)}
+          </div>
+        </div>
+        {(model.verdict.signalWord || model.verdict.pictograms.length > 0) && (
+          <div className="lbl">
+            {model.verdict.signalWord && (
+              <p className={`sig ${model.verdict.signalWord.toLowerCase()}`}>{model.verdict.signalWord}</p>
+            )}
+            <div className="pics">
+              {model.verdict.pictograms.map((p) => <Picto key={p} code={p} />)}
+            </div>
+          </div>
+        )}
+      </section>
 
       <section className="mx-rep-sec">
         <h3 className="mx-rep-h">What was entered</h3>

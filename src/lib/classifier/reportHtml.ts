@@ -26,6 +26,18 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+/**
+ * ⭐ Ромб пиктограммы — тот же знак, что рисует остров (`Picto`), только строкой.
+ * ⚠ Цвета и размеры заданы атрибутами, а не классами: html2canvas разбирает
+ * инлайновый SVG, но токенов и наследования он не понимает (урок s79).
+ */
+function picto(code: string): string {
+  return `<svg class="pic" viewBox="0 0 100 100" width="58" height="58" role="img" aria-label="${esc(code)}">`
+    + '<polygon points="50,3 97,50 50,97 3,50" fill="#ffffff" stroke="#b91c1c" stroke-width="7"/>'
+    + `<text x="50" y="55" text-anchor="middle" font-family="monospace" font-size="17" font-weight="700" fill="#0f172a">${esc(code)}</text>`
+    + '</svg>';
+}
+
 function kv(list: { label: string; value: string }[]): string {
   return `<table class="kv"><tbody>${list
     .map((x) => `<tr><td class="k">${esc(x.label)}</td><td>${esc(x.value)}</td></tr>`)
@@ -137,7 +149,9 @@ export function reportPdfHtml(m: ReportModel): string {
       .${ROOT} .sig{display:inline-block;margin-top:8px;padding:4px 14px;border-radius:14px;font-weight:800;font-size:12px}
       .${ROOT} .sig.Danger{background:#fee2e2;color:#991b1b}
       .${ROOT} .sig.Warning{background:#fef9c3;color:#854d0e}
-      .${ROOT} .pic{display:inline-block;margin:8px 6px 0 0;padding:3px 9px;border:1px solid #cbd5e1;border-radius:9px;font-size:10.5px;font-family:monospace}
+      .${ROOT} .hc{display:inline-block;margin-left:10px;font-family:monospace;font-size:11px;color:#334155}
+      .${ROOT} .pics{margin-top:8px}
+      .${ROOT} .pic{display:inline-block;margin-right:8px;vertical-align:middle}
       .${ROOT} .bd{display:inline-block;margin:8px 6px 0 0;padding:3px 9px;border:1px solid #fcd34d;background:#fffbeb;color:#92400e;border-radius:9px;font-size:10px}
       .${ROOT} .lead{margin:0 0 8px;font-size:11px;color:#64748b}
       .${ROOT} table{width:100%;border-collapse:collapse;font-size:11px}
@@ -186,8 +200,8 @@ export function reportPdfHtml(m: ReportModel): string {
       <p class="hl">${esc(m.verdict.headline)}</p>
       ${m.verdict.assigned.length ? `<p class="as">${m.verdict.assigned.map(esc).join(' · ')}</p>` : ''}
       ${m.verdict.signalWord ? `<span class="sig ${esc(m.verdict.signalWord)}">${esc(m.verdict.signalWord)}</span>` : ''}
-      ${m.verdict.pictograms.map((p) => `<span class="pic">${esc(p)}</span>`).join('')}
-      ${m.verdict.hCodes.length ? `<span class="pic">${m.verdict.hCodes.map(esc).join(' ')}</span>` : ''}
+      ${m.verdict.hCodes.length ? `<span class="hc">${m.verdict.hCodes.map(esc).join(' · ')}</span>` : ''}
+      ${m.verdict.pictograms.length ? `<div class="pics">${m.verdict.pictograms.map(picto).join('')}</div>` : ''}
       ${m.verdict.badges.map((b) => `<span class="bd">${esc(b)}</span>`).join('')}
     </div>
 
