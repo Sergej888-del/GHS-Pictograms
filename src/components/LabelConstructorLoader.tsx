@@ -440,7 +440,20 @@ export default function LabelConstructorLoader({
 
         <div className="lm-source-state">
           {loading ? (
-            <p className="lm-hint">Loading substance data…</p>
+            /* ⚠ Та же форма, что у состояния «вещество выбрано»: подпись,
+               строка имени, строка CAS, подсказка. Пока здесь была одна строка
+               «Loading…», панель после ответа базы вырастала на 30–70 px и
+               двигала всё под собой — RUM видел это как layout shift на
+               `section.bg-blue-50…` (блок юрисдикции сразу под панелью).
+               Высота панели не должна зависеть от того, пришёл ответ или нет. */
+            <>
+              <p className="k">Loading substance</p>
+              <p className="v">Looking up CAS {cas}…</p>
+              <p className="cas">CLP Annex VI, harmonised entry</p>
+              <p className="lm-hint">
+                Pictograms, signal word and H/P statements come from CLP Annex VI.
+              </p>
+            </>
           ) : notFound ? (
             <>
               <p className="k">Not in the list</p>

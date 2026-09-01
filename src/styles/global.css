@@ -141,6 +141,54 @@
     U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+/* ── Запасные шрифты с метриками веб-шрифтов (session 85) ─────────────────
+ *
+ * ⚠⚠ ЗАЧЕМ. `font-display: swap` рисует страницу системным шрифтом и ПОДМЕНЯЕТ
+ * его, когда приедет наш. Inter шире Arial на 5,6 %, и подмена перекладывает
+ * каждую строку: на хабе `/ghs-label-maker/` при 1366 px остров конструктора
+ * вырастал на 180 px, всё, что ниже, уезжало — Cloudflare RUM показывал это
+ * как CLS «Poor» с источниками `div.grid…`, `section.bg-blue-50…` и `#how`.
+ * У посетителя с пустым кэшем (первый заход) это происходит ВСЕГДА.
+ *
+ * ⭐ Лечение — не убирать swap, а дать запасному шрифту метрики нашего:
+ * `size-adjust` подгоняет ширину Arial под Inter, `ascent/descent-override` —
+ * высоту строки. Тогда страница, нарисованная запасным шрифтом, занимает те же
+ * пиксели, и подмена ничего не двигает. Замер с этим блоком: 180 px → 61 px,
+ * остаток — один ряд чипов размеров этикетки далеко под первым экраном.
+ *
+ * ⚠ Числа СЧИТАНЫ, а не взяты из чужих таблиц: ширина — canvas.measureText на
+ * тексте самого сайта в Chrome/Windows (Inter 400 против Arial 400,
+ * Space Grotesk 700 против Arial 700); ascent/descent — из таблиц hhea файлов
+ * в public/fonts/ (Inter 1984/494 при UPM 2048, Space Grotesk 984/292 при
+ * UPM 1000), поделённые на size-adjust. Смена файла шрифта = пересчёт.
+ *
+ * ⚠ `local('Arial')` — потому что sans-serif на Windows и есть Arial, а
+ * замеры RUM почти целиком с Windows. На macOS/Android Arial обычно тоже есть
+ * (Roboto — нет), а где нет — стек падает в обычный sans-serif, как и раньше.
+ *
+ * ⚠ Инлайновые стеки `'Space Grotesk', sans-serif` на /privacy/, /terms/,
+ * /pictogram-selector/, /sds/ и в ATE-калькуляторе запасного шрифта НЕ
+ * получают: там надо менять строки поимённо. Хабы, шапка, подвал и всё, что
+ * идёт через --font-body / --font-heading, — покрыты.
+ * ────────────────────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'Inter Fallback';
+  src: local('Arial');
+  size-adjust: 105.58%;
+  ascent-override: 91.75%;
+  descent-override: 22.85%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Space Grotesk Fallback';
+  src: local('Arial');
+  size-adjust: 100.86%;
+  ascent-override: 97.56%;
+  descent-override: 28.95%;
+  line-gap-override: 0%;
+}
+
 /* ── JetBrains Mono — коды, номера CAS/EC и цифры ────────────────────────────
  *
  * ⚠⚠ ЭТОГО ШРИФТА В ПУНКТЕ №43 НЕ БЫЛО ВООБЩЕ. Он висел ЧЕТВЁРТОЙ и ПЯТОЙ
@@ -180,8 +228,8 @@
 }
 
 :root {
-  --font-body: 'Inter', sans-serif;
-  --font-heading: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', 'Inter Fallback', sans-serif;
+  --font-heading: 'Space Grotesk', 'Space Grotesk Fallback', sans-serif;
 }
 
 body {
