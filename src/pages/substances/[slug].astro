@@ -85,6 +85,7 @@ import {
 import { EU_LANGUAGES, LANGUAGE_BY_CODE, EURLEX_ATTRIBUTION } from '../../lib/labelLanguages'
 import lcssValues from '../../data/lcss-values.json'
 import lcssText from '../../data/lcss-text.json'
+import { substanceIndexable } from '../../lib/substanceIndexGate'
 
 const SITE = 'https://ghspictograms.com'
 
@@ -569,6 +570,10 @@ const propertyRows = buildPropertyRows(lcss)
 // ниже под темой. Подпись «Lower explosive limit» над рассказом о взрыве — неправда,
 // но и молчание про взрыв человек прочтёт как «не взрывается». Разбор: lcssProperties.ts.
 const sourceNotes = buildSourceNotes(lcss)
+// ⚠⚠ Граница индексации — src/lib/substanceIndexGate.ts, там же причина.
+// Страница без данных LCSS строится и живёт в перелинковке, но закрыта для
+// индекса: `noindex, follow`, и sitemap её не объявляет (тот же модуль).
+const indexable = substanceIndexable(cas)
 // ⚠ Буква указателя. Правило обязано совпадать с
 // src/pages/substances/browse/[letter].astro, иначе крошка поведёт в 404.
 const firstChar = name.trim().charAt(0).toLowerCase()
@@ -864,6 +869,9 @@ const multiUn = unEntries.length > 1
 ---
 
 <Layout title={title} description={description} canonical={canonical} titleIsComplete={true}>
+  {/* ⚠⚠ `noindex` — мета-тегом через слот head, пропа у Layout нет (см. pick.astro).
+      `follow` обязателен: страница остаётся узлом перелинковки. */}
+  {!indexable && <meta name="robots" content="noindex, follow" slot="head" />}
   <script type="application/ld+json" slot="head" set:html={chemicalJson} />
   <script type="application/ld+json" slot="head" set:html={breadcrumbJson} />
   {faqJson && <script type="application/ld+json" slot="head" set:html={faqJson} />}

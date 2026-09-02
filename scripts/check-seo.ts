@@ -632,7 +632,13 @@ const CHECKS: Check[] = [
       // у страницы нет вовсе, и noindex стоит правильно. Поэтому рядом со словами
       // печатается число внутренних ссылок — «много слов при многих ссылках» это
       // перечень, а не статья, и решать по одному счётчику слов нельзя.
-      const list = PAGES.filter((p) => noindexOf(p))
+      // ⚠ С session 85 под noindex стоят ~2 тыс. страниц веществ без данных LCSS
+      // (граница — src/lib/substanceIndexGate.ts, сторож — check:dist
+      // subs-index-gate). Перечислять их здесь поимённо значило бы утопить те
+      // четыре-пять страниц, ради которых этот список и существует. Они
+      // сворачиваются в одну строку со счётчиком.
+      const gated = PAGES.filter((p) => noindexOf(p) && p.url.startsWith('/substances/'))
+      const list = PAGES.filter((p) => noindexOf(p) && !p.url.startsWith('/substances/'))
         .map((p) => {
           const words = p.html.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length
           const links = linksOf(p).length
@@ -644,8 +650,14 @@ const CHECKS: Check[] = [
         group: 'Обход',
         ok: true,
         level: 'warn',
-        headline: list.length === 0 ? 'noindex-страниц нет' : `noindex: ${list.length}`,
-        detail: list.length ? preview(list, 20) : [],
+        headline:
+          list.length + gated.length === 0
+            ? 'noindex-страниц нет'
+            : `noindex: ${list.length} страниц + ${gated.length} веществ под границей индексации`,
+        detail: [
+          ...(gated.length ? [`/substances/* под substanceIndexGate: ${gated.length} (см. check:dist subs-index-gate)`] : []),
+          ...preview(list, 20),
+        ],
       }
     },
   },

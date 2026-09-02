@@ -7,6 +7,7 @@ import { hSlug } from '../lib/hStatementSlug';
 // поздно объявить в sitemap страницу, которой нет.
 import { substanceNameFull, substanceTitleName, NAME_COLUMNS } from '../lib/substanceName';
 import { substanceHref } from '../lib/substanceSlug';
+import { substanceIndexable } from '../lib/substanceIndexGate';
 // ⚠ Ветки и шаблоны раздела /ghs-label-maker/ перечисляются НЕ руками: список
 // ведёт labelMakerHub.ts, и дублировать его здесь значит однажды объявить в
 // sitemap страницу, которой нет, или потерять ту, которая есть.
@@ -308,11 +309,18 @@ async function fetchSubstanceSitemapEntries(): Promise<
     ...[...letters]
       .sort()
       .map((l) => ({ url: `/substances/browse/${l}/`, changefreq: 'weekly', priority: '0.5' })),
-    ...clean.map((r) => ({
-      url: substanceHref(substanceNameFull(r), r.cas_number),
-      changefreq: 'monthly',
-      priority: '0.7',
-    })),
+    // ⚠⚠ В sitemap идут ТОЛЬКО индексируемые вещества — те, что проходят
+    // границу src/lib/substanceIndexGate.ts. Остальные собраны и стоят под
+    // `noindex, follow`; звать на них краулера значит противоречить самим себе.
+    // Буквенные страницы указателя выше строятся из ПОЛНОГО набора: они
+    // ссылаются на все вещества, и страницы под noindex там нужны как узлы.
+    ...clean
+      .filter((r) => substanceIndexable(r.cas_number))
+      .map((r) => ({
+        url: substanceHref(substanceNameFull(r), r.cas_number),
+        changefreq: 'monthly',
+        priority: '0.7',
+      })),
   ];
 }
 

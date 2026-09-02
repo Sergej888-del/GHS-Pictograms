@@ -67,6 +67,7 @@ import {
 } from '../src/lib/annex6Errata'
 import { casShapeOk, ecShapeOk, indexShapeOk } from '../src/lib/substanceIdentifiers'
 import { substanceSlug, casFromSlug } from '../src/lib/substanceSlug'
+import { substanceIndexable, substanceIndexableCount, SUBSTANCE_INDEX_GATE } from '../src/lib/substanceIndexGate'
 // ⚠⚠ Раскладка «код знака → файл» берётся ИЗ ТОГО ЖЕ модуля, что и страница.
 // Списать сюда список кодов — значит завести вторую копию словаря, которая
 // разойдётся молча. Ровно на этом уже спотыкались: список «19 знаков» из
@@ -3449,17 +3450,25 @@ const CHECKS: Check[] = [
       const inSitemap = new Set(
         [...xml.matchAll(/<loc>https:\/\/ghspictograms\.com\/substances\/([^<\/]+)\/<\/loc>/g)].map((m) => m[1]),
       )
-      const { missing, extra } = diffSets(inSitemap, new Set(slugs!))
+      // ⚠⚠ С session 85 в sitemap идут не все собранные вещества, а только
+      // прошедшие границу индексации (src/lib/substanceIndexGate.ts). Страница
+      // под `noindex` в sitemap — противоречие; страница без noindex вне sitemap —
+      // потеря. Оба направления сверяются здесь, сам мета-тег — в subs-index-gate.
+      const expected = new Set(slugs!.filter((slug) => {
+        const cas = casFromSlug(slug)
+        return cas !== null && substanceIndexable(cas)
+      }))
+      const { missing, extra } = diffSets(inSitemap, expected)
       const detail: string[] = []
       if (missing.length) {
         detail.push(
-          `собраны, но в sitemap их нет (${missing.length}): ${preview(missing)}`,
+          `индексируемые, но в sitemap их нет (${missing.length}): ${preview(missing)}`,
         )
       }
       if (extra.length) {
         detail.push(
-          `sitemap зовёт краулера на несобранные адреса (${extra.length}): ${preview(extra)}. ` +
-            'Это прямое нарушение правила «sitemap не объявляет страницу, которую getStaticPaths не строит».',
+          `sitemap зовёт краулера на несобранные или закрытые адреса (${extra.length}): ${preview(extra)}. ` +
+            'Правило: sitemap не объявляет страницу, которую getStaticPaths не строит или которая стоит под noindex.',
         )
       }
       const ok = missing.length === 0 && extra.length === 0
@@ -3468,7 +3477,66 @@ const CHECKS: Check[] = [
         id: 'subs-sitemap',
         group: 'subs',
         ok,
-        headline: `в sitemap ${inSitemap.size} страниц веществ, в dist ${slugs!.length}`,
+        headline: `в sitemap ${inSitemap.size} страниц веществ, индексируемых ${expected.size} из ${slugs!.length} собранных`,
+        detail,
+      }
+    },
+  },
+
+  {
+    id: 'subs-index-gate',
+    group: 'subs',
+    title: 'Граница индексации веществ: noindex стоит ровно там, где решил substanceIndexGate',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('subs-index-gate', slugs)
+      if (miss) return miss
+
+      // ⚠⚠ Сверяем ВЫХОД (мета-тег в dist) с ПРАВИЛОМ (модуль), а не правило само
+      // с собой. Проверка ловит два разных провала: страница закрыта, хотя данные
+      // есть (потеря), и страница открыта, хотя данных нет (тот самый шаблон,
+      // из-за которого Google переоценил сайт 21.08.2026).
+      const wronglyClosed: string[] = []
+      const wronglyOpen: string[] = []
+      const badCas: string[] = []
+      let open = 0
+      let closed = 0
+      for (const slug of slugs!) {
+        const cas = casFromSlug(slug)
+        if (!cas) { badCas.push(slug); continue }
+        const html = readFileSync(join(DIST, 'substances', slug, 'index.html'), 'utf8')
+        const hasNoindex = /<meta name="robots" content="noindex, follow">/.test(html)
+        const shouldIndex = substanceIndexable(cas)
+        if (shouldIndex && hasNoindex) wronglyClosed.push(slug)
+        if (!shouldIndex && !hasNoindex) wronglyOpen.push(slug)
+        if (hasNoindex) closed++
+        else open++
+      }
+      const detail: string[] = []
+      if (badCas.length) detail.push(`слаг без CAS (${badCas.length}): ${preview(badCas)}`)
+      if (wronglyClosed.length) {
+        detail.push(`закрыты, хотя данные LCSS есть (${wronglyClosed.length}): ${preview(wronglyClosed)}`)
+      }
+      if (wronglyOpen.length) {
+        detail.push(
+          `открыты без данных LCSS (${wronglyOpen.length}): ${preview(wronglyOpen)}. ` +
+            'Это шаблонные страницы — ровно те, из-за которых сайт переоценён.',
+        )
+      }
+      // ⚠ Сторож, который ни разу не падал, ничего не доказывает: число
+      // индексируемых печатается, чтобы смена границы была видна в отчёте.
+      const ok = detail.length === 0
+      if (ok) {
+        detail.push(
+          `правило ${SUBSTANCE_INDEX_GATE}: CAS с данными LCSS — ${substanceIndexableCount()}; ` +
+            'маркер: <meta name="robots" content="noindex, follow">',
+        )
+      }
+      return {
+        id: 'subs-index-gate',
+        group: 'subs',
+        ok,
+        headline: `открыто ${open}, под noindex ${closed} из ${slugs!.length}`,
         detail,
       }
     },
