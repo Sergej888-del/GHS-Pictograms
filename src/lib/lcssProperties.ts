@@ -41,6 +41,123 @@ export type LcssValue = {
 
 export type LcssRecord = Record<string, LcssValue[]>
 
+/**
+ * ⚠⚠⚠ Очистка одного значения ДО любого показа (аудит фактов, session 86).
+ *
+ * `lcss-values.json` собран разовым разбором, который в репозитории не лежит,
+ * и в нём есть классы ошибок, найденные чтением 1 882 выпадающих значений:
+ *
+ *   · «FP: -30 °C» лежит в разделе ТОЧКИ ПЛАВЛЕНИЯ (7 строк) — источник
+ *     подписал строку сам, разбор подпись проигнорировал. Это не значение
+ *     этого свойства → строка выбрасывается целиком (return null);
+ *   · «Density at 20 °C/20 °C = 1.119-1.123» дало плотность **20** — разбор
+ *     взял первое число, и это была температура условия. Ловится границами
+ *     правдоподобия и совпадением числа с `t` → число снимается, строка
+ *     остаётся текстом с исходной формулировкой;
+ *   · «Bulk density: 6.8 lb/gal», «Critical density», «Apparent density» —
+ *     ДРУГОЕ свойство под той же подписью (76 строк) → число снимается;
+ *   · «No autoflammability up to 500 °C» стало температурой самовоспламенения
+ *     500 °C → число снимается;
+ *   · «240 °C (explodes)», «657 °C, decomp», «Sublimes at 200 °C» со
+ *     статусом `exact` (33 строки) → статус исправляется на decomposes /
+ *     sublimes: в таблице появится условие, в прозу число не пойдёт.
+ *
+ * ⚠ Ни одна строка не исчезает без причины, названной здесь: выбрасывается
+ * только то, что заведомо принадлежит другому свойству. Всё остальное
+ * остаётся в таблице — но уже не может выдать себя за число.
+ *
+ * Пересборка JSON исключена сознательно: старый разбор восстановлен не
+ * полностью (см. scripts/build-lcss-text.mjs), а правило, живущее в коде,
+ * читается глазами и проверяется сторожем `check:facts`.
+ */
+const PROPERTY_LABEL_PREFIX: Array<[RegExp, string]> = [
+  [/^\s*(FP|flash\s*point|flash\s*pt)\b/i, 'fp'],
+  [/^\s*(BP|boiling\s*point|boiling\s*pt)\b/i, 'bp'],
+  [/^\s*(MP|melting\s*point|melting\s*pt)\b/i, 'mp'],
+  [/^\s*(VP|vapou?r\s*pressure)\b/i, 'vapor_pressure'],
+  [/^\s*(density|specific\s*gravity|sp\.?\s*gr\.?)\b/i, 'density'],
+  [/^\s*(autoignition|auto-ignition|ignition\s*temp)/i, 'autoignition'],
+]
+
+/** Границы правдоподобия числа в единице разбора. За ними число — ошибка разбора, не факт. */
+const PLAUSIBLE: Record<string, [number, number]> = {
+  bp: [-273.15, 6000],
+  mp: [-273.15, 4000],
+  fp: [-150, 700],
+  autoignition: [50, 1500],
+  density: [0.00005, 25],
+  vapor_density: [0.05, 30],
+  lel: [0, 100],
+  uel: [0, 100],
+  vapor_pressure: [0, 1e6],
+}
+
+const LABELLED = new Set(PROPERTY_LABEL_PREFIX.map(([, prop]) => prop))
+const OTHER_DENSITY = /\b(bulk|apparent|critical|tap|packing|pour)\s+density|cric?itical\s+density/i
+const NOT_A_TEMPERATURE = /\bno\s+autoflammab|not\s+autoflammab|does\s+not\s+(ignite|burn)|non-?flammable/i
+const SUBLIMES = /\bsublim/i
+const DECOMPOSES = /\bdecompos|\bdecomp\b|\bdec\.|\bexplodes?\b|\bexplosive\s+decomp/i
+
+export function sanitizeValue(key: string, val: LcssValue): LcssValue | null {
+  const raw = val.raw ?? ''
+
+  // 1. Строка подписана как ДРУГОЕ свойство — она не отсюда.
+  // ⚠ Только среди свойств, у которых есть своя подпись в списке: строка
+  // «Density (air = 1)…» в vapor_density — не чужая, а своя.
+  if (LABELLED.has(key)) {
+    for (const [re, prop] of PROPERTY_LABEL_PREFIX) {
+      if (re.test(raw)) {
+        if (prop !== key) return null
+        break
+      }
+    }
+  }
+
+  // 1b. ⛔ NFPA — запрещённое содержимое (решение D5, см. BANNED_ROW в
+  // scripts/build-lcss-text.mjs): строка уходит целиком, а не чистится.
+  // В lcss-values.json это 18 точек вспышки CAMEO с пометкой «(NFPA, 2010)».
+  if (/\(NFPA[,\s]/.test(raw)) return null
+
+  if (!val.v) return val
+  const num = Number(val.v)
+  let out: LcssValue = val
+
+  // 2. Число за границами правдоподобия — ошибка разбора: снимаем число, строку оставляем.
+  const range = PLAUSIBLE[key]
+  if (!Number.isFinite(num) || (range && (num < range[0] || num > range[1]))) {
+    out = stripNumber(out)
+    return out
+  }
+
+  // 2b. Число совпало с температурой условия: «Density at 20 °C/20 °C = 1.119-1.123»
+  // дало плотность 20 при t = 20. Разбор взял первое число строки, и это была
+  // температура. Для температурных свойств такое совпадение невозможно по смыслу.
+  if (key !== 'bp' && key !== 'mp' && key !== 'fp' && key !== 'autoignition' && val.t && Number(val.t) === num) {
+    return stripNumber(out)
+  }
+
+  // 3. Другое свойство под той же подписью и «нет такого свойства» словами.
+  if (key === 'density' && OTHER_DENSITY.test(raw)) return stripNumber(out)
+  if (key === 'autoignition' && NOT_A_TEMPERATURE.test(raw)) return stripNumber(out)
+
+  // 4. Разложение и возгонка, записанные как точное значение.
+  if ((key === 'bp' || key === 'mp') && (!val.q || val.q === 'exact')) {
+    if (SUBLIMES.test(raw)) out = { ...out, q: 'sublimes' }
+    else if (DECOMPOSES.test(raw)) out = { ...out, q: 'decomposes' }
+  }
+  return out
+}
+
+function stripNumber(val: LcssValue): LcssValue {
+  const out: LcssValue = { raw: val.raw, src: val.src }
+  if (val.t) out.t = val.t
+  if (val.p) out.p = val.p
+  if (val.q) out.q = val.q
+  if (val.vac) out.vac = val.vac
+  if (val.r2) out.r2 = val.r2
+  return out
+}
+
 /** Порядок свойств в таблице. Сначала то, что чаще всего ищут. */
 export const PROPERTY_ORDER = [
   'bp',
@@ -358,8 +475,24 @@ function rankValue(val: LcssValue): number {
   return score
 }
 
+/**
+ * Подтверждённое число свойства — то, что печатает проза (см. lcssFacts.ts).
+ * Здесь оно нужно только для ПОРЯДКА: строка, согласная с подтверждённым
+ * числом, встаёт первой. У кадмия иначе первой шла битая строка HSDB «32 °C»
+ * при 321 °C у NIOSH и CAMEO — просто потому, что HSDB в файле первый.
+ * ⚠ Тип импортируется как type: lcssFacts.ts зависит от этого файла, а не наоборот.
+ */
+export type FactHint = { value: number; tolerance: number }
+export type FactHints = Partial<Record<string, FactHint | null>>
+
+function agreesWithFact(val: LcssValue, hint: FactHint | null | undefined): boolean {
+  if (!hint || !val.v) return false
+  const n = Number(val.v)
+  return Number.isFinite(n) && Math.abs(n - hint.value) <= hint.tolerance
+}
+
 /** Готовые строки таблицы свойств для одного вещества. */
-export function buildPropertyRows(record: LcssRecord | undefined): PropertyRow[] {
+export function buildPropertyRows(record: LcssRecord | undefined, facts: FactHints = {}): PropertyRow[] {
   if (!record) return []
   const rows: PropertyRow[] = []
 
@@ -367,7 +500,13 @@ export function buildPropertyRows(record: LcssRecord | undefined): PropertyRow[]
     const raw = record[key]
     if (!raw?.length) continue
 
-    const sorted = [...raw].sort((a, b) => rankValue(a) - rankValue(b))
+    // ⚠ Очистка — до ранжирования и до показа. Разбор: sanitizeValue.
+    const clean = raw.map((v) => sanitizeValue(key, v)).filter((v): v is LcssValue => v !== null)
+    const hint = facts[key]
+    const sorted = [...clean].sort(
+      (a, b) =>
+        rankValue(a) - (agreesWithFact(a, hint) ? 20 : 0) - (rankValue(b) - (agreesWithFact(b, hint) ? 20 : 0)),
+    )
     // Дубли по одинаковому показу схлопываем: три источника с «56.08 °C» — одна строка.
     const seen = new Set<string>()
     const values: PropertyRow['values'] = []
@@ -405,7 +544,9 @@ export function buildSourceNotes(record: LcssRecord | undefined): SourceNote[] {
   for (const [key, arr] of Object.entries(record)) {
     const topic = NOTE_TOPIC[key]
     if (!topic || !Array.isArray(arr)) continue
-    for (const val of arr) {
+    for (const rawVal of arr) {
+      const val = sanitizeValue(key, rawVal)
+      if (!val) continue
       if (isJunk(val.raw) || isNavigationStub(val.raw)) continue
       if (val.v || val.raw.length <= VALUE_MAX_CHARS) continue
       const text = val.raw.trim()

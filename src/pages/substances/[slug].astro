@@ -36,6 +36,7 @@ import { ecForDisplay } from '../../lib/substanceIdentifiers'
 import { hHref } from '../../lib/hStatementSlug'
 import { buildPropertyRows, buildSourceNotes, PROPERTY_HEADING, PROPERTY_LABEL, type LcssRecord } from '../../lib/lcssProperties'
 import { buildIntro, type TextRecord } from '../../lib/substanceIntro'
+import { buildFacts, factHints } from '../../lib/lcssFacts'
 import { groupPStatements, countPStatements } from '../../lib/pStatements'
 import { buildHazardClasses, categoryLabel, hasAmbiguity, type HazardClassEntry } from '../../lib/hazardClasses'
 import { buildFaq } from '../../lib/substanceFaq'
@@ -565,7 +566,11 @@ const nm = truncateName(name, 30)
 const nmShort = truncateName(name, 26)
 const lcss = (lcssValues as Record<string, LcssRecord>)[cas]
 const texts = (lcssText as Record<string, TextRecord>)[cas]
-const propertyRows = buildPropertyRows(lcss)
+// ⚠⚠ Подтверждённые числа считаются ОДИН раз и расходятся в четыре места:
+// порядок строк таблицы, абзац, meta description, FAQ/JSON-LD. Правило —
+// lcssFacts.ts (≥ 2 источника в допуске → медиана; иначе числа в прозе нет).
+const facts = buildFacts(lcss)
+const propertyRows = buildPropertyRows(lcss, factHints(facts))
 // ⚠ Абзацы, не поместившиеся в таблицу значений, не выбрасываются, а показываются
 // ниже под темой. Подпись «Lower explosive limit» над рассказом о взрыве — неправда,
 // но и молчание про взрыв человек прочтёт как «не взрывается». Разбор: lcssProperties.ts.
@@ -585,7 +590,7 @@ const noteTopics = [...new Set(sourceNotes.map((n) => n.topic))]
 // вещество, у которого есть только firepot, получало бы заголовок «Further
 // notes on …» над абзацем о том, при какой температуре оно горит.
 const notesAreFire = noteTopics.includes('Fire and explosion') || Boolean(texts?.firepot)
-const intro = buildIntro({ name, formula, weight: row.molecular_weight, signal: row.signal_word, texts, lcss })
+const intro = buildIntro({ name, formula, weight: row.molecular_weight, signal: row.signal_word, texts, lcss, facts })
 
 // ⚠ 231 строка iupac_name содержит CRLF, а сама колонка Annex VI — перечень
 // синонимов через точку с запятой. Разбираем на список, не показываем строкой.
@@ -676,7 +681,7 @@ const faq = buildFaq({
   hCodes: row.h_statement_codes ?? [],
   hText,
   pictogramNames: pictograms.map((c) => PICTOGRAM_NAME[c]),
-  propertyRows,
+  facts,
   storageText: texts?.storage,
   storageCodes,
   iarc: carc?.iarc,

@@ -13,6 +13,7 @@
  * вовсе, а не заполняется водой.
  */
 import type { LcssRecord } from './lcssProperties'
+import { formatFact, type Facts } from './lcssFacts.ts'
 
 export type TextFact = { t: string; s: string }
 
@@ -60,6 +61,12 @@ export type IntroInput = {
   signal: string | null
   texts: TextRecord | undefined
   lcss: LcssRecord | undefined
+  /**
+   * Подтверждённые числа (lcssFacts.ts). ⚠ Проза печатает ТОЛЬКО их: число,
+   * подтверждённое ≥ 2 источниками. Один источник или разнобой — молчим,
+   * число остаётся в таблице с условиями. Правило session 86.
+   */
+  facts: Facts
 }
 
 export type Intro = {
@@ -176,19 +183,15 @@ function firstSentence(text: string): string {
   return (m ? m[1] : t.slice(0, 220)).trim()
 }
 
-/** Лучшее числовое значение свойства с единицей — для фразы, не для таблицы. */
-function bestNumber(lcss: LcssRecord | undefined, key: string): string | null {
-  const vals = lcss?.[key]
-  if (!vals?.length) return null
-  // Атмосферные и государственные вперёд: вакуумная точка кипения в прозе соврёт.
-  const pick =
-    vals.find((v) => v.v && v.vac !== 1 && v.r2 !== 1) ?? vals.find((v) => v.v && v.vac !== 1)
-  if (!pick?.v) return null
-  const num = Number(pick.v)
-  if (!Number.isFinite(num)) return null
-  const rounded = Math.abs(num) >= 100 ? Math.round(num) : Math.round(num * 10) / 10
-  const unit = pick.u === 'C' ? '°C' : pick.u === 'g/cm3' ? 'g/cm³' : pick.u === 'mmHg' ? 'mmHg' : ''
-  return unit ? `${rounded} ${unit}` : String(rounded)
+/**
+ * Число свойства для фразы. ⚠⚠ До session 86 здесь стоял `bestNumber`, бравший
+ * ПЕРВЫЙ источник в файле: у кадмия это была битая строка HSDB «32.0691 °C»,
+ * и страница печатала её в абзаце, meta и FAQ при 321 °C у NIOSH и CAMEO.
+ * Теперь число даёт только консенсус (lcssFacts.ts); нет консенсуса — нет числа.
+ */
+function factNumber(facts: Facts, key: 'bp' | 'mp'): string | null {
+  const f = facts[key]
+  return f ? formatFact(f) : null
 }
 
 /** Растворимость словами, если источник выразился коротко: «Miscible with water». */
@@ -207,7 +210,7 @@ function solubilityPhrase(lcss: LcssRecord | undefined): string | null {
 }
 
 export function buildIntro(input: IntroInput): Intro {
-  const { name, formula, weight, signal, texts, lcss } = input
+  const { name, formula, weight, signal, texts, lcss, facts } = input
 
   // ——— Предложение 1: что это такое. Имя первым словом. ———
   const appearance = texts?.color ? lower(texts.color.t, 92) : null
@@ -270,8 +273,8 @@ export function buildIntro(input: IntroInput): Intro {
     : ''
 
   // ——— Предложение 4: физхим одной строкой. ———
-  const bp = bestNumber(lcss, 'bp')
-  const mp = bestNumber(lcss, 'mp')
+  const bp = factNumber(facts, 'bp')
+  const mp = factNumber(facts, 'mp')
   const solubility = solubilityPhrase(lcss)
   const physBits: string[] = []
   if (bp) physBits.push(`boils at ${bp}`)

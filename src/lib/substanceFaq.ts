@@ -17,7 +17,7 @@
  * тело страницы. Один источник на два места — иначе они разъезжаются, и
  * разметка начинает обещать поиску не то, что видит человек.
  */
-import type { PropertyRow } from './lcssProperties'
+import { factSources, formatFact, formatFactF, type ConsensusFact, type Facts } from './lcssFacts.ts'
 
 export type FaqItem = { q: string; a: string }
 
@@ -32,7 +32,13 @@ export type FaqInput = {
   /** код → формулировка. Нужна, чтобы ответ был фразой, а не набором кодов. */
   hText: Record<string, string>
   pictogramNames: string[]
-  propertyRows: PropertyRow[]
+  /**
+   * Подтверждённые числа LCSS (lcssFacts.ts). ⚠⚠ До session 86 FAQ брал первую
+   * строку таблицы — у кадмия это была битая «32.07 °C (HSDB)», и она уезжала в
+   * JSON-LD как ответ на «What is the melting point of Cadmium?». Теперь в ответ
+   * идёт только число, на котором сходятся ≥ 2 источника; иначе вопроса нет.
+   */
+  facts: Facts
   /** Текст «Storage conditions» из LCSS, если он есть. */
   storageText: { t: string; s: string } | undefined
   /** Коды раздела Storage из Annex VI, если они есть. */
@@ -74,13 +80,15 @@ function statement(text: string): string {
     .replace(/\.$/, '')
 }
 
-/** Первое значение свойства со своими условиями и источником. */
-function firstValue(rows: PropertyRow[], key: string): string | null {
-  const row = rows.find((r) => r.key === key)
-  const val = row?.values[0]
-  if (!val) return null
-  const cond = val.condition ? `, ${val.condition}` : ''
-  return `${val.display}${cond} (${val.source})`
+/**
+ * Число с °F и с теми, кто его подтверждает: «321 °C (610 °F), a figure on
+ * which NIOSH and CAMEO agree». Источники названы в самом ответе — ответ
+ * уходит в JSON-LD один, без таблицы рядом.
+ */
+function factPhrase(fact: ConsensusFact | null): string | null {
+  if (!fact) return null
+  const f = formatFactF(fact)
+  return `${formatFact(fact)}${f ? ` (${f})` : ''}, a figure on which ${factSources(fact)} agree`
 }
 
 export function buildFaq(input: FaqInput): FaqItem[] {
@@ -131,7 +139,7 @@ export function buildFaq(input: FaqInput): FaqItem[] {
 
   // ── 3. Воспламеняемость ──
   const flam = input.hCodes.filter((c) => FLAMMABLE.has(c))
-  const fp = firstValue(input.propertyRows, 'fp')
+  const fp = factPhrase(input.facts.fp)
   if (flam.length) {
     const phrase = statement(input.hText[flam[0]] ?? '')
     items.push({
@@ -139,7 +147,7 @@ export function buildFaq(input: FaqInput): FaqItem[] {
       a:
         `Yes. CLP Annex VI assigns ${name} ${list(flam)}` +
         (phrase ? ` — ${phrase.toLowerCase()}.` : '.') +
-        (fp ? ` The flash point reported for it is ${fp}.` : ''),
+        (fp ? ` Its flash point is ${fp}.` : ''),
     })
   } else {
     items.push({
@@ -147,7 +155,7 @@ export function buildFaq(input: FaqInput): FaqItem[] {
       a:
         `CLP Annex VI assigns ${name} no flammability hazard class. ` +
         `That is not a statement that it cannot burn: the harmonised list only records the hazards that were assessed for it.` +
-        (fp ? ` The flash point reported for it is ${fp}.` : ''),
+        (fp ? ` Its flash point is ${fp}.` : ''),
     })
   }
 
@@ -200,11 +208,13 @@ export function buildFaq(input: FaqInput): FaqItem[] {
   }
 
   // ── 5. Числа, за которыми чаще всего и приходят ──
-  const bp = firstValue(input.propertyRows, 'bp')
-  if (bp) items.push({ q: `What is the boiling point of ${name}?`, a: `The boiling point reported for ${name} is ${bp}.` })
+  // ⚠ Только подтверждённые числа. Один источник — вопроса нет, число остаётся
+  // в таблице свойств с условиями и подписью. Три полиморфа серы — тоже нет.
+  const bp = factPhrase(input.facts.bp)
+  if (bp) items.push({ q: `What is the boiling point of ${name}?`, a: `The boiling point of ${name} is ${bp}.` })
 
-  const mp = firstValue(input.propertyRows, 'mp')
-  if (mp) items.push({ q: `What is the melting point of ${name}?`, a: `The melting point reported for ${name} is ${mp}.` })
+  const mp = factPhrase(input.facts.mp)
+  if (mp) items.push({ q: `What is the melting point of ${name}?`, a: `The melting point of ${name} is ${mp}.` })
 
   // ── 6. Хранение ──
   if (input.storageCodes.length || input.storageText) {

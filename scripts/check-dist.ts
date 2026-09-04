@@ -68,6 +68,8 @@ import {
 import { casShapeOk, ecShapeOk, indexShapeOk } from '../src/lib/substanceIdentifiers'
 import { substanceSlug, casFromSlug } from '../src/lib/substanceSlug'
 import { substanceIndexable, substanceIndexableCount, SUBSTANCE_INDEX_GATE } from '../src/lib/substanceIndexGate'
+import { buildFacts, formatFact, LCSS_FACT_RULE } from '../src/lib/lcssFacts'
+import type { LcssRecord } from '../src/lib/lcssProperties'
 // ⚠⚠ Раскладка «код знака → файл» берётся ИЗ ТОГО ЖЕ модуля, что и страница.
 // Списать сюда список кодов — значит завести вторую копию словаря, которая
 // разойдётся молча. Ровно на этом уже спотыкались: список «19 знаков» из
@@ -3537,6 +3539,78 @@ const CHECKS: Check[] = [
         group: 'subs',
         ok,
         headline: `открыто ${open}, под noindex ${closed} из ${slugs!.length}`,
+        detail,
+      }
+    },
+  },
+
+  {
+    id: 'subs-facts',
+    group: 'subs',
+    title: 'Факты в прозе веществ: напечатано ровно подтверждённое число (lcssFacts), и ничего сверх',
+    run: async () => {
+      const slugs = builtSubstanceSlugs()
+      const miss = substanceSectionMissing('subs-facts', slugs)
+      if (miss) return miss
+
+      // ⚠⚠ Сверяем НАПЕЧАТАННОЕ с ПРАВИЛОМ, а не правило с собой (аудит s86).
+      // До s86 проза брала первый источник: кадмий «melts at 32 °C» в абзаце,
+      // meta и FAQ при 321 °C у NIOSH и CAMEO. Теперь число в прозе обязано
+      // совпадать с консенсусом lcssFacts.ts, а без консенсуса фразы быть не должно.
+      const values = JSON.parse(
+        readFileSync(resolve(process.cwd(), 'src', 'data', 'lcss-values.json'), 'utf8'),
+      ) as Record<string, LcssRecord>
+      const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      const wrongNumber: string[] = []
+      const phantom: string[] = []
+      const missingPhrase: string[] = []
+      let checkedPages = 0
+      let printedNumbers = 0
+      for (const slug of slugs!) {
+        const cas = casFromSlug(slug)
+        if (!cas || !values[cas]) continue
+        checkedPages++
+        const html = readFileSync(join(DIST, 'substances', slug, 'index.html'), 'utf8')
+        const facts = buildFacts(values[cas])
+        for (const [key, verb, faqLead] of [
+          ['bp', 'boils at', 'The boiling point of'],
+          ['mp', 'melts at', 'The melting point of'],
+        ] as const) {
+          const fact = facts[key]
+          const re = new RegExp(`${verb} (-?[\\d.]+ °C)`, 'g')
+          const printed = [...new Set([...html.matchAll(re)].map((m) => m[1]))]
+          const faqCount = countOccurrences(html, esc(faqLead))
+          if (!fact) {
+            if (printed.length) phantom.push(`${slug}: «${verb} ${printed[0]}» без консенсуса`)
+            if (faqCount) phantom.push(`${slug}: вопрос FAQ «${faqLead}…» без консенсуса`)
+            continue
+          }
+          printedNumbers++
+          const expected = esc(formatFact(fact))
+          if (!printed.length) missingPhrase.push(`${slug}: ждали «${verb} ${expected}»`)
+          else if (printed.some((p) => p !== expected)) wrongNumber.push(`${slug}: «${verb} ${printed.join(' / ')}», консенсус ${expected}`)
+          if (!faqCount) missingPhrase.push(`${slug}: нет вопроса FAQ «${faqLead}…» при консенсусе ${expected}`)
+          // ⚠ Ответ FAQ печатает и °C, и подпись источников — сверяем число.
+          const faqRe = new RegExp(`${esc(faqLead)} [^<"]{1,80}? is (-?[\\d.]+ °C)`)
+          const faqNum = faqRe.exec(html)?.[1]
+          if (faqNum && faqNum !== expected) wrongNumber.push(`${slug}: FAQ «${faqNum}», консенсус ${expected}`)
+        }
+      }
+      const detail: string[] = []
+      if (wrongNumber.length) detail.push(`число в прозе/FAQ расходится с консенсусом (${wrongNumber.length}): ${preview(wrongNumber, 8)}`)
+      if (phantom.length) detail.push(`число напечатано, хотя консенсуса нет (${phantom.length}): ${preview(phantom, 8)}`)
+      if (missingPhrase.length) detail.push(`консенсус есть, фразы нет (${missingPhrase.length}): ${preview(missingPhrase, 8)}`)
+      const ok = detail.length === 0
+      if (ok) {
+        detail.push(
+          `правило ${LCSS_FACT_RULE}; маркеры: «boils at N °C», «melts at N °C», «The boiling/melting point of … is N °C»`,
+        )
+      }
+      return {
+        id: 'subs-facts',
+        group: 'subs',
+        ok,
+        headline: `${checkedPages} страниц с данными LCSS, ${printedNumbers} подтверждённых чисел напечатано`,
         detail,
       }
     },
