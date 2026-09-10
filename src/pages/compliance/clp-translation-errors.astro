@@ -21,7 +21,7 @@
 import Layout from '../../layouts/Layout.astro';
 import { PILLAR_BY_SLUG, pillarAccentStyle } from '../../lib/complianceHub';
 import {
-  ERRATUM_LEAD, ERRATA_COUNT, SUBMISSION, humanDate,
+  ERRATUM_LEAD, ERRATA_COUNT, SUBMISSION, ACKNOWLEDGEMENT, humanDate,
   erratumStatus, erratumStatusLabel, erratumFor, erratumCitation,
   type ErratumKind,
 } from '../../lib/annex6Errata';
@@ -50,6 +50,9 @@ if (findings.length !== ERRATA_COUNT) {
 }
 
 const languages = [...new Set(findings.map((f) => f.lang))].sort();
+const reportedCount = findings.filter((f) => f.status.kind === 'submitted').length;
+const CONTACT = 'hello@ghspictograms.com';
+const CITATION = `Sevcenko, S. (2026). Errors in the language editions of CLP Annex VI: ${ERRATA_COUNT} entries checked against the Official Journal. GHS Pictograms. ${canonical}`;
 const acts = [...new Set(findings.map((f) => f.act))].sort();
 
 /** Порядок разделов: по видам ошибок, как и в модуле. */
@@ -236,6 +239,12 @@ const jsonLd = {
             appear here, and each entry above will say so on its own line.
           </p>
         )}
+        {/* ⚠⚠ Строго по письму Бюро публикаций (session 64): текст живёт в
+            модуле, страница печатает его дословно, сторож ищет дословно. */}
+        <p class="hub-sub">
+          The same findings were sent to the EU Publications Office on {humanDate(ACKNOWLEDGEMENT.date)}.
+          {' '}{ACKNOWLEDGEMENT.text}
+        </p>
         <p class="hub-fine">
           There is precedent for the correction of exactly this kind of mistake.
           Corrigendum 32018R0669R(01) (OJ L 233, 10.9.2019, p. 26) corrected the name of entry
@@ -247,6 +256,46 @@ const jsonLd = {
           appear in it — but that register’s outcome column is empty for 118 of its 125 rows, so
           absence from it means only that: absence. It is not evidence that a mistake is still
           live, and it is not evidence that anyone disagreed.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  {/* ── ДЛЯ РЕДАКЦИЙ И ИССЛЕДОВАТЕЛЕЙ (press-kit, session 87) ───────────────
+      Журналист, у которого нет что скачать и кому написать, не пишет. Здесь:
+      сводка одним абзацем, которую можно цитировать; два файла с ТЕМИ ЖЕ
+      данными, что на странице; готовая ссылка для цитирования; контакт. */}
+  <section class="hub-sec-white" id="for-editors">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">For editors and researchers</p>
+      <h2 class="hub-h2">The story in one paragraph, the data in one file</h2>
+      <div class="hub-prose">
+        <p class="hub-sub">
+          Annex VI to the CLP Regulation lists the EU’s harmonised classifications for
+          thousands of substances, in 23 equally authentic language editions. Comparing column (2) of
+          every entry across those editions, and against the EC and CAS numbers of the same row,
+          turned up {ERRATA_COUNT} entries in {languages.length} editions where the printed name
+          identifies a different substance from the identifiers next to it — so a supplier reading
+          that edition would classify and label the wrong substance. Each finding cites the
+          amending act and the Official Journal page. {reportedCount} of them were reported to
+          ECHA on {humanDate(SUBMISSION.date!)}; the Publications Office acknowledged the
+          submission and forwarded it to the author institution. The list is not claimed to be
+          complete.
+        </p>
+        <p class="hub-fine">
+          <b>Data.</b> The findings as a table, with the status of each:
+          {' '}<a href="/data/annex6-errata.csv" download>annex6-errata.csv</a> (Excel-ready) or
+          {' '}<a href="/data/annex6-errata.json">annex6-errata.json</a>. Both are generated from
+          the same source as this page on every build, so they cannot drift from it. The
+          compilation is CC BY 4.0; the quoted texts are EU documents.
+        </p>
+        <p class="hub-fine">
+          <b>Cite.</b> {CITATION}
+        </p>
+        <p class="hub-fine">
+          <b>Contact.</b> Questions, requests for the comparison files, or corrections:
+          {' '}<a href={`mailto:${CONTACT}`}>{CONTACT}</a>. Who runs this site and how it is funded:
+          {' '}<a href="/about/">About</a>.
         </p>
       </div>
     </div>

@@ -7,7 +7,9 @@
 // ⚠ Числа на странице НЕ выписаны руками: число errata и дата подачи берутся из
 // annex6Errata.ts, имя правила консенсуса — из lcssFacts.ts. Второй копии нет.
 import Layout from '../layouts/Layout.astro'
-import { ERRATA_COUNT, SUBMISSION } from '../lib/annex6Errata'
+import {
+  ERRATA_COUNT, SUBMISSION, ERRATA_INDEX_NUMBERS, erratumLanguages, erratumStatus,
+} from '../lib/annex6Errata'
 import { LCSS_FACT_RULE } from '../lib/lcssFacts'
 
 export const prerender = true
@@ -25,6 +27,9 @@ function longDate(iso: string | null): string {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
 }
 const reported = longDate(SUBMISSION.date)
+/** Сколько находок действительно отправлено: не все — часть ждёт второй подачи (SUPPLEMENT). */
+const reportedCount = ERRATA_INDEX_NUMBERS.flatMap((i) => erratumLanguages(i).map((l) => erratumStatus(i, l)))
+  .filter((st) => st.kind === 'submitted').length
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -136,8 +141,7 @@ const jsonLd = {
           The same habit of checking the source against itself is how we found
           <strong>{ERRATA_COUNT} entries</strong> in the language editions of Annex VI whose printed
           substance name does not match the EC and CAS numbers of the same row. They are documented
-          on <a href="/compliance/clp-translation-errors/" class="text-[#062A78] font-semibold hover:underline">a dedicated page</a>
-          {reported ? `and were reported to ECHA on ${reported}` : ''}.
+          on <a href="/compliance/clp-translation-errors/" class="text-[#062A78] font-semibold hover:underline">a dedicated page</a>{reported ? `; ${reportedCount} of them were reported to ECHA on ${reported}, and the EU Publications Office forwarded the submission to the author institution` : ''}.
         </p>
       </section>
 

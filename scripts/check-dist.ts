@@ -63,7 +63,7 @@ import { acuteToxModule } from '../src/lib/classifier/modules/acuteTox'
 import { CUTOFF_PLANS } from '../src/lib/classifier/modules/cutoff'
 import {
   erratumFor, erratumLanguages, erratumCitation,
-  ERRATA_INDEX_NUMBERS, ERRATA_COUNT, ERRATA_TABLE_NOTE,
+  ERRATA_INDEX_NUMBERS, ERRATA_COUNT, ERRATA_TABLE_NOTE, ACKNOWLEDGEMENT,
 } from '../src/lib/annex6Errata'
 import { casShapeOk, ecShapeOk, indexShapeOk } from '../src/lib/substanceIdentifiers'
 import { substanceSlug, casFromSlug } from '../src/lib/substanceSlug'
@@ -3909,6 +3909,57 @@ const CHECKS: Check[] = [
         group: 'About',
         ok: problems.length === 0,
         headline: problems.length === 0 ? 'dist/404.html на месте, noindex, вне sitemap' : `проблем: ${problems.length}`,
+        detail: problems,
+      }
+    },
+  },
+
+  // ─────────────────── press-kit на странице errata (session 87, №136) ─────────
+  {
+    id: 'errata-press-kit',
+    group: 'Annex VI',
+    title: 'Страница errata: подтверждение Бюро дословно, файлы данных и контакт на месте',
+    run: async () => {
+      const REL = 'compliance/clp-translation-errors/index.html'
+      const html = readPage(REL)
+      if (!html) return { id: 'errata-press-kit', group: 'Annex VI', ok: false, headline: 'страницы нет в dist', detail: [REL] }
+      const text = unescapeHtml(html)
+      const problems: string[] = []
+      // ⚠⚠ Формулировка о пересылке — ТОЛЬКО из модуля и только дословно: это
+      // единственное, что письмо Бюро позволяет утверждать.
+      if (!text.includes(ACKNOWLEDGEMENT.text)) problems.push(`нет подтверждения Бюро дословно: «${ACKNOWLEDGEMENT.text}»`)
+      for (const bad of ['under review', 'accepted for review', 'pending decision']) {
+        if (text.toLowerCase().includes(bad)) problems.push(`обещание, которого письмо не содержит: «${bad}»`)
+      }
+      for (const m of ['href="/data/annex6-errata.csv"', 'href="/data/annex6-errata.json"', 'mailto:hello@ghspictograms.com', 'href="/about/"']) {
+        if (!html.includes(m)) problems.push(`нет ${m}`)
+      }
+      // Файлы данных: те же ERRATA_COUNT строк, что на странице.
+      const jsonAbs = join(DIST, 'data', 'annex6-errata.json')
+      if (!existsSync(jsonAbs)) problems.push('нет dist/data/annex6-errata.json')
+      else {
+        try {
+          const j = JSON.parse(readFileSync(jsonAbs, 'utf8')) as { count?: number; findings?: unknown[]; acknowledgement?: { ref?: string } }
+          if (!Array.isArray(j.findings) || j.findings.length !== ERRATA_COUNT) problems.push(`в JSON ${j.findings?.length ?? 'нет'} находок, ожидалось ${ERRATA_COUNT}`)
+          if (j.acknowledgement?.ref !== ACKNOWLEDGEMENT.ref) problems.push('в JSON нет ссылки на обращение Бюро')
+        } catch (e) {
+          problems.push(`JSON не разбирается: ${(e as Error).message}`)
+        }
+      }
+      const csvAbs = join(DIST, 'data', 'annex6-errata.csv')
+      if (!existsSync(csvAbs)) problems.push('нет dist/data/annex6-errata.csv')
+      else {
+        const lines = readFileSync(csvAbs, 'utf8').split(/\r?\n/).filter((l) => l.length > 0)
+        // ⚠ Поля с переводом строки берутся в кавычки, так что строк ровно заголовок + находки,
+        //   если ни одно свидетельство не содержит перевода строки. Проверяем не меньше.
+        if (lines.length < ERRATA_COUNT + 1) problems.push(`в CSV ${lines.length} строк, ожидалось ≥ ${ERRATA_COUNT + 1}`)
+        if (!lines[0].replace(/^\uFEFF/, '').startsWith('index_number,language,kind')) problems.push('в CSV нет ожидаемого заголовка')
+      }
+      return {
+        id: 'errata-press-kit',
+        group: 'Annex VI',
+        ok: problems.length === 0,
+        headline: problems.length === 0 ? `подтверждение дословно, JSON и CSV по ${ERRATA_COUNT} находок, контакт` : `проблем: ${problems.length}`,
         detail: problems,
       }
     },

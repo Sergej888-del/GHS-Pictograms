@@ -447,6 +447,37 @@ export const SUBMISSION: {
 };
 
 /**
+ * Подтверждение получения — ЕДИНСТВЕННЫЙ факт из переписки, который страница
+ * вправе печатать (session 64, 87).
+ *
+ * ⚠⚠ ФОРМУЛИРОВКА СТРОГО ПО ПИСЬМУ и ни словом шире. Бюро публикаций написало:
+ * «Your comments have been sent to the institution that is the author of the
+ * document. It will decide … whether it is necessary to publish a corrigendum»
+ * и «cannot provide more information or give precise dates». Отсюда годится
+ * «acknowledged … and forwarded … no outcome is implied». НЕ годится «принято
+ * к рассмотрению», «на рассмотрении в Комиссии», «ожидает решения» — письмо
+ * таких слов не содержит, а решение о рассмотрении ещё не принято.
+ *
+ * ⚠ Обращение `OPXHDJSM-237` — это тикет хелпдеска EUR-Lex (Бюро публикаций),
+ * а не номер в ECHA. Подача в ECHA шла отдельно, формой, и подтверждения не
+ * имеет — см. SUBMISSION.channel.
+ *
+ * Сторож `errata-press-kit` в check:dist ищет `text` на странице дословно.
+ */
+export const ACKNOWLEDGEMENT: {
+  date: string;
+  body: string;
+  ref: string;
+  text: string;
+} = {
+  date: '2026-08-10',
+  body: 'EU Publications Office (EUR-Lex helpdesk)',
+  ref: 'OPXHDJSM-237',
+  text:
+    'Acknowledged by the EU Publications Office and forwarded to the author institution (ref. OPXHDJSM-237). No outcome is implied.',
+};
+
+/**
  * Находки, которые УЖЕ исправлены отдельным актом.
  *
  * ⚠ Сегодня список пуст, и это утверждение, а не заготовка: ни одна из
