@@ -3842,6 +3842,76 @@ const CHECKS: Check[] = [
     },
   },
 
+  // ─────────────────── /about/ и 404 (session 87, №136 · №145) ───────────────────
+  // ⚠⚠ Зачем. До s87 на сайте не было ни имени, ни компании: адресат письма
+  // с просьбой о ссылке открывал «кто это» и не находил ответа. А dist/404.html
+  // не существовал вовсе — Cloudflare Pages отдавал ГЛАВНУЮ с кодом 200 на любой
+  // несуществующий адрес (soft-404), и мусорные адреса от сканеров индексировались
+  // как дубли (вероятный корень №129). Оба дефекта не ломают сборку и не видны
+  // на самой странице — ровно тот класс, что favicon в session 37.
+  {
+    id: 'about-page',
+    group: 'About',
+    title: '/about/ называет автора, компанию, контакт и печатает числа из модулей',
+    run: async () => {
+      const html = readPage('about/index.html')
+      if (!html) return { id: 'about-page', group: 'About', ok: false, headline: 'нет dist/about/index.html', detail: [] }
+      const need: [string, string][] = [
+        ['Sergejs Sevcenko', 'имя автора'],
+        ['SIA Basis Assets', 'компания'],
+        ['mailto:hello@ghspictograms.com', 'контакт'],
+        ['"@type":"AboutPage"', 'JSON-LD AboutPage'],
+        ['"@type":"Organization"', 'JSON-LD Organization'],
+        ['"@type":"Person"', 'JSON-LD Person'],
+        [`${ERRATA_COUNT} entries`, 'число errata из annex6Errata.ts'],
+        [LCSS_FACT_RULE, 'имя правила консенсуса из lcssFacts.ts'],
+        ['href="/compliance/clp-translation-errors/"', 'ссылка на страницу errata'],
+        ['href="/affiliate-disclosure/"', 'ссылка на affiliate disclosure'],
+      ]
+      const missing = need.filter(([m]) => !html.includes(m)).map(([m, why]) => `${why}: ${JSON.stringify(m)}`)
+      const footerHome = readPage('index.html') ?? ''
+      if (!footerHome.includes('href="/about/"')) missing.push('в подвале главной нет ссылки href="/about/"')
+      const sitemap = existsSync(join(DIST, 'sitemap.xml')) ? readFileSync(join(DIST, 'sitemap.xml'), 'utf8') : ''
+      if (!sitemap.includes('https://ghspictograms.com/about/')) missing.push('в sitemap.xml нет /about/')
+      return {
+        id: 'about-page',
+        group: 'About',
+        ok: missing.length === 0,
+        headline: missing.length === 0 ? `на месте: ${need.length} маркеров, подвал, sitemap` : `не хватает: ${missing.length}`,
+        detail: missing,
+      }
+    },
+  },
+  {
+    id: 'not-found-page',
+    group: 'About',
+    title: 'dist/404.html существует, noindex, это не главная и его нет в sitemap',
+    run: async () => {
+      const abs = join(DIST, '404.html')
+      if (!existsSync(abs)) {
+        return {
+          id: 'not-found-page', group: 'About', ok: false,
+          headline: 'нет dist/404.html — Pages отдаст главную с 200 на любой адрес (soft-404)',
+          detail: ['src/pages/404.astro обязан собираться в dist/404.html'],
+        }
+      }
+      const html = readFileSync(abs, 'utf8')
+      const problems: string[] = []
+      if (!/<meta[^>]+name="robots"[^>]+content="noindex/i.test(html)) problems.push('нет <meta name="robots" content="noindex…">')
+      if (!html.includes('<title>Page not found | GHS Pictograms</title>')) problems.push('заголовок не «Page not found»')
+      if (html.includes('Label Maker &amp; Hazard Symbol Library')) problems.push('в 404 напечатан заголовок главной')
+      const sitemap = existsSync(join(DIST, 'sitemap.xml')) ? readFileSync(join(DIST, 'sitemap.xml'), 'utf8') : ''
+      if (sitemap.includes('/404')) problems.push('в sitemap.xml попал адрес 404')
+      return {
+        id: 'not-found-page',
+        group: 'About',
+        ok: problems.length === 0,
+        headline: problems.length === 0 ? 'dist/404.html на месте, noindex, вне sitemap' : `проблем: ${problems.length}`,
+        detail: problems,
+      }
+    },
+  },
+
   // ─────────────────── фирменный знак и значки (session 37) ───────────────────
   // ⚠⚠ Зачем это вообще проверять. Дефолтный favicon.ico фреймворка Astro
   // (чёрный квадрат с ракетой) пролежал в public/ полтора года и показывался

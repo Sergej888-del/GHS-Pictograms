@@ -1,0 +1,203 @@
+---
+// /about/ — кто делает сайт, откуда данные, чего сайт не делает, как связаться.
+// Session 87 (№136 беклинки): до этой страницы на сайте не было ни имени, ни
+// компании — библиотекарь или редактор, получив письмо, открывал «кто это» и не
+// находил ответа. Для YMYL-темы это ещё и требование E-E-A-T.
+//
+// ⚠ Числа на странице НЕ выписаны руками: число errata и дата подачи берутся из
+// annex6Errata.ts, имя правила консенсуса — из lcssFacts.ts. Второй копии нет.
+import Layout from '../layouts/Layout.astro'
+import { ERRATA_COUNT, SUBMISSION } from '../lib/annex6Errata'
+import { LCSS_FACT_RULE } from '../lib/lcssFacts'
+
+export const prerender = true
+
+const title = 'About GHS Pictograms'
+const description =
+  'Who builds ghspictograms.com, where the data comes from, what the tools do not cover, and how to reach us. Independent, free, made in Riga by SIA Basis Assets.'
+const canonical = 'https://ghspictograms.com/about/'
+
+const CONTACT = 'hello@ghspictograms.com'
+
+function longDate(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso + 'T00:00:00Z')
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+}
+const reported = longDate(SUBMISSION.date)
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'AboutPage',
+  name: title,
+  url: canonical,
+  mainEntity: {
+    '@type': 'Organization',
+    '@id': 'https://ghspictograms.com/#organization',
+    name: 'GHS Pictograms',
+    legalName: 'SIA Basis Assets',
+    url: 'https://ghspictograms.com/',
+    logo: 'https://ghspictograms.com/icon-512.png',
+    email: CONTACT,
+    address: { '@type': 'PostalAddress', addressLocality: 'Riga', addressCountry: 'LV' },
+    founder: {
+      '@type': 'Person',
+      '@id': 'https://ghspictograms.com/about/#founder',
+      name: 'Sergejs Sevcenko',
+      jobTitle: 'Founder',
+      worksFor: { '@id': 'https://ghspictograms.com/#organization' },
+      email: CONTACT,
+    },
+  },
+}
+---
+
+<Layout title={title} description={description} canonical={canonical}>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  </Fragment>
+
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <nav class="text-sm text-gray-500 mb-6" aria-label="Breadcrumb">
+      <a href="/" class="text-[#062A78] hover:underline">Home</a>
+      <span class="mx-2">→</span>
+      <span class="text-gray-700">About</span>
+    </nav>
+
+    <h1
+      class="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight"
+      style="font-family: 'Space Grotesk', system-ui, sans-serif"
+    >
+      About this site
+    </h1>
+    <p class="mt-4 text-gray-700 leading-relaxed text-lg">
+      ghspictograms.com is an independent reference for GHS and CLP chemical safety: a set of
+      free tools for label making, mixture classification and storage segregation, backed by
+      substance data that names its source on every page. It is built and run by one person,
+      and this page says who, why, and where the limits are.
+    </p>
+
+    <div class="mt-10 space-y-10 text-gray-700 leading-relaxed">
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">Who</h2>
+        <p>
+          My name is <strong>Sergejs Sevcenko</strong>. I am a solo developer based in Riga,
+          Latvia, and I build and maintain this site under my company,
+          <strong>SIA Basis Assets</strong>. There is no editorial team behind it: every tool,
+          every data import and every mistake here is mine, which is also why the site is
+          explicit about where its data comes from and what it does not attempt.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">Why</h2>
+        <p>
+          I started this as a long-term project: a set of free, registration-free tools for the
+          people who actually do GHS, EHS and compliance work — label a container, check whether
+          two chemicals can share a shelf, classify a mixture from its composition, pick the
+          precautionary statements that belong on a label and understand why the others do not.
+        </p>
+        <p class="mt-3">
+          Tools like these exist, but most are locked inside paid suites, and many of the free
+          ones were designed a generation ago: slow, cluttered, and quiet about where their
+          numbers come from. I think the field deserves tools that are fast, open about their
+          sources, and honest about their limits — so that is what I am building.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">Where the data comes from</h2>
+        <ul class="list-disc pl-5 space-y-2">
+          <li>
+            <span class="font-semibold">Harmonised classification</span> — Annex VI to Regulation (EC)
+            No 1272/2008 (CLP), consolidated text, with the amending ATPs traced per entry.
+          </li>
+          <li>
+            <span class="font-semibold">Physical and safety properties</span> — PubChem Laboratory
+            Chemical Safety Summaries (LCSS), which aggregate NIOSH, NTP, USCG, EPA and ICSC records.
+          </li>
+          <li>
+            <span class="font-semibold">Reactivity and storage</span> — NOAA CAMEO Chemicals reactive
+            groups, combined with the GHS classes to derive storage segregation.
+          </li>
+          <li>
+            <span class="font-semibold">Pictograms, statements and transport</span> — UNECE GHS,
+            the CLP annexes, ECHA guidance, and the UN Model Regulations for UN numbers.
+          </li>
+        </ul>
+        <p class="mt-4">
+          A number is printed in a page's prose, summary and structured data <strong>only when
+          at least two independent origins agree</strong> on it within a tolerance; a single
+          source, or sources that disagree, appear in the properties table with their conditions
+          and nothing more. The rule has a name in the code, <code class="text-sm">{LCSS_FACT_RULE}</code>,
+          and an automated check runs it on every build.
+        </p>
+        <p class="mt-3">
+          The same habit of checking the source against itself is how we found
+          <strong>{ERRATA_COUNT} entries</strong> in the language editions of Annex VI whose printed
+          substance name does not match the EC and CAS numbers of the same row. They are documented
+          on <a href="/compliance/clp-translation-errors/" class="text-[#062A78] font-semibold hover:underline">a dedicated page</a>
+          {reported ? `and were reported to ECHA on ${reported}` : ''}.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">What this site does not do</h2>
+        <ul class="list-disc pl-5 space-y-2">
+          <li>
+            It is <strong>not a substitute for your supplier's safety data sheet</strong>. The
+            SDS for the product in your hands is the document that governs; use this site to
+            check it, not to replace it.
+          </li>
+          <li>
+            The mixture classifier works from harmonised entries under <strong>EU CLP only</strong>.
+            It does not yet cover physical hazards, bridging principles, the notes to Annex VI,
+            self-classifications from the C&amp;L Inventory, or jurisdictions other than the EU.
+            Each result page states these limits next to the verdict.
+          </li>
+          <li>
+            Substance pages without confirmed property data are kept out of search engines on
+            purpose: a page that only repeats the template is not worth your click.
+          </li>
+          <li>
+            Nothing here is legal advice. Where a page cites a regulation, it cites the article,
+            the Official Journal page, or both, so you can read the source yourself.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">How it is funded</h2>
+        <p>
+          The tools are free and will stay free. The site earns a commission when a reader
+          chooses to sign up for SDS Manager through a link marked as a partner link; the terms
+          are on the <a href="/affiliate-disclosure/" class="text-[#062A78] font-semibold hover:underline">affiliate disclosure</a> page.
+          No partner has any say over the data, the tools or what this site publishes.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style="font-family: 'Space Grotesk', system-ui, sans-serif">Contact</h2>
+        <p>
+          Corrections, questions, and requests from editors, librarians and researchers:
+          <a href={`mailto:${CONTACT}`} class="text-[#062A78] font-semibold hover:underline">{CONTACT}</a>.
+          If you spot a wrong number, please include the page address and the source you checked
+          it against — that is how most fixes here begin.
+        </p>
+        <p class="mt-3 text-sm text-gray-600">
+          SIA Basis Assets · Riga, Latvia · Data protection matters: see the
+          <a href="/privacy/" class="text-[#062A78] hover:underline">privacy policy</a>.
+        </p>
+      </section>
+
+      <section class="rounded-lg border border-gray-200 bg-gray-50 p-5">
+        <h2 class="text-base font-semibold text-gray-900 mb-2" style="font-family: 'Space Grotesk', system-ui, sans-serif">Linking to or citing this site</h2>
+        <p class="text-sm">
+          Every page is free to link to; no permission is needed. A short form that fits most
+          resource lists:
+        </p>
+        <pre class="mt-3 text-xs bg-white border border-gray-200 rounded p-3 overflow-x-auto"><code>GHS Pictograms — free GHS/CLP tools: label maker, mixture classifier, storage compatibility. https://ghspictograms.com/</code></pre>
+      </section>
+    </div>
+  </div>
+</Layout>

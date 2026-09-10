@@ -1,0 +1,61 @@
+---
+// 404 (№145, session 87). ⚠⚠ До этой страницы у проекта не было dist/404.html,
+// и Cloudflare Pages включал режим одностраничного приложения: ЛЮБОЙ
+// несуществующий адрес отдавал главную с кодом 200 и canonical на «/».
+// Следствия: мусорные адреса от сканеров и ботов индексировались как дубли
+// (вероятный корень №129 — 624 «вариант с canonical» в GSC), «/about/» до
+// своего появления «отдавал главную», сканеры секретов получали HTML вместо 404.
+// Astro собирает этот файл в dist/404.html; Pages отдаёт его со статусом 404.
+// Сторож: группа About в check:dist (файл есть, noindex на месте).
+import Layout from '../layouts/Layout.astro'
+
+export const prerender = true
+
+const title = 'Page not found'
+const description = 'The address you opened does not exist on ghspictograms.com.'
+---
+
+<Layout title={title} description={description}>
+  <Fragment slot="head">
+    <meta name="robots" content="noindex, follow" />
+  </Fragment>
+
+  <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <p class="text-xs font-semibold tracking-widest uppercase text-gray-500">Error 404</p>
+    <h1
+      class="mt-2 text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight"
+      style="font-family: 'Space Grotesk', system-ui, sans-serif"
+    >
+      This page does not exist
+    </h1>
+    <p class="mt-4 text-gray-700 leading-relaxed text-lg">
+      The address may have been mistyped, or the page has moved. Nothing was found at this
+      location, and this response carries a real 404 status so that search engines do not keep it.
+    </p>
+
+    <div class="mt-8 grid gap-3 sm:grid-cols-2">
+      <a href="/ghs-label-maker/" class="rounded-lg border border-gray-200 p-4 hover:border-[#062A78]">
+        <span class="block font-semibold text-[#062A78]">GHS Label Maker</span>
+        <span class="block text-sm text-gray-600 mt-1">Build a compliant label for EU CLP, OSHA HCS, WHMIS or GB CLP.</span>
+      </a>
+      <a href="/tools/clp-mixture-classifier/" class="rounded-lg border border-gray-200 p-4 hover:border-[#062A78]">
+        <span class="block font-semibold text-[#062A78]">CLP Mixture Classifier</span>
+        <span class="block text-sm text-gray-600 mt-1">Classify a mixture from its composition against Annex VI.</span>
+      </a>
+      <a href="/substances/" class="rounded-lg border border-gray-200 p-4 hover:border-[#062A78]">
+        <span class="block font-semibold text-[#062A78]">Substance database</span>
+        <span class="block text-sm text-gray-600 mt-1">Search by name, CAS or EC number.</span>
+      </a>
+      <a href="/tools/" class="rounded-lg border border-gray-200 p-4 hover:border-[#062A78]">
+        <span class="block font-semibold text-[#062A78]">All tools</span>
+        <span class="block text-sm text-gray-600 mt-1">Storage matrix, ATE calculator, P-statement selector and more.</span>
+      </a>
+    </div>
+
+    <p class="mt-8 text-sm text-gray-600">
+      Followed a link from another site and landed here? Tell us at
+      <a href="mailto:hello@ghspictograms.com" class="text-[#062A78] font-semibold hover:underline">hello@ghspictograms.com</a>
+      and we will set up a redirect.
+    </p>
+  </div>
+</Layout>

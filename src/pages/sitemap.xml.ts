@@ -48,6 +48,9 @@ const STATIC_PAGES = [
   { url: '/compliance/', changefreq: 'weekly', priority: '0.9' },
   // ⚠ session 32: юридические страницы отсутствовали в sitemap, хотя индексируются
   // и на них ведут ссылки из подвала. Нашла проверка sitemap-both-ways в check-seo.
+  // ⚠ session 87 (№136): страница автора и компании — до неё сайт был анонимным,
+  // а /about/ отдавал главную (soft-404, №145).
+  { url: '/about/', changefreq: 'monthly', priority: '0.5' },
   { url: '/privacy/', changefreq: 'yearly', priority: '0.3' },
   { url: '/terms/', changefreq: 'yearly', priority: '0.3' },
   { url: '/affiliate-disclosure/', changefreq: 'yearly', priority: '0.3' },
