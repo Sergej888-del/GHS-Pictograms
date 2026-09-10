@@ -58,6 +58,9 @@ const { sdsCount = '109', animateMark = false } = Astro.props
       <button type="button" id="nav-data-btn" aria-expanded="false">Substance data<span class="caret">▼</span></button>
       <a href="/compliance/">Compliance</a>
       <a href="/#pictograms">Pictograms</a>
+      {/* ⚠ session 87 (№136): «About» в шапке, а не только в подвале — адресат
+          письма с просьбой о ссылке ищет «кто это» там, где ищут все. */}
+      <a href="/about/">About</a>
     </nav>
     <a href="/ghs-label-maker/" class="sh-cta">Build a label</a>
 
@@ -130,6 +133,7 @@ const { sdsCount = '109', animateMark = false } = Astro.props
     <a href="/ghs-label-maker/osha/">OSHA HazCom labels</a>
     <a href="/ghs-label-maker/clp-eu/">EU CLP labels</a>
     <a href="/ghs-label-maker/templates/">Label size templates</a>
+    <a href="/about/">About this site</a>
     <a href="/ghs-label-maker/" class="sh-cta mobile-cta">Build a label</a>
   </div>
 </header>

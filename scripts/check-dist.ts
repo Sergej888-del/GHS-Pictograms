@@ -3871,6 +3871,8 @@ const CHECKS: Check[] = [
       const missing = need.filter(([m]) => !html.includes(m)).map(([m, why]) => `${why}: ${JSON.stringify(m)}`)
       const footerHome = readPage('index.html') ?? ''
       if (!footerHome.includes('href="/about/"')) missing.push('в подвале главной нет ссылки href="/about/"')
+      // ⚠ Шапка: и десктопная навигация, и мобильная панель — две ссылки, не одна.
+      if ((footerHome.match(/href="\/about\/"/g) ?? []).length < 3) missing.push('в шапке главной (десктоп + мобильная панель) нет ссылок на /about/')
       const sitemap = existsSync(join(DIST, 'sitemap.xml')) ? readFileSync(join(DIST, 'sitemap.xml'), 'utf8') : ''
       if (!sitemap.includes('https://ghspictograms.com/about/')) missing.push('в sitemap.xml нет /about/')
       return {
