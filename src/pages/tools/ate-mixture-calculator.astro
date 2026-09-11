@@ -5,6 +5,7 @@
 // JetBrains Mono labels) shared with the /sds/ pages and storage tool.
 export const prerender = true
 import Layout from '../../layouts/Layout.astro'
+import CiteTool from '../../components/CiteTool.astro'
 import AteMixtureCalculator from '../../components/AteMixtureCalculator'
 import SdsManagerCard from '../../components/SdsManagerCard.astro'
 
@@ -185,4 +186,6 @@ const jsonLd = {
   </section>
 
   <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  {/* Блок «Link to or cite this tool» — session 87 (№136c), план беклинков §2.3. */}
+  <CiteTool name="ATE Mixture Calculator" url={canonical} blurb="acute toxicity estimate for mixtures under the GHS/CLP additivity formula, with the category and the working shown" />
 </Layout>

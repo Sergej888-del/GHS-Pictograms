@@ -3959,3 +3959,49 @@ a.sub-alpha-item:hover { border-color: var(--teal-200); background: var(--teal-5
    надзаголовку следующей секции (замечено отрисовкой session 60), поэтому
    отступ живёт снаружи, на обёртке. ⭐ Переведут компонент — обёртка уйдёт. */
 .hub-share { margin-bottom: 26px; }
+
+/* ── «Link to or cite this tool» (session 87, №136c) ─────────────────────────
+   Блок под пятью инструментами: готовая строка для ресурсных списков и HTML.
+   Разметка — src/components/CiteTool.astro. Тихий, белый, без акцентного
+   цвета: это служебный блок для библиотекаря, а не призыв к действию. */
+.cite-tool { padding: 0 0 clamp(40px, 5vw, 64px); background: #ffffff; }
+.cite-box {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 22px 24px 18px;
+  background: #fbfcfe;
+}
+.cite-h {
+  margin: 4px 0 8px;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.cite-p { margin: 0 0 12px; max-width: 720px; font-size: 14px; line-height: 1.6; color: var(--ink-2); }
+.cite-row { display: flex; gap: 10px; align-items: stretch; }
+.cite-code {
+  flex: 1 1 auto; min-width: 0; margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: #ffffff;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12.5px; line-height: 1.5; color: var(--ink);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.cite-copy {
+  flex: 0 0 auto; align-self: flex-start;
+  padding: 9px 14px;
+  border: 1px solid var(--line-2); border-radius: 8px;
+  background: #ffffff; color: var(--navy);
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.cite-copy:hover { border-color: var(--navy); }
+.cite-copy:focus-visible { outline: 2px solid var(--teal-600); outline-offset: 2px; }
+.cite-more { margin-top: 10px; }
+.cite-more > summary { cursor: pointer; font-size: 13px; color: var(--ink-3); }
+.cite-more > .cite-row { margin-top: 8px; }
+.cite-fine { margin: 14px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--ink-3); }
+.cite-fine a { color: var(--navy); font-weight: 600; }
+@media (max-width: 560px) { .cite-row { flex-direction: column; } .cite-copy { align-self: flex-end; } }

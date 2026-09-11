@@ -21,6 +21,7 @@
 export const prerender = true
 
 import Layout from '../../layouts/Layout.astro'
+import CiteTool from '../../components/CiteTool.astro'
 import PStatementSelector from '../../components/PStatementSelector'
 import { supabase } from '../../lib/supabase'
 import { must } from '../../lib/mustQuery'
@@ -284,6 +285,8 @@ const jsonLd = [
       </div>
     </div>
   </section>
+  {/* Блок «Link to or cite this tool» — session 87 (№136c), план беклинков §2.3. */}
+  <CiteTool name="P-Statement Selector" url={canonical} blurb="picks the precautionary statements a CLP label needs and explains why each one is on, or off, the label" />
 </Layout>
 
 <style>

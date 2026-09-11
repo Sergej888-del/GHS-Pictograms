@@ -3914,6 +3914,41 @@ const CHECKS: Check[] = [
     },
   },
 
+  // ─────────────────── «Link to or cite this tool» на пяти инструментах (s87, №136c) ──
+  {
+    id: 'cite-tool',
+    group: 'About',
+    title: 'Блок «Link to or cite this tool» стоит на пяти инструментах и называет их же canonical',
+    run: async () => {
+      const PAGES = [
+        'ghs-label-maker/index.html',
+        'tools/clp-mixture-classifier/index.html',
+        'tools/ate-mixture-calculator/index.html',
+        'tools/chemical-storage-compatibility/index.html',
+        'p-statements/selector/index.html',
+      ]
+      const problems: string[] = []
+      for (const rel of PAGES) {
+        const html = readPage(rel)
+        if (!html) { problems.push(`нет ${rel}`); continue }
+        const blocks = (html.match(/class="cite-tool"/g) ?? []).length
+        if (blocks !== 1) { problems.push(`${rel}: блоков ${blocks}, ожидался 1`); continue }
+        const cite = html.match(/data-cite-url="([^"]+)"/)?.[1]
+        const canon = html.match(/<link[^>]+rel="canonical"[^>]+href="([^"]+)"/)?.[1]
+        if (!cite || !canon || cite !== canon) problems.push(`${rel}: data-cite-url «${cite}» ≠ canonical «${canon}»`)
+        if (!html.includes('mailto:hello@ghspictograms.com')) problems.push(`${rel}: нет контакта`)
+        if (!html.includes('href="/about/"')) problems.push(`${rel}: нет ссылки на /about/ в блоке`)
+      }
+      return {
+        id: 'cite-tool',
+        group: 'About',
+        ok: problems.length === 0,
+        headline: problems.length === 0 ? `блок на ${PAGES.length} инструментах, адреса совпадают с canonical` : `проблем: ${problems.length}`,
+        detail: problems,
+      }
+    },
+  },
+
   // ─────────────────── press-kit на странице errata (session 87, №136) ─────────
   {
     id: 'errata-press-kit',

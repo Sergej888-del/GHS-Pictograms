@@ -33,6 +33,7 @@
 export const prerender = true
 
 import Layout from '../../layouts/Layout.astro'
+import CiteTool from '../../components/CiteTool.astro'
 import MixtureClassifier from '../../components/MixtureClassifier'
 import SdsManagerCard from '../../components/SdsManagerCard.astro'
 import { supabase } from '../../lib/supabase'
@@ -440,4 +441,6 @@ const breadcrumbJson = JSON.stringify({
       </div>
     </div>
   </section>
+  {/* Блок «Link to or cite this tool» — session 87 (№136c), план беклинков §2.3. */}
+  <CiteTool name="CLP Mixture Classifier" url={canonical} blurb="classifies a mixture from its composition against CLP Annex VI and shows the reasoning behind every hazard class" />
 </Layout>

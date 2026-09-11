@@ -1,0 +1,77 @@
+---
+/**
+ * «Link to or cite this tool» — блок под инструментом (session 87, №136c).
+ *
+ * Зачем: библиотекарь или преподаватель, решивший поставить ссылку, тратит на
+ * формулировку больше, чем на решение. Здесь готово всё, что он бы писал сам:
+ * одна строка описания, HTML-фрагмент, разрешение (ссылка не требует
+ * согласования), и та же строка — для писем аутрича (план беклинков §2.3).
+ *
+ * ⚠ Адрес и имя — только из пропсов, из тех же констант, что canonical
+ * страницы. Сторож `cite-tool` в check:dist сверяет `data-cite-url` с
+ * canonical и требует блок на каждом из пяти инструментов.
+ * ⚠ Стили — в hub.css (`.cite-*`), не здесь: правило дизайн-системы.
+ */
+interface Props {
+  /** Имя инструмента, как в заголовке страницы. */
+  name: string
+  /** Канонический адрес, со слэшем. */
+  url: string
+  /** Одна строка: что делает, для кого. Без точки в конце. */
+  blurb: string
+}
+const { name, url, blurb } = Astro.props
+const line = `${name} — ${blurb}. Free, no registration. ${url}`
+const html = `<a href="${url}">${name}</a> — ${blurb}.`
+const uid = `cite-${url.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}`
+---
+
+<section class="cite-tool" data-cite-url={url} aria-labelledby={`${uid}-h`}>
+  <div class="hub-wrap">
+    <div class="cite-box">
+      <p class="hub-eyebrow navy">Link to or cite this tool</p>
+      <h2 class="cite-h" id={`${uid}-h`}>Adding {name} to a resource list</h2>
+      <p class="cite-p">
+        Every page here is free to link to — no permission needed, no registration behind the
+        link, no affiliate strings attached. A short form that fits most guides:
+      </p>
+      <div class="cite-row">
+        <pre class="cite-code" id={`${uid}-text`}><code>{line}</code></pre>
+        <button type="button" class="cite-copy" data-copy={`${uid}-text`}>Copy</button>
+      </div>
+      <details class="cite-more">
+        <summary>HTML for a web page</summary>
+        <div class="cite-row">
+          <pre class="cite-code" id={`${uid}-html`}><code>{html}</code></pre>
+          <button type="button" class="cite-copy" data-copy={`${uid}-html`}>Copy</button>
+        </div>
+      </details>
+      <p class="cite-fine">
+        Data sources and the rule for printed numbers are on the <a href="/about/">About</a> page.
+        Found a wrong value? <a href="mailto:hello@ghspictograms.com">hello@ghspictograms.com</a> —
+        include the page address and the source you checked it against.
+      </p>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Копирование в буфер. Без буфера (http, старый браузер) кнопка просто выделяет текст.
+  document.querySelectorAll<HTMLButtonElement>('.cite-copy').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const el = document.getElementById(btn.dataset.copy ?? '')
+      const text = el?.textContent ?? ''
+      try {
+        await navigator.clipboard.writeText(text)
+        const was = btn.textContent
+        btn.textContent = 'Copied'
+        setTimeout(() => { btn.textContent = was }, 1500)
+      } catch {
+        if (el) {
+          const r = document.createRange(); r.selectNodeContents(el)
+          const s = window.getSelection(); s?.removeAllRanges(); s?.addRange(r)
+        }
+      }
+    })
+  })
+</script>

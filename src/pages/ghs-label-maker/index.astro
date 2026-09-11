@@ -24,6 +24,7 @@
 export const prerender = true
 
 import Layout from '../../layouts/Layout.astro'
+import CiteTool from '../../components/CiteTool.astro'
 import LabelConstructorLoader from '../../components/LabelConstructorLoader'
 import {
   SITE, STEPS, ANATOMY, HUB_FAQ, CROSS_LINKS, TEMPLATES,
@@ -407,4 +408,6 @@ const jsonLd = [
       были литералами (`#475569`, `#0f172a`, `#e2e8f0`), а `.lm-h3` объявлялся
       ещё и на второй странице раздела — с другими отступами.
       Разбор — `claude/design-system.md`. */}
+  {/* Блок «Link to or cite this tool» — session 87 (№136c), план беклинков §2.3. */}
+  <CiteTool name="GHS Label Maker" url={canonical} blurb="free online GHS label generator for EU CLP, OSHA HCS, WHMIS and GB CLP — pictograms, signal word, H/P statements and real label sizes" />
 </Layout>

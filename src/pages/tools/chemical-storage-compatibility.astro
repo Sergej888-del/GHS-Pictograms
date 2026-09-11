@@ -8,6 +8,7 @@
 // unchanged (HERO_BG, §0.2). The island itself is untouched in this pass.
 export const prerender = true
 import Layout from '../../layouts/Layout.astro'
+import CiteTool from '../../components/CiteTool.astro'
 import SdsManagerCard from '../../components/SdsManagerCard.astro'
 import StorageTool from '../../components/StorageTool'
 import { HERO_BG } from '../../lib/storageClasses'
@@ -112,4 +113,6 @@ const method = [
       />
     </div>
   </section>
+  {/* Блок «Link to or cite this tool» — session 87 (№136c), план беклинков §2.3. */}
+  <CiteTool name="Chemical Storage Compatibility Matrix" url="https://ghspictograms.com/tools/chemical-storage-compatibility/" blurb="which chemicals can share a shelf — storage classes derived from GHS hazard classes and CAMEO reactive groups for thousands of substances" />
 </Layout>
