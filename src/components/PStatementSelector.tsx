@@ -21,6 +21,7 @@ import { supabase } from '../lib/supabase'
 import { usePPrecedence } from '../lib/usePPrecedence'
 import PStatementProtocol from './PStatementProtocol'
 import { labelMakerHref, resolveStatementCodes, parseLabelMakerParams } from '../lib/labelMakerLink'
+import { logSearchMiss } from '../lib/toolSignals'
 import { casForDisplay } from '../lib/substanceIdentifiers'
 import type { Audience } from '../lib/pPrecedence'
 import SaveResultButton from './SaveResultButton'
@@ -231,7 +232,7 @@ export default function PStatementSelector() {
       }
       const casRows = (data ?? []) as Substance[]
       const hit = casRows.find((r) => (r.cas_number ?? '').trim() === cas) ?? casRows[0]
-      if (!hit) { setSubState({ kind: 'miss', q: cas, byName: false }); return }
+      if (!hit) { setSubState({ kind: 'miss', q: cas, byName: false }); logSearchMiss('p-statement-selector', cas); return }
       applySubstance(hit)
       return
     }
@@ -303,7 +304,7 @@ export default function PStatementSelector() {
       seen.add(s.cas_number)
       list.push(s)
     }
-    if (list.length === 0) { setSubState({ kind: 'miss', q: typed, byName: true }); return }
+    if (list.length === 0) { setSubState({ kind: 'miss', q: typed, byName: true }); logSearchMiss('p-statement-selector', typed); return }
     /**
      * ⚠⚠ ЕДИНСТВЕННОЕ СОВПАДЕНИЕ ПРИМЕНЯЕТСЯ САМО, НЕСКОЛЬКО — ВЫБИРАЕТ ЧЕЛОВЕК.
      * Взять первое из списка было бы удобнее и опаснее: «acetone» и «acetone

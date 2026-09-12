@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { substanceName, substanceNameFull } from '../lib/substanceName'
 import { casForDisplay, ecForDisplay, casShapeOk } from '../lib/substanceIdentifiers'
 import { substanceHref } from '../lib/substanceSlug'
+import { logSearchMiss, cancelSearchMiss } from '../lib/toolSignals'
 // ⚠⚠ Ссылка в конструктор строится СБОРЩИКОМ, а не склейкой строк. Session 52:
 // ровно здесь и на девяти страницах пиктограмм стоял `?cas=${casEnc}` без
 // проверки формы, и у 156 записей Annex VI в адрес уезжала склейка
@@ -143,6 +144,14 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
 
     return list.slice(0, 100)
   }, [query, picFilters, signalFilter, all, fuse])
+
+  // «Искал и не нашёл» (s88, сигнал E): только по строке поиска, без фильтров
+  useEffect(() => {
+    const q = query.trim()
+    if (loading || q.length < 2 || picFilters.length > 0 || signalFilter) { cancelSearchMiss('substances'); return }
+    if (results.length === 0) logSearchMiss('substances', q)
+    else cancelSearchMiss('substances')
+  }, [query, results, loading, picFilters, signalFilter])
 
   const togglePic = (code: string) => {
     setPicFilters(prev =>

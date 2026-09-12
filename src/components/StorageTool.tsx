@@ -48,6 +48,7 @@ import { substanceNameFull, truncateName } from '../lib/substanceName'
 // та же половинчатая правка, что и на этикетке. Правило формы одно на весь сайт.
 import { ecForDisplay, casForDisplay, casShapeOk } from '../lib/substanceIdentifiers'
 import SaveResultButton from './SaveResultButton'
+import { logSearchMiss, cancelSearchMiss } from '../lib/toolSignals'
 
 // SDS Manager affiliate — the callout already tells the reader to verify against
 // the SDS; this link serves that exact moment. GA separates placements via the
@@ -329,6 +330,15 @@ export default function StorageTool() {
   }, [query, chip, all, fuse])
 
   const shown = filtered.slice(0, 60)
+
+  // «Искал и не нашёл» (s88, сигнал E): только без чипа пиктограммы — иначе промахом
+  // считался бы фильтр, а не вещество.
+  useEffect(() => {
+    const q = query.trim()
+    if (loading || q.length < 2 || chip !== 'All') { cancelSearchMiss('storage-matrix'); return }
+    if (filtered.length === 0) logSearchMiss('storage-matrix', q)
+    else cancelSearchMiss('storage-matrix')
+  }, [query, filtered, loading, chip])
 
   // Fetch the verdict whenever the selected CAS changes; keep the URL shareable.
   useEffect(() => {

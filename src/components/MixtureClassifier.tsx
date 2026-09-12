@@ -35,6 +35,7 @@ import type {
 import { buildReport, resultFingerprint, stampTime } from '../lib/classifier/report'
 import MixtureReport, { Picto } from './MixtureReport'
 import { labelMakerHref } from '../lib/labelMakerLink'
+import { logSearchMiss, cancelSearchMiss } from '../lib/toolSignals'
 import SaveResultButton from './SaveResultButton'
 
 /* ── контракт с Function ─────────────────────────────────────────────────── */
@@ -446,7 +447,7 @@ export default function MixtureClassifier({ registry, pictograms }: Props) {
 
   useEffect(() => {
     const q = query.trim()
-    if (q.length < 2) { setCandidates([]); setSearchError(null); return }
+    if (q.length < 2) { setCandidates([]); setSearchError(null); cancelSearchMiss('clp-classifier'); return }
     let cancelled = false
     setSearching(true)
     const t = setTimeout(async () => {
@@ -460,6 +461,9 @@ export default function MixtureClassifier({ registry, pictograms }: Props) {
         } else {
           setSearchError(null)
           setCandidates(data.candidates ?? [])
+          // «Искал и не нашёл» (s88, сигнал E) — только на честный пустой ответ, не на ошибку
+          if ((data.candidates ?? []).length === 0) logSearchMiss('clp-classifier', q)
+          else cancelSearchMiss('clp-classifier')
           setProfiles((p) => ({ ...p, ...(data.profiles ?? {}) }))
           if (data.rateLimit) setRate(data.rateLimit)
         }

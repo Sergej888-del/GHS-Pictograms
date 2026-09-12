@@ -3990,18 +3990,59 @@ const CHECKS: Check[] = [
       const assets = assetFiles()
       const withRpc = assets.filter((a) => a.text.includes('record_feature_interest')).length
       const withMark = assets.filter((a) => a.text.includes('data-save-result')).length
+      const withFeedback = assets.filter((a) => a.text.includes('record_tool_feedback')).length
+      const withSuggest = assets.filter((a) => a.text.includes('data-suggest-feature')).length
       if (assets.length === 0) problems.push('dist/_astro пуст — бандл не собран')
       else {
         if (withRpc === 0) problems.push('ни один dist/_astro/*.js не вызывает record_feature_interest')
         if (withMark === 0) problems.push('ни один dist/_astro/*.js не несёт data-save-result')
+        // s88, форма пожеланий (C): панель и её RPC едут тем же компонентом
+        if (withFeedback === 0) problems.push('ни один dist/_astro/*.js не вызывает record_tool_feedback')
+        if (withSuggest === 0) problems.push('ни один dist/_astro/*.js не несёт data-suggest-feature (ссылка «Suggest a feature»)')
       }
       return {
         id: 'save-result',
         group: 'Tools',
         ok: problems.length === 0,
         headline: problems.length === 0
-          ? `кнопка в ${found.length} островах (${[...keys.keys()].join(', ')}), в бандле: RPC ${withRpc}, маркер ${withMark}`
+          ? `кнопка в ${found.length} островах (${[...keys.keys()].join(', ')}), в бандле: RPC ${withRpc}/${withFeedback}, маркеры ${withMark}/${withSuggest}`
           : `проблем: ${problems.length}`,
+        detail: problems,
+      }
+    },
+  },
+
+  // ─────────────────── «Искал и не нашёл» — пассивный сигнал E (s88) ──────────
+  //
+  // Острова с поиском вещества находятся ПО СОДЕРЖИМОМУ — по тому, чем они ищут
+  // (`fuse.search(`, `/api/classify/lookup`, `kind: 'miss'`), а не по списку из
+  // памяти; каждый обязан звать logSearchMiss(). Бандл обязан нести RPC.
+  {
+    id: 'search-miss',
+    group: 'Tools',
+    title: 'Каждый остров с поиском вещества логирует «искал и не нашёл», и RPC доехал до бандла',
+    run: async () => {
+      const dir = resolve(process.cwd(), 'src', 'components')
+      const problems: string[] = []
+      const found: string[] = []
+      const SEARCH = /fuse\.search\(|\/api\/classify\/lookup|kind: 'miss'/
+      const files = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.tsx')) : []
+      for (const f of files) {
+        const src = readFileSync(join(dir, f), 'utf8')
+        if (!SEARCH.test(src)) continue
+        found.push(f)
+        if (!src.includes('logSearchMiss(')) problems.push(`${f}: ищет вещество, но не зовёт logSearchMiss()`)
+      }
+      if (found.length < 6) problems.push(`островов с поиском найдено ${found.length}, ожидалось ≥ 6: ${found.join(', ')}`)
+      const assets = assetFiles()
+      const withRpc = assets.filter((a) => a.text.includes('record_search_miss')).length
+      if (assets.length === 0) problems.push('dist/_astro пуст — бандл не собран')
+      else if (withRpc === 0) problems.push('ни один dist/_astro/*.js не вызывает record_search_miss')
+      return {
+        id: 'search-miss',
+        group: 'Tools',
+        ok: problems.length === 0,
+        headline: problems.length === 0 ? `логируют ${found.length} островов (${found.join(', ')}), бандлов с RPC: ${withRpc}` : `проблем: ${problems.length}`,
         detail: problems,
       }
     },

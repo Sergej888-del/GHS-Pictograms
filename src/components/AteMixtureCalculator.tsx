@@ -20,6 +20,7 @@ import ShareResult from './ShareResult'
 import { supabase } from '../lib/supabase'
 import { substanceNameFull, truncateName } from '../lib/substanceName'
 import { casShapeOk, casForDisplay } from '../lib/substanceIdentifiers'
+import { logSearchMiss, cancelSearchMiss } from '../lib/toolSignals'
 import {
   resolveRoute, computeRoute, rollUp, tableKey, UNITS, P_TEXT, RELEVANCE_CUTOFF_CAT1_3,
   type Route, type InhalForm, type Resolved, type RouteResult, type RouteWarning,
@@ -319,6 +320,14 @@ export default function AteMixtureCalculator() {
     if (q.length < 2) return []
     return fuse.search(q).slice(0, 8).map(r => r.item)
   }, [activeSearch, searchTexts, fuse])
+
+  // «Искал и не нашёл» (s88, сигнал E): то же условие, что рисует «No Annex VI entry matches»
+  useEffect(() => {
+    const q = activeSearch ? (searchTexts[activeSearch] ?? '').trim() : ''
+    if (loading || q.length < 2) { cancelSearchMiss('ate-calculator'); return }
+    if (searchResults.length === 0) logSearchMiss('ate-calculator', q)
+    else cancelSearchMiss('ate-calculator')
+  }, [activeSearch, searchTexts, searchResults, loading])
 
   const totalConc = comps.reduce((s, c) => s + c.concentration, 0)
   /** Остаток до 100 % — по design §4.3 считается заявленным неклассифицированным (в формулу и в неизвестные не входит). */

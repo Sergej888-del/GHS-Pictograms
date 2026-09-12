@@ -3,6 +3,7 @@ import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
 import { substanceName, substanceNameFull } from '../lib/substanceName'
 import { casForDisplay, ecForDisplay, casShapeOk } from '../lib/substanceIdentifiers'
+import { logSearchMiss, cancelSearchMiss } from '../lib/toolSignals'
 import {
   LM_PARAM, LM_STICKY_PARAMS, LABEL_MAKER_BASE, labelMakerHref, parseLabelMakerParams,
   readReturnBase,
@@ -165,6 +166,15 @@ export default function SubstancePicker({ branchPaths = [] }: Props) {
     if (signalFilter) list = list.filter((s) => s.signal_word === signalFilter)
     return list
   }, [query, letter, picFilters, signalFilter, all, fuse])
+
+  // «Искал и не нашёл» (s88, сигнал E): только по строке поиска, без фильтров — иначе
+  // промахом считалась бы буква или пиктограмма, а не вещество.
+  useEffect(() => {
+    const q = query.trim()
+    if (loading || q.length < 2 || letter || picFilters.length > 0 || signalFilter) { cancelSearchMiss('label-maker'); return }
+    if (results.length === 0) logSearchMiss('label-maker', q)
+    else cancelSearchMiss('label-maker')
+  }, [query, results, loading, letter, picFilters, signalFilter])
 
   /** Какие буквы вообще что-то дадут — пустые кнопки не должны выглядеть живыми. */
   const letterHas = useMemo(() => {
