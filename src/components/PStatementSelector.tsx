@@ -23,6 +23,7 @@ import PStatementProtocol from './PStatementProtocol'
 import { labelMakerHref, resolveStatementCodes, parseLabelMakerParams } from '../lib/labelMakerLink'
 import { casForDisplay } from '../lib/substanceIdentifiers'
 import type { Audience } from '../lib/pPrecedence'
+import SaveResultButton from './SaveResultButton'
 
 interface HStatement { code: string; text_en: string }
 interface Substance {
@@ -682,6 +683,8 @@ export default function PStatementSelector() {
               </a>
             </div>
             <PStatementProtocol result={result} />
+            {/* №142 — замер спроса на сохранение подбора */}
+            <SaveResultButton tool="p-statement-selector" style={{ marginTop: 12 }} />
           </>
         )}
       </div>

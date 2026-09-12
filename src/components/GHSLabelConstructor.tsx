@@ -49,6 +49,7 @@ import {
 } from '../lib/pStatementSlots'
 import { supabase } from '../lib/supabase'
 import NewsletterOptIn from './NewsletterOptIn'
+import SaveResultButton from './SaveResultButton'
 
 interface Pictogram { code: string; name_en: string; svg_content: string | null }
 interface HStatement { code: string; text_en: string }
@@ -2661,6 +2662,8 @@ export default function GHSLabelConstructor({
                   </button>
                 )}
                 {sheetNote && <p className="text-center text-xs text-gray-500">{sheetNote}</p>}
+                {/* №142 — замер спроса на сохранение: только там, где этикетка уже готова */}
+                <SaveResultButton tool="label-maker" />
                 {downloadError && (
                   <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
                     {downloadError}

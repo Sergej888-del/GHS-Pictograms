@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import SaveResultButton from './SaveResultButton';
 
 /**
  * Per-pictogram interactive calculator shell for /ghs/[code]/ pages.
@@ -885,6 +886,8 @@ export default function GhsCalculator({ code }: Props) {
                   {copied ? 'Link copied' : 'Share result'}
                 </button>
                 <span className="text-xs text-gray-400">Copies a link that reproduces this exact result.</span>
+                {/* №142 — замер спроса на сохранение; один компонент = девять калькуляторов */}
+                <SaveResultButton tool={`calc-${upper.toLowerCase()}`} style={{ display: 'contents' }} />
               </div>
 
               {config.affiliate && result.classified && (

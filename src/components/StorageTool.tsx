@@ -47,6 +47,7 @@ import { substanceNameFull, truncateName } from '../lib/substanceName'
 // ⚠ CAS здесь уже брался канонический (display_cas), а EC печатался сырым —
 // та же половинчатая правка, что и на этикетке. Правило формы одно на весь сайт.
 import { ecForDisplay, casForDisplay, casShapeOk } from '../lib/substanceIdentifiers'
+import SaveResultButton from './SaveResultButton'
 
 // SDS Manager affiliate — the callout already tells the reader to verify against
 // the SDS; this link serves that exact moment. GA separates placements via the
@@ -760,6 +761,8 @@ export default function StorageTool() {
               </section>
             )}
 
+            {/* №142 — замер спроса на сохранение вердикта */}
+            <SaveResultButton tool="storage-matrix" style={{ margin: '12px 0' }} />
             <p className="tool-fine">
               <b>Reference aid only.</b> Colour and class are a triage signal, not a classification — always verify storage and gas hazards against the substance&apos;s safety data sheet (sections 7 and 10) and local regulations.{' '}
               Managing SDSs for a whole inventory?{' '}

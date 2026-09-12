@@ -3949,6 +3949,64 @@ const CHECKS: Check[] = [
     },
   },
 
+  // ─────────────────── «Save this result» — кнопка-замер спроса (s88, №142) ──────
+  //
+  // ⚠ Кнопка живёт ЗА состоянием результата, поэтому в dist/*.html её нет
+  // (§16.3: Astro рендерит остров один раз, в начальном состоянии). Проверяем
+  // две вещи, которые видны: (1) ИСХОДНИК каждого острова с рядом действий
+  // «Download / Share» или панелью вердикта монтирует <SaveResultButton> — острова находим по
+  // содержимому, не по списку из памяти; (2) СОБРАННЫЙ бандл несёт вызов RPC и
+  // маркер data-save-result — иначе кнопка есть в исходнике и отсутствует на сайте.
+  {
+    id: 'save-result',
+    group: 'Tools',
+    title: 'Кнопка «Save this result» стоит в каждом острове с рядом Download/Share и доехала до бандла',
+    run: async () => {
+      const dir = resolve(process.cwd(), 'src', 'components')
+      const problems: string[] = []
+      const found: string[] = []
+      const keys = new Map<string, string>()
+      // Ряд действий над результатом — ИЛИ панель вердикта: у StorageTool нет Download/Share,
+      // его результат — <div className="tool-verdict"> (поймано первым прогоном s88: 6 вместо 7).
+      const ACTION = /Download PDF|Download SVG|Share result|Share link|Build the label with these|className="tool-verdict"/
+      const files = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.tsx')) : []
+      for (const f of files) {
+        if (f === 'SaveResultButton.tsx' || f === 'ShareResult.tsx') continue
+        const src = readFileSync(join(dir, f), 'utf8')
+        if (!ACTION.test(src)) continue
+        found.push(f)
+        const mounts = src.match(/<SaveResultButton\b[^>]*tool=(?:"([^"]+)"|\{`([^`]+)`\})/g) ?? []
+        if (mounts.length === 0) { problems.push(`${f}: есть ряд Download/Share, нет <SaveResultButton>`); continue }
+        for (const m of mounts) {
+          const key = m.match(/tool=(?:"([^"]+)"|\{`([^`]+)`\})/)
+          const k = key?.[1] ?? key?.[2] ?? ''
+          if (!k || k.length > 40) problems.push(`${f}: ключ tool пустой или длиннее 40: «${k}»`)
+          const prev = keys.get(k)
+          if (prev && prev !== f) problems.push(`ключ tool «${k}» повторяется: ${prev} и ${f}`)
+          keys.set(k, f)
+        }
+      }
+      if (found.length < 7) problems.push(`островов с рядом Download/Share найдено ${found.length}, ожидалось ≥ 7: ${found.join(', ')}`)
+      const assets = assetFiles()
+      const withRpc = assets.filter((a) => a.text.includes('record_feature_interest')).length
+      const withMark = assets.filter((a) => a.text.includes('data-save-result')).length
+      if (assets.length === 0) problems.push('dist/_astro пуст — бандл не собран')
+      else {
+        if (withRpc === 0) problems.push('ни один dist/_astro/*.js не вызывает record_feature_interest')
+        if (withMark === 0) problems.push('ни один dist/_astro/*.js не несёт data-save-result')
+      }
+      return {
+        id: 'save-result',
+        group: 'Tools',
+        ok: problems.length === 0,
+        headline: problems.length === 0
+          ? `кнопка в ${found.length} островах (${[...keys.keys()].join(', ')}), в бандле: RPC ${withRpc}, маркер ${withMark}`
+          : `проблем: ${problems.length}`,
+        detail: problems,
+      }
+    },
+  },
+
   // ─────────────────── press-kit на странице errata (session 87, №136) ─────────
   {
     id: 'errata-press-kit',

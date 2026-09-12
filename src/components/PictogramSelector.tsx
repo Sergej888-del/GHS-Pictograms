@@ -11,6 +11,7 @@ import { resolveSelection, type Selection } from '../lib/pictogramSelector';
 import { buildLabelElementsSvg, downloadSvg, downloadPdf } from '../lib/labelArtifact';
 import { pictogramSelectorCta } from '../lib/labelMakerCta';
 import ShareResult from './ShareResult';
+import SaveResultButton from './SaveResultButton';
 import NewsletterOptIn from './NewsletterOptIn';
 import LabelMakerCtaBlock from './LabelMakerCtaBlock';
 
@@ -402,6 +403,8 @@ export default function PictogramSelector() {
           <LabelMakerCtaBlock content={labelMakerCta} />
 
           {selectedCount > 0 && <ShareResult url={shareUrl} title="My GHS pictogram selection" />}
+          {/* №142 — замер спроса на сохранение подбора */}
+          {selectedCount > 0 && <SaveResultButton tool="pictogram-selector" style={{ marginTop: 10 }} />}
 
           {/* download + optional newsletter opt-in — un-gated 2026-06-28 */}
           {selectedCount > 0 && (

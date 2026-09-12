@@ -27,6 +27,7 @@ import {
 } from '../lib/ate'
 import { ateMixtureCta } from '../lib/labelMakerCta'
 import LabelMakerCtaBlock from './LabelMakerCtaBlock'
+import SaveResultButton from './SaveResultButton'
 
 const ROUTES: Route[] = ['oral', 'dermal', 'inhalation']
 const ROUTE_LABEL: Record<Route, string> = { oral: 'Oral', dermal: 'Dermal', inhalation: 'Inhalation' }
@@ -819,6 +820,8 @@ export default function AteMixtureCalculator() {
               <p className="mt-2 text-xs text-rose-700">PDF export failed ({pdfError}). Use your browser’s Print (Ctrl+P / ⌘P) and choose «Save as PDF» instead.</p>
             )}
             <ShareResult url={shareUrl} title={shareTitle} />
+            {/* №142 — замер спроса на сохранение результата */}
+            <SaveResultButton tool="ate-calculator" style={{ marginTop: 10 }} />
           </div>
 
           {/* ⭐⭐ Вход в конструктор — ВЫШЕ партнёрской карточки (решение

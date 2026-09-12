@@ -35,6 +35,7 @@ import type {
 import { buildReport, resultFingerprint, stampTime } from '../lib/classifier/report'
 import MixtureReport, { Picto } from './MixtureReport'
 import { labelMakerHref } from '../lib/labelMakerLink'
+import SaveResultButton from './SaveResultButton'
 
 /* ── контракт с Function ─────────────────────────────────────────────────── */
 
@@ -1537,6 +1538,8 @@ export default function MixtureClassifier({ registry, pictograms }: Props) {
                 <button type="button" className="mx-btn" onClick={makeShareLink} disabled={shareBusy || !lastBody}>
                   {shareBusy ? 'Creating…' : shareCopied ? 'Link copied' : 'Share link'}
                 </button>
+                {/* №142 — замер спроса на сохранение; записка занимает всю строку под рядом кнопок */}
+                <SaveResultButton tool="clp-classifier" buttonClassName="mx-btn" style={{ display: 'contents' }} />
                 {labelHref && <a className="mx-btn label" href={labelHref}>Open in GHS Label Maker →</a>}
                 <button type="button" className="mx-btn" onClick={copySds}>
                   {copied ? 'Copied' : 'Copy for SDS Section 2'}
