@@ -1864,7 +1864,8 @@ function SupplierPairs({
             if (pairs.some((p) => p.classCode === cls && p.categoryCode === cat)) return
             onChange([...pairs, { classCode: cls, categoryCode: cat }], `${shortName(name)}: added ${cls} ${cat}`)
           }}>
-          <option value="">— category —</option>
+          {/* s88: заблокированный select читался как сломанный — подпись объясняет, чего он ждёт */}
+          <option value="">{cls ? '— category —' : '— choose a hazard class first —'}</option>
           {cats.map((c) => <option key={c.code} value={c.code}>{c.code}{c.h ? ` · ${c.h}` : ''}</option>)}
         </select>
       </div>
