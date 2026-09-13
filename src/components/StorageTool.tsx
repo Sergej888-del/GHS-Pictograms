@@ -51,14 +51,10 @@ import SaveResultButton from './SaveResultButton'
 import { logSearchMiss, cancelSearchMiss } from '../lib/toolSignals'
 
 // SDS Manager affiliate — the callout already tells the reader to verify against
-// the SDS; this link serves that exact moment. GA separates placements via the
-// affiliate_click `placement` param even though the fp_sid is shared with ATE.
+// the SDS; this link serves that exact moment. fp_sid is shared with ATE; since s89
+// (№144) GA4 affiliate_click comes from the delegated listener in GoogleAnalytics.astro
+// with placement = fp_sid and page = pathname — the page separates the two.
 const SDS_MANAGEMENT_URL = 'https://sdsmanager.com/us/sds-management?fpr=ghs3&fp_sid=gpmgmt'
-function track(event: string, params: Record<string, unknown>): void {
-  if (typeof window !== 'undefined' && typeof (window as any).gtag === 'function') {
-    ;(window as any).gtag('event', event, params)
-  }
-}
 
 interface SubstanceRow {
   id: string
@@ -780,7 +776,6 @@ export default function StorageTool() {
                 href={SDS_MANAGEMENT_URL}
                 target="_blank"
                 rel="sponsored nofollow noopener"
-                onClick={() => track('affiliate_click', { partner: 'sds_manager', placement: 'storage_tool' })}
               >
                 SDS Manager keeps them current and audit-ready&nbsp;†
               </a>

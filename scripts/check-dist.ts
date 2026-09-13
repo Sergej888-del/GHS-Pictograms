@@ -2983,6 +2983,51 @@ const CHECKS: Check[] = [
     },
   },
 
+  // ─────────────── №144: GA4 видит каждый партнёрский клик (session 89) ───────────────
+  // До s89 `affiliate_click` слали только четыре React-острова; статическая
+  // SdsManagerCard на ~4 400 страницах не слала ничего — GA4 показывал «2» при
+  // ~110 кликах в FirstPromoter. Теперь один делегированный слушатель в
+  // GoogleAnalytics.astro (a[href*="fpr=ghs3"] → placement = fp_sid, page).
+  // Сторож держит две вещи: слушатель стоит на каждой странице с партнёрской
+  // ссылкой (и на страницах островов, где ссылка живёт в JS), а в бандле
+  // островов события НЕТ — иначе клик считался бы дважды.
+  {
+    id: 'affiliate-ga4',
+    group: 'Affiliate',
+    title: 'Делегированный слушатель affiliate_click стоит везде, где есть партнёрская ссылка; в бандле дублей нет',
+    run: async () => {
+      const LISTENER = 'a[href*="fpr=ghs3"]'
+      const EVENT = "'affiliate_click'"
+      const SID = "searchParams.get('fp_sid')"
+      assertAscii('affiliate-ga4', [LISTENER, EVENT, SID])
+      const problems: string[] = []
+      let withLink = 0
+      let covered = 0
+      // Страницы островов: партнёрская ссылка лежит в _astro/*.js, в HTML её нет.
+      const ISLAND_PAGES = ['ghs-label-maker/index.html', 'pictogram-selector/index.html']
+      for (const { rel, html } of allPages()) {
+        const needs = html.includes('fpr=ghs3') || ISLAND_PAGES.includes(rel)
+        if (!needs) continue
+        withLink++
+        const hasListener = html.includes(LISTENER) && html.includes(EVENT) && html.includes(SID)
+        if (hasListener) covered++
+        else problems.push(`${rel}: партнёрская ссылка есть, слушателя affiliate_click нет`)
+      }
+      for (const isl of ISLAND_PAGES) if (!readPage(isl)) problems.push(`нет dist/${isl}`)
+      for (const { name, text } of assetFiles()) {
+        if (text.includes('affiliate_click')) problems.push(`${name}: остров шлёт affiliate_click сам — двойной счёт с делегированным слушателем`)
+      }
+      const ok = problems.length === 0
+      return {
+        id: 'affiliate-ga4',
+        group: 'Affiliate',
+        ok,
+        headline: ok ? `слушатель на ${covered} из ${withLink} страниц с партнёрской ссылкой, бандл чист` : `нарушений: ${problems.length}`,
+        detail: ok ? [`placement = fp_sid, page = путь; источник правды по партнёрке — FirstPromoter`] : problems.slice(0, 40),
+      }
+    },
+  },
+
   // ─────────────── SDS sections: /sds-sections/ (session 31) ───────────────
   // Раздел построен из контент-коллекции, а выпадашка веществ — из живой базы.
   // Поэтому проверок две породы: набор страниц сверяется с прозой на диске,

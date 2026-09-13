@@ -1299,9 +1299,6 @@ export default function GHSLabelConstructor({
       setDownloadError(`Sheet PDF could not be generated: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
-  const trackSdsAffiliateClick = () =>
-    track('affiliate_click', { partner: 'sds_manager', placement: 'label_constructor', cas: entryCas })
-
   // ── Логотип ───────────────────────────────────────────────────────────────
   const MAX_LOGO_DIM = 600
   const processLogoFile = (file: File) => {
@@ -2680,7 +2677,6 @@ export default function GHSLabelConstructor({
                     href="https://sdsmanager.com/us/sds-authoring?fpr=ghs3&fp_sid=gpauth"
                     target="_blank"
                     rel="sponsored nofollow noopener"
-                    onClick={trackSdsAffiliateClick}
                     className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#f97316] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#ea670c]"
                   >
                     Create an SDS with SDS Manager †

@@ -125,11 +125,7 @@ const fmt = (n: number) => (n >= 100 ? n.toFixed(0) : n >= 1 ? n.toFixed(1) : n.
 // SDS Manager affiliate (results slot) — matches the GhsCalculator placement +
 // its registered fp_sid=gpauth so conversions land in the existing dashboard link.
 const SDS_AUTHORING_URL = 'https://sdsmanager.com/us/sds-authoring?fpr=ghs3&fp_sid=gpauth'
-function track(event: string, params: Record<string, unknown>): void {
-  if (typeof window !== 'undefined' && typeof (window as any).gtag === 'function') {
-    ;(window as any).gtag('event', event, params)
-  }
-}
+// GA4 affiliate_click шлёт делегированный слушатель в GoogleAnalytics.astro (s89, №144).
 
 export default function AteMixtureCalculator() {
   const [all, setAll] = useState<IndexedSub[]>([])
@@ -850,7 +846,6 @@ export default function AteMixtureCalculator() {
               href={SDS_AUTHORING_URL}
               target="_blank"
               rel="sponsored nofollow noopener"
-              onClick={() => track('affiliate_click', { partner: 'sds_manager', placement: 'ate_mixture_calculator' })}
               className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 hover:text-emerald-800"
             >
               Author the SDS with SDS Manager †

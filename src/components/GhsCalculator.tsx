@@ -734,10 +734,6 @@ export default function GhsCalculator({ code }: Props) {
     }
   };
 
-  const onAffiliateClick = () => {
-    track('affiliate_click', { partner: 'sds_manager', placement: 'ghs_calculator', code: upper, jurisdiction: jur });
-  };
-
   const toneCls = (tone?: string): string =>
     tone === 'danger'
       ? 'bg-rose-50 border-rose-200 text-rose-900'
@@ -899,7 +895,6 @@ export default function GhsCalculator({ code }: Props) {
                     href={SDS_AUTHORING_URL}
                     target="_blank"
                     rel="sponsored nofollow noopener"
-                    onClick={onAffiliateClick}
                     className="inline-flex items-center gap-1.5 mt-2 text-sm font-semibold text-emerald-700 hover:text-emerald-800"
                   >
                     Create an SDS with SDS Manager †

@@ -35,6 +35,27 @@
   gtag('js', new Date());
   gtag('config', 'G-7T76LL8ZF3');
 
+  // ---- Партнёрские клики → GA4 `affiliate_click` (session 89, №144) ------------
+  // Один делегированный слушатель на ВСЕ ссылки с fpr=ghs3 — и в статических
+  // карточках SdsManagerCard (~4 400 страниц), и в React-островах. До s89 событие
+  // слали только четыре острова, и GA4 показывал «2» при ~110 кликах в FirstPromoter.
+  // placement = fp_sid ссылки (тот же ключ, что в отчёте FirstPromoter), page = путь.
+  // Источник правды по партнёрке — по-прежнему FirstPromoter; это вторая линейка.
+  // Фаза capture: сработает и там, где островной обработчик остановит всплытие.
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    var a = t && t.closest ? t.closest('a[href*="fpr=ghs3"]') : null;
+    if (!a) return;
+    var sid = 'unknown';
+    try { sid = new URL(a.href).searchParams.get('fp_sid') || 'unknown'; } catch (err) {}
+    gtag('event', 'affiliate_click', {
+      partner: 'sds_manager',
+      placement: sid,
+      page: location.pathname,
+      link_url: a.href.split('?')[0]
+    });
+  }, true);
+
   // ---- Cookie consent banner -------------------------------------------------
   (function () {
     var KEY = 'ga-consent';
