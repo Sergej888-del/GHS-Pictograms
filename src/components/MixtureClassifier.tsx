@@ -36,6 +36,7 @@ import { buildReport, resultFingerprint, stampTime } from '../lib/classifier/rep
 import MixtureReport, { Picto } from './MixtureReport'
 import { labelMakerHref } from '../lib/labelMakerLink'
 import { logSearchMiss, cancelSearchMiss } from '../lib/toolSignals'
+import { getTurnstileToken } from '../lib/turnstile'
 import SaveResultButton from './SaveResultButton'
 
 /* ── контракт с Function ─────────────────────────────────────────────────── */
@@ -628,10 +629,14 @@ export default function MixtureClassifier({ registry, pictograms }: Props) {
     try {
       const body = override ?? buildBody()
 
+      // №120: одноразовый токен Turnstile на каждый расчёт — сервер проверяет его
+      // в verifyTurnstile() ДО лимита по IP. Сам body не меняется (его отпечаток
+      // и короткая ссылка считаются без токена).
+      const turnstileToken = await getTurnstileToken()
       const res = await fetch('/api/classify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, turnstileToken }),
       })
       const data = await res.json()
       if (data.rateLimit) setRate(data.rateLimit)

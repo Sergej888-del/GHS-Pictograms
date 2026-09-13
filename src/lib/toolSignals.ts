@@ -1,10 +1,14 @@
 // toolSignals — общий слой сигналов от инструментов (session 88).
 //
 // Три сигнала, одна таблица на каждый, один паттерн: закрытая таблица + RPC
-// SECURITY DEFINER с лимитом на visitor_id в сутки (scripts/sql/88-*, 89-*):
-//   • record_feature_interest — клик «Save this result» (№142, замер спроса);
-//   • record_tool_feedback    — форма пожеланий (чекбоксы + текст + email);
-//   • record_search_miss      — «искал вещество и не нашёл» (пассивный сигнал).
+// SECURITY DEFINER с лимитом на visitor_id в сутки (scripts/sql/88-*, 89-*).
+//   • save     — клик «Save this result» (№142, замер спроса);
+//   • feedback — форма пожеланий (чекбоксы + текст + email);
+//   • miss     — «искал вещество и не нашёл» (пассивный сигнал).
+//
+// ⚠ С №120 (s88) сигналы НЕ зовут RPC напрямую: браузер → POST /api/signal
+// (functions/api/signal.ts) → Turnstile → лимит по IP → RPC service-ключом.
+// У anon EXECUTE на трёх RPC отозван — прямой вызов из браузера вернёт 42501.
 //
 // ⚠ Источник правды — база, не GA4 (s86: GA4 показал 2 партнёрских клика
 // против ~110 в FirstPromoter). GA4-события шлются параллельно как вторая линейка.
@@ -13,7 +17,7 @@
 // УНИКАЛЬНЫЕ люди, а не клики. Без localStorage (приватное окно) — UUID на сессию.
 // Ничего личного в нём нет, и ни с чем он не связан.
 
-import { supabase } from './supabase'
+import { getTurnstileToken } from './turnstile'
 
 const VISITOR_KEY = 'ghsp_visitor'
 let sessionVisitor: string | null = null
@@ -52,11 +56,24 @@ export function track(event: string, params: Record<string, unknown>): void {
   if (typeof g === 'function') g('event', event, params)
 }
 
-async function rpc(name: string, args: Record<string, unknown>): Promise<boolean> {
+type Kind = 'save' | 'feedback' | 'miss'
+
+/**
+ * Одна отправка = один свежий токен Turnstile (одноразовый) + один POST.
+ * Ответ `ok` означает, что функция приняла и RPC отработал; `counted:false`
+ * (лимит/дубль) — тоже ok: сигнал был, просто не учтён второй раз.
+ */
+async function signal(kind: Kind, payload: Record<string, unknown>): Promise<boolean> {
   try {
-    const { data, error } = await supabase.rpc(name, args)
-    if (error) return false
-    return !!(data && (data as { ok?: boolean }).ok)
+    const turnstileToken = await getTurnstileToken()
+    const res = await fetch('/api/signal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind, turnstileToken, visitor: visitorId(), page: pagePath(), ...payload }),
+    })
+    if (!res.ok) return false
+    const data = (await res.json().catch(() => null)) as { ok?: boolean; result?: { ok?: boolean } } | null
+    return !!(data && data.ok && data.result && data.result.ok)
   } catch {
     return false
   }
@@ -64,25 +81,12 @@ async function rpc(name: string, args: Record<string, unknown>): Promise<boolean
 
 /** Клик «Save this result» — одна строка на клик, ≤ 5 на посетителя в сутки (в RPC). */
 export function recordSaveClick(tool: string): Promise<boolean> {
-  return rpc('record_feature_interest', {
-    p_feature: 'save_result',
-    p_tool: tool,
-    p_page: pagePath(),
-    p_visitor: visitorId(),
-    p_email: null,
-  })
+  return signal('save', { tool })
 }
 
 /** Форма пожеланий — ≤ 3 на посетителя в сутки; хотя бы одно из wants / comment / email. */
 export function recordToolFeedback(tool: string, wants: string[], comment: string, email: string): Promise<boolean> {
-  return rpc('record_tool_feedback', {
-    p_tool: tool,
-    p_page: pagePath(),
-    p_visitor: visitorId(),
-    p_wants: wants,
-    p_comment: comment.trim() || null,
-    p_email: email.trim() || null,
-  })
+  return signal('feedback', { tool, wants, comment: comment.trim() || null, email: email.trim() || null })
 }
 
 /**
@@ -109,7 +113,7 @@ export function logSearchMiss(tool: string, query: string): void {
   const t = window.setTimeout(() => {
     missTimers.delete(tool)
     missSent.set(tool, norm)
-    void rpc('record_search_miss', { p_tool: tool, p_query: q, p_visitor: visitorId(), p_page: pagePath() })
+    void signal('miss', { tool, query: q })
     track('search_miss', { tool, query_length: q.length })
   }, 900)
   missTimers.set(tool, t)

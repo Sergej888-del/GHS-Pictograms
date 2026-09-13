@@ -3988,24 +3988,27 @@ const CHECKS: Check[] = [
       }
       if (found.length < 7) problems.push(`островов с рядом Download/Share найдено ${found.length}, ожидалось ≥ 7: ${found.join(', ')}`)
       const assets = assetFiles()
-      const withRpc = assets.filter((a) => a.text.includes('record_feature_interest')).length
+      // №120 (s88): сигналы идут через /api/signal, имён RPC в бандле быть НЕ должно —
+      // их присутствие означало бы прямой вызов из браузера в обход Turnstile.
+      const withRpc = assets.filter((a) => a.text.includes('/api/signal')).length
       const withMark = assets.filter((a) => a.text.includes('data-save-result')).length
-      const withFeedback = assets.filter((a) => a.text.includes('record_tool_feedback')).length
+      const withFeedback = assets.filter((a) => a.text.includes('"feedback"') || a.text.includes("'feedback'")).length
       const withSuggest = assets.filter((a) => a.text.includes('data-suggest-feature')).length
+      const leaked = assets.filter((a) => /record_feature_interest|record_tool_feedback|record_search_miss/.test(a.text)).map((a) => a.name)
       if (assets.length === 0) problems.push('dist/_astro пуст — бандл не собран')
       else {
-        if (withRpc === 0) problems.push('ни один dist/_astro/*.js не вызывает record_feature_interest')
+        if (withRpc === 0) problems.push('ни один dist/_astro/*.js не зовёт /api/signal')
         if (withMark === 0) problems.push('ни один dist/_astro/*.js не несёт data-save-result')
-        // s88, форма пожеланий (C): панель и её RPC едут тем же компонентом
-        if (withFeedback === 0) problems.push('ни один dist/_astro/*.js не вызывает record_tool_feedback')
+        if (withFeedback === 0) problems.push('ни один dist/_astro/*.js не отправляет сигнал feedback')
         if (withSuggest === 0) problems.push('ни один dist/_astro/*.js не несёт data-suggest-feature (ссылка «Suggest a feature»)')
+        if (leaked.length) problems.push(`имя RPC сигналов в бандле — прямой вызов в обход /api/signal: ${leaked.join(', ')}`)
       }
       return {
         id: 'save-result',
         group: 'Tools',
         ok: problems.length === 0,
         headline: problems.length === 0
-          ? `кнопка в ${found.length} островах (${[...keys.keys()].join(', ')}), в бандле: RPC ${withRpc}/${withFeedback}, маркеры ${withMark}/${withSuggest}`
+          ? `кнопка в ${found.length} островах (${[...keys.keys()].join(', ')}), в бандле: /api/signal ${withRpc}, feedback ${withFeedback}, маркеры ${withMark}/${withSuggest}, имён RPC нет`
           : `проблем: ${problems.length}`,
         detail: problems,
       }
@@ -4035,14 +4038,60 @@ const CHECKS: Check[] = [
       }
       if (found.length < 6) problems.push(`островов с поиском найдено ${found.length}, ожидалось ≥ 6: ${found.join(', ')}`)
       const assets = assetFiles()
-      const withRpc = assets.filter((a) => a.text.includes('record_search_miss')).length
+      // №120: промах уходит как сигнал 'miss' в /api/signal, а не прямым RPC
+      const withRpc = assets.filter((a) => a.text.includes('/api/signal') && (a.text.includes('"miss"') || a.text.includes("'miss'"))).length
       if (assets.length === 0) problems.push('dist/_astro пуст — бандл не собран')
-      else if (withRpc === 0) problems.push('ни один dist/_astro/*.js не вызывает record_search_miss')
+      else if (withRpc === 0) problems.push('ни один dist/_astro/*.js не отправляет сигнал miss в /api/signal')
       return {
         id: 'search-miss',
         group: 'Tools',
         ok: problems.length === 0,
-        headline: problems.length === 0 ? `логируют ${found.length} островов (${found.join(', ')}), бандлов с RPC: ${withRpc}` : `проблем: ${problems.length}`,
+        headline: problems.length === 0 ? `логируют ${found.length} островов (${found.join(', ')}), бандлов с сигналом miss: ${withRpc}` : `проблем: ${problems.length}`,
+        detail: problems,
+      }
+    },
+  },
+
+  // ─────────────────── №120 Turnstile: виджет в бандле, RPC сигналов закрыты для anon ──
+  //
+  // Две половины одного замка. (1) Бандл: клиентский слой Turnstile должен уехать
+  // в сборку вместе с ключом сайта — иначе сервер с TURNSTILE_SECRET отвечает 403 на
+  // каждый расчёт и каждый сигнал. (2) База: три RPC сигналов обязаны отвечать anon
+  // 42501 — проверяется ЖИВЫМ вызовом anon-ключом, которым и работает этот скрипт
+  // (постоянный visitor-пробник; при 42501 ни одна строка не пишется).
+  {
+    id: 'turnstile-gate',
+    group: 'Tools',
+    title: 'Turnstile: скрипт и ключ сайта в бандле; RPC сигналов не вызываются anon-ключом',
+    run: async () => {
+      const problems: string[] = []
+      const assets = assetFiles()
+      const siteKey = process.env.PUBLIC_TURNSTILE_SITE_KEY ?? ''
+      const withScript = assets.filter((a) => a.text.includes('challenges.cloudflare.com/turnstile')).length
+      if (assets.length === 0) problems.push('dist/_astro пуст — бандл не собран')
+      else {
+        if (withScript === 0) problems.push('ни один dist/_astro/*.js не подгружает challenges.cloudflare.com/turnstile')
+        if (!siteKey) problems.push('PUBLIC_TURNSTILE_SITE_KEY не задан в .env.local — сборка без ключа, сервер с секретом ответит 403')
+        else if (!assets.some((a) => a.text.includes(siteKey))) problems.push('ключ сайта из .env.local не найден ни в одном dist/_astro/*.js')
+      }
+      const probe = '00000000-0000-4000-8000-00000000c0de'
+      const calls: Array<[string, Record<string, unknown>]> = [
+        ['record_search_miss', { p_tool: 'guard', p_query: 'guard probe', p_visitor: probe, p_page: null }],
+        ['record_feature_interest', { p_feature: 'save_result', p_tool: 'guard', p_page: null, p_visitor: probe, p_email: null }],
+        ['record_tool_feedback', { p_tool: 'guard', p_page: null, p_visitor: probe, p_wants: ['api'], p_comment: null, p_email: null }],
+      ]
+      const open: string[] = []
+      for (const [name, args] of calls) {
+        const { error } = await supabase.rpc(name, args)
+        if (!error) open.push(`${name}: anon ВЫЗВАЛ функцию — RPC открыт в обход /api/signal (и записал пробную строку visitor …c0de)`)
+        else if (error.code !== '42501') open.push(`${name}: ожидался 42501, получено ${error.code} ${error.message}`)
+      }
+      problems.push(...open)
+      return {
+        id: 'turnstile-gate',
+        group: 'Tools',
+        ok: problems.length === 0,
+        headline: problems.length === 0 ? `скрипт Turnstile в ${withScript} бандлах, ключ сайта на месте; три RPC сигналов → 42501 для anon` : `проблем: ${problems.length}`,
         detail: problems,
       }
     },
