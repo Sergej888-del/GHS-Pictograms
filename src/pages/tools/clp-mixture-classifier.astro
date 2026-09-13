@@ -164,6 +164,11 @@ const registry = catalog.map((c) => ({
     // классификацию, которой в его юрисдикции не существует. Движок их
     // принимает — ограничение здесь сознательное, а не техническое.
     .filter((m) => m.clp_status !== 'not_in_clp')
+    // ⚠ Одна категория — одна строка выбора. В mapping категория с двумя
+    // пиктограммами лежит ДВУМЯ строками (Org. Perox. / Self-react. Type B:
+    // GHS01 + GHS02) — без склейки «Type B · H241» стояло в списке дважды (s88).
+    // Берётся первая строка; список пиктограмм отчёта считает движок, не этот выбор.
+    .filter((m, i, all) => all.findIndex((x) => x.category_code === m.category_code) === i)
     .map((m) => ({
       code: m.category_code,
       h: m.h_statement_code,
