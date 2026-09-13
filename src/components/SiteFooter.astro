@@ -7,6 +7,7 @@
 // довод, что в шапке и в sitemap. До session 45 на весь раздел из четырнадцати
 // страниц в подвале стояла одна ссылка — на хаб.
 import { BRANCHES } from '../lib/labelMakerHub'
+import { AUTHOR_LINKEDIN } from '../lib/siteIdentity'
 ---
 
 <footer class="sf-footer">
@@ -65,6 +66,7 @@ import { BRANCHES } from '../lib/labelMakerHub'
     <div class="sf-col">
       <p class="head">Site</p>
       <a href="/about/">About</a>
+      <a href={AUTHOR_LINKEDIN} rel="me noopener" target="_blank">LinkedIn</a>
       <a href="/blog/">Blog</a>
       <a href="/faq/">FAQ</a>
       <a href="/privacy/">Privacy policy</a>

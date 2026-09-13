@@ -69,6 +69,7 @@ import { casShapeOk, ecShapeOk, indexShapeOk } from '../src/lib/substanceIdentif
 import { substanceSlug, casFromSlug } from '../src/lib/substanceSlug'
 import { substanceIndexable, substanceIndexableCount, SUBSTANCE_INDEX_GATE } from '../src/lib/substanceIndexGate'
 import { buildFacts, formatFact, LCSS_FACT_RULE } from '../src/lib/lcssFacts'
+import { AUTHOR_NAME, AUTHOR_LINKEDIN } from '../src/lib/siteIdentity'
 import type { LcssRecord } from '../src/lib/lcssProperties'
 // ⚠⚠ Раскладка «код знака → файл» берётся ИЗ ТОГО ЖЕ модуля, что и страница.
 // Списать сюда список кодов — значит завести вторую копию словаря, которая
@@ -3857,8 +3858,10 @@ const CHECKS: Check[] = [
       const html = readPage('about/index.html')
       if (!html) return { id: 'about-page', group: 'About', ok: false, headline: 'нет dist/about/index.html', detail: [] }
       const need: [string, string][] = [
-        ['Sergejs Sevcenko', 'имя автора'],
+        [AUTHOR_NAME, 'имя автора'],
         ['SIA Basis Assets', 'компания'],
+        [`"sameAs":[${JSON.stringify(AUTHOR_LINKEDIN)}]`, 'JSON-LD Person.sameAs → LinkedIn'],
+        [`href="${AUTHOR_LINKEDIN}" rel="me noopener"`, 'ссылка на LinkedIn в тексте (rel=me)'],
         ['mailto:hello@ghspictograms.com', 'контакт'],
         ['"@type":"AboutPage"', 'JSON-LD AboutPage'],
         ['"@type":"Organization"', 'JSON-LD Organization'],
@@ -3871,6 +3874,7 @@ const CHECKS: Check[] = [
       const missing = need.filter(([m]) => !html.includes(m)).map(([m, why]) => `${why}: ${JSON.stringify(m)}`)
       const footerHome = readPage('index.html') ?? ''
       if (!footerHome.includes('href="/about/"')) missing.push('в подвале главной нет ссылки href="/about/"')
+      if (!footerHome.includes(`href="${AUTHOR_LINKEDIN}" rel="me noopener"`)) missing.push('в подвале главной нет ссылки на LinkedIn (rel=me)')
       // ⚠ Шапка: и десктопная навигация, и мобильная панель — две ссылки, не одна.
       if ((footerHome.match(/href="\/about\/"/g) ?? []).length < 3) missing.push('в шапке главной (десктоп + мобильная панель) нет ссылок на /about/')
       const sitemap = existsSync(join(DIST, 'sitemap.xml')) ? readFileSync(join(DIST, 'sitemap.xml'), 'utf8') : ''

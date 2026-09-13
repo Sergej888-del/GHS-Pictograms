@@ -11,6 +11,7 @@ import {
   ERRATA_COUNT, SUBMISSION, ERRATA_INDEX_NUMBERS, erratumLanguages, erratumStatus,
 } from '../lib/annex6Errata'
 import { LCSS_FACT_RULE } from '../lib/lcssFacts'
+import { AUTHOR_NAME, AUTHOR_LINKEDIN, AUTHOR_SAME_AS } from '../lib/siteIdentity'
 
 export const prerender = true
 
@@ -48,10 +49,11 @@ const jsonLd = {
     founder: {
       '@type': 'Person',
       '@id': 'https://ghspictograms.com/about/#founder',
-      name: 'Sergejs Sevcenko',
+      name: AUTHOR_NAME,
       jobTitle: 'Founder',
       worksFor: { '@id': 'https://ghspictograms.com/#organization' },
       email: CONTACT,
+      sameAs: AUTHOR_SAME_AS,
     },
   },
 }
@@ -91,6 +93,8 @@ const jsonLd = {
           <strong>SIA Basis Assets</strong>. There is no editorial team behind it: every tool,
           every data import and every mistake here is mine, which is also why the site is
           explicit about where its data comes from and what it does not attempt.
+          You can find me on
+          <a href={AUTHOR_LINKEDIN} rel="me noopener" target="_blank" class="text-[#062A78] font-semibold hover:underline">LinkedIn</a>.
         </p>
       </section>
 
