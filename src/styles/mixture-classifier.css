@@ -331,6 +331,14 @@ details.mx-panel.help[open] .mx-panel-head.as-button .a { transform: rotate(180d
 .mx-hint { margin: 6px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-3); }
 .mx-note { margin: 8px 0 0; font-size: 12px; line-height: 1.55; color: var(--ink-3); }
 .mx-note.err { color: var(--verdict-never-ink); }
+.mx-note.ok { color: #065f46; }
+/* s88: карточка только что добавленного ингредиента — короткая подсветка, чтобы «+ From supplier SDS» отвечал глазу */
+.mx-ing.flash { animation: mx-ing-flash 1.8s ease-out; }
+@keyframes mx-ing-flash {
+  0%   { box-shadow: 0 0 0 3px rgba(13, 148, 136, .55); background: #ecfdf5; }
+  100% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0); background: #ffffff; }
+}
+@media (prefers-reduced-motion: reduce) { .mx-ing.flash { animation: none; box-shadow: 0 0 0 2px rgba(13, 148, 136, .5); } }
 
 /* Сегменты — состояние и форма: выбор из трёх, а не список из трёх. */
 .mx-seg { display: flex; gap: 6px; }

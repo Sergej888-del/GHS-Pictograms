@@ -384,6 +384,8 @@ export default function MixtureClassifier({ registry, pictograms }: Props) {
   const [remainderStated, setRemainderStated] = useState(false)
 
   const [query, setQuery] = useState('')
+  /** Что только что добавили в состав — чтобы кнопка «+ …» отвечала на месте, а не только в списке ниже (s88). */
+  const [added, setAdded] = useState<{ key: string; text: string } | null>(null)
   const [candidates, setCandidates] = useState<LookupCandidate[]>([])
   const [profiles, setProfiles] = useState<Record<string, Profile>>({})
   const [searching, setSearching] = useState(false)
@@ -489,26 +491,48 @@ export default function MixtureClassifier({ registry, pictograms }: Props) {
   })
 
   const addAnnex6 = (c: LookupCandidate) => {
-    setRows((r) => [...r, blank({
+    const row = blank({
       source: 'annex6', indexNumber: c.indexNumber, name: c.name,
       cas: c.casPrimary, ec: c.ecPrimary,
       profile: profiles[c.indexNumber] ?? null, formsSharingCas: c.formsSharingCas,
-    })])
+    })
+    setRows((r) => [...r, row])
     note(`added ${shortName(c.name)} (${c.indexNumber})`)
+    setAdded({ key: row.key, text: `Added ${shortName(c.name)} (${c.indexNumber}) to the composition below — enter its concentration.` })
     setQuery(''); setCandidates([])
   }
 
   const addSupplier = (name: string, withPairs: boolean) => {
-    setRows((r) => [...r, blank({
+    const row = blank({
       source: 'supplier', name,
       // ⚠ Вне Annex VI по умолчанию «данные есть, не классифицирован» — иначе
       // вода в каждом рецепте попадала бы в Σ C(unknown) и запускала коррекцию
       // 3.1.3.6.2.3 на пустом месте (урок аудита №100). Флаг виден и снимается.
       knownNonhazard: !withPairs,
-    })])
+    })
+    setRows((r) => [...r, row])
     note(`added ${shortName(name)} as a supplier entry`)
+    setAdded({
+      key: row.key,
+      text: withPairs
+        ? `Added ${shortName(name)} to the composition below — enter its concentration and the classification from section 2 of the supplier's SDS.`
+        : `Added ${shortName(name)} to the composition below as a known non-hazardous ingredient — enter its concentration.`,
+    })
     setQuery(''); setCandidates([])
   }
+
+  // Ответ на месте клика: прокрутить к новой карточке, подсветить, через 6 с строку убрать.
+  useEffect(() => {
+    if (!added) return
+    const el = document.querySelector<HTMLElement>(`[data-ing-key="${added.key}"]`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      el.classList.add('flash')
+      window.setTimeout(() => el.classList.remove('flash'), 1800)
+    }
+    const t = window.setTimeout(() => setAdded(null), 6000)
+    return () => window.clearTimeout(t)
+  }, [added])
 
   const patch = (key: string, next: Partial<Row>) => {
     setRows((r) => r.map((x) => (x.key === key ? { ...x, ...next } : x)))
@@ -1140,6 +1164,12 @@ export default function MixtureClassifier({ registry, pictograms }: Props) {
                     </p>
                   )}
 
+                  {added && (
+                    <p className="mx-note ok" role="status" data-added-note="">
+                      {added.text}
+                    </p>
+                  )}
+
                   <div className="mx-btns">
                     <button type="button" className="mx-btn" onClick={() => addSupplier(query.trim() || 'Supplier ingredient', true)}>
                       + From supplier SDS
@@ -1692,7 +1722,7 @@ function IngredientCard({
   const longName = r.name.length > 48
 
   return (
-    <div className="mx-ing">
+    <div className="mx-ing" data-ing-key={r.key}>
       <div className="mx-ing-top">
         <div className="mx-ing-id">
           {r.source === 'supplier'
