@@ -22,7 +22,7 @@ import Layout from '../../layouts/Layout.astro';
 import { PILLAR_BY_SLUG, pillarAccentStyle } from '../../lib/complianceHub';
 import {
   ERRATUM_LEAD, ERRATA_COUNT, SUBMISSION, ACKNOWLEDGEMENT, humanDate,
-  erratumStatus, erratumStatusLabel, erratumFor, erratumCitation,
+  erratumStatus, erratumStatusLabel, erratumFor, erratumCitation, erratumSourceUrl,
   type ErratumKind,
 } from '../../lib/annex6Errata';
 import dossier from '../../data/errata-dossier.json';
@@ -43,7 +43,7 @@ const findings = dossier.map((f) => {
   const e = erratumFor(f.index, f.lang);
   if (!e) throw new Error(`Досье знает ${f.index} · ${f.lang}, а annex6Errata — нет.`);
   if (e.note !== f.note) throw new Error(`Свидетельство разошлось у ${f.index} · ${f.lang}.`);
-  return { ...f, kind: e.kind as ErratumKind, citation: erratumCitation(e), status: erratumStatus(f.index, f.lang) };
+  return { ...f, kind: e.kind as ErratumKind, citation: erratumCitation(e), sourceUrl: erratumSourceUrl(e, f.lang), status: erratumStatus(f.index, f.lang) };
 });
 if (findings.length !== ERRATA_COUNT) {
   throw new Error(`В досье ${findings.length} находок, в модуле ${ERRATA_COUNT}.`);
@@ -197,7 +197,7 @@ const jsonLd = {
               </p>
 
               <div class="err-foot">
-                <span class="cite">{f.citation}</span>
+                <a class="cite" href={f.sourceUrl} target="_blank" rel="noopener" title={`Open the ${LANG_NAME[f.lang] ?? f.lang} edition on EUR-Lex`}>{f.citation}</a>
                 <span>{erratumStatusLabel(f.status)}</span>
                 {/* ⚠⚠ ССЫЛКА ИДЁТ ПО CAS, А НЕ ПО ИНДЕКСНОМУ НОМЕРУ. Поиск на
                     /substances/ ведёт Fuse.js по полям `cas_number`,
@@ -247,7 +247,7 @@ const jsonLd = {
         </p>
         <p class="hub-fine">
           There is precedent for the correction of exactly this kind of mistake.
-          Corrigendum 32018R0669R(01) (OJ L 233, 10.9.2019, p. 26) corrected the name of entry
+          <a href="https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32018R0669R(01)" target="_blank" rel="noopener">Corrigendum 32018R0669R(01)</a> (OJ L 233, 10.9.2019, p. 26) corrected the name of entry
           015-011-00-6 in the French edition, on page 42 of OJ L 115. The Polish mistake in the
           same entry is on the same page 42 and has not been corrected.
         </p>

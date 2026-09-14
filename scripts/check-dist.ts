@@ -4166,6 +4166,12 @@ const CHECKS: Check[] = [
       for (const m of ['href="/data/annex6-errata.csv"', 'href="/data/annex6-errata.json"', 'mailto:hello@ghspictograms.com', 'href="/about/"']) {
         if (!html.includes(m)) problems.push(`нет ${m}`)
       }
+      // Session 89: у каждой находки — ссылка на EUR-Lex в ЕЁ языковой редакции (Rob Toreki, ILPI,
+      // спросил «official EU link for the document versions» — до этого была только полоса ОЖ).
+      const EURLEX = 'href="https://eur-lex.europa.eu/legal-content/'
+      const eurlexLinks = html.split(EURLEX).length - 1
+      if (eurlexLinks < ERRATA_COUNT + 1) problems.push(`ссылок на EUR-Lex ${eurlexLinks}, ожидалось ≥ ${ERRATA_COUNT + 1} (по одной на находку + корриджендум R(01))`)
+      if (!html.includes('uri=CELEX:32018R0669R(01)')) problems.push('нет ссылки на корриджендум 32018R0669R(01)')
       // Файлы данных: те же ERRATA_COUNT строк, что на странице.
       const jsonAbs = join(DIST, 'data', 'annex6-errata.json')
       if (!existsSync(jsonAbs)) problems.push('нет dist/data/annex6-errata.json')
@@ -4174,6 +4180,9 @@ const CHECKS: Check[] = [
           const j = JSON.parse(readFileSync(jsonAbs, 'utf8')) as { count?: number; findings?: unknown[]; acknowledgement?: { ref?: string } }
           if (!Array.isArray(j.findings) || j.findings.length !== ERRATA_COUNT) problems.push(`в JSON ${j.findings?.length ?? 'нет'} находок, ожидалось ${ERRATA_COUNT}`)
           if (j.acknowledgement?.ref !== ACKNOWLEDGEMENT.ref) problems.push('в JSON нет ссылки на обращение Бюро')
+          const rows = (j.findings ?? []) as { act?: string; language?: string; eur_lex_url?: string }[]
+          const badUrl = rows.filter((r) => !r.eur_lex_url || !r.eur_lex_url.startsWith('https://eur-lex.europa.eu/legal-content/') || !r.eur_lex_url.endsWith(`CELEX:${r.act}`) || !r.eur_lex_url.includes(`/${r.language}/`))
+          if (badUrl.length > 0) problems.push(`в JSON ${badUrl.length} находок без верного eur_lex_url (язык + CELEX акта)`)
         } catch (e) {
           problems.push(`JSON не разбирается: ${(e as Error).message}`)
         }
@@ -4186,6 +4195,7 @@ const CHECKS: Check[] = [
         //   если ни одно свидетельство не содержит перевода строки. Проверяем не меньше.
         if (lines.length < ERRATA_COUNT + 1) problems.push(`в CSV ${lines.length} строк, ожидалось ≥ ${ERRATA_COUNT + 1}`)
         if (!lines[0].replace(/^\uFEFF/, '').startsWith('index_number,language,kind')) problems.push('в CSV нет ожидаемого заголовка')
+        if (!lines[0].includes(',eur_lex_url,')) problems.push('в CSV нет столбца eur_lex_url')
       }
       return {
         id: 'errata-press-kit',

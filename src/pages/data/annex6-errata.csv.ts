@@ -9,7 +9,7 @@ export const prerender = true
 
 const COLS = [
   'index_number', 'language', 'kind', 'published_name', 'english_name', 'ec', 'cas',
-  'belongs_to_entry', 'note', 'act', 'oj_page', 'citation', 'status', 'status_date',
+  'belongs_to_entry', 'note', 'act', 'oj_page', 'citation', 'eur_lex_url', 'status', 'status_date',
 ] as const
 
 /** RFC 4180: кавычки удваиваются, поле с запятой/кавычкой/переводом строки берётся в кавычки. */

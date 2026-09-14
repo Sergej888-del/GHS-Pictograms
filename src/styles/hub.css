@@ -3936,7 +3936,8 @@ a.sub-alpha-item:hover { border-color: var(--teal-200); background: var(--teal-5
   color: var(--ink-3);
 }
 
-.err-foot .cite { color: var(--acc-ink, var(--ink-2)); font-weight: 600; }
+.err-foot .cite { color: var(--acc-ink, var(--ink-2)); font-weight: 600; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 2px; }
+.err-foot .cite:hover { text-decoration-color: currentColor; }
 
 /* ⚠ Замечено отрисовкой session 60: ссылка в подвале карточки наследовала
    серый цвет подвала и читалась как обычный текст. */

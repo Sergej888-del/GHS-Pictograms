@@ -9,7 +9,7 @@
  * у страницы: свидетельство из досье ≠ свидетельству из модуля → сборка падает.
  */
 import dossier from '../data/errata-dossier.json'
-import { ERRATA_COUNT, erratumFor, erratumStatus } from './annex6Errata'
+import { ERRATA_COUNT, erratumFor, erratumSourceUrl, erratumStatus } from './annex6Errata'
 
 export type ErratumExport = {
   index_number: string
@@ -24,6 +24,7 @@ export type ErratumExport = {
   act: string
   oj_page: number
   citation: string
+  eur_lex_url: string
   status: string
   status_date: string | null
 }
@@ -47,6 +48,7 @@ export function errataRows(): ErratumExport[] {
       act: f.act,
       oj_page: f.page,
       citation: f.citation,
+      eur_lex_url: erratumSourceUrl(e, f.lang),
       status: st.kind === 'corrected' ? 'corrected' : st.kind === 'submitted' ? 'reported' : 'not reported',
       status_date: st.kind === 'submitted' ? st.date : null,
     }

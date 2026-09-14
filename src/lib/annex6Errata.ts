@@ -614,6 +614,18 @@ export const ERRATA_TABLE_NOTE =
  * запись из акта старой нумерации — разбор надо будет расширить, и молчать об
  * этом нельзя: цитата с неверным номером хуже отсутствующей.
  */
+/**
+ * Адрес акта на EUR-Lex В РЕДАКЦИИ НАХОДКИ — чтобы читатель открыл ровно ту
+ * языковую версию, где напечатана ошибка, и пошёл на полосу из `source.page`.
+ * Session 89: Rob Toreki (ILPI) спросил «official EU link for the document
+ * versions» — до этого страница давала только номер полосы, без ссылки.
+ * Схема `legal-content/{LANG}/TXT/?uri=CELEX:{act}` устойчива для всех
+ * 24 языков; ELI (`/eli/reg/2018/669/oj`) даёт только выбор языка.
+ */
+export function erratumSourceUrl(e: Erratum, lang: string): string {
+  return `https://eur-lex.europa.eu/legal-content/${lang.toUpperCase()}/TXT/?uri=CELEX:${e.source.act}`;
+}
+
 export function erratumCitation(e: Erratum): string {
   const m = /^3(\d{4})R(\d{4})$/.exec(e.source.act);
   const act = m
