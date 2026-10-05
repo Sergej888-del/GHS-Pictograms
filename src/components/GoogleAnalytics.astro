@@ -56,6 +56,23 @@
     });
   }, true);
 
+  // ---- Directory: clicks to a vendor's website -> GA4 `directory_outbound` (s92, No.148)
+  // One delegated listener for every "Vendor website" link on /directory/ (category cards and
+  // entry pages). vendor = listing slug, the number a vendor can be shown: "we sent you N visitors".
+  // An SDS Manager link fires affiliate_click as well - two rulers, FirstPromoter stays the truth.
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    var a = t && t.closest ? t.closest('a[data-dir-out]') : null;
+    if (!a) return;
+    gtag('event', 'directory_outbound', {
+      vendor: a.getAttribute('data-dir-out') || 'unknown',
+      category: a.getAttribute('data-dir-cat') || 'unknown',
+      tier: a.getAttribute('data-dir-tier') || 'unknown',
+      page: location.pathname,
+      link_url: a.href.split('?')[0]
+    });
+  }, true);
+
   // ---- Cookie consent banner -------------------------------------------------
   (function () {
     var KEY = 'ga-consent';

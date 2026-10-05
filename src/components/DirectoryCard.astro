@@ -281,7 +281,7 @@ const hasDetails =
     <span class="dir-status">{e.tier === 'listed' ? LISTED_NOTE : CLAIMED_NOTE} Last verified {verified}.</span>
     <span class="dir-links">
       {outboundHref && !closed && (
-        <a class="dir-out" href={outboundHref} rel={outboundRel} target="_blank">Vendor website ↗</a>
+        <a class="dir-out" href={outboundHref} rel={outboundRel} target="_blank" data-dir-out={e.slug} data-dir-cat={e.category} data-dir-tier={e.tier}>Vendor website ↗</a>
       )}
       {variant === 'compact' && <a href={entryHref(e)}>Details · claim or correct</a>}
     </span>

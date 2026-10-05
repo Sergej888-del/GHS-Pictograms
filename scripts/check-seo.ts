@@ -659,7 +659,7 @@ const CHECKS: Check[] = [
             : `noindex: ${list.length} страниц + ${gated.length} веществ под границей индексации`,
         detail: [
           ...(gated.length ? [`/substances/* под substanceIndexGate: ${gated.length} (см. check:dist subs-index-gate)`] : []),
-          ...(dirEntries.length ? [`/directory/<раздел>/<запись>/ до заявки владельца: ${dirEntries.length} (см. check:dist dir-entry-pages)`] : []),
+          ...(dirEntries.length ? [`/directory/<раздел>/<запись>/ тонкие и закрытые: ${dirEntries.length} (см. check:dist dir-entry-pages)`] : []),
           ...preview(list, 20),
         ],
       }

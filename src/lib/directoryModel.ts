@@ -13,7 +13,10 @@
 //   4. Партнёрство раскрыто на карточке (`AFFILIATE_NOTE`), партнёрская ссылка —
 //      rel="sponsored nofollow noopener", как везде (§8).
 //   5. Ничего не удаляется: мёртвое → state 'closed' с датой и источником.
-//   6. Страница записи — noindex, пока запись не заявлена владельцем (`entryIndexable`).
+//   6. Страница записи индексируется, когда в ней есть что читать (`entryIndexable`): живая запись
+//      с ≥ ENTRY_INDEX_MIN_FACTS печатаемых фактов — или заявленная владельцем. Тонкие и закрытые —
+//      noindex. ⚠ Решение Сергея s92 (05.10): «noindex до заявки» не давал ни данных о спросе
+//      (GSC молчит о закрытых страницах), ни цифр, которые можно показать вендору в письме.
 //
 // ⭐⭐ ЦЕНЫ И ЦИТАТЫ ПЕЧАТАЮТСЯ ТОЛЬКО ПОДТВЕРЖДЁННЫМИ (`printable`). Обе собраны инструментом,
 // который пропускает страницу через суммаризатор: он может исказить число ($9,293 вместо
@@ -201,14 +204,37 @@ export const GATED_KINDS: readonly FactKind[] = ['price', 'pricing_note', 'respo
  * Печатается ли факт. ⚠ `pricing_note` (условия: «billed annually», «excl. VAT») идёт вместе с
  * ценами — без подтверждённой цены условия к ней бессмысленны, поэтому гейт тот же.
  */
-export function printable(f: DirectoryFact): boolean {
+export function printable(f: Pick<DirectoryFact, 'kind' | 'confirmed'>): boolean {
   if (!GATED_KINDS.includes(f.kind)) return true
   return f.confirmed === true
 }
 
-/** Правило 6: страница записи индексируется, только когда владелец её заявил. */
-export function entryIndexable(e: Pick<DirectoryEntry, 'tier' | 'state'>): boolean {
-  return e.state === 'live' && (e.tier === 'claimed' || e.tier === 'featured')
+/**
+ * Правило 6 (пересмотрено s92, решение Сергея): порог «не тонкая» — столько фактов, сколько
+ * карточка реально печатает (`printable`: неподтверждённые цены и цитаты не считаются).
+ * 5 отсекает четыре записи s92, где на странице почти ничего нет (GoSDS 0, Chemwatch SDS
+ * management 2, Haz-Map 2, eChemPortal 4); медиана живых записей — 11.
+ */
+export const ENTRY_INDEX_MIN_FACTS = 5
+
+type FactForIndex = Pick<DirectoryFact, 'entry_id' | 'kind' | 'confirmed'>
+
+/** Сколько фактов записи печатается на её карточке. */
+export function printableFactCount(entryId: number, facts: readonly FactForIndex[]): number {
+  let n = 0
+  for (const f of facts) if (f.entry_id === entryId && printable(f)) n++
+  return n
+}
+
+/**
+ * Правило 6: индексируется живая запись, в которой есть что читать, и любая заявленная.
+ * Закрытые — никогда: их справочную роль несёт индексируемая категория /directory/closed/.
+ * ⚠ Одна функция на страницу (noindex), sitemap и сторожа dir-entry-pages / dir-sitemap.
+ */
+export function entryIndexable(e: Pick<DirectoryEntry, 'id' | 'tier' | 'state'>, facts: readonly FactForIndex[]): boolean {
+  if (e.state !== 'live') return false
+  if (e.tier === 'claimed' || e.tier === 'featured') return true
+  return printableFactCount(e.id, facts) >= ENTRY_INDEX_MIN_FACTS
 }
 
 /**

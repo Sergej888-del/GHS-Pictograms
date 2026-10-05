@@ -1,10 +1,11 @@
 ---
 // /directory/<category>/<entry>/ — страница записи каталога (№148, s92).
 //
-// ⚠⚠ ПРАВИЛО 6 (§18.2): страница записи под `noindex, follow`, пока владелец не заявил запись
-// (tier claimed/featured — `entryIndexable`). Тонкая страница-шаблон на сотне вендоров — ровно то,
-// что 21.08 стоило домену переоценки в Google (§17.1). Заявка + подтверждённые факты = повод
-// индексировать; это и есть бесплатный стимул ответить на письмо «вы в каталоге».
+// ⚠⚠ ПРАВИЛО 6 (§18.2, пересмотрено s92 решением Сергея): страница записи индексируется, когда в ней
+// есть что читать — живая запись с ≥ ENTRY_INDEX_MIN_FACTS печатаемых фактов, или заявленная
+// (`entryIndexable`). Тонкие и закрытые — `noindex, follow`: тонкая страница-шаблон на сотне вендоров —
+// ровно то, что 21.08 стоило домену переоценки в Google (§17.1). Открытые страницы дают данные GSC о
+// спросе и цифры для письма вендору; стимул заявить — «Verified by owner», первое место, обычная ссылка.
 // ⚠ Индексируемые записи обязаны попасть в sitemap — sitemap.xml.ts зовёт ту же функцию.
 import Layout from '../../../../layouts/Layout.astro'
 import DirectoryCard from '../../../../components/DirectoryCard.astro'
@@ -30,7 +31,7 @@ const { entries, facts } = await loadDirectory()
 const entry = entries.find((e) => e.id === id) as DirectoryEntry
 const card = buildCard(entry, facts)
 const category = categoryBySlug(entry.category)!
-const indexable = entryIndexable(entry)
+const indexable = entryIndexable(entry, facts)
 const canonical = `${SITE}${entryHref(entry)}`
 const title = `${entry.title} — ${category.short}`
 const description = `${entry.title}${entry.vendor && entry.vendor !== entry.title ? ` (${entry.vendor})` : ''}: ${entry.description}`.slice(0, 160)

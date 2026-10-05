@@ -8093,13 +8093,17 @@ const CHECKS: Check[] = [
   {
     id: 'dir-entry-pages',
     group: 'Directory',
-    title: 'Страница у каждой живой и закрытой записи; noindex ровно у незаявленных (правило 6)',
+    title: 'Страница у каждой живой и закрытой записи; noindex ровно у тонких и закрытых (правило 6); клик к вендору считается',
     run: async () => {
-      const rows = await selectAll<{ id: number; slug: string; category: string; state: string; tier: string }>(
-        'directory_entries', 'id, slug, category, state, tier', (q) => q.order('id'))
+      const rows = await selectAll<{ id: number; slug: string; category: string; state: string; tier: string; url: string | null }>(
+        'directory_entries', 'id, slug, category, state, tier, url', (q) => q.order('id'))
+      // Порог «не тонкая» считается той же entryIndexable по тем же фактам, что видит сборка.
+      const facts = await selectAll<{ entry_id: number; kind: string; confirmed: boolean | null }>(
+        'directory_facts', 'id, entry_id, kind, confirmed', (q) => q.order('id'))
       const problems: string[] = []
       const expected = new Set<string>()
       let noindex = 0
+      let outbound = 0
       for (const r of rows) {
         if (r.state === 'not-listed') continue
         const rel = `directory/${r.category}/${r.slug}`
@@ -8107,10 +8111,16 @@ const CHECKS: Check[] = [
         const html = readPage(`${rel}/index.html`)
         if (!html) { problems.push(`нет ${rel}/`); continue }
         const closed = /<meta[^>]+name="robots"[^>]+content="noindex/i.test(html)
-        const should = !dirEntryIndexable({ tier: r.tier as any, state: r.state as any })
+        const should = !dirEntryIndexable({ id: r.id, tier: r.tier as any, state: r.state as any }, facts as any)
         if (closed !== should) problems.push(`${rel}: noindex=${closed}, правило требует ${should}`)
         if (closed) noindex++
         if (!html.includes('data-dir-form="entry"')) problems.push(`${rel}: нет формы «Claim or correct»`)
+        // GA4 directory_outbound: у живой записи с сайтом ссылка несёт слаг, и слушатель стоит на странице.
+        if (r.state === 'live' && r.url) {
+          if (!html.includes(`data-dir-out="${r.slug}"`)) problems.push(`${rel}: у ссылки на вендора нет data-dir-out`)
+          else outbound++
+          if (!html.includes("'directory_outbound'")) problems.push(`${rel}: нет слушателя directory_outbound`)
+        }
       }
       for (const c of DIR_CATEGORIES) {
         for (const slug of pageSlugs(`directory/${c.slug}`)) {
@@ -8119,7 +8129,9 @@ const CHECKS: Check[] = [
       }
       return {
         id: 'dir-entry-pages', group: 'Directory', ok: problems.length === 0,
-        headline: problems.length === 0 ? `${expected.size} страниц записей, из них под noindex ${noindex}` : `проблем: ${problems.length}`,
+        headline: problems.length === 0
+          ? `${expected.size} страниц записей: индексируются ${expected.size - noindex}, под noindex ${noindex}; клик к вендору размечен на ${outbound}`
+          : `проблем: ${problems.length}`,
         detail: problems.slice(0, 40),
       }
     },
@@ -8263,8 +8275,10 @@ const CHECKS: Check[] = [
     group: 'Directory',
     title: 'sitemap несёт хаб, семь категорий и только индексируемые записи; ссылка в подвале',
     run: async () => {
-      const rows = await selectAll<{ slug: string; category: string; state: string; tier: string }>(
-        'directory_entries', 'slug, category, state, tier', (q) => q.order('id'))
+      const rows = await selectAll<{ id: number; slug: string; category: string; state: string; tier: string }>(
+        'directory_entries', 'id, slug, category, state, tier', (q) => q.order('id'))
+      const facts = await selectAll<{ entry_id: number; kind: string; confirmed: boolean | null }>(
+        'directory_facts', 'id, entry_id, kind, confirmed', (q) => q.order('id'))
       const sitemap = existsSync(join(DIST, 'sitemap.xml')) ? readFileSync(join(DIST, 'sitemap.xml'), 'utf8') : ''
       const problems: string[] = []
       if (!sitemap) problems.push('нет dist/sitemap.xml')
@@ -8274,7 +8288,7 @@ const CHECKS: Check[] = [
       for (const r of rows) {
         if (r.state === 'not-listed') continue
         const loc = `<loc>${SITE_URL}/directory/${r.category}/${r.slug}/</loc>`
-        const should = dirEntryIndexable({ tier: r.tier as any, state: r.state as any })
+        const should = dirEntryIndexable({ id: r.id, tier: r.tier as any, state: r.state as any }, facts as any)
         if (should && !sitemap.includes(loc)) problems.push(`индексируемой записи нет в sitemap: ${r.slug}`)
         if (!should && sitemap.includes(loc)) problems.push(`запись под noindex попала в sitemap: ${r.slug}`)
       }
