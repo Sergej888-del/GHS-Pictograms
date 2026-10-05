@@ -22,6 +22,7 @@ import { loadSubstancesIndex, sdsIndexes, type SubstancesIndex } from '../lib/su
 import { substanceNameFull, truncateName } from '../lib/substanceName'
 import { casShapeOk, casForDisplay } from '../lib/substanceIdentifiers'
 import { logSearchMiss, cancelSearchMiss } from '../lib/toolSignals'
+import { normalizeSearchQuery } from '../lib/searchQuery'
 import {
   resolveRoute, computeRoute, rollUp, tableKey, UNITS, P_TEXT, RELEVANCE_CUTOFF_CAT1_3,
   type Route, type InhalForm, type Resolved, type RouteResult, type RouteWarning,
@@ -318,7 +319,8 @@ export default function AteMixtureCalculator() {
 
   const searchResults = useMemo(() => {
     if (!activeSearch) return []
-    const q = norm(searchTexts[activeSearch] ?? '')
+    // №149 (s91): общая чистка (NFKC, тире, подпись «CAS») — ДО островной norm()
+    const q = norm(normalizeSearchQuery(searchTexts[activeSearch] ?? ''))
     if (q.length < 2) return []
     return fuse.search(q).slice(0, 8).map(r => r.item)
   }, [activeSearch, searchTexts, fuse])
@@ -326,7 +328,7 @@ export default function AteMixtureCalculator() {
   // «Искал и не нашёл» (s88, сигнал E): то же условие, что рисует «No Annex VI entry matches»
   useEffect(() => {
     const q = activeSearch ? (searchTexts[activeSearch] ?? '').trim() : ''
-    if (loading || q.length < 2) { cancelSearchMiss('ate-calculator'); return }
+    if (loading || normalizeSearchQuery(q).length < 2) { cancelSearchMiss('ate-calculator'); return }
     if (searchResults.length === 0) logSearchMiss('ate-calculator', q)
     else cancelSearchMiss('ate-calculator')
   }, [activeSearch, searchTexts, searchResults, loading])
@@ -592,7 +594,7 @@ export default function AteMixtureCalculator() {
                     className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none"
                   />
                   )}
-                  {!c.unlisted && !loading && activeSearch === c.key && searchResults.length === 0 && norm(searchTexts[c.key] ?? '').length >= 2 && (
+                  {!c.unlisted && !loading && activeSearch === c.key && searchResults.length === 0 && norm(normalizeSearchQuery(searchTexts[c.key] ?? '')).length >= 2 && (
                     <div className="absolute z-20 top-full left-0 right-0 mt-1 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-600 shadow-xl">
                       No Annex VI entry matches «{searchTexts[c.key]}».{' '}
                       <button type="button" onClick={() => addUnlisted(searchTexts[c.key] ?? '', c.key)} className="font-semibold text-teal-700 hover:underline">

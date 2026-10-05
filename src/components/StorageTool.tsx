@@ -50,6 +50,7 @@ import { substanceNameFull, truncateName } from '../lib/substanceName'
 import { ecForDisplay, casForDisplay, casShapeOk } from '../lib/substanceIdentifiers'
 import SaveResultButton from './SaveResultButton'
 import { logSearchMiss, cancelSearchMiss } from '../lib/toolSignals'
+import { normalizeSearchQuery } from '../lib/searchQuery'
 
 // SDS Manager affiliate — the callout already tells the reader to verify against
 // the SDS; this link serves that exact moment. fp_sid is shared with ATE; since s89
@@ -314,7 +315,8 @@ export default function StorageTool() {
   )
 
   const filtered = useMemo(() => {
-    const q = norm(query)
+    // №149 (s91): общая чистка (NFKC, тире, подпись «CAS») — ДО островной norm()
+    const q = norm(normalizeSearchQuery(query))
     let list = q.length >= 2 ? fuse.search(q).map(r => r.item) : all
     const pic = HAZARD_CHIPS.find(c => c.label === chip)?.pic
     if (pic) list = list.filter(s => (s.ghs_pictogram_codes ?? []).includes(pic))
@@ -327,7 +329,7 @@ export default function StorageTool() {
   // считался бы фильтр, а не вещество.
   useEffect(() => {
     const q = query.trim()
-    if (loading || q.length < 2 || chip !== 'All') { cancelSearchMiss('storage-matrix'); return }
+    if (loading || normalizeSearchQuery(q).length < 2 || chip !== 'All') { cancelSearchMiss('storage-matrix'); return }
     if (filtered.length === 0) logSearchMiss('storage-matrix', q)
     else cancelSearchMiss('storage-matrix')
   }, [query, filtered, loading, chip])

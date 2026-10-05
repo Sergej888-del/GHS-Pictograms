@@ -30,6 +30,7 @@
     "check:ate": "node --experimental-strip-types scripts/check-ate.ts",
     "check:engine": "node --experimental-strip-types scripts/check-engine.ts",
     "check:facts": "node --experimental-strip-types scripts/check-facts.ts",
+    "check:search": "node --experimental-strip-types scripts/check-search.ts",
     "build:annex6-classification": "node --use-system-ca --experimental-strip-types scripts/build-annex6-classification.ts"
   },
   "dependencies": {

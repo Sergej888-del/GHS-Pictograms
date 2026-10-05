@@ -22,6 +22,7 @@ import { usePPrecedence } from '../lib/usePPrecedence'
 import PStatementProtocol from './PStatementProtocol'
 import { labelMakerHref, resolveStatementCodes, parseLabelMakerParams } from '../lib/labelMakerLink'
 import { logSearchMiss } from '../lib/toolSignals'
+import { normalizeSearchQuery, CAS_SHAPE } from '../lib/searchQuery'
 import { casForDisplay } from '../lib/substanceIdentifiers'
 import type { Audience } from '../lib/pPrecedence'
 import SaveResultButton from './SaveResultButton'
@@ -136,12 +137,10 @@ export default function PStatementSelector() {
    * ⚠⚠ Чистим ТОЛЬКО обрамление: сам номер не трогаем и цифры не переставляем.
    */
   function normalizeCas(raw: string): string {
-    return raw
-      .replace(/ /g, ' ')          // неразрывный пробел
-      .replace(/[‐-―]/g, '-') // все виды тире → дефис
-      .replace(/^\s*cas\b[\s.:№#-]*(no\.?)?[\s.:]*/i, '')
-      .replace(/\s+/g, '')
-      .trim()
+    // №149 (s91): чистка общая на все острова — normalizeSearchQuery (NFKC для
+    // полноширинных цифр, все виды тире, пробелы, подпись «CAS»). Здесь остаётся
+    // только убрать пробелы ВНУТРИ номера — в CAS их не бывает.
+    return normalizeSearchQuery(raw).replace(/\s+/g, '')
   }
 
   /**
@@ -151,7 +150,7 @@ export default function PStatementSelector() {
    * цифра. Поэтому одно поле обслуживает оба пути без переключателя: по номеру
    * ищем точно, по всему остальному — по имени. Гадать не приходится.
    */
-  const CAS_SHAPE = /^\d{2,7}-\d{2}-\d$/
+  // №149 (s91): CAS_SHAPE живёт в ../lib/searchQuery — один регэксп на все острова.
 
   /** Поля `substances`, которые тянем и при точном поиске, и при поиске по имени. */
   const SUB_COLS = 'cas_number, iupac_name, common_name, display_name_short, signal_word, h_statement_codes'

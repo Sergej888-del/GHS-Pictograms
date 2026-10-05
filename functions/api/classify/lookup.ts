@@ -14,6 +14,7 @@
 
 import type { EventContext } from '@cloudflare/workers-types';
 import { corsHeaders, fail, json, loadProfiles, rateLimit, rpc, tooMany, type Env } from './_shared.ts';
+import { normalizeSearchQuery } from '../../../src/lib/searchQuery.ts';
 
 interface Candidate {
   indexNumber: string;
@@ -34,7 +35,8 @@ export async function onRequestGet(
     return fail(503, 'NOT_CONFIGURED', 'Search is not available right now. Try again later.');
   }
 
-  const q = (new URL(request.url).searchParams.get('q') ?? '').trim();
+  // №149 (s91): та же чистка, что в островах — прямой вызов API тоже видит «ＣＡＳ １０８－８８－３»
+  const q = normalizeSearchQuery(new URL(request.url).searchParams.get('q'));
   if (q.length < 2) {
     return json({ ok: true, query: q, candidates: [], profiles: {} });
   }

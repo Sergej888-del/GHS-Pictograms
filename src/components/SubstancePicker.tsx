@@ -4,6 +4,7 @@ import { loadSubstancesIndex } from '../lib/substancesIndexData'
 import { substanceName, substanceNameFull } from '../lib/substanceName'
 import { casForDisplay, ecForDisplay, casShapeOk } from '../lib/substanceIdentifiers'
 import { logSearchMiss, cancelSearchMiss } from '../lib/toolSignals'
+import { normalizeSearchQuery } from '../lib/searchQuery'
 import {
   LM_PARAM, LM_STICKY_PARAMS, LABEL_MAKER_BASE, labelMakerHref, parseLabelMakerParams,
   readReturnBase,
@@ -156,24 +157,26 @@ export default function SubstancePicker({ branchPaths = [] }: Props) {
     [all],
   )
 
-  const narrowed = query.trim().length >= 2 || letter !== '' || picFilters.length > 0 || signalFilter !== ''
+  // №149 (s91): одна чистка строки на все острова — полноширинные цифры, тире, подпись «CAS»
+  const queryNorm = normalizeSearchQuery(query)
+  const narrowed = queryNorm.length >= 2 || letter !== '' || picFilters.length > 0 || signalFilter !== ''
 
   const results = useMemo(() => {
-    let list = query.trim().length >= 2 ? fuse.search(query.trim()).map((r) => r.item) : all
+    let list = queryNorm.length >= 2 ? fuse.search(queryNorm).map((r) => r.item) : all
     if (letter) list = list.filter((s) => firstLetter(substanceName(s)) === letter)
     if (picFilters.length > 0) {
       list = list.filter((s) => picFilters.every((c) => (s.ghs_pictogram_codes ?? []).includes(c)))
     }
     if (signalFilter) list = list.filter((s) => s.signal_word === signalFilter)
     return list
-  }, [query, letter, picFilters, signalFilter, all, fuse])
+  }, [queryNorm, letter, picFilters, signalFilter, all, fuse])
 
   // «Искал и не нашёл» (s88, сигнал E): только по строке поиска, без фильтров — иначе
   // промахом считалась бы буква или пиктограмма, а не вещество.
   useEffect(() => {
-    const q = query.trim()
-    if (loading || q.length < 2 || letter || picFilters.length > 0 || signalFilter) { cancelSearchMiss('label-maker'); return }
-    if (results.length === 0) logSearchMiss('label-maker', q)
+    const typed = query.trim()
+    if (loading || queryNorm.length < 2 || letter || picFilters.length > 0 || signalFilter) { cancelSearchMiss('label-maker'); return }
+    if (results.length === 0) logSearchMiss('label-maker', typed)
     else cancelSearchMiss('label-maker')
   }, [query, results, loading, letter, picFilters, signalFilter])
 

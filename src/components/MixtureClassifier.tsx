@@ -36,6 +36,7 @@ import { buildReport, resultFingerprint, stampTime } from '../lib/classifier/rep
 import MixtureReport, { Picto } from './MixtureReport'
 import { labelMakerHref } from '../lib/labelMakerLink'
 import { logSearchMiss, cancelSearchMiss } from '../lib/toolSignals'
+import { normalizeSearchQuery } from '../lib/searchQuery'
 import { getTurnstileToken } from '../lib/turnstile'
 import SaveResultButton from './SaveResultButton'
 
@@ -449,7 +450,8 @@ export default function MixtureClassifier({ registry, pictograms }: Props) {
   /* ── поиск ────────────────────────────────────────────────────────────── */
 
   useEffect(() => {
-    const q = query.trim()
+    // №149 (s91): общая чистка — NFKC (полноширинные цифры), тире, подпись «CAS»; сервер чистит так же
+    const q = normalizeSearchQuery(query)
     if (q.length < 2) { setCandidates([]); setSearchError(null); cancelSearchMiss('clp-classifier'); return }
     let cancelled = false
     setSearching(true)
@@ -465,7 +467,7 @@ export default function MixtureClassifier({ registry, pictograms }: Props) {
           setSearchError(null)
           setCandidates(data.candidates ?? [])
           // «Искал и не нашёл» (s88, сигнал E) — только на честный пустой ответ, не на ошибку
-          if ((data.candidates ?? []).length === 0) logSearchMiss('clp-classifier', q)
+          if ((data.candidates ?? []).length === 0) logSearchMiss('clp-classifier', query.trim())
           else cancelSearchMiss('clp-classifier')
           setProfiles((p) => ({ ...p, ...(data.profiles ?? {}) }))
           if (data.rateLimit) setRate(data.rateLimit)
@@ -1156,7 +1158,7 @@ export default function MixtureClassifier({ registry, pictograms }: Props) {
                     </ul>
                   )}
 
-                  {query.trim().length >= 2 && !searching && !candidates.length && !searchError && (
+                  {normalizeSearchQuery(query).length >= 2 && !searching && !candidates.length && !searchError && (
                     <p className="mx-note">
                       Nothing in Annex VI matches that. Water, carriers, most solvents used as such and in-house
                       blends have no harmonised entry by construction — that is not a gap in the search. Add them

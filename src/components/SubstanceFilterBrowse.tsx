@@ -6,6 +6,7 @@ import { substanceName, substanceNameFull } from '../lib/substanceName'
 import { casForDisplay, ecForDisplay, casShapeOk } from '../lib/substanceIdentifiers'
 import { substanceHref } from '../lib/substanceSlug'
 import { logSearchMiss, cancelSearchMiss } from '../lib/toolSignals'
+import { normalizeSearchQuery } from '../lib/searchQuery'
 // ⚠⚠ Ссылка в конструктор строится СБОРЩИКОМ, а не склейкой строк. Session 52:
 // ровно здесь и на девяти страницах пиктограмм стоял `?cas=${casEnc}` без
 // проверки формы, и у 156 записей Annex VI в адрес уезжала склейка
@@ -118,10 +119,13 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
     minMatchCharLength: 2,
   }), [all])
 
+  // №149 (s91): одна чистка строки на все острова — полноширинные цифры, тире, подпись «CAS»
+  const queryNorm = normalizeSearchQuery(query)
+
   // Фильтрация
   const results = useMemo(() => {
-    let list = query.length >= 2
-      ? fuse.search(query).map(r => r.item)
+    let list = queryNorm.length >= 2
+      ? fuse.search(queryNorm).map(r => r.item)
       : all
 
     if (picFilters.length > 0) {
@@ -135,13 +139,13 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
     }
 
     return list.slice(0, 100)
-  }, [query, picFilters, signalFilter, all, fuse])
+  }, [queryNorm, picFilters, signalFilter, all, fuse])
 
   // «Искал и не нашёл» (s88, сигнал E): только по строке поиска, без фильтров
   useEffect(() => {
-    const q = query.trim()
-    if (loading || q.length < 2 || picFilters.length > 0 || signalFilter) { cancelSearchMiss('substances'); return }
-    if (results.length === 0) logSearchMiss('substances', q)
+    const typed = query.trim()
+    if (loading || queryNorm.length < 2 || picFilters.length > 0 || signalFilter) { cancelSearchMiss('substances'); return }
+    if (results.length === 0) logSearchMiss('substances', typed)
     else cancelSearchMiss('substances')
   }, [query, results, loading, picFilters, signalFilter])
 
@@ -158,7 +162,7 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
   }
 
   const total = useMemo(() => {
-    let list = query.length >= 2 ? fuse.search(query).map(r => r.item) : all
+    let list = queryNorm.length >= 2 ? fuse.search(queryNorm).map(r => r.item) : all
     if (picFilters.length > 0) {
       list = list.filter(s => picFilters.every(code => (s.ghs_pictogram_codes ?? []).includes(code)))
     }
@@ -166,7 +170,7 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
       list = list.filter(s => s.signal_word === signalFilter)
     }
     return list.length
-  }, [query, picFilters, signalFilter, all, fuse])
+  }, [queryNorm, picFilters, signalFilter, all, fuse])
 
   if (loading) {
     return (
