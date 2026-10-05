@@ -1,0 +1,95 @@
+---
+// /directory/<category>/<entry>/ — страница записи каталога (№148, s92).
+//
+// ⚠⚠ ПРАВИЛО 6 (§18.2): страница записи под `noindex, follow`, пока владелец не заявил запись
+// (tier claimed/featured — `entryIndexable`). Тонкая страница-шаблон на сотне вендоров — ровно то,
+// что 21.08 стоило домену переоценки в Google (§17.1). Заявка + подтверждённые факты = повод
+// индексировать; это и есть бесплатный стимул ответить на письмо «вы в каталоге».
+// ⚠ Индексируемые записи обязаны попасть в sitemap — sitemap.xml.ts зовёт ту же функцию.
+import Layout from '../../../../layouts/Layout.astro'
+import DirectoryCard from '../../../../components/DirectoryCard.astro'
+import DirectoryClaimForm from '../../../../components/DirectoryClaimForm'
+import '../../../../styles/directory.css'
+import {
+  SITE, buildCard, categoryBySlug, categoryHref, entryHref, entryIndexable, formatDate,
+  type DirectoryEntry,
+} from '../../../../lib/directoryModel'
+import { loadDirectory } from '../../../../lib/directoryData'
+
+export const prerender = true
+
+export async function getStaticPaths() {
+  const { entries } = await loadDirectory()
+  return entries
+    .filter((e) => e.state === 'live' || e.state === 'closed')
+    .map((e) => ({ params: { category: e.category, entry: e.slug }, props: { id: e.id } }))
+}
+
+const { id } = Astro.props as { id: number }
+const { entries, facts } = await loadDirectory()
+const entry = entries.find((e) => e.id === id) as DirectoryEntry
+const card = buildCard(entry, facts)
+const category = categoryBySlug(entry.category)!
+const indexable = entryIndexable(entry)
+const canonical = `${SITE}${entryHref(entry)}`
+const title = `${entry.title} — ${category.short}`
+const description = `${entry.title}${entry.vendor && entry.vendor !== entry.title ? ` (${entry.vendor})` : ''}: ${entry.description}`.slice(0, 160)
+
+const breadcrumb = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'GHS Tools & Services Directory', item: `${SITE}/directory/` },
+    { '@type': 'ListItem', position: 2, name: category.short, item: `${SITE}${categoryHref(category.slug)}` },
+    { '@type': 'ListItem', position: 3, name: entry.title, item: canonical },
+  ],
+}
+---
+
+<Layout title={title} description={description} canonical={canonical}>
+  <Fragment slot="head">
+    {!indexable && <meta name="robots" content="noindex, follow" />}
+    <script type="application/ld+json" set:html={JSON.stringify(breadcrumb)} />
+  </Fragment>
+
+  <section class="hub-hero tint-teal">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="hub-wrap hub-hero-left" style="padding-top:clamp(36px,5vw,64px);padding-bottom:clamp(30px,4vw,52px);position:relative">
+      <p class="hub-crumb">
+        <a href="/directory/">GHS Tools &amp; Services Directory</a><span class="sep">/</span>
+        <a href={categoryHref(category.slug)}>{category.short}</a>
+      </p>
+      <p class="hub-hero-eyebrow">{category.eyebrow}</p>
+      <h1>{entry.title}</h1>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">{entry.tier === 'listed' ? 'Listed · not verified by owner' : 'Verified by owner'}</span>
+        <span class="hub-hero-chip">Last verified {formatDate(entry.last_verified)}</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-b">
+    <div class="hub-wrap">
+      <DirectoryCard card={card} variant="full" />
+      <p class="hub-fine">
+        This page lists facts published by the vendor, each linked to the page we read it on. We have not used the
+        product and do not rate it. The order of listings in <a href={categoryHref(category.slug)}>{category.short}</a>
+        is alphabetical, with owner-confirmed listings first, and is never sold.
+      </p>
+    </div>
+  </section>
+
+  <section class="hub-sec-white" id="claim">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">{entry.tier === 'listed' ? 'Is this your company?' : 'Corrections'}</p>
+      <h2 class="hub-h2">{entry.tier === 'listed' ? 'Claim or correct this listing' : 'Report a correction'}</h2>
+      <p class="hub-sub">
+        Claiming is free. The owner confirms or corrects the facts, the card shows “Verified by owner”, and owner-confirmed
+        listings come first in their section. Corrections from anyone are welcome — please say where the right fact can
+        be checked.
+      </p>
+      <DirectoryClaimForm client:visible mode="entry" slug={entry.slug} title={entry.title} />
+    </div>
+  </section>
+</Layout>

@@ -70,6 +70,11 @@ import { substanceSlug, casFromSlug } from '../src/lib/substanceSlug'
 import { substanceIndexable, substanceIndexableCount, SUBSTANCE_INDEX_GATE } from '../src/lib/substanceIndexGate'
 import { buildFacts, formatFact, LCSS_FACT_RULE } from '../src/lib/lcssFacts'
 import { AUTHOR_NAME, AUTHOR_LINKEDIN } from '../src/lib/siteIdentity'
+// ⚠ s92 (№148): правила каталога берутся из ТОГО ЖЕ модуля, по которому строятся страницы.
+import {
+  CATEGORIES as DIR_CATEGORIES, entryIndexable as dirEntryIndexable, orderEntries as dirOrderEntries,
+  GATED_KINDS as DIR_GATED_KINDS, SPONSORED_MAX as DIR_SPONSORED_MAX,
+} from '../src/lib/directoryModel'
 import type { LcssRecord } from '../src/lib/lcssProperties'
 // ⚠⚠ Раскладка «код знака → файл» берётся ИЗ ТОГО ЖЕ модуля, что и страница.
 // Списать сюда список кодов — значит завести вторую копию словаря, которая
@@ -8038,6 +8043,251 @@ const CHECKS: Check[] = [
       }
     },
   },
+  // ─────────────────── Каталог /directory/ (№148, s92, CLAUDE.md §18) ──────────────────────
+  // ⚠ Каждая проверка спрашивает ожидание У БАЗЫ (directory_entries / directory_facts) и у
+  //   directoryModel.ts — тех же функций, по которым строятся страницы. Списков в этом файле нет.
+  // ⚠ Правила §18.2, которые здесь сторожатся: «Listed, not ranked» и «Last verified» на каждой
+  //   категории · порядок claimed → алфавит · ни одного <img> в каталоге · партнёрство помечено на
+  //   каждой карточке партнёра · noindex у записей до заявки · цены и цитаты только подтверждённые
+  //   (confirmed = true) · sitemap несёт категории и только индексируемые записи.
+  {
+    id: 'dir-pages',
+    group: 'Directory',
+    title: 'Хаб и семь категорий: принцип, дата проверки, карточки и строки таблицы = база',
+    run: async () => {
+      const rows = await selectAll<{ id: number; category: string; state: string }>('directory_entries', 'id, category, state', (q) => q.order('id'))
+      assertNonEmpty('dir-pages', 'directory_entries', rows)
+      const problems: string[] = []
+      const PRINCIPLE = 'data-dir-principle'
+      const VERIFIED = 'Last verified'
+      assertAscii('dir-pages', [PRINCIPLE, VERIFIED])
+      const hub = readPage('directory/index.html')
+      if (!hub) problems.push('нет dist/directory/index.html')
+      else {
+        if (!hub.includes(PRINCIPLE)) problems.push('хаб: нет «Listed, not ranked»')
+        const notListed = rows.filter((r) => r.state === 'not-listed').length
+        const shown = (hub.match(/<li id="n-/g) ?? []).length
+        if (shown !== notListed) problems.push(`хаб: «Checked and not listed» ${shown}, база ${notListed}`)
+        for (const c of DIR_CATEGORIES) if (!hub.includes(`href="/directory/${c.slug}/"`)) problems.push(`хаб: нет ссылки на /directory/${c.slug}/`)
+      }
+      for (const c of DIR_CATEGORIES) {
+        const html = readPage(`directory/${c.slug}/index.html`)
+        if (!html) { problems.push(`нет dist/directory/${c.slug}/index.html`); continue }
+        if (!html.includes(PRINCIPLE)) problems.push(`${c.slug}: нет «Listed, not ranked»`)
+        if (!html.includes(VERIFIED)) problems.push(`${c.slug}: нет «Last verified»`)
+        const expect = rows.filter((r) => r.category === c.slug).length
+        const cards = (html.match(/data-dir-entry="/g) ?? []).length
+        if (cards !== expect) problems.push(`${c.slug}: карточек ${cards}, база ${expect}`)
+        if (c.slug !== 'closed') {
+          const trs = (html.match(/data-dir-row="/g) ?? []).length
+          if (trs !== expect) problems.push(`${c.slug}: строк таблицы ${trs}, база ${expect}`)
+        }
+      }
+      return {
+        id: 'dir-pages', group: 'Directory', ok: problems.length === 0,
+        headline: problems.length === 0 ? `хаб + ${DIR_CATEGORIES.length} категорий, ${rows.length} строк базы` : `проблем: ${problems.length}`,
+        detail: problems,
+      }
+    },
+  },
+  {
+    id: 'dir-entry-pages',
+    group: 'Directory',
+    title: 'Страница у каждой живой и закрытой записи; noindex ровно у незаявленных (правило 6)',
+    run: async () => {
+      const rows = await selectAll<{ id: number; slug: string; category: string; state: string; tier: string }>(
+        'directory_entries', 'id, slug, category, state, tier', (q) => q.order('id'))
+      const problems: string[] = []
+      const expected = new Set<string>()
+      let noindex = 0
+      for (const r of rows) {
+        if (r.state === 'not-listed') continue
+        const rel = `directory/${r.category}/${r.slug}`
+        expected.add(rel)
+        const html = readPage(`${rel}/index.html`)
+        if (!html) { problems.push(`нет ${rel}/`); continue }
+        const closed = /<meta[^>]+name="robots"[^>]+content="noindex/i.test(html)
+        const should = !dirEntryIndexable({ tier: r.tier as any, state: r.state as any })
+        if (closed !== should) problems.push(`${rel}: noindex=${closed}, правило требует ${should}`)
+        if (closed) noindex++
+        if (!html.includes('data-dir-form="entry"')) problems.push(`${rel}: нет формы «Claim or correct»`)
+      }
+      for (const c of DIR_CATEGORIES) {
+        for (const slug of pageSlugs(`directory/${c.slug}`)) {
+          if (!expected.has(`directory/${c.slug}/${slug}`)) problems.push(`лишняя страница: directory/${c.slug}/${slug}/ (в базе нет)`)
+        }
+      }
+      return {
+        id: 'dir-entry-pages', group: 'Directory', ok: problems.length === 0,
+        headline: problems.length === 0 ? `${expected.size} страниц записей, из них под noindex ${noindex}` : `проблем: ${problems.length}`,
+        detail: problems.slice(0, 40),
+      }
+    },
+  },
+  {
+    id: 'dir-order',
+    group: 'Directory',
+    title: 'Порядок в списке: заявленные первыми, внутри — алфавит (порядок не продаётся)',
+    run: async () => {
+      const rows = await selectAll<{ id: number; category: string; state: string; tier: string; title: string }>(
+        'directory_entries', 'id, category, state, tier, title', (q) => q.order('id'))
+      const problems: string[] = []
+      for (const c of DIR_CATEGORIES) {
+        const html = readPage(`directory/${c.slug}/index.html`)
+        if (!html) continue
+        const expect = dirOrderEntries(rows.filter((r) => r.category === c.slug) as any).map((r: any) => String(r.id))
+        const marker = c.slug === 'closed' ? /data-dir-entry="(\d+)"/g : /data-dir-row="(\d+)"/g
+        const actual = [...html.matchAll(marker)].map((m) => m[1])
+        if (actual.join(',') !== expect.join(',')) {
+          const i = actual.findIndex((v, k) => v !== expect[k])
+          problems.push(`${c.slug}: порядок расходится с позиции ${i + 1} (на странице id ${actual[i]}, ожидался ${expect[i]})`)
+        }
+      }
+      return {
+        id: 'dir-order', group: 'Directory', ok: problems.length === 0,
+        headline: problems.length === 0 ? 'порядок совпадает с orderEntries на всех страницах' : `проблем: ${problems.length}`,
+        detail: problems,
+      }
+    },
+  },
+  {
+    id: 'dir-no-logos',
+    group: 'Directory',
+    title: 'В каталоге нет ни одного <img> — имена без логотипов (правило 2)',
+    run: async () => {
+      const hits: string[] = []
+      let pages = 0
+      for (const { rel, html } of allPages()) {
+        if (!rel.startsWith('directory/')) continue
+        pages++
+        const main = html.slice(html.indexOf('<main'), html.lastIndexOf('</main>'))
+        const n = (main.match(/<img\b/gi) ?? []).length
+        if (n) hits.push(`${rel}: <img> ${n}`)
+      }
+      return {
+        id: 'dir-no-logos', group: 'Directory', ok: hits.length === 0 && pages > 0,
+        headline: hits.length === 0 ? `${pages} страниц каталога, <img> в <main>: 0` : `картинки на ${hits.length} страницах`,
+        detail: pages === 0 ? ['в dist нет страниц каталога'] : hits.slice(0, 20),
+      }
+    },
+  },
+  {
+    id: 'dir-gated-facts',
+    group: 'Directory',
+    title: 'Цены и цитаты печатаются только подтверждёнными check:directory — и все подтверждённые напечатаны',
+    run: async () => {
+      const entries = await selectAll<{ id: number; slug: string; category: string; state: string }>(
+        'directory_entries', 'id, slug, category, state', (q) => q.order('id'))
+      const facts = await selectAll<{ id: number; entry_id: number; kind: string; confirmed: boolean | null }>(
+        'directory_facts', 'id, entry_id, kind, confirmed', (q) => q.in('kind', DIR_GATED_KINDS as unknown as string[]).order('id'))
+      const byId = new Map(entries.map((e) => [e.id, e]))
+      const problems: string[] = []
+      let printed = 0
+      let hidden = 0
+      for (const f of facts) {
+        const e = byId.get(f.entry_id)
+        if (!e || e.state !== 'live') continue
+        const html = readPage(`directory/${e.category}/${e.slug}/index.html`) ?? ''
+        const on = html.includes(`data-fid="${f.id}"`)
+        if (f.confirmed === true && !on) problems.push(`${e.slug}: подтверждённый ${f.kind} #${f.id} не напечатан`)
+        if (f.confirmed !== true && on) problems.push(`${e.slug}: НЕподтверждённый ${f.kind} #${f.id} напечатан`)
+        if (on) printed++
+        else hidden++
+      }
+      return {
+        id: 'dir-gated-facts', group: 'Directory', ok: problems.length === 0,
+        headline: problems.length === 0 ? `напечатано ${printed}, скрыто до подтверждения ${hidden}` : `проблем: ${problems.length}`,
+        detail: problems.slice(0, 30),
+      }
+    },
+  },
+  {
+    id: 'dir-affiliate',
+    group: 'Directory',
+    title: 'Партнёр помечен на каждой своей карточке и только на ней; ссылка SDS Manager — fpr + sponsored',
+    run: async () => {
+      const rows = await selectAll<{ id: number; slug: string; category: string; state: string; affiliate: string | null }>(
+        'directory_entries', 'id, slug, category, state, affiliate', (q) => q.order('id'))
+      const problems: string[] = []
+      for (const c of DIR_CATEGORIES) {
+        const html = readPage(`directory/${c.slug}/index.html`)
+        if (!html) continue
+        const expect = rows.filter((r) => r.category === c.slug && r.affiliate).length
+        const marks = (html.match(/data-dir-affiliate="/g) ?? []).length
+        if (marks !== expect) problems.push(`${c.slug}: пометок «Affiliate partner» ${marks}, партнёров в базе ${expect}`)
+      }
+      for (const r of rows.filter((x) => x.affiliate && x.state === 'live')) {
+        const html = readPage(`directory/${r.category}/${r.slug}/index.html`) ?? ''
+        if (!html.includes(`data-dir-affiliate="${r.affiliate}"`)) problems.push(`${r.slug}: нет пометки партнёра на странице записи`)
+        if (r.affiliate === 'sds_manager' && !/href="[^"]*sdsmanager\.com[^"]*fpr=ghs3[^"]*" rel="sponsored nofollow noopener"/.test(html)) {
+          problems.push(`${r.slug}: нет партнёрской ссылки с fpr=ghs3 и rel="sponsored nofollow noopener"`)
+        }
+        if (!html.includes('href="/affiliate-disclosure/"')) problems.push(`${r.slug}: нет ссылки на /affiliate-disclosure/`)
+      }
+      return {
+        id: 'dir-affiliate', group: 'Directory', ok: problems.length === 0,
+        headline: problems.length === 0 ? `партнёров: ${rows.filter((r) => r.affiliate).length}, все помечены` : `проблем: ${problems.length}`,
+        detail: problems,
+      }
+    },
+  },
+  {
+    id: 'dir-sponsored',
+    group: 'Directory',
+    title: 'Блок Sponsored — только featured и не больше двух на категорию',
+    run: async () => {
+      const rows = await selectAll<{ id: number; category: string; state: string; tier: string }>(
+        'directory_entries', 'id, category, state, tier', (q) => q.order('id'))
+      const problems: string[] = []
+      for (const c of DIR_CATEGORIES) {
+        const html = readPage(`directory/${c.slug}/index.html`)
+        if (!html) continue
+        const featured = rows.filter((r) => r.category === c.slug && r.tier === 'featured' && r.state === 'live').map((r) => String(r.id))
+        const shown = [...html.matchAll(/data-dir-sponsored-card="(\d+)"/g)].map((m) => m[1])
+        if (shown.length > DIR_SPONSORED_MAX) problems.push(`${c.slug}: в Sponsored ${shown.length} карточек, максимум ${DIR_SPONSORED_MAX}`)
+        const wrong = shown.filter((id) => !featured.includes(id))
+        if (wrong.length) problems.push(`${c.slug}: в Sponsored не-featured записи: ${wrong.join(', ')}`)
+        if (featured.length > 0 && shown.length !== Math.min(featured.length, DIR_SPONSORED_MAX)) {
+          problems.push(`${c.slug}: featured в базе ${featured.length}, в блоке Sponsored ${shown.length}`)
+        }
+      }
+      return {
+        id: 'dir-sponsored', group: 'Directory', ok: problems.length === 0,
+        headline: problems.length === 0 ? `featured: ${rows.filter((r) => r.tier === 'featured').length}` : `проблем: ${problems.length}`,
+        detail: problems,
+      }
+    },
+  },
+  {
+    id: 'dir-sitemap',
+    group: 'Directory',
+    title: 'sitemap несёт хаб, семь категорий и только индексируемые записи; ссылка в подвале',
+    run: async () => {
+      const rows = await selectAll<{ slug: string; category: string; state: string; tier: string }>(
+        'directory_entries', 'slug, category, state, tier', (q) => q.order('id'))
+      const sitemap = existsSync(join(DIST, 'sitemap.xml')) ? readFileSync(join(DIST, 'sitemap.xml'), 'utf8') : ''
+      const problems: string[] = []
+      if (!sitemap) problems.push('нет dist/sitemap.xml')
+      const SITE_URL = 'https://ghspictograms.com'
+      if (!sitemap.includes(`<loc>${SITE_URL}/directory/</loc>`)) problems.push('в sitemap нет /directory/')
+      for (const c of DIR_CATEGORIES) if (!sitemap.includes(`<loc>${SITE_URL}/directory/${c.slug}/</loc>`)) problems.push(`в sitemap нет /directory/${c.slug}/`)
+      for (const r of rows) {
+        if (r.state === 'not-listed') continue
+        const loc = `<loc>${SITE_URL}/directory/${r.category}/${r.slug}/</loc>`
+        const should = dirEntryIndexable({ tier: r.tier as any, state: r.state as any })
+        if (should && !sitemap.includes(loc)) problems.push(`индексируемой записи нет в sitemap: ${r.slug}`)
+        if (!should && sitemap.includes(loc)) problems.push(`запись под noindex попала в sitemap: ${r.slug}`)
+      }
+      const home = readPage('index.html') ?? ''
+      if (!home.includes('href="/directory/"')) problems.push('в подвале главной нет ссылки на /directory/')
+      return {
+        id: 'dir-sitemap', group: 'Directory', ok: problems.length === 0,
+        headline: problems.length === 0 ? `sitemap: хаб + ${DIR_CATEGORIES.length} категорий, записи по правилу 6` : `проблем: ${problems.length}`,
+        detail: problems.slice(0, 30),
+      }
+    },
+  },
+
 ]
 // ─────────────────────────── прогон ───────────────────────────
 

@@ -1,0 +1,289 @@
+---
+// DirectoryCard — одна запись каталога (№148, s92). Одна разметка для страницы категории и
+// страницы записи: на категории подробности свёрнуты в нативный <details> (текст остаётся в HTML —
+// урок s81: всё, что за состоянием React, краулер не видит), на странице записи — раскрыты.
+//
+// ⚠ ПРАВИЛА §18.2, которые держит эта разметка:
+//   • ни звёзд, ни оценок, ни «best for» — только факты, у каждой строки ссылка «source»;
+//   • ни одного <img>: имена без логотипов (правило 2; сторож dir-no-logos);
+//   • цены и цитаты — только `printable()` (подтверждённые check-directory);
+//   • партнёрство раскрыто бейджем и строкой, партнёрская ссылка — sponsored nofollow noopener,
+//     и рядом ссылка на /affiliate-disclosure/ (сторож affiliate-marking требует её на странице);
+//   • внешняя ссылка listed-записи — nofollow (владелец не подтверждён); claimed — обычная ссылка
+//     (бесплатный стимул заявить запись); featured — sponsored (оплачено — так требует Google).
+import {
+  type CardModel, AFFILIATE_NOTE, CLAIMED_NOTE, LISTED_NOTE, JURISDICTION_SHORT, TAG_LABEL,
+  countryName, entryHref, first, formatDate, jurisdictionsOf,
+} from '../lib/directoryModel'
+
+interface Props {
+  card: CardModel
+  variant: 'compact' | 'full'
+  /** Копия в блоке Sponsored: свой id и пометка, чтобы не дублировать якорь редакционной карточки. */
+  sponsored?: boolean
+}
+const { card, variant, sponsored = false } = Astro.props
+const e = card.entry
+const f = card.facts
+const closed = e.state === 'closed'
+const country = countryName(e.hq_country)
+const juris = jurisdictionsOf(card)
+const lang = first(card, 'language')
+const deployment = first(card, 'deployment')
+const pricingModel = first(card, 'pricing_model')
+const pricingStatement = first(card, 'pricing_statement')
+const trial = first(card, 'free_trial')
+const api = first(card, 'api')
+const ufi = first(card, 'ufi_pcn')
+const iso17100 = first(card, 'iso17100')
+const claim = first(card, 'jurisdiction_claim')
+const features = f.feature ?? []
+const certs = f.certification ?? []
+const integrations = f.integration ?? []
+const platforms = f.platform ?? []
+const notes = (f.pricing_note ?? []).filter((n) => n.confirmed === true)
+
+const outboundHref = e.affiliate === 'sds_manager' && e.affiliate_url ? e.affiliate_url : e.url
+const outboundRel =
+  e.affiliate === 'sds_manager'
+    ? 'sponsored nofollow noopener'
+    : e.tier === 'featured'
+      ? 'sponsored noopener'
+      : e.tier === 'claimed'
+        ? 'noopener'
+        : 'nofollow noopener'
+const src = 'nofollow noopener'
+const verified = formatDate(e.last_verified)
+const respLabel: Record<string, string> = {
+  customer_responsible: 'Customer responsibility',
+  compliance_guarantee: 'Compliance and accuracy',
+  liability_cap: 'Liability',
+  insurance: 'Insurance',
+  data_disclaimer: 'Data disclaimer',
+}
+// Цитата, оборванная посреди фразы, получает «…» — иначе читатель примет обрыв за конец условия.
+// ⚠ Логика здесь, а не в разметке: вложенный шаблон с обратными кавычками внутри map() Astro
+// компилирует неверно (s92 — страница отдавала 500).
+function quoteText(q: string | null): string {
+  const t = (q ?? '').trim()
+  return /[.!?;:)\u201d"']$/.test(t) ? t : t + '\u2026'
+}
+// ⚠ Пометка о юрисдикциях — не всегда дословная цитата вендора (часто перечень стран со страницы),
+// поэтому без кавычек. «(no count stated)» — наша служебная оговорка, читателю она не нужна.
+const claimText = claim ? claim.value.replace(/^named:\s*/i, 'Countries named: ') : null
+const langText = lang ? lang.value.replace(/\s*\(no count stated\)/i, '') : null
+const closedBadge = e.closed_on ? 'Closed ' + formatDate(e.closed_on) : 'Closed'
+const jurisData = juris.map((j) => (JURISDICTION_SHORT[j] ?? j).toLowerCase().replace(/\s+/g, '-')).join(' ')
+const searchBlob = [e.title, e.vendor, country, e.description, ...juris, ...features.map((x) => x.value)]
+  .filter(Boolean)
+  .join(' | ')
+  .toLowerCase()
+const hasDetails =
+  card.prices.length > 0 || card.pricesPending || features.length > 0 || card.responsibility.length > 0 ||
+  card.termsUrl || certs.length > 0 || integrations.length > 0 || platforms.length > 0
+---
+
+<article
+  class={`dir-card${closed ? ' is-closed' : ''}${e.tier !== 'listed' ? ' is-claimed' : ''}`}
+  id={`${sponsored ? 's' : 'e'}-${e.slug}`}
+  data-dir-entry={sponsored ? undefined : e.id}
+  data-dir-sponsored-card={sponsored ? e.id : undefined}
+  data-dir-title={e.title}
+  data-dir-tier={e.tier}
+  data-juris={jurisData}
+  data-country={e.hq_country ?? ''}
+  data-search={searchBlob}
+>
+  <header class="dir-card-head">
+    <div class="dir-card-name">
+      <h3>
+        {variant === 'compact' ? <a href={entryHref(e)}>{e.title}</a> : e.title}
+      </h3>
+      <p class="dir-vendor">
+        {e.vendor && <span>{e.vendor}</span>}
+        {country && (
+          <span class="dir-country">
+            {country}
+            {e.hq_country_source && (
+              <a class="dir-src" href={e.hq_country_source} rel={src} target="_blank" title="Where we read the company address">source</a>
+            )}
+          </span>
+        )}
+      </p>
+    </div>
+    <div class="dir-badges">
+      {closed && <span class="dir-badge closed">{closedBadge}</span>}
+      {e.tier !== 'listed' && <span class="dir-badge claimed" data-dir-claimed>Verified by owner</span>}
+      {e.affiliate && <span class="dir-badge aff" data-dir-affiliate={e.affiliate}>Affiliate partner</span>}
+      {e.tags.map((t) => TAG_LABEL[t] && <span class="dir-badge tag">{TAG_LABEL[t]}</span>)}
+    </div>
+  </header>
+
+  <p class="dir-desc">
+    {e.description}
+    {e.description_source && (
+      <a class="dir-src" href={e.description_source} rel={src} target="_blank" title="Where this description comes from">source</a>
+    )}
+  </p>
+
+  {closed && (
+    <dl class="dir-facts">
+      {e.closed_on && (
+        <div><dt>Closed</dt><dd>{formatDate(e.closed_on)}{e.closed_source && <a class="dir-src" href={e.closed_source} rel={src} target="_blank">source</a>}</dd></div>
+      )}
+      {e.successor && <div><dt>Where it went</dt><dd>{e.successor}</dd></div>}
+      {e.url && <div><dt>Old address</dt><dd class="dir-mono">{e.url.replace(/^https?:\/\//, '')}</dd></div>}
+    </dl>
+  )}
+
+  {!closed && (
+    <dl class="dir-facts">
+      <div>
+        <dt>Covers</dt>
+        <dd>
+          {juris.length ? juris.join(' · ') : <span class="dir-none">not stated by the vendor</span>}
+          {juris.length > 0 && f.jurisdiction?.[0] && <a class="dir-src" href={f.jurisdiction[0].source_url} rel={src} target="_blank">source</a>}
+          {claimText && <span class="dir-claim">{claimText}</span>}
+        </dd>
+      </div>
+      <div>
+        <dt>Languages</dt>
+        <dd>
+          {lang ? langText : <span class="dir-none">not stated</span>}
+          {lang && <a class="dir-src" href={lang.source_url} rel={src} target="_blank">source</a>}
+        </dd>
+      </div>
+      <div>
+        <dt>Pricing</dt>
+        <dd>
+          {pricingModel ? pricingModel.value : <span class="dir-none">not stated</span>}
+          {card.fromPrice && <span class="dir-from"> · from {card.fromPrice}</span>}
+          {pricingModel && <a class="dir-src" href={pricingModel.source_url} rel={src} target="_blank">source</a>}
+        </dd>
+      </div>
+      {deployment && (
+        <div><dt>Delivered as</dt><dd>{deployment.value}<a class="dir-src" href={deployment.source_url} rel={src} target="_blank">source</a></dd></div>
+      )}
+      {(trial || api || ufi || iso17100) && (
+        <div>
+          <dt>Also</dt>
+          <dd class="dir-flags">
+            {trial && <span>Free trial or free account<a class="dir-src" href={trial.source_url} rel={src} target="_blank">source</a></span>}
+            {api && <span>API<a class="dir-src" href={api.source_url} rel={src} target="_blank">source</a></span>}
+            {ufi && <span>UFI / poison centre notification<a class="dir-src" href={ufi.source_url} rel={src} target="_blank">source</a></span>}
+            {iso17100 && <span>ISO 17100 certified<a class="dir-src" href={iso17100.source_url} rel={src} target="_blank">source</a></span>}
+          </dd>
+        </div>
+      )}
+    </dl>
+  )}
+
+  {!closed && hasDetails && (
+    <details class="dir-more" open={variant === 'full'}>
+      <summary>Prices, features and terms</summary>
+
+      <section class="dir-block">
+        <h4>Prices</h4>
+        {card.prices.length > 0 && (
+          <ul class="dir-prices">
+            {card.prices.map((p) => (
+              <li data-fact="price" data-fid={p.id}>
+                {p.label && <span class="tier">{p.label}</span>}
+                <span class="amt">{p.value}</span>
+                {p.detail && <span class="inc">{p.detail}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {notes.map((n) => <p class="dir-fine" data-fact="pricing_note" data-fid={n.id}>{n.value}</p>)}
+        {card.prices.length > 0 && (
+          <p class="dir-fine">
+            As published by the vendor, checked {formatDate(card.prices[0].confirmed_on ?? card.prices[0].checked_on)}.
+            Prices change — the vendor’s page is the reference:
+            <a href={card.prices[0].source_url} rel={src} target="_blank">pricing page</a>.
+          </p>
+        )}
+        {card.pricesPartial && (
+          <p class="dir-fine" data-dir-pending="price-partial">
+            The vendor publishes more tiers than shown here; we print only the figures our re-check found on its page.
+          </p>
+        )}
+        {card.pricesPending && (
+          <p class="dir-fine" data-dir-pending="price">
+            The vendor publishes prices on its own site. We print a price only after re-reading it on that page; until
+            then, see the <a href={(f.price ?? [])[0]?.source_url} rel={src} target="_blank">vendor’s pricing page</a>.
+          </p>
+        )}
+        {card.prices.length === 0 && !card.pricesPending && pricingStatement && (
+          <p class="dir-fine">
+            Price on request — the vendor publishes no prices on its site (checked {formatDate(pricingStatement.checked_on)}).
+            <a class="dir-src" href={pricingStatement.source_url} rel={src} target="_blank">source</a>
+          </p>
+        )}
+      </section>
+
+      {features.length > 0 && (
+        <section class="dir-block">
+          <h4>What it does, according to the vendor</h4>
+          <ul class="dir-features">
+            {features.map((x) => (
+              <li>{x.value}<a class="dir-src" href={x.source_url} rel={src} target="_blank">source</a></li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {(certs.length > 0 || integrations.length > 0 || platforms.length > 0) && (
+        <section class="dir-block">
+          <dl class="dir-facts tight">
+            {certs.length > 0 && (
+              <div><dt>Certifications</dt><dd>{certs.map((c) => <span class="dir-chip">{c.value}<a class="dir-src" href={c.source_url} rel={src} target="_blank">source</a></span>)}</dd></div>
+            )}
+            {integrations.length > 0 && (
+              <div><dt>Integrations</dt><dd>{integrations.map((c) => c.value).join(' · ')}<a class="dir-src" href={integrations[0].source_url} rel={src} target="_blank">source</a></dd></div>
+            )}
+            {platforms.length > 0 && (
+              <div><dt>Platforms</dt><dd>{platforms.map((c) => c.value).join(' · ')}<a class="dir-src" href={platforms[0].source_url} rel={src} target="_blank">source</a></dd></div>
+            )}
+          </dl>
+        </section>
+      )}
+
+      {(card.responsibility.length > 0 || card.termsUrl) && (
+        <section class="dir-block dir-resp">
+          <h4>What the vendor says it is responsible for</h4>
+          {card.responsibility.map((r) => (
+            <figure data-fact="responsibility" data-fid={r.id}>
+              <figcaption>{respLabel[r.label ?? ''] ?? r.value}</figcaption>
+              <blockquote>“{quoteText(r.quote)}”</blockquote>
+              <a class="dir-src" href={r.source_url} rel={src} target="_blank">read the terms</a>
+            </figure>
+          ))}
+          {card.responsibility.length === 0 && card.termsUrl && (
+            <p class="dir-fine" data-dir-pending="responsibility">
+              We quote a vendor’s terms only after re-reading the exact words on its page; until then, read them at the
+              source: <a href={card.termsUrl} rel={src} target="_blank">vendor terms</a>.
+            </p>
+          )}
+        </section>
+      )}
+    </details>
+  )}
+
+  {e.affiliate && (
+    <p class="dir-aff-note">
+      {AFFILIATE_NOTE[e.affiliate]} It does not change where this card appears.
+      <a href="/affiliate-disclosure/">Affiliate disclosure</a>
+    </p>
+  )}
+
+  <footer class="dir-card-foot">
+    <span class="dir-status">{e.tier === 'listed' ? LISTED_NOTE : CLAIMED_NOTE} Last verified {verified}.</span>
+    <span class="dir-links">
+      {outboundHref && !closed && (
+        <a class="dir-out" href={outboundHref} rel={outboundRel} target="_blank">Vendor website ↗</a>
+      )}
+      {variant === 'compact' && <a href={entryHref(e)}>Details · claim or correct</a>}
+    </span>
+  </footer>
+</article>

@@ -31,6 +31,8 @@
     "check:engine": "node --experimental-strip-types scripts/check-engine.ts",
     "check:facts": "node --experimental-strip-types scripts/check-facts.ts",
     "check:search": "node --experimental-strip-types scripts/check-search.ts",
+    "import:directory": "node --use-system-ca --import tsx scripts/import-directory.ts",
+    "check:directory": "node --use-system-ca --import tsx scripts/check-directory.ts",
     "build:annex6-classification": "node --use-system-ca --experimental-strip-types scripts/build-annex6-classification.ts"
   },
   "dependencies": {

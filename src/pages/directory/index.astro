@@ -1,0 +1,164 @@
+---
+// /directory/ — хаб GHS Tools & Services Directory (№148, s92, CLAUDE.md §18).
+//
+// Что на странице: правила каталога словами читателя (§18.2), семь разделов с числом записей,
+// «Who is responsible for an SDS» (дословные цитаты REACH / CLP / OSHA / HPA), раздел «Checked and
+// not listed» (имена из «best of»-списков, которых нет или которые не про GHS — решение Сергея s92:
+// люди будут искать эти имена и найдут у нас честный ответ), форма «Suggest a listing».
+//
+// ⚠ «Checked and not listed» формулируется ТОЛЬКО фактами («не нашли продукт с таким именем»,
+//   «вендор не описывает его как GHS-инструмент») — без «фальшивка», без имён сайтов-списков.
+import Layout from '../../layouts/Layout.astro'
+import DirectoryClaimForm from '../../components/DirectoryClaimForm'
+import '../../styles/directory.css'
+import { CATEGORIES, SITE, categoryHref, formatDate } from '../../lib/directoryModel'
+import { loadDirectory } from '../../lib/directoryData'
+import { LEGAL_QUOTES, LEGAL_SUMMARY, LEGAL_DISCLAIMER, LEGAL_CHECKED } from '../../lib/directoryLegal'
+
+export const prerender = true
+
+const { entries } = await loadDirectory()
+const listed = entries.filter((e) => e.state === 'live')
+const closed = entries.filter((e) => e.state === 'closed')
+const notListed = entries
+  .filter((e) => e.state === 'not-listed')
+  .sort((a, b) => a.title.localeCompare(b.title, 'en', { sensitivity: 'base' }))
+const count = (slug: string) => entries.filter((e) => e.category === slug).length
+const lastVerified = entries.map((e) => e.last_verified).sort().at(-1) ?? null
+
+const title = 'GHS Tools & Services Directory — Listed, Not Ranked'
+const description =
+  'A neutral directory of SDS authoring and management software, GHS label tools, databases and SDS services: verifiable facts and published prices, never ranked.'
+const canonical = `${SITE}/directory/`
+
+const principles = [
+  ['Facts, not ratings', 'We have not used these products, so we do not score them. Each card lists what the vendor publishes, with a link to the page we read it on.'],
+  ['Order is never sold', 'Alphabetical, with listings confirmed by their owners first. A paid placement, if one ever appears, sits in a separate block marked Sponsored and moves nothing.'],
+  ['Prices only as published', 'A price appears only if the vendor publishes it and a second reading of its page found the same figure. Otherwise: “price on request”.'],
+  ['Responsibility, quoted', 'Writing an SDS for someone does not take over their legal duty. Each card quotes what the vendor itself says it is, and is not, responsible for.'],
+  ['Partnerships disclosed', 'Where this site earns from a vendor, the card says so next to the name. It changes nothing in the order.'],
+  ['Nothing is deleted', 'A tool that closes stays listed as closed, with the date and where its content went — that is what old links are looking for.'],
+]
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'GHS Tools & Services Directory',
+  description,
+  url: canonical,
+  isPartOf: { '@type': 'WebSite', name: 'GHS Pictograms', url: `${SITE}/` },
+  hasPart: CATEGORIES.map((c) => ({ '@type': 'CollectionPage', name: c.h1, url: `${SITE}${categoryHref(c.slug)}` })),
+}
+---
+
+<Layout title={title} description={description} canonical={canonical} titleIsComplete>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  </Fragment>
+
+  <section class="hub-hero tint-teal">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+    <div class="hub-wrap hub-hero-inner">
+      <p class="hub-hero-eyebrow">Directory · Tools &amp; services</p>
+      <h1>GHS Tools &amp; Services Directory</h1>
+      <p class="hub-hero-sub">
+        SDS authoring and management software, GHS label tools, chemical safety databases, SDS writing and translation
+        services — what each one is, where it is based, which rules it covers, what it costs when the price is public,
+        and what its vendor says it is responsible for.
+      </p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">{listed.length} listings</span>
+        <span class="hub-hero-chip">{closed.length} closed or moved</span>
+        <span class="hub-hero-chip" data-dir-principle>Listed, not ranked</span>
+        {lastVerified && <span class="hub-hero-chip">Last verified {formatDate(lastVerified)}</span>}
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">01 · Sections</p>
+      <h2 class="hub-h2">Seven sections, one set of rules</h2>
+      <div class="hub-cards four">
+        {CATEGORIES.map((c) => (
+          <a class="hub-card" href={categoryHref(c.slug)}>
+            <p class="tag">{c.eyebrow.replace('Directory · ', '')}</p>
+            <h3>{c.h1.charAt(0).toUpperCase() + c.h1.slice(1)}</h3>
+            <p class="copy">{c.description}</p>
+            <p class="dir-cat-n">{count(c.slug)} {c.slug === 'closed' ? 'entries' : 'listings'}</p>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-b">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow navy">02 · How the directory works</p>
+      <h2 class="hub-h2">Listed, not ranked</h2>
+      <div class="dir-principles">
+        {principles.map(([h, t]) => (
+          <div class="dir-principle"><strong>{h}</strong>{t}</div>
+        ))}
+      </div>
+      <p class="hub-sub">
+        Every listing starts as <strong>listed</strong>: facts from public pages, not verified by the owner. An owner can
+        <strong>claim</strong> it for free — confirm or correct the facts — and the card then shows “Verified by owner”.
+        Unconfirmed listings link out with <code>nofollow</code>; an owner-confirmed listing gets an ordinary link.
+      </p>
+    </div>
+  </section>
+
+  <section class="hub-sec-white" id="who-is-responsible">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">03 · The law</p>
+      <h2 class="hub-h2">Who is responsible for an SDS?</h2>
+      <p class="hub-sub">Read in the official consolidated texts on {formatDate(LEGAL_CHECKED)}.</p>
+      <div class="dir-legal">
+        {LEGAL_QUOTES.map((q) => (
+          <figure>
+            <figcaption>{q.instrument} · {q.provision} · <a href={q.url} rel="noopener" target="_blank">{q.version}</a></figcaption>
+            <blockquote>“{q.quote}”</blockquote>
+          </figure>
+        ))}
+      </div>
+      <p class="hub-sub">{LEGAL_SUMMARY}</p>
+      <p class="hub-fine">{LEGAL_DISCLAIMER}</p>
+    </div>
+  </section>
+
+  <section class="hub-sec-a" id="checked-not-listed">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">04 · Checked and not listed</p>
+      <h2 class="hub-h2">Names you may have seen elsewhere</h2>
+      <p class="hub-sub">
+        Some names appear in “best software” lists but do not hold up when you go to the source. We checked each one;
+        this is what we found, and why it is not in the directory.
+      </p>
+      <ul class="dir-notlisted" data-dir-notlisted>
+        {notListed.map((e) => (
+          <li id={`n-${e.slug}`}>
+            <strong>{e.title}</strong>
+            <span class="seen">{e.description} · checked {formatDate(e.last_verified)}</span>
+            {e.reason}
+            {e.reason_source && <a class="dir-src" href={e.reason_source} rel="nofollow noopener" target="_blank">source</a>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <section class="hub-sec-white" id="suggest">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">05 · Suggest a listing</p>
+      <h2 class="hub-h2">Missing a tool or a service?</h2>
+      <p class="hub-sub">
+        Tell us its name and website. We check it against the same rules before it appears — there is no fee for
+        being listed, and no way to pay for a better position.
+      </p>
+      <DirectoryClaimForm client:visible mode="suggest" />
+    </div>
+  </section>
+</Layout>

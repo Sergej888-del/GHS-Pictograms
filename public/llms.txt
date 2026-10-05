@@ -11,6 +11,10 @@
 - [Substance Database](https://ghspictograms.com/substances/): Search 4,178 CLP Annex VI substances with full GHS classification, pictograms and signal words
 - [UN Number Reference](https://ghspictograms.com/un/): Every UN number in Table A of ADR 2025 with proper shipping name, class and packing group; 389 numbers have a full page carrying the 49 CFR 172.101 entry beside the ADR one, never merged, each under its own source stamp
 
+## Directory
+
+- [GHS Tools & Services Directory](https://ghspictograms.com/directory/): A neutral directory of SDS authoring and SDS management software, GHS label software, chemical safety databases, SDS authoring and translation services, training resources and closed databases (where TOXNET went) — verifiable facts per listing (country, jurisdictions, languages, delivery), prices only as published by the vendor and re-checked, verbatim quotes of what each vendor says it is responsible for, and the REACH / CLP / OSHA provisions that keep the duty with the chemical's supplier. Listed, not ranked; the order is never sold.
+
 ## SDS Library
 
 - [SDS Library](https://ghspictograms.com/sds/): Substance safety reports for 109 chemicals — full GHS/CLP classification with provenance, computed storage-compatibility verdicts, ADR transport data, links to official supplier SDS PDFs, and an "MSDS vs SDS" explainer on every page

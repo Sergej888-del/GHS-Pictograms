@@ -12,6 +12,11 @@ import { substanceIndexable } from '../lib/substanceIndexGate';
 // ведёт labelMakerHub.ts, и дублировать его здесь значит однажды объявить в
 // sitemap страницу, которой нет, или потерять ту, которая есть.
 import { BRANCHES, TEMPLATES } from '../lib/labelMakerHub';
+// ⚠ s92 (№148): каталог. Категории индексируются с первого дня; запись — только когда её заявил
+// владелец (правило 6, §18.2). Условие НЕ переписывается здесь — та же `entryIndexable`, что ставит
+// noindex на странице записи; сторож dir-sitemap сверяет обе стороны.
+import { CATEGORIES, categoryHref, entryHref, entryIndexable } from '../lib/directoryModel';
+import { loadDirectory } from '../lib/directoryData';
 
 export const prerender = true;
 
@@ -327,6 +332,17 @@ async function fetchSubstanceSitemapEntries(): Promise<
   ];
 }
 
+async function fetchDirectorySitemapEntries() {
+  const { entries } = await loadDirectory();
+  return [
+    { url: '/directory/', changefreq: 'weekly', priority: '0.8' },
+    ...CATEGORIES.map((c) => ({ url: categoryHref(c.slug), changefreq: 'weekly', priority: '0.75' })),
+    ...entries
+      .filter((e) => entryIndexable(e))
+      .map((e) => ({ url: entryHref(e), changefreq: 'monthly', priority: '0.5' })),
+  ];
+}
+
 export const GET: APIRoute = async () => {
   const [
     blogPages,
@@ -337,6 +353,7 @@ export const GET: APIRoute = async () => {
     hStatementPages,
     unPages,
     substancePages,
+    directoryPages,
   ] = await Promise.all([
     fetchBlogSitemapEntries(),
     fetchComplianceSitemapEntries(),
@@ -346,6 +363,7 @@ export const GET: APIRoute = async () => {
     fetchHStatementSitemapEntries(),
     fetchUnSitemapEntries(),
     fetchSubstanceSitemapEntries(),
+    fetchDirectorySitemapEntries(),
   ]);
 
   const allPages = [
@@ -354,6 +372,7 @@ export const GET: APIRoute = async () => {
     ...GHS_PAGES,
     ...COMPLIANCE_PILLAR_PAGES,
     ...STORAGE_PAGES,
+    ...directoryPages,
     ...sdsPages,
     ...sdsSectionPages,
     ...pStatementPages,

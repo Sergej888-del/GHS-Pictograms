@@ -638,7 +638,10 @@ const CHECKS: Check[] = [
       // четыре-пять страниц, ради которых этот список и существует. Они
       // сворачиваются в одну строку со счётчиком.
       const gated = PAGES.filter((p) => noindexOf(p) && p.url.startsWith('/substances/'))
-      const list = PAGES.filter((p) => noindexOf(p) && !p.url.startsWith('/substances/'))
+      // ⚠ s92 (№148): страницы записей каталога стоят под noindex до заявки владельца (правило 6,
+      // §18.2; сторож — check:dist dir-entry-pages). Сворачиваются в одну строку, как вещества.
+      const dirEntries = PAGES.filter((p) => noindexOf(p) && /^\/directory\/[^/]+\/[^/]+\/$/.test(p.url))
+      const list = PAGES.filter((p) => noindexOf(p) && !p.url.startsWith('/substances/') && !/^\/directory\/[^/]+\/[^/]+\/$/.test(p.url))
         .map((p) => {
           const words = p.html.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length
           const links = linksOf(p).length
@@ -656,6 +659,7 @@ const CHECKS: Check[] = [
             : `noindex: ${list.length} страниц + ${gated.length} веществ под границей индексации`,
         detail: [
           ...(gated.length ? [`/substances/* под substanceIndexGate: ${gated.length} (см. check:dist subs-index-gate)`] : []),
+          ...(dirEntries.length ? [`/directory/<раздел>/<запись>/ до заявки владельца: ${dirEntries.length} (см. check:dist dir-entry-pages)`] : []),
           ...preview(list, 20),
         ],
       }
