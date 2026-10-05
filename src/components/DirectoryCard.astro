@@ -44,14 +44,13 @@ const platforms = f.platform ?? []
 const notes = (f.pricing_note ?? []).filter((n) => n.confirmed === true)
 
 const outboundHref = e.affiliate === 'sds_manager' && e.affiliate_url ? e.affiliate_url : e.url
+// ⚠ Решение Сергея s92 (05.10): ссылка на вендора — nofollow у всех, заявленных тоже («пока оставляем
+// nofollow»). Стимул заявить — «Verified by owner» и место наверху раздела, не вес ссылки.
+// Сторож dir-entry-pages требует nofollow у каждой ссылки «Vendor website».
 const outboundRel =
-  e.affiliate === 'sds_manager'
+  e.affiliate === 'sds_manager' || e.tier === 'featured'
     ? 'sponsored nofollow noopener'
-    : e.tier === 'featured'
-      ? 'sponsored noopener'
-      : e.tier === 'claimed'
-        ? 'noopener'
-        : 'nofollow noopener'
+    : 'nofollow noopener'
 const src = 'nofollow noopener'
 const verified = formatDate(e.last_verified)
 const respLabel: Record<string, string> = {

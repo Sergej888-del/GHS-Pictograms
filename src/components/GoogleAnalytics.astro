@@ -31,6 +31,11 @@
   } catch (e) {}
 </script>
 <script is:inline async src="https://www.googletagmanager.com/gtag/js?id=G-7T76LL8ZF3"></script>
+{/* Umami Cloud (s92): cookieless statistics, no consent banner needed - counts the visitors GA4 does not see
+    after they decline. data-domains: only ghspictograms.com is counted (not *.pages.dev previews, not localhost).
+    data-exclude-search: page reports by path; query strings (tool deep links, label-maker state) are not sent.
+    Free Hobby plan: 100K events / month, one website, 6 months retention. */}
+<script is:inline defer src="https://cloud.umami.is/script.js" data-website-id="825a9f36-85a7-416f-b44d-b5a0937db4b8" data-domains="ghspictograms.com" data-exclude-search="true"></script>
 <script is:inline>
   gtag('js', new Date());
   gtag('config', 'G-7T76LL8ZF3');
@@ -54,6 +59,10 @@
       page: location.pathname,
       link_url: a.href.split('?')[0]
     });
+    // Same click to Umami (cookieless - counted even when GA4 consent was declined).
+    if (window.umami && typeof window.umami.track === 'function') {
+      window.umami.track('affiliate_click', { partner: 'sds_manager', placement: sid, page: location.pathname });
+    }
   }, true);
 
   // ---- Directory: clicks to a vendor's website -> GA4 `directory_outbound` (s92, No.148)
@@ -64,13 +73,17 @@
     var t = e.target;
     var a = t && t.closest ? t.closest('a[data-dir-out]') : null;
     if (!a) return;
-    gtag('event', 'directory_outbound', {
+    var ev = {
       vendor: a.getAttribute('data-dir-out') || 'unknown',
       category: a.getAttribute('data-dir-cat') || 'unknown',
       tier: a.getAttribute('data-dir-tier') || 'unknown',
       page: location.pathname,
       link_url: a.href.split('?')[0]
-    });
+    };
+    gtag('event', 'directory_outbound', ev);
+    if (window.umami && typeof window.umami.track === 'function') {
+      window.umami.track('directory_outbound', ev);
+    }
   }, true);
 
   // ---- Cookie consent banner -------------------------------------------------

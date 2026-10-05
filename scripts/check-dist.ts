@@ -3033,6 +3033,54 @@ const CHECKS: Check[] = [
     },
   },
 
+  // ─────────────── s92: Umami — статистика без cookie ───────────────
+  // GA4 работает в Consent Mode v2 с отказом по умолчанию: отказавшихся в баннере он почти не видит.
+  // Umami Cloud (без cookie) считает всех; тег живёт ТОЛЬКО в GoogleAnalytics.astro, рядом с gtag.
+  // Сторож держит: на каждой странице с GA4 ровно один тег Umami, у всех один website-id, ограничение
+  // data-domains на прод-домен (иначе превью *.pages.dev и localhost портят счёт), оба делегированных
+  // слушателя зовут umami.track, и в бандлах островов второго тега нет.
+  {
+    id: 'umami-tag',
+    group: 'Analytics',
+    title: 'Umami: на каждой странице с GA4 ровно один тег, один website-id, только прод-домен; клики уходят в umami.track',
+    run: async () => {
+      const GA = 'googletagmanager.com/gtag/js?id='
+      const SRC = 'src="https://cloud.umami.is/script.js"'
+      const DOMAINS = 'data-domains="ghspictograms.com"'
+      const TRACK_AFF = "umami.track('affiliate_click'"
+      const TRACK_DIR = "umami.track('directory_outbound'"
+      assertAscii('umami-tag', [GA, SRC, DOMAINS, TRACK_AFF, TRACK_DIR])
+      const problems: string[] = []
+      const ids = new Set<string>()
+      let withGa = 0
+      let tagged = 0
+      for (const { rel, html } of allPages()) {
+        const ga = html.includes(GA)
+        const n = html.split(SRC).length - 1
+        if (ga) withGa++
+        if (n === 0) { if (ga) problems.push(`${rel}: GA4 есть, тега Umami нет`); continue }
+        if (n > 1) problems.push(`${rel}: тег Umami ${n} раз`)
+        tagged++
+        const tag = html.slice(html.indexOf(SRC) - 40, html.indexOf(SRC) + 300)
+        const id = tag.match(/data-website-id="([0-9a-f-]{36})"/)?.[1]
+        if (!id) problems.push(`${rel}: у тега Umami нет data-website-id`)
+        else ids.add(id)
+        if (!tag.includes(DOMAINS)) problems.push(`${rel}: у тега Umami нет ${DOMAINS}`)
+        if (!html.includes(TRACK_AFF) || !html.includes(TRACK_DIR)) problems.push(`${rel}: слушатели не зовут umami.track`)
+      }
+      if (ids.size > 1) problems.push(`разные website-id: ${[...ids].join(', ')}`)
+      for (const { name, text } of assetFiles()) {
+        if (text.includes('cloud.umami.is')) problems.push(`${name}: тег Umami в бандле — второй источник счёта`)
+      }
+      const ok = problems.length === 0
+      return {
+        id: 'umami-tag', group: 'Analytics', ok,
+        headline: ok ? `тег Umami на ${tagged} страницах (с GA4 — ${withGa}), website-id ${[...ids][0] ?? '—'}` : `нарушений: ${problems.length}`,
+        detail: ok ? ['data-domains=ghspictograms.com, data-exclude-search; клики: affiliate_click и directory_outbound'] : problems.slice(0, 40),
+      }
+    },
+  },
+
   // ─────────────── SDS sections: /sds-sections/ (session 31) ───────────────
   // Раздел построен из контент-коллекции, а выпадашка веществ — из живой базы.
   // Поэтому проверок две породы: набор страниц сверяется с прозой на диске,
@@ -8119,6 +8167,9 @@ const CHECKS: Check[] = [
         if (r.state === 'live' && r.url) {
           if (!html.includes(`data-dir-out="${r.slug}"`)) problems.push(`${rel}: у ссылки на вендора нет data-dir-out`)
           else outbound++
+          // Решение Сергея s92: ссылка «Vendor website» — nofollow у всех, заявленных тоже.
+          const outRel = html.match(/<a class="dir-out"[^>]*\brel="([^"]*)"/)?.[1] ?? ''
+          if (!/\bnofollow\b/.test(outRel)) problems.push(`${rel}: ссылка на вендора без nofollow (rel="${outRel}")`)
           if (!html.includes("'directory_outbound'")) problems.push(`${rel}: нет слушателя directory_outbound`)
         }
       }
@@ -8130,7 +8181,7 @@ const CHECKS: Check[] = [
       return {
         id: 'dir-entry-pages', group: 'Directory', ok: problems.length === 0,
         headline: problems.length === 0
-          ? `${expected.size} страниц записей: индексируются ${expected.size - noindex}, под noindex ${noindex}; клик к вендору размечен на ${outbound}`
+          ? `${expected.size} страниц записей: индексируются ${expected.size - noindex}, под noindex ${noindex}; клик к вендору размечен на ${outbound}, все nofollow`
           : `проблем: ${problems.length}`,
         detail: problems.slice(0, 40),
       }
