@@ -42,6 +42,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
+import { loadSubstancesIndex, sdsIndexes, type SubstancesIndex } from '../lib/substancesIndexData'
 import { shortForCode, urlForCode, familyBadgeForCode } from '../lib/storageClasses'
 import { substanceNameFull, truncateName } from '../lib/substanceName'
 // ⚠ CAS здесь уже брался канонический (display_cas), а EC печатался сырым —
@@ -217,66 +218,61 @@ export default function StorageTool() {
     })
   }
 
-  // Load all substances once (same runtime pattern as the browse tool).
-  // rev6: live /sds/ pages load first (one small query) so each row can carry
-  // its report slug; bracketed multi-CAS rows join the list via their page's
-  // canonical CAS instead of being skipped.
+  // Load all substances once — from the build-time snapshot
+  // /data/substances-index.json (session 90). Before that this island pulled the
+  // whole `substances` table from Supabase on every page open; 1 Oct 2026 a
+  // headless-browser swarm did that ~6 600 times in a day and Supabase ran out
+  // of Disk IO budget. Why a file and not a query: the header of
+  // src/pages/data/substances-index.json.ts.
+  // rev6 logic kept as is: live /sds/ pages give each row its report slug;
+  // bracketed multi-CAS rows join the list via their page's canonical CAS.
   useEffect(() => {
     let cancelled = false
     async function loadAll() {
-      // 1. Live /sds/ page registry → slug by substance_id + by CAS (both forms).
-      const bySubstanceId = new Map<string, { slug: string; cas: string }>()
-      const slugByPageCas = new Map<string, string>()
-      {
-        const { data } = await supabase
-          .from('sds_pages')
-          .select('slug, cas_number, substance_id')
-          .eq('status', 'live')
-        for (const p of data ?? []) {
-          if (p.substance_id) bySubstanceId.set(p.substance_id, { slug: p.slug, cas: p.cas_number })
-          if (p.cas_number) slugByPageCas.set(p.cas_number, p.slug)
-        }
+      let snap: SubstancesIndex
+      try {
+        snap = await loadSubstancesIndex()
+      } catch (e) {
+        // Same visible behaviour as the old silent `break` — an empty list —
+        // but the reason is on the console now, not swallowed.
+        console.error('storage-tool: substances index failed to load', e)
+        if (!cancelled) { setAll([]); setLoading(false) }
+        return
       }
+      const { bySubstanceId, slugByCas: slugByPageCas } = sdsIndexes(snap.sdsPages)
 
       const rows: IndexedSubstance[] = []
-      let from = 0
-      const size = 1000
-      while (true) {
-        const { data, error } = await supabase
-          .from('substances')
-          .select('id, cas_number, iupac_name, common_name, display_name_short, synonyms, ec_number, ghs_pictogram_codes')
-          .not('cas_number', 'is', null)
-          .order('cas_number', { ascending: true })
-          .range(from, from + size - 1)
-        if (error || !data || data.length === 0) break
-        for (const r of data as SubstanceRow[]) {
-          const cas = r.cas_number?.trim()
-          if (!cas || cas === '-') continue
-          const page = bySubstanceId.get(r.id) ?? null
-          // Bracketed multi-CAS rows only make sense with a canonical CAS from
-          // their live page; without one they stay out (as before rev6).
-          // ⚠⚠ Признак непечатаемого CAS — ФОРМА, а не скобка. Две записи склеены
-          // БЕЗ маркеров («127087-87-09016-45-9», «3811-73-215922-78-8») и
-          // проверку на скобку проходили насквозь; ещё у трёх страниц SDS свой
-          // cas_number тоже не той формы. Правило одно — substanceIdentifiers.ts.
-          if (!casShapeOk(cas) && !page) continue
-          const displayCas = casShapeOk(cas) ? cas : (casForDisplay(page!.cas) || casForDisplay(cas))
-          if (!displayCas) continue
-          const displayName = substanceNameFull(r)
-          rows.push({
-            ...r,
-            cas_number: cas,
-            cas_nodash: displayCas.replace(/-/g, ''),
-            name_norm: norm(r.iupac_name),
-            display_name: displayName,
-            display_norm: norm(displayName),
-            syn_norm: (r.synonyms ?? []).map(norm).filter(Boolean).join(' | '),
-            display_cas: displayCas,
-            sdsSlug: page?.slug ?? slugByPageCas.get(cas) ?? null,
-          })
+      for (const x of snap.substances) {
+        // Exactly the old `select` — the snapshot carries fields for four tools.
+        const r: SubstanceRow = {
+          id: x.id, cas_number: x.cas_number, iupac_name: x.iupac_name, common_name: x.common_name,
+          display_name_short: x.display_name_short, synonyms: x.synonyms, ec_number: x.ec_number,
+          ghs_pictogram_codes: x.ghs_pictogram_codes,
         }
-        if (data.length < size) break
-        from += size
+        const cas = r.cas_number?.trim()
+        if (!cas || cas === '-') continue
+        const page = bySubstanceId.get(r.id) ?? null
+        // Bracketed multi-CAS rows only make sense with a canonical CAS from
+        // their live page; without one they stay out (as before rev6).
+        // ⚠⚠ Признак непечатаемого CAS — ФОРМА, а не скобка. Две записи склеены
+        // БЕЗ маркеров («127087-87-09016-45-9», «3811-73-215922-78-8») и
+        // проверку на скобку проходили насквозь; ещё у трёх страниц SDS свой
+        // cas_number тоже не той формы. Правило одно — substanceIdentifiers.ts.
+        if (!casShapeOk(cas) && !page) continue
+        const displayCas = casShapeOk(cas) ? cas : (casForDisplay(page!.cas) || casForDisplay(cas))
+        if (!displayCas) continue
+        const displayName = substanceNameFull(r)
+        rows.push({
+          ...r,
+          cas_number: cas,
+          cas_nodash: displayCas.replace(/-/g, ''),
+          name_norm: norm(r.iupac_name),
+          display_name: displayName,
+          display_norm: norm(displayName),
+          syn_norm: (r.synonyms ?? []).map(norm).filter(Boolean).join(' | '),
+          display_cas: displayCas,
+          sdsSlug: page?.slug ?? slugByPageCas.get(cas) ?? null,
+        })
       }
       if (!cancelled) {
         setAll(rows)

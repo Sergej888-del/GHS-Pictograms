@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Fuse from 'fuse.js'
-import { supabase } from '../lib/supabase'
+import { loadSubstancesIndex } from '../lib/substancesIndexData'
 import { substanceName, substanceNameFull } from '../lib/substanceName'
 import { casForDisplay, ecForDisplay, casShapeOk } from '../lib/substanceIdentifiers'
 import { logSearchMiss, cancelSearchMiss } from '../lib/toolSignals'
@@ -123,20 +123,21 @@ export default function SubstancePicker({ branchPaths = [] }: Props) {
 
   useEffect(() => {
     let cancelled = false
+    // Snapshot /data/substances-index.json (session 90) instead of paging the
+    // whole `substances` table out of Supabase on every open — see the header
+    // of src/pages/data/substances-index.json.ts for why.
     async function loadAll() {
       let data: Row[] = []
-      let from = 0
-      const size = 1000
-      for (;;) {
-        const { data: chunk } = await supabase
-          .from('substances')
-          .select('cas_number, iupac_name, common_name, display_name_short, ec_number, ghs_pictogram_codes, signal_word')
-          .not('cas_number', 'is', null)
-          .range(from, from + size - 1)
-        if (!chunk || chunk.length === 0) break
-        data = [...data, ...(chunk as Row[])]
-        if (chunk.length < size) break
-        from += size
+      try {
+        const snap = await loadSubstancesIndex()
+        data = snap.substances.map((x): Row => ({
+          cas_number: x.cas_number, iupac_name: x.iupac_name, common_name: x.common_name,
+          display_name_short: x.display_name_short, ec_number: x.ec_number,
+          ghs_pictogram_codes: x.ghs_pictogram_codes, signal_word: x.signal_word,
+        }))
+      } catch (e) {
+        // Same visible behaviour as the old silent `break` — an empty list.
+        console.error('substance-picker: substances index failed to load', e)
       }
       if (cancelled) return
       setAll(data)

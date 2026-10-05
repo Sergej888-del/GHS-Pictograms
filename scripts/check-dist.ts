@@ -4064,6 +4064,126 @@ const CHECKS: Check[] = [
     },
   },
 
+  // ─────────────────── Снимок справочника веществ для инструментов (s90) ───────
+  //
+  // ⚠⚠ ЗАЧЕМ. 1 октября 2026 рой headless-браузеров ~18 000 раз заставил четыре
+  // острова (ATE, матрица, выбор вещества в конструкторе, браузер /substances/)
+  // вытянуть из Supabase весь справочник; Disk IO ушёл в 100 %, пришло письмо
+  // «running out of Disk IO Budget». С s90 справочник едет статикой
+  // `/data/substances-index.json`, собранной на сборке. Проверка держит три
+  // вещи: (1) файл собран, цел и СХОДИТСЯ С БАЗОЙ — не сам с собой (старый
+  // снимок, собранный до новых строк, внутренне согласован и всё равно врёт);
+  // (2) бандлы его ПРОСЯТ — иначе снимок есть, а читает его никто; (3) в
+  // бандлах НЕТ прежних полных `select` по `substances` — вернись хоть один,
+  // база снова на пути у ботов, а сборка останется зелёной.
+  {
+    id: 'substances-index-snapshot',
+    group: 'Tools',
+    title: 'Снимок /data/substances-index.json собран, сходится с базой, бандлы просят его и не тянут таблицу целиком',
+    run: async () => {
+      const rel = 'data/substances-index.json'
+      const abs = join(DIST, rel)
+      if (!existsSync(abs)) {
+        return {
+          id: 'substances-index-snapshot', group: 'Tools', ok: false,
+          headline: `нет файла ${rel} — эндпоинт не отработал на сборке`,
+          detail: ['ATE-калькулятор, матрица, /ghs-label-maker/pick/ и /substances/ покажут пустой справочник'],
+        }
+      }
+      let snap: any
+      try {
+        snap = JSON.parse(readFileSync(abs, 'utf8'))
+      } catch (e) {
+        return { id: 'substances-index-snapshot', group: 'Tools', ok: false, headline: `${rel} не разбирается как JSON`, detail: [String(e)] }
+      }
+      const problems: string[] = []
+      const detail: string[] = []
+
+      // ① Счётчики против собственного содержимого — порча файла.
+      const subs: any[] = Array.isArray(snap.substances) ? snap.substances : []
+      const pages: any[] = Array.isArray(snap.sdsPages) ? snap.sdsPages : []
+      if (!Array.isArray(snap.substances)) problems.push('нет массива substances')
+      if (!Array.isArray(snap.sdsPages)) problems.push('нет массива sdsPages')
+      if (snap.counts?.substances !== subs.length) problems.push(`counts.substances=${snap.counts?.substances}, в файле ${subs.length}`)
+      if (snap.counts?.sdsPages !== pages.length) problems.push(`counts.sdsPages=${snap.counts?.sdsPages}, в файле ${pages.length}`)
+      if (subs.length < 2000) problems.push(`в снимке ${subs.length} веществ — обрезан (ожидалось ≥ 2000)`)
+
+      // ② Состав полей — ровно объединение прежних select четырёх островов.
+      // Ушло поле — остров молча получит undefined; появилось — должна смениться метка ?v=.
+      const FIELDS = ['id', 'cas_number', 'index_number', 'iupac_name', 'common_name', 'display_name_short', 'synonyms',
+        'ec_number', 'molecular_formula', 'h_statement_codes', 'ghs_pictogram_codes', 'signal_word', 'ate_oral']
+      if (subs.length) {
+        const keys = new Set(Object.keys(subs[0]))
+        const missing = FIELDS.filter((f) => !keys.has(f))
+        const extra = [...keys].filter((k) => !FIELDS.includes(k))
+        if (missing.length) problems.push(`у строк снимка нет полей: ${missing.join(', ')}`)
+        if (extra.length) problems.push(`у строк снимка лишние поля (подними ?v= в substancesIndexData.ts): ${extra.join(', ')}`)
+        const noCas = subs.filter((s) => !s.cas_number).length
+        if (noCas) problems.push(`${noCas} строк без cas_number — фильтр not.is.null не сработал`)
+      }
+      if (pages.length) {
+        for (const k of ['slug', 'cas_number', 'substance_id']) if (!(k in pages[0])) problems.push(`у sdsPages нет поля ${k}`)
+      }
+
+      // ③ ⭐⭐ Сверка С БАЗОЙ, а не сама с собой: число строк с CAS и число живых SDS.
+      const [{ count: dbSubs, error: e1 }, { count: dbPages, error: e2 }] = await Promise.all([
+        supabase.from('substances').select('id', { count: 'exact', head: true }).not('cas_number', 'is', null),
+        supabase.from('sds_pages').select('slug', { count: 'exact', head: true }).eq('status', 'live'),
+      ])
+      if (e1 || e2) problems.push(`база не ответила на сверку: ${e1?.message ?? ''} ${e2?.message ?? ''}`.trim())
+      else {
+        if (dbSubs !== subs.length) problems.push(`в базе ${dbSubs} веществ с CAS, в снимке ${subs.length} — снимок от другой базы или старой сборки`)
+        if (dbPages !== pages.length) problems.push(`в базе ${dbPages} живых SDS, в снимке ${pages.length}`)
+        if (dbSubs === subs.length && dbPages === pages.length) detail.push(`сходится с базой: ${subs.length} веществ, ${pages.length} живых SDS`)
+      }
+
+      // ④ Бандлы ПРОСЯТ снимок — и путь, который просят, существует.
+      const assets = assetFiles()
+      const asked = new Set<string>()
+      for (const a of assets) {
+        for (const m of a.text.matchAll(/["'`](\/data\/substances-index\.json[^"'`]*)["'`]/g)) asked.add(m[1])
+      }
+      if (assets.length === 0) problems.push('dist/_astro пуст — бандл не собран')
+      else if (!asked.size) problems.push('ни один бандл не просит /data/substances-index.json — снимок собран, но его никто не читает')
+      for (const url of asked) {
+        const path = url.split('?')[0].replace(/^\//, '')
+        if (!existsSync(join(DIST, path))) problems.push(`бандл просит ${url}, а файла ${path} в dist нет`)
+      }
+      if (asked.size) detail.push(`бандлы просят: ${[...asked].join(', ')}`)
+
+      // ⑤ ⛔⛔ ПРЕЖНИХ ПОЛНЫХ SELECT В БАНДЛАХ БЫТЬ НЕ ДОЛЖНО. Строки select
+      // уезжают в бандл дословно; эти три сочетания полей — отпечатки четырёх
+      // снятых запросов (ATE; матрица; picker и browse — у них select одинаковый).
+      // Точечные запросы (LabelConstructorLoader по cas_primary, PStatementSelector
+      // с limit) этих сочетаний не содержат и не трогаются.
+      const FINGERPRINTS = [
+        'synonyms, ec_number, molecular_formula',
+        'synonyms, ec_number, ghs_pictogram_codes',
+        'ec_number, ghs_pictogram_codes, signal_word',
+      ]
+      for (const fp of FINGERPRINTS) {
+        const hit = assets.filter((a) => a.text.includes(fp)).map((a) => a.name)
+        if (hit.length) problems.push(`в бандле снова полный select по substances («${fp}»): ${hit.join(', ')}`)
+      }
+      if (problems.length === 0) detail.push('полных select по substances в бандлах нет')
+
+      // ⑥ `_headers` накрывает файл правилом /data/* — иначе снимок едет без кэша браузера.
+      const headers = existsSync(resolve(process.cwd(), 'public', '_headers'))
+        ? readFileSync(resolve(process.cwd(), 'public', '_headers'), 'utf8') : ''
+      if (!/^\/data\/\*\s*\n\s+Cache-Control:/m.test(headers)) problems.push('в public/_headers нет правила /data/* с Cache-Control')
+
+      return {
+        id: 'substances-index-snapshot',
+        group: 'Tools',
+        ok: problems.length === 0,
+        headline: problems.length === 0
+          ? `${subs.length} веществ, ${pages.length} SDS, ${(readFileSync(abs).length / 1024 / 1024).toFixed(2)} МБ, сходится с базой, бандлы просят, прямых select нет`
+          : `проблем: ${problems.length}`,
+        detail: problems.length ? problems : detail,
+      }
+    },
+  },
+
   // ─────────────────── «Искал и не нашёл» — пассивный сигнал E (s88) ──────────
   //
   // Острова с поиском вещества находятся ПО СОДЕРЖИМОМУ — по тому, чем они ищут

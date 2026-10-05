@@ -1,7 +1,7 @@
 // v2 - mobile layout fix
 import { useEffect, useMemo, useState } from 'react'
 import Fuse from 'fuse.js'
-import { supabase } from '../lib/supabase'
+import { loadSubstancesIndex } from '../lib/substancesIndexData'
 import { substanceName, substanceNameFull } from '../lib/substanceName'
 import { casForDisplay, ecForDisplay, casShapeOk } from '../lib/substanceIdentifiers'
 import { substanceHref } from '../lib/substanceSlug'
@@ -79,44 +79,36 @@ export default function SubstanceFilterBrowse({ onSelectSubstance }: Props = {})
   })
   const [signalFilter, setSignalFilter] = useState<string>('')
 
-  // Загрузка всех веществ при монтировании
+  // Загрузка справочника при монтировании — из снимка /data/substances-index.json
+  // (session 90), а не постранично из Supabase на каждое открытие. Почему файл,
+  // а не запрос — в шапке src/pages/data/substances-index.json.ts. Реестр живых
+  // SDS-страниц едет в том же файле: раньше это был второй запрос.
   useEffect(() => {
+    let cancelled = false
     async function loadAll() {
       let data: Substance[] = []
-      let from = 0
-      const size = 1000
-      while (true) {
-        const { data: chunk } = await supabase
-          .from('substances')
-          .select('cas_number, iupac_name, common_name, display_name_short, ec_number, ghs_pictogram_codes, signal_word')
-          .not('cas_number', 'is', null)
-          .range(from, from + size - 1)
-        if (!chunk || chunk.length === 0) break
-        data = [...data, ...(chunk as Substance[])]
-        if (chunk.length < size) break
-        from += size
+      const map = new Map<string, string>()
+      try {
+        const snap = await loadSubstancesIndex()
+        data = snap.substances.map((x): Substance => ({
+          cas_number: x.cas_number, iupac_name: x.iupac_name, common_name: x.common_name,
+          display_name_short: x.display_name_short, ec_number: x.ec_number,
+          ghs_pictogram_codes: x.ghs_pictogram_codes, signal_word: x.signal_word,
+        }))
+        for (const row of snap.sdsPages) if (row.cas_number) map.set(row.cas_number, row.slug)
+      } catch (e) {
+        // Как и прежний молчаливый `break` — пустой список, но причина теперь в консоли.
+        console.error('substance-browse: substances index failed to load', e)
       }
+      if (cancelled) return
       setAll(data)
+      setSdsSlug(map)
       setLoading(false)
     }
     loadAll()
-  }, [])
-
-  // Реестр SDS-страниц: 109 строк, один запрос. Нужен, чтобы знать, у какого вещества
-  // есть локальная страница-деталь, а у какого её нет.
-  useEffect(() => {
-    async function loadSds() {
-      const { data } = await supabase
-        .from('sds_pages')
-        .select('slug, cas_number')
-        .eq('status', 'live')
-      const map = new Map<string, string>()
-      for (const row of (data ?? []) as { slug: string; cas_number: string | null }[]) {
-        if (row.cas_number) map.set(row.cas_number, row.slug)
-      }
-      setSdsSlug(map)
+    return () => {
+      cancelled = true
     }
-    loadSds()
   }, [])
 
   // Fuse.js поиск
