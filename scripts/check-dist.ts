@@ -73,7 +73,8 @@ import { AUTHOR_NAME, AUTHOR_LINKEDIN } from '../src/lib/siteIdentity'
 // ⚠ s92 (№148): правила каталога берутся из ТОГО ЖЕ модуля, по которому строятся страницы.
 import {
   CATEGORIES as DIR_CATEGORIES, entryIndexable as dirEntryIndexable, orderEntries as dirOrderEntries,
-  GATED_KINDS as DIR_GATED_KINDS, SPONSORED_MAX as DIR_SPONSORED_MAX,
+  GATED_KINDS as DIR_GATED_KINDS, SPONSORED_MAX as DIR_SPONSORED_MAX, printable as dirPrintable,
+  LEGAL_SOURCE_KINDS as DIR_LEGAL_SOURCE_KINDS,
 } from '../src/lib/directoryModel'
 import type { LcssRecord } from '../src/lib/lcssProperties'
 // ⚠⚠ Раскладка «код знака → файл» берётся ИЗ ТОГО ЖЕ модуля, что и страница.
@@ -8146,8 +8147,8 @@ const CHECKS: Check[] = [
       const rows = await selectAll<{ id: number; slug: string; category: string; state: string; tier: string; url: string | null }>(
         'directory_entries', 'id, slug, category, state, tier, url', (q) => q.order('id'))
       // Порог «не тонкая» считается той же entryIndexable по тем же фактам, что видит сборка.
-      const facts = await selectAll<{ entry_id: number; kind: string; confirmed: boolean | null }>(
-        'directory_facts', 'id, entry_id, kind, confirmed', (q) => q.order('id'))
+      const facts = await selectAll<{ entry_id: number; kind: string; confirmed: boolean | null; source_kind: string | null }>(
+        'directory_facts', 'id, entry_id, kind, confirmed, source_kind', (q) => q.order('id'))
       const problems: string[] = []
       const expected = new Set<string>()
       let noindex = 0
@@ -8167,9 +8168,15 @@ const CHECKS: Check[] = [
         if (r.state === 'live' && r.url) {
           if (!html.includes(`data-dir-out="${r.slug}"`)) problems.push(`${rel}: у ссылки на вендора нет data-dir-out`)
           else outbound++
-          // Решение Сергея s92: ссылка «Vendor website» — nofollow у всех, заявленных тоже.
-          const outRel = html.match(/<a class="dir-out"[^>]*\brel="([^"]*)"/)?.[1] ?? ''
-          if (!/\bnofollow\b/.test(outRel)) problems.push(`${rel}: ссылка на вендора без nofollow (rel="${outRel}")`)
+          // Решение Сергея s92: ссылка «Vendor website» — nofollow у всех, заявленных тоже. s93: таких ссылок на
+          // странице записи две (hero + карточка), у каждой — data-dir-place, и КАЖДАЯ обязана быть nofollow.
+          const outs = [...html.matchAll(/<a [^>]*data-dir-out="[^"]*"[^>]*>/g)].map((m) => m[0])
+          if (outs.length < 2) problems.push(`${rel}: ссылок на вендора ${outs.length}, ожидались hero + карточка`)
+          for (const tag of outs) {
+            const outRel = tag.match(/\brel="([^"]*)"/)?.[1] ?? ''
+            if (!/\bnofollow\b/.test(outRel)) problems.push(`${rel}: ссылка на вендора без nofollow (rel="${outRel}")`)
+            if (!/\bdata-dir-place="(table|card|entry-hero|entry)"/.test(tag)) problems.push(`${rel}: у ссылки на вендора нет data-dir-place`)
+          }
           if (!html.includes("'directory_outbound'")) problems.push(`${rel}: нет слушателя directory_outbound`)
         }
       }
@@ -8237,29 +8244,47 @@ const CHECKS: Check[] = [
   {
     id: 'dir-gated-facts',
     group: 'Directory',
-    title: 'Цены и цитаты печатаются только подтверждёнными check:directory — и все подтверждённые напечатаны',
+    title: 'Цены и цитаты печатаются только подтверждёнными check:directory и (цитаты) только из юридических документов — и всё, что прошло оба гейта, напечатано',
     run: async () => {
       const entries = await selectAll<{ id: number; slug: string; category: string; state: string }>(
         'directory_entries', 'id, slug, category, state', (q) => q.order('id'))
-      const facts = await selectAll<{ id: number; entry_id: number; kind: string; confirmed: boolean | null }>(
-        'directory_facts', 'id, entry_id, kind, confirmed', (q) => q.in('kind', DIR_GATED_KINDS as unknown as string[]).order('id'))
+      const facts = await selectAll<{ id: number; entry_id: number; kind: string; quote: string | null; confirmed: boolean | null; source_kind: string | null }>(
+        'directory_facts', 'id, entry_id, kind, quote, confirmed, source_kind', (q) => q.in('kind', DIR_GATED_KINDS as unknown as string[]).order('id'))
       const byId = new Map(entries.map((e) => [e.id, e]))
       const problems: string[] = []
       let printed = 0
       let hidden = 0
+      let nonLegal = 0
+      // Один и тот же абзац под несколькими подписями печатается один раз (PubChem) — вторая и далее
+      // копии «не напечатаны» по праву, сторож этого не считает ошибкой.
+      const seen = new Set<string>()
       for (const f of facts) {
         const e = byId.get(f.entry_id)
         if (!e || e.state !== 'live') continue
         const html = readPage(`directory/${e.category}/${e.slug}/index.html`) ?? ''
         const on = html.includes(`data-fid="${f.id}"`)
-        if (f.confirmed === true && !on) problems.push(`${e.slug}: подтверждённый ${f.kind} #${f.id} не напечатан`)
-        if (f.confirmed !== true && on) problems.push(`${e.slug}: НЕподтверждённый ${f.kind} #${f.id} напечатан`)
+        const legal = f.kind !== 'responsibility' || DIR_LEGAL_SOURCE_KINDS.includes(f.source_kind as any)
+        if (f.kind === 'responsibility' && !legal) nonLegal++
+        if (f.kind === 'responsibility' && !f.source_kind) problems.push(`${e.slug}: у цитаты #${f.id} нет source_kind`)
+        const key = `${f.entry_id}|${(f.quote ?? '').replace(/\W+/g, ' ').trim().toLowerCase()}`
+        const dup = f.kind === 'responsibility' && seen.has(key)
+        if (f.kind === 'responsibility') seen.add(key)
+        const should = dirPrintable(f as any) && !dup
+        if (should && !on) problems.push(`${e.slug}: подтверждённый ${f.kind} #${f.id} не напечатан`)
+        if (!should && on) problems.push(`${e.slug}: ${f.kind} #${f.id} напечатан, хотя ${f.confirmed !== true ? 'НЕ подтверждён' : !legal ? `источник не юридический (${f.source_kind})` : 'это повтор цитаты'}`)
         if (on) printed++
         else hidden++
       }
+      // На страницах не должно быть ни одной цитаты с не-юридическим типом источника.
+      for (const { rel, html } of allPages()) {
+        if (!rel.startsWith('directory/')) continue
+        for (const m of html.matchAll(/data-src-kind="([^"]*)"/g)) {
+          if (!DIR_LEGAL_SOURCE_KINDS.includes(m[1] as any)) problems.push(`${rel}: цитата с source_kind="${m[1]}" на странице`)
+        }
+      }
       return {
         id: 'dir-gated-facts', group: 'Directory', ok: problems.length === 0,
-        headline: problems.length === 0 ? `напечатано ${printed}, скрыто до подтверждения ${hidden}` : `проблем: ${problems.length}`,
+        headline: problems.length === 0 ? `напечатано ${printed}, скрыто ${hidden} (из них цитат не из юридических документов ${nonLegal})` : `проблем: ${problems.length}`,
         detail: problems.slice(0, 30),
       }
     },
@@ -8322,14 +8347,48 @@ const CHECKS: Check[] = [
     },
   },
   {
+    id: 'dir-entry-points',
+    group: 'Directory',
+    title: 'Каталог виден: секция с шестью разделами и кнопкой на главной, ссылка «Directory» в шапке каждой страницы (s93)',
+    run: async () => {
+      const problems: string[] = []
+      const home = readPage('index.html') ?? ''
+      if (!home.includes('data-hp-dir-cta')) problems.push('на главной нет кнопки «Browse the directory»')
+      const cats = [...home.matchAll(/data-hp-dir-cat="([^"]+)"/g)].map((m) => m[1])
+      const expect = DIR_CATEGORIES.filter((c) => c.slug !== 'closed').map((c) => `/directory/${c.slug}/`)
+      for (const e of expect) if (!cats.includes(e)) problems.push(`на главной нет карточки раздела ${e}`)
+      if (!/id="directory"/.test(home)) problems.push('на главной нет секции id="directory"')
+      // Шапка: ссылка на каталог в основной навигации и в мобильном меню — на каждой странице с шапкой.
+      let withHeader = 0
+      let missing = 0
+      const examples: string[] = []
+      for (const { rel, html } of allPages()) {
+        const start = html.indexOf('<header')
+        if (start < 0) continue
+        const header = html.slice(start, html.indexOf('</header>', start))
+        withHeader++
+        if (!header.includes('href="/directory/"')) {
+          missing++
+          if (examples.length < 5) examples.push(rel)
+        }
+      }
+      if (missing) problems.push(`шапка без ссылки на /directory/: ${missing} из ${withHeader} страниц (${examples.join(', ')})`)
+      return {
+        id: 'dir-entry-points', group: 'Directory', ok: problems.length === 0,
+        headline: problems.length === 0 ? `главная: кнопка + ${cats.length} разделов; шапка со ссылкой на ${withHeader} страницах` : `проблем: ${problems.length}`,
+        detail: problems,
+      }
+    },
+  },
+  {
     id: 'dir-sitemap',
     group: 'Directory',
     title: 'sitemap несёт хаб, семь категорий и только индексируемые записи; ссылка в подвале',
     run: async () => {
       const rows = await selectAll<{ id: number; slug: string; category: string; state: string; tier: string }>(
         'directory_entries', 'id, slug, category, state, tier', (q) => q.order('id'))
-      const facts = await selectAll<{ entry_id: number; kind: string; confirmed: boolean | null }>(
-        'directory_facts', 'id, entry_id, kind, confirmed', (q) => q.order('id'))
+      const facts = await selectAll<{ entry_id: number; kind: string; confirmed: boolean | null; source_kind: string | null }>(
+        'directory_facts', 'id, entry_id, kind, confirmed, source_kind', (q) => q.order('id'))
       const sitemap = existsSync(join(DIST, 'sitemap.xml')) ? readFileSync(join(DIST, 'sitemap.xml'), 'utf8') : ''
       const problems: string[] = []
       if (!sitemap) problems.push('нет dist/sitemap.xml')

@@ -144,7 +144,46 @@
 .dir-card-name h3 a:hover { color: var(--teal-700); text-decoration: underline; }
 .dir-vendor { margin: 3px 0 0; font-size: 13px; color: var(--ink-3); }
 .dir-vendor > span + span::before { content: ' · '; }
-.dir-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
+.dir-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* Кнопка на сайт вендора — в шапке карточки (s93: каталогу нужны клики, не мелкая ссылка в подвале) */
+.dir-out-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  border: 1px solid var(--teal-600);
+  border-radius: 8px;
+  background: var(--teal-600);
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff !important;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(13, 148, 136, .22);
+  transition: background 200ms ease, transform 200ms ease;
+}
+.dir-out-btn:hover { background: var(--teal-700); border-color: var(--teal-700); transform: translateY(-1px); text-decoration: none; }
+.dir-card.is-closed .dir-out-btn { display: none; }
+@media (max-width: 640px) { .dir-badges { width: 100%; } .dir-out-btn { margin-left: 0; width: 100%; justify-content: center; } }
+/* Колонка «Website» в таблице сравнения */
+.dir-table .dir-out-mini {
+  display: inline-block;
+  border: 1px solid var(--teal-200);
+  border-radius: 6px;
+  background: var(--teal-50);
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--teal-700);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.dir-table .dir-out-mini:hover { background: var(--teal-600); border-color: var(--teal-600); color: #ffffff; }
+/* Кнопка на вендора в hero страницы записи */
+.dir-hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.dir-hero-actions .hub-hero-cta { margin-top: 0; }
 .dir-badge {
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -241,6 +280,9 @@
   color: var(--acc-reg-ink);
 }
 .dir-resp blockquote { margin: 4px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--ink); }
+.dir-resp-src { margin: 4px 0 0; font-size: 11px; color: var(--ink-3); }
+.dir-resp-src .dir-src { margin-left: 0; }
+.dir-resp-kind { margin-left: 8px; font-style: italic; }
 .dir-aff-note { margin: 12px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--acc-pict-ink); }
 .dir-aff-note a { color: inherit; text-decoration: underline; }
 .dir-card-foot {

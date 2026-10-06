@@ -20,6 +20,11 @@
  *
  * ⚠ Записи, которых нет в файле, НЕ удаляются (правило 5: ничего не удаляется). Факты записей из
  * файла заменяются целиком.
+ *
+ * ⚠ s93: у каждой цитаты об ответственности обязателен `source_kind` (тип документа-источника —
+ * directoryModel.SourceKind); печатаются только terms / legal_notice / policy. И цитата, начатая
+ * со строчной буквы, — обрывок фразы: ей положено ведущее «…» (урок Avery #621), иначе файл не
+ * принимается.
  */
 import { config } from 'dotenv'
 import { resolve } from 'node:path'
@@ -57,6 +62,18 @@ const orphan = facts.filter((f) => !ids.has(f.entry_id as number))
 if (orphan.length) die(`факты без записи: ${orphan.slice(0, 5).map((f) => f.id).join(', ')}`)
 const noSource = facts.filter((f) => !/^https?:\/\//.test(String(f.source_url ?? '')))
 if (noSource.length) die(`факты без source_url: ${noSource.slice(0, 5).map((f) => f.id).join(', ')}`)
+const SOURCE_KINDS = new Set(['terms', 'legal_notice', 'policy', 'inline_disclaimer', 'other'])
+const resp = facts.filter((f) => f.kind === 'responsibility')
+const noKind = resp.filter((f) => !SOURCE_KINDS.has(String(f.source_kind ?? '')))
+if (noKind.length) die(`цитаты без source_kind (terms/legal_notice/policy/inline_disclaimer/other): ${noKind.slice(0, 8).map((f) => f.id).join(', ')}`)
+const strayKind = facts.filter((f) => f.kind !== 'responsibility' && f.source_kind != null)
+if (strayKind.length) die(`source_kind положен только цитатам об ответственности: ${strayKind.slice(0, 5).map((f) => f.id).join(', ')}`)
+// Обрывок фразы, напечатанный как целая («You are responsible for…» у Avery был хвостом инструкции), —
+// в кавычках так нельзя: строчная буква в начале без «…» = ошибка посева.
+const fragment = resp.filter((f) => /^[a-z]/.test(String(f.quote ?? '')))
+if (fragment.length) die(`цитата начинается со строчной буквы без «…» (обрывок фразы?): ${fragment.slice(0, 8).map((f) => f.id).join(', ')}`)
+const legalKinds = resp.filter((f) => ['terms', 'legal_notice', 'policy'].includes(String(f.source_kind))).length
+console.log(`  цитат об ответственности ${resp.length}: из юридических документов ${legalKinds}, не печатаются ${resp.length - legalKinds}`)
 
 const byState = new Map<string, number>()
 for (const e of entries) byState.set(String(e.state), (byState.get(String(e.state)) ?? 0) + 1)
@@ -70,7 +87,7 @@ const ENTRY_COLS = [
   'hq_country', 'hq_country_source', 'reason', 'reason_source', 'closed_on', 'closed_source', 'successor',
   'affiliate', 'affiliate_url', 'tags', 'last_verified',
 ]
-const FACT_COLS = ['id', 'entry_id', 'kind', 'label', 'value', 'detail', 'quote', 'source_url', 'evidence', 'sort', 'checked_on']
+const FACT_COLS = ['id', 'entry_id', 'kind', 'label', 'value', 'detail', 'quote', 'source_url', 'evidence', 'sort', 'checked_on', 'source_kind']
 const pick = (r: Row, cols: string[]) => Object.fromEntries(cols.map((c) => [c, r[c] ?? null]))
 
 async function main() {

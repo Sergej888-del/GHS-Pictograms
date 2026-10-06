@@ -14,6 +14,11 @@
  *        responsibility — начало дословной цитаты (регистр, кавычки и пунктуация игнорируются);
  *        прочие         — слово-маркер (CLP, OSHA, WHMIS, 17100, UFI…).
  *   4. Пишет отчёт `directory-check-<дата>.json` в корень репозитория и печатает сводку.
+ *   5. s93: предупреждает о цитатах об ответственности, у которых источник — не юридический документ
+ *      (`source_kind` не terms/legal_notice/policy: такие в базе остаются, но не печатаются), и о цитатах,
+ *      начатых со строчной буквы без «…» (обрывок фразы, напечатанный как целая, — урок Avery #621).
+ *      ⚠ «Найдено на странице» подтверждает ДОСЛОВНОСТЬ, не то, что документ — об этом продукте: тип
+ *      документа и его предмет проверяет человек, глазами, и записывает в source_kind.
  *
  * ⚠⚠ СКРИПТ НИЧЕГО НЕ ПИШЕТ В БАЗУ. Подтверждения (`confirmed = true`) по отчёту ставит Claude
  * MCP-запросом — check-скрипты в этом репозитории только читают (как check:dist). Пока факт не
@@ -36,7 +41,7 @@ config({ path: resolve(process.cwd(), '.env.local') })
 config()
 
 type Entry = { id: number; title: string; state: string; url: string | null; description_source: string | null; hq_country_source: string | null; closed_source: string | null; reason_source: string | null }
-type Fact = { id: number; entry_id: number; kind: string; value: string; quote: string | null; evidence: string | null; source_url: string; confirmed: boolean | null }
+type Fact = { id: number; entry_id: number; kind: string; value: string; quote: string | null; evidence: string | null; source_url: string; confirmed: boolean | null; source_kind: string | null }
 type Page = { url: string; status: number | null; finalUrl: string | null; error: string | null; text: string; textLength: number; verdict: 'ok' | 'dead' | 'blocked' | 'script-only' | 'error' }
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
@@ -162,7 +167,7 @@ async function main() {
   for (let from = 0; ; from += 1000) {
     const { data, error } = await db
       .from('directory_facts')
-      .select('id, entry_id, kind, value, quote, evidence, source_url, confirmed')
+      .select('id, entry_id, kind, value, quote, evidence, source_url, confirmed, source_kind')
       .order('id')
       .range(from, from + 999)
     if (error) die(`directory_facts: ${error.message}`)
@@ -235,6 +240,18 @@ async function main() {
     console.log(`\n✗ Мёртвый адрес у живой записи (${deadOwn.length}) — кандидаты в closed, решает человек:`)
     for (const d of deadOwn) console.log(`  #${d.id} ${d.title} — ${d.url} (${d.error})`)
   }
+  // s93: цитаты, которые не печатаются по типу источника, и обрывки фраз без «…».
+  const LEGAL = new Set(['terms', 'legal_notice', 'policy'])
+  const resp = scopedFacts.filter((f) => f.kind === 'responsibility')
+  const nonLegal = resp.filter((f) => !f.source_kind || !LEGAL.has(f.source_kind))
+  const fragments = resp.filter((f) => /^[a-z]/.test(f.quote ?? ''))
+  if (nonLegal.length) {
+    console.log(`\nЦитат об ответственности не из юридических документов (не печатаются): ${nonLegal.length} из ${resp.length}`)
+    const byKind = new Map<string, number>()
+    for (const f of nonLegal) byKind.set(f.source_kind ?? 'null', (byKind.get(f.source_kind ?? 'null') ?? 0) + 1)
+    console.log(`  ${[...byKind].map(([k, v]) => `${k} ${v}`).join(' · ')}`)
+  }
+  if (fragments.length) console.log(`⚠ Цитата со строчной буквы без «…» (обрывок фразы?): ${fragments.map((f) => `#${f.id}`).join(', ')}`)
   const blocked = pages.filter((p) => p.verdict === 'blocked' || p.verdict === 'script-only').length
   if (blocked) console.log(`\n${blocked} страниц закрыты от скриптов или рисуются скриптом — их факты остаются неподтверждёнными.`)
   console.log(`\nОтчёт: ${out}`)

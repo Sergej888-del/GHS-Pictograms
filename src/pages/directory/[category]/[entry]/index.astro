@@ -12,7 +12,7 @@ import DirectoryCard from '../../../../components/DirectoryCard.astro'
 import DirectoryClaimForm from '../../../../components/DirectoryClaimForm'
 import '../../../../styles/directory.css'
 import {
-  SITE, buildCard, categoryBySlug, categoryHref, entryHref, entryIndexable, formatDate,
+  SITE, buildCard, categoryBySlug, categoryHref, entryHref, entryIndexable, formatDate, outboundLink,
   type DirectoryEntry,
 } from '../../../../lib/directoryModel'
 import { loadDirectory } from '../../../../lib/directoryData'
@@ -32,6 +32,10 @@ const entry = entries.find((e) => e.id === id) as DirectoryEntry
 const card = buildCard(entry, facts)
 const category = categoryBySlug(entry.category)!
 const indexable = entryIndexable(entry, facts)
+// s93: кнопка на сайт вендора в hero — первое, что видит пришедший из поиска по имени продукта;
+// placement entry-hero в GA4 отличает её от кнопки на карточке ниже.
+const out = outboundLink(entry)
+const vendorShort = (entry.vendor && entry.vendor.length <= 28 ? entry.vendor : entry.title).replace(/\s*\(.*\)$/, '')
 const canonical = `${SITE}${entryHref(entry)}`
 const title = `${entry.title} — ${category.short}`
 const description = `${entry.title}${entry.vendor && entry.vendor !== entry.title ? ` (${entry.vendor})` : ''}: ${entry.description}`.slice(0, 160)
@@ -67,6 +71,12 @@ const breadcrumb = {
         <span class="hub-hero-chip">{entry.tier === 'listed' ? 'Listed · not verified by owner' : 'Verified by owner'}</span>
         <span class="hub-hero-chip">Last verified {formatDate(entry.last_verified)}</span>
       </div>
+      {out && (
+        <div class="dir-hero-actions">
+          <a class="hub-hero-cta dir-out" href={out.href} rel={out.rel} target="_blank" data-dir-out={entry.slug} data-dir-cat={entry.category} data-dir-tier={entry.tier} data-dir-place="entry-hero">Visit the {vendorShort} website ↗</a>
+          <a class="hub-hero-cta ghost" href={categoryHref(category.slug)}>Compare all {category.short.toLowerCase()}</a>
+        </div>
+      )}
     </div>
   </section>
 

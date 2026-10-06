@@ -6,14 +6,15 @@
 // ⚠ ПРАВИЛА §18.2, которые держит эта разметка:
 //   • ни звёзд, ни оценок, ни «best for» — только факты, у каждой строки ссылка «source»;
 //   • ни одного <img>: имена без логотипов (правило 2; сторож dir-no-logos);
-//   • цены и цитаты — только `printable()` (подтверждённые check-directory);
+//   • цены и цитаты — только `printable()` (подтверждённые check-directory); цитата об ответственности —
+//     к тому же только из юридического документа (`source_kind`, s93), и под ней написано, из какого;
 //   • партнёрство раскрыто бейджем и строкой, партнёрская ссылка — sponsored nofollow noopener,
 //     и рядом ссылка на /affiliate-disclosure/ (сторож affiliate-marking требует её на странице);
 //   • внешняя ссылка listed-записи — nofollow (владелец не подтверждён); claimed — обычная ссылка
 //     (бесплатный стимул заявить запись); featured — sponsored (оплачено — так требует Google).
 import {
-  type CardModel, AFFILIATE_NOTE, CLAIMED_NOTE, LISTED_NOTE, JURISDICTION_SHORT, TAG_LABEL,
-  countryName, entryHref, first, formatDate, jurisdictionsOf,
+  type CardModel, AFFILIATE_NOTE, CLAIMED_NOTE, LISTED_NOTE, JURISDICTION_SHORT, SOURCE_KIND_LABEL, TAG_LABEL,
+  countryName, entryHref, first, formatDate, jurisdictionsOf, outboundLink,
 } from '../lib/directoryModel'
 
 interface Props {
@@ -43,14 +44,14 @@ const integrations = f.integration ?? []
 const platforms = f.platform ?? []
 const notes = (f.pricing_note ?? []).filter((n) => n.confirmed === true)
 
-const outboundHref = e.affiliate === 'sds_manager' && e.affiliate_url ? e.affiliate_url : e.url
 // ⚠ Решение Сергея s92 (05.10): ссылка на вендора — nofollow у всех, заявленных тоже («пока оставляем
 // nofollow»). Стимул заявить — «Verified by owner» и место наверху раздела, не вес ссылки.
-// Сторож dir-entry-pages требует nofollow у каждой ссылки «Vendor website».
-const outboundRel =
-  e.affiliate === 'sds_manager' || e.tier === 'featured'
-    ? 'sponsored nofollow noopener'
-    : 'nofollow noopener'
+// Сторож dir-entry-pages требует nofollow у каждой ссылки «Vendor website». Логика — outboundLink().
+// ⭐ s93: кнопка на вендора стоит в ШАПКЕ карточки, не мелкой ссылкой в подвале — каталогу нужны клики
+// (решение Сергея), и клик по вендору — цифра для письма «we sent you N visitors». `data-dir-place`
+// говорит GA4, где был клик: card (список категории) или entry (страница записи).
+const out = outboundLink(e)
+const place = variant === 'full' ? 'entry' : 'card'
 const src = 'nofollow noopener'
 const verified = formatDate(e.last_verified)
 const respLabel: Record<string, string> = {
@@ -115,6 +116,9 @@ const hasDetails =
       {e.tier !== 'listed' && <span class="dir-badge claimed" data-dir-claimed>Verified by owner</span>}
       {e.affiliate && <span class="dir-badge aff" data-dir-affiliate={e.affiliate}>Affiliate partner</span>}
       {e.tags.map((t) => TAG_LABEL[t] && <span class="dir-badge tag">{TAG_LABEL[t]}</span>)}
+      {out && (
+        <a class="dir-out dir-out-btn" href={out.href} rel={out.rel} target="_blank" data-dir-out={e.slug} data-dir-cat={e.category} data-dir-tier={e.tier} data-dir-place={place}>Vendor website ↗</a>
+      )}
     </div>
   </header>
 
@@ -252,10 +256,13 @@ const hasDetails =
         <section class="dir-block dir-resp">
           <h4>What the vendor says it is responsible for</h4>
           {card.responsibility.map((r) => (
-            <figure data-fact="responsibility" data-fid={r.id}>
+            <figure data-fact="responsibility" data-fid={r.id} data-src-kind={r.source_kind ?? ''}>
               <figcaption>{respLabel[r.label ?? ''] ?? r.value}</figcaption>
               <blockquote>“{quoteText(r.quote)}”</blockquote>
-              <a class="dir-src" href={r.source_url} rel={src} target="_blank">read the terms</a>
+              <p class="dir-resp-src">
+                <a class="dir-src" href={r.source_url} rel={src} target="_blank">source</a>
+                <span class="dir-resp-kind">{r.source_kind ? SOURCE_KIND_LABEL[r.source_kind] : ''}</span>
+              </p>
             </figure>
           ))}
           {card.responsibility.length === 0 && card.termsUrl && (
@@ -264,6 +271,10 @@ const hasDetails =
               source: <a href={card.termsUrl} rel={src} target="_blank">vendor terms</a>.
             </p>
           )}
+          <p class="dir-fine">
+            Quoted only from the vendor’s own legal documents — terms, licence, legal notice or a published policy — never
+            from its blog, help pages or marketing.
+          </p>
         </section>
       )}
     </details>
@@ -279,10 +290,8 @@ const hasDetails =
   <footer class="dir-card-foot">
     <span class="dir-status">{e.tier === 'listed' ? LISTED_NOTE : CLAIMED_NOTE} Last verified {verified}.</span>
     <span class="dir-links">
-      {outboundHref && !closed && (
-        <a class="dir-out" href={outboundHref} rel={outboundRel} target="_blank" data-dir-out={e.slug} data-dir-cat={e.category} data-dir-tier={e.tier}>Vendor website ↗</a>
-      )}
       {variant === 'compact' && <a href={entryHref(e)}>Details · claim or correct</a>}
+      {variant === 'full' && e.state === 'live' && <a href="#claim">{e.tier === 'listed' ? 'Claim or correct this listing' : 'Report a correction'}</a>}
     </span>
   </footer>
 </article>

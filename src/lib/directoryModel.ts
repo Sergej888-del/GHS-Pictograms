@@ -22,6 +22,15 @@
 // который пропускает страницу через суммаризатор: он может исказить число ($9,293 вместо
 // $9,299 — живой случай s92) или обрезать цитату. scripts/check-directory.ts заново читает
 // страницу-источник и ищет на ней `evidence`; только после этого `confirmed = true`.
+//
+// ⭐⭐⭐ ЦИТАТА ОБ ОТВЕТСТВЕННОСТИ — ТОЛЬКО ИЗ ЮРИДИЧЕСКОГО ДОКУМЕНТА (`LEGAL_SOURCE_KINDS`, решение
+// Сергея s93, 05.10). Повод: у Avery печаталась оговорка «the contents of this article… are not a
+// legal opinion» — дословная, подтверждённая, и при этом о СТАТЬЕ БЛОГА, а не об этикетках.
+// «Дословно» ≠ «про то, что мы утверждаем». Поэтому у каждой цитаты `source_kind` — тип
+// документа-источника, и блок «What the vendor says it is responsible for» печатает только
+// terms / legal_notice / policy. Оговорка на странице продукта (`inline_disclaimer`) и
+// блог / FAQ / маркетинг / пересказ закона (`other`) остаются в базе как след проверки, но не
+// печатаются — даже подтверждённые. Под цитатой читатель видит, из какого документа она.
 
 export const DIRECTORY_BASE = '/directory/'
 export const SITE = 'https://ghspictograms.com'
@@ -179,6 +188,28 @@ export type FactKind =
   | 'iso17100' | 'ufi_pcn' | 'pricing_model' | 'price' | 'pricing_note' | 'pricing_statement' | 'feature'
   | 'certification' | 'integration' | 'responsibility'
 
+/**
+ * Тип документа, из которого взята цитата об ответственности (только у kind = 'responsibility').
+ *   terms             — Terms & Conditions / Terms of Service / Terms of Use / EULA / licence / AGB / MSA;
+ *   legal_notice      — страница Legal notice / Disclaimer / Impressum / policies регулятора;
+ *   policy            — формальная политика с датой и разделом об ответственности (EcoOnline «Use of AI»);
+ *   inline_disclaimer — оговорка на странице продукта или инструмента (ChemRadar, Cole-Parmer, ILPI);
+ *   other             — блог, справка, FAQ, маркетинг, пересказ закона («according to CLP Article 4…»).
+ */
+export type SourceKind = 'terms' | 'legal_notice' | 'policy' | 'inline_disclaimer' | 'other'
+
+/** Из чего разрешено цитировать ответственность вендора (решение Сергея s93). */
+export const LEGAL_SOURCE_KINDS: readonly SourceKind[] = ['terms', 'legal_notice', 'policy']
+
+/** Подпись под цитатой — читатель видит, какого рода документ говорит. */
+export const SOURCE_KIND_LABEL: Record<SourceKind, string> = {
+  terms: 'from the vendor’s terms',
+  legal_notice: 'from the legal notice',
+  policy: 'from a published policy',
+  inline_disclaimer: 'disclaimer on the product page',
+  other: 'not a legal document',
+}
+
 export interface DirectoryFact {
   id: number
   entry_id: number
@@ -193,6 +224,8 @@ export interface DirectoryFact {
   checked_on: string
   confirmed: boolean | null
   confirmed_on: string | null
+  /** Только у responsibility; у прочих видов null. */
+  source_kind: SourceKind | null
 }
 
 // ─────────────────────────── правила печати ───────────────────────────
@@ -200,13 +233,21 @@ export interface DirectoryFact {
 /** Факты, которые печатаются только подтверждёнными (см. шапку файла). */
 export const GATED_KINDS: readonly FactKind[] = ['price', 'pricing_note', 'responsibility']
 
+/** Цитата об ответственности взята из юридического документа (а не из блога, FAQ или страницы продукта). */
+export function legalSource(f: Pick<DirectoryFact, 'kind' | 'source_kind'>): boolean {
+  if (f.kind !== 'responsibility') return true
+  return f.source_kind != null && LEGAL_SOURCE_KINDS.includes(f.source_kind)
+}
+
 /**
  * Печатается ли факт. ⚠ `pricing_note` (условия: «billed annually», «excl. VAT») идёт вместе с
  * ценами — без подтверждённой цены условия к ней бессмысленны, поэтому гейт тот же.
+ * ⚠ `responsibility` проходит два гейта: подтверждена дословность И источник — юридический документ.
  */
-export function printable(f: Pick<DirectoryFact, 'kind' | 'confirmed'>): boolean {
+export function printable(f: Pick<DirectoryFact, 'kind' | 'confirmed' | 'source_kind'>): boolean {
   if (!GATED_KINDS.includes(f.kind)) return true
-  return f.confirmed === true
+  if (f.confirmed !== true) return false
+  return legalSource(f)
 }
 
 /**
@@ -217,7 +258,7 @@ export function printable(f: Pick<DirectoryFact, 'kind' | 'confirmed'>): boolean
  */
 export const ENTRY_INDEX_MIN_FACTS = 5
 
-type FactForIndex = Pick<DirectoryFact, 'entry_id' | 'kind' | 'confirmed'>
+type FactForIndex = Pick<DirectoryFact, 'entry_id' | 'kind' | 'confirmed' | 'source_kind'>
 
 /** Сколько фактов записи печатается на её карточке. */
 export function printableFactCount(entryId: number, facts: readonly FactForIndex[]): number {
@@ -256,6 +297,22 @@ export const AFFILIATE_NOTE: Record<'sds_manager' | 'ghslabels', string> = {
   sds_manager: 'Affiliate partner: this site earns a commission if you sign up through the link on this card.',
   ghslabels: 'Affiliate relationship: our sister site ghslabels.com has an affiliate relationship with this vendor.',
 }
+
+/**
+ * Ссылка на сайт вендора — ОДНА функция для карточки, hero страницы записи и колонки таблицы (s93):
+ * партнёрская ссылка SDS Manager вместо обычной, rel по правилу §8 / решению Сергея s92 (nofollow у всех).
+ * Сторож dir-entry-pages требует nofollow у каждой такой ссылки; dir-affiliate — fpr=ghs3 + sponsored у партнёра.
+ */
+export function outboundLink(e: Pick<DirectoryEntry, 'url' | 'affiliate' | 'affiliate_url' | 'tier' | 'state'>): { href: string; rel: string } | null {
+  if (e.state === 'closed') return null
+  const href = e.affiliate === 'sds_manager' && e.affiliate_url ? e.affiliate_url : e.url
+  if (!href) return null
+  const rel = e.affiliate === 'sds_manager' || e.tier === 'featured' ? 'sponsored nofollow noopener' : 'nofollow noopener'
+  return { href, rel }
+}
+
+/** Где стоял клик к вендору — параметр `placement` события directory_outbound (GA4 / Umami). */
+export type OutboundPlacement = 'table' | 'card' | 'entry-hero' | 'entry'
 
 export const LISTED_NOTE = 'Listed, not ranked. Not verified by the owner.'
 export const CLAIMED_NOTE = 'Verified by owner: the company has confirmed or corrected these facts.'
@@ -327,9 +384,15 @@ export interface CardModel {
   pricesPending: boolean
   /** Часть тарифов напечатана, часть ещё не подтверждена — карточка обязана об этом сказать. */
   pricesPartial: boolean
-  /** Подтверждённые цитаты из условий вендора, в порядке RESPONSIBILITY_ORDER. */
+  /**
+   * Цитаты из юридических документов вендора, подтверждённые и без повторов (один и тот же абзац
+   * у PubChem стоял под тремя подписями), в порядке RESPONSIBILITY_ORDER.
+   */
   responsibility: DirectoryFact[]
-  /** Страница условий, если цитаты есть, но ни одна ещё не подтверждена. */
+  /**
+   * Юридический документ вендора, если цитаты из него есть, но ни одна ещё не подтверждена.
+   * ⚠ Только из legal-строк: ссылка «vendor terms» не имеет права вести в блог.
+   */
   termsUrl: string | null
   /** Самая низкая подтверждённая ненулевая цена — для колонки «Pricing» таблицы. */
   fromPrice: string | null
@@ -345,13 +408,20 @@ export function buildCard(entry: DirectoryEntry, all: DirectoryFact[]): CardMode
   for (const k of Object.keys(facts) as FactKind[]) facts[k].sort((a, b) => a.sort - b.sort || a.id - b.id)
   const priceRows = facts.price ?? []
   const prices = priceRows.filter(printable)
-  const respRows = facts.responsibility ?? []
+  const respRows = (facts.responsibility ?? []).filter(legalSource)
+  const seenQuotes = new Set<string>()
   const responsibility = respRows
     .filter(printable)
     .sort(
       (a, b) =>
         RESPONSIBILITY_ORDER.indexOf((a.label ?? '') as any) - RESPONSIBILITY_ORDER.indexOf((b.label ?? '') as any),
     )
+    .filter((r) => {
+      const key = (r.quote ?? '').replace(/\W+/g, ' ').trim().toLowerCase()
+      if (seenQuotes.has(key)) return false
+      seenQuotes.add(key)
+      return true
+    })
   // ⚠ «from» — по тарифам самого продукта: обучение, услуги и надбавки («Training», «(service)», «add-on»,
   // «translation pack») в «from» не идут, иначе SBLCore читался бы «from EUR 30» — это цена проверки этикетки.
   const NOT_A_PLAN = /training|service|add-on|certification|translation pack/i

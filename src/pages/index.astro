@@ -12,6 +12,8 @@ import SiteHeader from '../components/SiteHeader.astro'
 import SiteFooter from '../components/SiteFooter.astro'
 import { layoutLabel, renderSvg } from '../lib/labelEngine'
 import { JURISDICTION_BRANCHES } from '../lib/labelMakerHub'
+import { CATEGORIES as DIR_CATEGORIES, categoryHref as dirHref } from '../lib/directoryModel'
+import { loadDirectory } from '../lib/directoryData'
 
 /**
  * pictograms_signals: id, code, name_en, svg_content, svg_url
@@ -274,6 +276,28 @@ const pillars = [
   { href: '/compliance/reach/', accent: '#e11d48', n: '06', title: 'REACH', copy: 'Registration duties, tonnage bands, downstream user obligations.' },
   { href: '/compliance/svhc/', accent: '#93b4e8', n: '07', title: 'SVHC', copy: 'Candidate list changes, authorisation, communication duties.' },
 ]
+
+// ── Каталог инструментов и услуг (№148, s93). Решение Сергея 05.10: ссылка в подвале — не
+// представление; каталогу нужны клики, и клики с него по вендорам — цифра для писем «you are listed».
+// Карточки ведут сразу в разделы (один клик до таблицы сравнения), не на хаб. Числа — из того же
+// снимка базы, что строит /directory/ (loadDirectory кэшируется на сборку). ⚠ Без оценок и «best»:
+// §18.2 действует и на главной — только «N listed» и чем раздел полезен.
+const { entries: dirEntries } = await loadDirectory()
+const dirLive = dirEntries.filter((e) => e.state === 'live')
+const dirCards = DIR_CATEGORIES.filter((c) => c.slug !== 'closed').map((c) => ({
+  href: dirHref(c.slug),
+  tag: c.eyebrow.replace('Directory · ', ''),
+  title: c.h1.charAt(0).toUpperCase() + c.h1.slice(1),
+  n: dirLive.filter((e) => e.category === c.slug).length,
+  copy: {
+    'sds-authoring-software': 'Write and classify SDSs: published prices, jurisdictions, languages, UFI/PCN.',
+    'sds-management': 'Keep supplier SDSs current and reachable; chemical inventory where offered.',
+    'label-design-printing': 'Label software, printers and stock for GHS labels — which prints from data, which from an SDS.',
+    'regulatory-databases': 'ECHA, PubChem, GESTIS, CAMEO and free SDS search — who runs each and what it warrants.',
+    'authoring-services-consultants': 'SDS writers, CLP/REACH consultants and SDS translators, with what each says it is responsible for.',
+    'training': 'GHS, CLP and HazCom training from regulators and professional bodies.',
+  }[c.slug] ?? c.description,
+}))
 
 const roles = [
   { who: 'EHS managers', copy: 'Segregation plans and storage-class decisions for the chemical store.' },
@@ -1183,9 +1207,94 @@ const roles = [
       }
 
       /* ── Other tools band ── */
+      /* ── Directory (№148, s93) ── */
+      .hp-dir {
+        padding: clamp(56px, 8vw, 104px) 0;
+        background: #ffffff;
+        border-bottom: 1px solid var(--line);
+      }
+      .hp-dir-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 20px;
+      }
+      .hp-dir-grid {
+        margin-top: 32px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 14px;
+      }
+      .hp-dir-card {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--line);
+        border-top: 3px solid var(--teal-500);
+        border-radius: 12px;
+        padding: 18px 18px 16px;
+        background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+        box-shadow: 0 2px 6px rgba(15, 23, 41, 0.06);
+        transition: all 400ms ease-out;
+        text-decoration: none;
+      }
+      .hp-dir-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 18px 34px rgba(15, 23, 41, 0.14);
+        border-color: var(--teal-200);
+        border-top-color: var(--teal-600);
+      }
+      .hp-dir-card .tag {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--teal-700);
+      }
+      .hp-dir-card h3 {
+        margin: 8px 0 6px;
+        font-size: 17px;
+        font-weight: 600;
+        letter-spacing: -0.015em;
+        color: var(--ink);
+      }
+      .hp-dir-card p.copy {
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--ink-2);
+        flex: 1;
+      }
+      .hp-dir-card p.n {
+        margin-top: 14px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        color: var(--ink-3);
+      }
+      .hp-dir-card p.n strong {
+        font-size: 15px;
+        color: var(--teal-700);
+      }
+      .hp-dir-foot {
+        margin-top: 22px;
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: var(--ink-3);
+      }
+      .hp-dir-foot a {
+        margin-left: 6px;
+        color: var(--teal-700);
+        font-weight: 600;
+      }
       .hp-others {
         background: linear-gradient(180deg, #f1f5f9 0%, var(--bg-b) 100%);
         padding: 0 0 clamp(48px, 6vw, 88px);
+      }
+      /* s93: раньше справочники шли сразу под SDS-библиотекой (её карточки «висели» на стыке);
+         теперь между ними секция каталога с рамкой — нужен верхний отступ. */
+      .hp-dir + .hp-others {
+        padding-top: clamp(40px, 5vw, 64px);
       }
       .hp-others-head {
         display: flex;
@@ -1633,6 +1742,7 @@ const roles = [
           <div><p class="hp-stat-num">4,178</p><p class="hp-stat-label">Substances, CLP Annex VI</p></div>
           <div><p class="hp-stat-num">9</p><p class="hp-stat-label">Pictograms, free SVG</p></div>
           <div><p class="hp-stat-num">4</p><p class="hp-stat-label">Label rulebooks</p></div>
+          <div><p class="hp-stat-num teal">{dirLive.length}</p><p class="hp-stat-label">Tools &amp; services listed</p></div>
         </div>
       </div>
     </section>
@@ -1956,6 +2066,40 @@ const roles = [
       </div>
     </section>
 
+    <section class="hp-dir" id="directory">
+      <div class="wrap">
+        <div class="hp-dir-head">
+          <div style="max-width:760px">
+            <p class="hp-eyebrow">03 · Tools &amp; services directory</p>
+            <h2 class="hp-h2">{dirLive.length} SDS and GHS tools and services — listed, never ranked.</h2>
+            <p class="hp-sub">
+              SDS authoring and management software, GHS label software, chemical safety databases, SDS writing and
+              translation services. Published prices only, countries and languages, and what each vendor’s own terms say
+              it is — and is not — responsible for. Every fact links to the page it came from.
+            </p>
+          </div>
+          <a href="/directory/" class="btn-teal" data-hp-dir-cta>Browse the directory →</a>
+        </div>
+
+        <div class="hp-dir-grid">
+          {
+            dirCards.map((c) => (
+              <a href={c.href} class="hp-dir-card" data-hp-dir-cat={c.href}>
+                <p class="tag">{c.tag}</p>
+                <h3>{c.title}</h3>
+                <p class="copy">{c.copy}</p>
+                <p class="n"><strong>{c.n}</strong> listed · compare →</p>
+              </a>
+            ))
+          }
+        </div>
+        <p class="hp-dir-foot">
+          Order is alphabetical, owner-verified listings first, and is never sold. Owners can claim a listing for free.
+          <a href="/directory/#who-is-responsible">Who is legally responsible for an SDS? →</a>
+        </p>
+      </div>
+    </section>
+
     {/* Reference data — added session 19 with the P-statements hub. Deliberately
          un-numbered: the 01/02/03 eyebrows belong to Tools / SDS / Compliance,
          and .hp-others above sets the precedent for a section without a number. */}
@@ -1982,7 +2126,7 @@ const roles = [
     <section class="hp-compliance" id="compliance">
       <div class="dots" aria-hidden="true"></div>
       <div class="wrap">
-        <p class="hp-eyebrow on-dark">03 · Compliance Hub</p>
+        <p class="hp-eyebrow on-dark">04 · Compliance Hub</p>
         <h2 class="hp-h2 on-dark">Seven regulatory pillars, written for the person who has to sign off.</h2>
         <p class="hp-sub on-dark">
           In-depth guides on the frameworks that decide your label, your SDS and your storage plan —
@@ -2023,7 +2167,7 @@ const roles = [
       <div class="wrap">
         <div class="hp-pictos-head">
           <div style="max-width:720px">
-            <p class="hp-eyebrow navy">04 · Pictogram reference</p>
+            <p class="hp-eyebrow navy">05 · Pictogram reference</p>
             <h2 class="hp-h2">GHS01–GHS09, free SVGs, and the substance behind each one.</h2>
             <p class="hp-sub">
               The original library, still here: every pictogram with its hazard classes, print notes

@@ -15,7 +15,7 @@ import DirectoryCard from '../../../components/DirectoryCard.astro'
 import '../../../styles/directory.css'
 import {
   CATEGORIES, SITE, SPONSORED_MAX, JURISDICTION_ORDER, JURISDICTION_SHORT, buildCard, categoryHref, countryName,
-  entryHref, first, formatDate, jurisdictionsOf, languageShort, orderEntries, type Category,
+  entryHref, first, formatDate, jurisdictionsOf, languageShort, orderEntries, outboundLink, type Category,
 } from '../../../lib/directoryModel'
 import { loadDirectory } from '../../../lib/directoryData'
 import { LEGAL_QUOTES, LEGAL_SUMMARY, LEGAL_DISCLAIMER, LEGAL_CHECKED } from '../../../lib/directoryLegal'
@@ -108,7 +108,8 @@ const jsonLd = {
         <h2 class="hub-h2">{n} listings side by side</h2>
         <p class="hub-sub">
           Listed, not ranked: the order is alphabetical, with listings confirmed by their owners first, and it is never
-          sold. Each column comes from the vendor’s own pages; open a card below for the source of every line.
+          sold. Each column comes from the vendor’s own pages; click a name for the full card with the source of every
+          line, or go straight to the vendor’s site from the last column.
         </p>
 
         <div class="dir-filters" data-dir-filters>
@@ -138,7 +139,7 @@ const jsonLd = {
           <table class="dir-table" data-dir-table>
             <thead>
               <tr>
-                <th>Name</th><th>Based in</th><th>Covers</th><th>Languages</th><th>Pricing</th><th>Delivered as</th><th>Trial</th><th>API</th>
+                <th>Name</th><th>Based in</th><th>Covers</th><th>Languages</th><th>Pricing</th><th>Delivered as</th><th>Trial</th><th>API</th><th>Website</th>
               </tr>
             </thead>
             <tbody>
@@ -147,6 +148,7 @@ const jsonLd = {
                 const juris = jurisdictionsOf(c)
                 const model = first(c, 'pricing_model')
                 const dep = first(c, 'deployment')
+                const out = outboundLink(e)
                 return (
                   <tr
                     data-dir-row={e.id}
@@ -169,6 +171,13 @@ const jsonLd = {
                     <td>{dep ? dep.value : <span class="no">—</span>}</td>
                     <td>{first(c, 'free_trial') ? <span class="yes">Yes</span> : <span class="no">—</span>}</td>
                     <td>{first(c, 'api') ? <span class="yes">Yes</span> : <span class="no">—</span>}</td>
+                    <td>
+                      {out ? (
+                        <a class="dir-out-mini" href={out.href} rel={out.rel} target="_blank" data-dir-out={e.slug} data-dir-cat={e.category} data-dir-tier={e.tier} data-dir-place="table" title={`Open the ${e.title} website`}>Visit ↗</a>
+                      ) : (
+                        <span class="no">—</span>
+                      )}
+                    </td>
                   </tr>
                 )
               })}

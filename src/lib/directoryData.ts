@@ -17,7 +17,7 @@ import type { DirectoryEntry, DirectoryFact } from './directoryModel'
 const ENTRY_COLS =
   'id, slug, category, state, tier, title, vendor, url, description, description_source, hq_country, hq_country_source, reason, reason_source, closed_on, closed_source, successor, affiliate, affiliate_url, tags, claimed_on, last_verified'
 const FACT_COLS =
-  'id, entry_id, kind, label, value, detail, quote, source_url, evidence, sort, checked_on, confirmed, confirmed_on'
+  'id, entry_id, kind, label, value, detail, quote, source_url, evidence, sort, checked_on, confirmed, confirmed_on, source_kind'
 
 export interface DirectorySnapshot {
   entries: DirectoryEntry[]
