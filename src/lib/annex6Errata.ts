@@ -597,10 +597,11 @@ const CORRECTED_BY: Record<string, Record<string, string[]>> = {
 const CORRECTED: Record<string, Record<string, Extract<ErratumStatus, { kind: 'corrected' }>>> = {};
 for (const [act, byLang] of Object.entries(CORRECTED_BY)) {
   const c = CORRIGENDA.find((x) => x.act === act);
-  if (!c) throw new Error(`annex6Errata: корриджендум ${act} не описан в CORRIGENDA`);
+  // ⚠ Текст ошибок — по-английски: модуль едет в бандл конструктора этикеток (сторож interface-language).
+  if (!c) throw new Error(`annex6Errata: corrigendum ${act} is not described in CORRIGENDA`);
   for (const [lang, indexes] of Object.entries(byLang)) {
     for (const index of indexes) {
-      if (!ERRATA[index]?.[lang]) throw new Error(`annex6Errata: CORRECTED_BY называет ${index} · ${lang}, которой нет в ERRATA`);
+      if (!ERRATA[index]?.[lang]) throw new Error(`annex6Errata: CORRECTED_BY names ${index} / ${lang}, which is not in ERRATA`);
       (CORRECTED[index] ??= {})[lang] = { kind: 'corrected', act, oj: c.oj, date: c.date, eli: c.eli, reported: false };
     }
   }
