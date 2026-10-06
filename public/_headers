@@ -110,6 +110,21 @@
   Cache-Control: public, max-age=86400
 
 
+# ── Бейджи каталога и логотипы вендоров (session 96, №148) ──────────────────
+#
+# `/badges/directory-listed.svg` и `directory-verified.svg` вендоры вставляют на СВОИ сайты
+# (<img> со ссылкой на свою запись) — каждый показ чужой страницы тянет файл отсюда. Сутки
+# кэша: имена без хеша, перерисовка бейджа доедет к вернувшемуся за день — цена ничтожна.
+# Логотипы (`/directory-logos/*`, только от владельцев) и скриншоты — то же правило.
+# ⚠ Страниц под этими путями нет — проверено сторожем dir-badges (dist/badges/ — только svg).
+/badges/*
+  Cache-Control: public, max-age=86400
+/directory-logos/*
+  Cache-Control: public, max-age=86400
+/directory-screenshots/*
+  Cache-Control: public, max-age=86400
+
+
 # ── Шрифты со своего домена (session 69, пункт №43) ─────────────────────────
 #
 # ⭐⭐ ГОД И `immutable` БЕЗОПАСНЫ, И ВОТ ПОЧЕМУ ИМЕННО ЗДЕСЬ. У woff2 нет хеша от

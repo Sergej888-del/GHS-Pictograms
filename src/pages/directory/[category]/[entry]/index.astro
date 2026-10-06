@@ -12,8 +12,8 @@ import DirectoryCard from '../../../../components/DirectoryCard.astro'
 import DirectoryClaimForm from '../../../../components/DirectoryClaimForm'
 import '../../../../styles/directory.css'
 import {
-  SITE, buildCard, categoryBySlug, categoryHref, entryHref, entryIndexable, formatDate, outboundLink,
-  type DirectoryEntry,
+  SITE, buildCard, categoryBySlug, categoryHref, effectiveTier, entryHref, entryIndexable, formatDate, outboundLink,
+  subcategoryBySlug, subcategoryHref, type DirectoryEntry,
 } from '../../../../lib/directoryModel'
 import { loadDirectory } from '../../../../lib/directoryData'
 
@@ -32,6 +32,11 @@ const entry = entries.find((e) => e.id === id) as DirectoryEntry
 const card = buildCard(entry, facts)
 const category = categoryBySlug(entry.category)!
 const indexable = entryIndexable(entry, facts)
+const tier = effectiveTier(entry)
+// s96: у записи услуг в крошках и Compare — её подраздел, не весь раздел из 39.
+const sub = subcategoryBySlug(entry.subcategory)
+const listHref = sub ? subcategoryHref(sub.slug) : categoryHref(category.slug)
+const listName = sub ? sub.short : category.short
 // s93: кнопка на сайт вендора в hero — первое, что видит пришедший из поиска по имени продукта;
 // placement entry-hero в GA4 отличает её от кнопки на карточке ниже.
 const out = outboundLink(entry)
@@ -46,7 +51,8 @@ const breadcrumb = {
   itemListElement: [
     { '@type': 'ListItem', position: 1, name: 'GHS Tools & Services Directory', item: `${SITE}/directory/` },
     { '@type': 'ListItem', position: 2, name: category.short, item: `${SITE}${categoryHref(category.slug)}` },
-    { '@type': 'ListItem', position: 3, name: entry.title, item: canonical },
+    ...(sub ? [{ '@type': 'ListItem', position: 3, name: sub.short, item: `${SITE}${subcategoryHref(sub.slug)}` }] : []),
+    { '@type': 'ListItem', position: sub ? 4 : 3, name: entry.title, item: canonical },
   ],
 }
 ---
@@ -64,17 +70,18 @@ const breadcrumb = {
       <p class="hub-crumb">
         <a href="/directory/">GHS Tools &amp; Services Directory</a><span class="sep">/</span>
         <a href={categoryHref(category.slug)}>{category.short}</a>
+        {sub && <><span class="sep">/</span><a href={subcategoryHref(sub.slug)}>{sub.short}</a></>}
       </p>
       <p class="hub-hero-eyebrow">{category.eyebrow}</p>
       <h1>{entry.title}</h1>
       <div class="hub-hero-chips">
-        <span class="hub-hero-chip">{entry.tier === 'listed' ? 'Listed · not verified by owner' : 'Verified by owner'}</span>
+        <span class="hub-hero-chip">{tier === 'listed' ? 'Listed · not verified by owner' : `Verified by owner · ${formatDate(entry.owner_confirmed_on ?? entry.claimed_on)}`}</span>
         <span class="hub-hero-chip">Last verified {formatDate(entry.last_verified)}</span>
       </div>
       {out && (
         <div class="dir-hero-actions">
           <a class="hub-hero-cta dir-out" href={out.href} rel={out.rel} target="_blank" data-dir-out={entry.slug} data-dir-cat={entry.category} data-dir-tier={entry.tier} data-dir-place="entry-hero">Visit the {vendorShort} website ↗</a>
-          <a class="hub-hero-cta ghost" href={categoryHref(category.slug)}>Compare all {category.short.toLowerCase()}</a>
+          <a class="hub-hero-cta ghost" href={listHref}>Compare all {listName.toLowerCase()}</a>
         </div>
       )}
     </div>
@@ -85,20 +92,21 @@ const breadcrumb = {
       <DirectoryCard card={card} variant="full" />
       <p class="hub-fine">
         This page lists facts published by the vendor, each linked to the page we read it on. We have not used the
-        product and do not rate it. The order of listings in <a href={categoryHref(category.slug)}>{category.short}</a>
-        is alphabetical, with owner-confirmed listings first, and is never sold.
+        product and do not rate it. In <a href={listHref}>{listName}</a>, verified listings come first, most recently
+        confirmed at the top, then listed ones alphabetically; that order is not for sale.
       </p>
     </div>
   </section>
 
   <section class="hub-sec-white" id="claim">
     <div class="hub-wrap">
-      <p class="hub-eyebrow">{entry.tier === 'listed' ? 'Is this your company?' : 'Corrections'}</p>
-      <h2 class="hub-h2">{entry.tier === 'listed' ? 'Claim or correct this listing' : 'Report a correction'}</h2>
+      <p class="hub-eyebrow">{tier === 'listed' ? 'Is this your company?' : 'Corrections'}</p>
+      <h2 class="hub-h2">{tier === 'listed' ? 'Claim or correct this listing' : 'Report a correction'}</h2>
       <p class="hub-sub">
-        Claiming is free. The owner confirms or corrects the facts, the card shows “Verified by owner”, and owner-confirmed
-        listings come first in their section. Corrections from anyone are welcome — please say where the right fact can
-        be checked.
+        Claiming is free. The owner confirms or corrects the facts; the card then shows “Verified by owner” with the
+        date, a logo and a short description in the vendor’s own words, and comes first in its section — verified
+        listings are ordered by the date the owner last confirmed the facts, which can be renewed once a quarter.
+        Corrections from anyone are welcome — please say where the right fact can be checked.
       </p>
       <DirectoryClaimForm client:visible mode="entry" slug={entry.slug} title={entry.title} />
     </div>

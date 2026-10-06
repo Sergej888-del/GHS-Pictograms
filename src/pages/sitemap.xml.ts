@@ -15,7 +15,7 @@ import { BRANCHES, TEMPLATES } from '../lib/labelMakerHub';
 // ⚠ s92 (№148): каталог. Категории индексируются с первого дня; запись — когда в ней есть что читать
 // или её заявил владелец (правило 6, §18.2, пересмотрено s92). Условие НЕ переписывается здесь — та же
 // `entryIndexable`, что ставит noindex на странице записи; сторож dir-sitemap сверяет обе стороны.
-import { CATEGORIES, categoryHref, entryHref, entryIndexable } from '../lib/directoryModel';
+import { CATEGORIES, SUBCATEGORIES, categoryHref, entryHref, entryIndexable, subcategoryHref } from '../lib/directoryModel';
 import { loadDirectory } from '../lib/directoryData';
 
 export const prerender = true;
@@ -337,6 +337,8 @@ async function fetchDirectorySitemapEntries() {
   return [
     { url: '/directory/', changefreq: 'weekly', priority: '0.8' },
     ...CATEGORIES.map((c) => ({ url: categoryHref(c.slug), changefreq: 'weekly', priority: '0.75' })),
+    // s96: четыре подраздела услуг — свои страницы под «sds translation services», «sds authoring services»
+    ...SUBCATEGORIES.map((s) => ({ url: subcategoryHref(s.slug), changefreq: 'weekly', priority: '0.7' })),
     ...entries
       .filter((e) => entryIndexable(e, facts))
       .map((e) => ({ url: entryHref(e), changefreq: 'monthly', priority: '0.5' })),

@@ -4,18 +4,22 @@
 // Устройство (решение Сергея s92 «карточки + таблица»): сравнительная таблица по всем записям
 // (страна, юрисдикции, языки, модель цены, «от», поставка, проба, API) → карточки с ценами,
 // возможностями и тем, за что вендор отвечает → блок «Who is responsible for an SDS» (там, где
-// документ имеет юридическую силу) → «предложить / заявить».
+// документ имеет юридическую силу) → «предложить / заявить». Таблица, фильтры и карточки — DirectoryListing (s96).
 //
 // ⚠ Индексируется с первого дня (правило 6 касается страниц записей, не категорий).
-// ⚠ Порядок — `orderEntries` (claimed первыми, внутри алфавит). Таблица и карточки идут в ОДНОМ
-//   порядке; сторож dir-order проверяет его по data-dir-title.
-// ⚠ Фильтры — на клиенте, только прячут строки; без JS видно всё.
+// ⚠ Порядок — `orderEntries` (s95: заявленные первыми по дате подтверждения, свежие выше; listed — алфавит).
+//   Таблица и карточки идут в ОДНОМ порядке; сторож dir-order проверяет его по data-dir-title и ищет ORDER_NOTE.
+// ⚠ s96: записи с подтверждённой дополнительной категорией (`also_in`, alsoInCategories) стоят и здесь — той же
+//   карточкой с пометкой «Also listed under …»; страница записи у них одна, под основной категорией.
+// ⚠ s96: раздел услуг — хаб четырёх подразделов (SUBCATEGORIES): карточки по группам со ссылкой на страницу
+//   подраздела /directory/authoring-services-consultants/<sub>/; таблица — общая по всем 39.
 import Layout from '../../../layouts/Layout.astro'
-import DirectoryCard from '../../../components/DirectoryCard.astro'
+import DirectoryListing from '../../../components/DirectoryListing.astro'
+import type { ListingGroup } from '../../../components/DirectoryListing.astro'
 import '../../../styles/directory.css'
 import {
-  CATEGORIES, SITE, SPONSORED_MAX, JURISDICTION_ORDER, JURISDICTION_SHORT, buildCard, categoryHref, countryName,
-  entryHref, first, formatDate, jurisdictionsOf, languageShort, orderEntries, outboundLink, type Category,
+  CATEGORIES, SITE, SPONSORED_MAX, SUBCATEGORIES, SUBCATEGORY_PARENT, buildCard, categoryHref, effectiveTier,
+  entriesInCategory, formatDate, orderEntries, subcategoryHref, type Category,
 } from '../../../lib/directoryModel'
 import { loadDirectory } from '../../../lib/directoryData'
 import { LEGAL_QUOTES, LEGAL_SUMMARY, LEGAL_DISCLAIMER, LEGAL_CHECKED } from '../../../lib/directoryLegal'
@@ -29,28 +33,34 @@ export function getStaticPaths() {
 const { category } = Astro.props as { category: Category }
 const { entries, facts } = await loadDirectory()
 
-const inCat = entries.filter((e) => e.category === category.slug)
+const inCat = entriesInCategory(entries, category.slug, facts)
 // ⚠ Featured-запись остаётся и в редакционном списке на своём месте: оплата ДОБАВЛЯЕТ место в
-// блоке Sponsored, но не двигает и не убирает её из списка ниже (§18.3).
+// блоке Sponsored, но не двигает и не убирает её из списка ниже (§18.3). Sponsored — только по основной категории.
 const editorial = orderEntries(inCat)
-const sponsored = orderEntries(inCat.filter((e) => e.tier === 'featured' && e.state === 'live')).slice(0, SPONSORED_MAX)
+const sponsored = orderEntries(
+  inCat.filter((e) => e.category === category.slug && e.state === 'live' && effectiveTier(e) === 'featured'),
+).slice(0, SPONSORED_MAX)
 const cards = editorial.map((e) => buildCard(e, facts))
 const sponsoredCards = sponsored.map((e) => buildCard(e, facts))
 const n = inCat.length
 const isClosed = category.slug === 'closed'
-const isServices = category.slug === 'authoring-services-consultants'
-const groups = isServices
-  ? [
-      { id: 'consultants', title: 'SDS authoring & regulatory consulting', cards: cards.filter((c) => !c.entry.tags.includes('translation')) },
-      { id: 'sds-translation-services', title: 'SDS translation services', cards: cards.filter((c) => c.entry.tags.includes('translation')) },
-    ]
+const isServices = category.slug === SUBCATEGORY_PARENT
+const groups: ListingGroup[] = isServices
+  ? SUBCATEGORIES.map((s) => ({
+      id: s.slug,
+      title: s.h1,
+      rule: s.rule,
+      href: subcategoryHref(s.slug),
+      cards: cards.filter((c) => c.entry.subcategory === s.slug),
+    }))
   : [{ id: 'entries', title: '', cards }]
+// ⚠ Запись услуг без подраздела или с чужим — в группы не попала бы и молча исчезла со страницы.
+if (isServices) {
+  const grouped = groups.reduce((a, g) => a + g.cards.length, 0)
+  if (grouped !== cards.length) throw new Error(`directory: ${cards.length - grouped} services entries have no subcategory`)
+}
 
 const lastVerified = inCat.map((e) => e.last_verified).sort().at(-1) ?? null
-const countries = [...new Set(inCat.map((e) => e.hq_country).filter(Boolean) as string[])]
-  .map((c) => ({ code: c, name: countryName(c) ?? c }))
-  .sort((a, b) => a.name.localeCompare(b.name))
-const jurisPresent = JURISDICTION_ORDER.filter((j) => cards.some((c) => jurisdictionsOf(c).includes(j)))
 const others = CATEGORIES.filter((c) => c.slug !== category.slug)
 
 const title = category.title
@@ -65,6 +75,9 @@ const jsonLd = {
   description,
   url: canonical,
   isPartOf: { '@type': 'WebSite', name: 'GHS Pictograms', url: `${SITE}/` },
+  ...(isServices
+    ? { hasPart: SUBCATEGORIES.map((s) => ({ '@type': 'CollectionPage', name: s.h1, url: `${SITE}${subcategoryHref(s.slug)}` })) }
+    : {}),
   mainEntity: {
     '@type': 'ItemList',
     numberOfItems: n,
@@ -98,131 +111,17 @@ const jsonLd = {
         <span class="hub-hero-chip" data-dir-principle>Listed, not ranked</span>
         {lastVerified && <span class="hub-hero-chip">Last verified {formatDate(lastVerified)}</span>}
       </div>
+      {isServices && (
+        <nav class="dir-subnav" aria-label="Sections" data-dir-subnav>
+          {SUBCATEGORIES.map((s) => (
+            <a href={subcategoryHref(s.slug)}>{s.short} <span class="dir-cat-n">{cards.filter((c) => c.entry.subcategory === s.slug).length}</span></a>
+          ))}
+        </nav>
+      )}
     </div>
   </section>
 
-  {!isClosed && (
-    <section class="hub-sec-a">
-      <div class="hub-wrap">
-        <p class="hub-eyebrow">01 · Compare</p>
-        <h2 class="hub-h2">{n} listings side by side</h2>
-        <p class="hub-sub">
-          Listed, not ranked: the order is alphabetical, with listings confirmed by their owners first, and it is never
-          sold. Each column comes from the vendor’s own pages; click a name for the full card with the source of every
-          line, or go straight to the vendor’s site from the last column.
-        </p>
-
-        <div class="dir-filters" data-dir-filters>
-          {jurisPresent.length > 0 && (
-            <label>Covers
-              <select data-filter="juris">
-                <option value="">Any jurisdiction</option>
-                {jurisPresent.map((j) => <option value={(JURISDICTION_SHORT[j] ?? j).toLowerCase().replace(/\s+/g, '-')}>{j}</option>)}
-              </select>
-            </label>
-          )}
-          {countries.length > 1 && (
-            <label>Based in
-              <select data-filter="country">
-                <option value="">Any country</option>
-                {countries.map((c) => <option value={c.code}>{c.name}</option>)}
-              </select>
-            </label>
-          )}
-          <label>Search
-            <input type="search" data-filter="q" placeholder="Name, feature, country…" autocomplete="off" />
-          </label>
-          <span class="dir-count"><span data-dir-visible>{n}</span> of {n} shown</span>
-        </div>
-
-        <div class="dir-table-wrap">
-          <table class="dir-table" data-dir-table>
-            <thead>
-              <tr>
-                <th>Name</th><th>Based in</th><th>Covers</th><th>Languages</th><th>Pricing</th><th>Delivered as</th><th>Trial</th><th>API</th><th>Website</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cards.map((c) => {
-                const e = c.entry
-                const juris = jurisdictionsOf(c)
-                const model = first(c, 'pricing_model')
-                const dep = first(c, 'deployment')
-                const out = outboundLink(e)
-                return (
-                  <tr
-                    data-dir-row={e.id}
-                    data-dir-title={e.title}
-                    data-juris={juris.map((j) => (JURISDICTION_SHORT[j] ?? j).toLowerCase().replace(/\s+/g, '-')).join(' ')}
-                    data-country={e.hq_country ?? ''}
-                    data-search={[e.title, e.vendor, countryName(e.hq_country), e.description].filter(Boolean).join(' | ').toLowerCase()}
-                  >
-                    <td class="c-name">
-                      <a href={`#e-${e.slug}`}>{e.title}</a>
-                      {e.vendor && <span class="v">{e.vendor}</span>}
-                    </td>
-                    <td>{countryName(e.hq_country) ?? <span class="no">—</span>}</td>
-                    <td>{juris.length ? juris.map((j) => <span class="jur">{JURISDICTION_SHORT[j] ?? j}</span>) : <span class="no">—</span>}</td>
-                    <td>{languageShort(first(c, 'language')?.value) ?? <span class="no">—</span>}</td>
-                    <td>
-                      {model ? model.value : <span class="no">—</span>}
-                      {c.fromPrice && <><br /><span>from {c.fromPrice}</span></>}
-                    </td>
-                    <td>{dep ? dep.value : <span class="no">—</span>}</td>
-                    <td>{first(c, 'free_trial') ? <span class="yes">Yes</span> : <span class="no">—</span>}</td>
-                    <td>{first(c, 'api') ? <span class="yes">Yes</span> : <span class="no">—</span>}</td>
-                    <td>
-                      {out ? (
-                        <a class="dir-out-mini" href={out.href} rel={out.rel} target="_blank" data-dir-out={e.slug} data-dir-cat={e.category} data-dir-tier={e.tier} data-dir-place="table" title={`Open the ${e.title} website`}>Visit ↗</a>
-                      ) : (
-                        <span class="no">—</span>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-        <p class="hub-fine">
-          “—” means the vendor’s pages did not state it when we checked, not that the product lacks it. Prices appear only
-          where the vendor publishes them and our re-check found the same figure on its page.
-        </p>
-      </div>
-    </section>
-  )}
-
-  <section class={isClosed ? 'hub-sec-a' : 'hub-sec-b'}>
-    <div class="hub-wrap">
-      <p class="hub-eyebrow navy">{isClosed ? '01 · Closed and moved' : '02 · Every listing'}</p>
-      <h2 class="hub-h2">{isClosed ? 'Where they went' : 'Facts, prices and terms'}</h2>
-      {isClosed && (
-        <p class="hub-sub">
-          Library guides and old safety manuals still link to these addresses. Each card gives the closure date when an
-          official notice states one, and where the content went.
-        </p>
-      )}
-
-      {sponsoredCards.length > 0 && (
-        <div class="dir-sponsored" data-dir-sponsored>
-          <p class="lbl">Sponsored</p>
-          <div class="dir-list">
-            {sponsoredCards.map((c) => <DirectoryCard card={c} variant="compact" sponsored />)}
-          </div>
-        </div>
-      )}
-
-      {groups.map((g) => (
-        <div>
-          {g.title && <h3 class="hub-h2" id={g.id} style="font-size:22px;margin-top:34px">{g.title} <span class="dir-cat-n">{g.cards.length}</span></h3>}
-          <div class="dir-list" data-dir-list>
-            {g.cards.map((c) => <DirectoryCard card={c} variant="compact" />)}
-          </div>
-        </div>
-      ))}
-      <p id="dir-empty" class="hub-note hub-hide">Nothing matches these filters. Clear one of them to see more.</p>
-    </div>
-  </section>
+  <DirectoryListing cards={cards} sponsoredCards={sponsoredCards} groups={groups} isClosed={isClosed} inCategory={category.slug} />
 
   {category.responsibility && (
     <section class="hub-sec-white" id="who-is-responsible">
@@ -260,41 +159,4 @@ const jsonLd = {
       </div>
     </div>
   </section>
-
-  <script>
-    // Фильтры: прячут строки таблицы и карточки по юрисдикции, стране и тексту. Без JS видно всё.
-    const root = document.querySelector<HTMLElement>('[data-dir-filters]')
-    if (root) {
-      const juris = root.querySelector<HTMLSelectElement>('[data-filter="juris"]')
-      const country = root.querySelector<HTMLSelectElement>('[data-filter="country"]')
-      const q = root.querySelector<HTMLInputElement>('[data-filter="q"]')
-      const visibleEl = root.querySelector('[data-dir-visible]')
-      const empty = document.getElementById('dir-empty')
-      const rows = Array.from(document.querySelectorAll<HTMLElement>('tr[data-dir-row]'))
-      const cards = Array.from(document.querySelectorAll<HTMLElement>('article[data-dir-entry]'))
-      const match = (el: HTMLElement) => {
-        const j = juris?.value ?? ''
-        const c = country?.value ?? ''
-        const tokens = (q?.value ?? '').toLowerCase().split(/\s+/).filter(Boolean)
-        if (j && !(el.dataset.juris ?? '').split(' ').includes(j)) return false
-        if (c && el.dataset.country !== c) return false
-        const blob = el.dataset.search ?? ''
-        return tokens.every((t) => blob.includes(t))
-      }
-      const apply = () => {
-        let n = 0
-        rows.forEach((r) => {
-          const ok = match(r)
-          r.classList.toggle('hub-hide', !ok)
-          if (ok) n++
-        })
-        cards.forEach((a) => a.classList.toggle('hub-hide', !match(a)))
-        if (visibleEl) visibleEl.textContent = String(n)
-        empty?.classList.toggle('hub-hide', n > 0)
-      }
-      juris?.addEventListener('change', apply)
-      country?.addEventListener('change', apply)
-      q?.addEventListener('input', apply)
-    }
-  </script>
 </Layout>

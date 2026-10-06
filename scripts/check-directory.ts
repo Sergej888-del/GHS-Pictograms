@@ -30,18 +30,29 @@
  * ⚠ Страница, которая рисует текст скриптом (меньше 600 знаков текста), тоже не мёртвая —
  * evidence на ней искать бесполезно; такие факты остаются неподтверждёнными до ручной проверки.
  *
- * Код возврата: 1, если у живой записи мёртв её собственный адрес; иначе 0.
+ *   6. s96: профиль владельца — ссылки pricing_url / terms_url / contact_url проверяются на живость вместе с
+ *      источниками; owner_description — ≤ 60 слов, без превосходных степеней и ссылок (SUPERLATIVE_RE из
+ *      directoryModel); у каждой дополнительной категории (`also_in`) — факт-основание (`basis_for`), и он
+ *      должен быть подтверждён (иначе категория не печатается — alsoInCategories).
+ *
+ * Код возврата: 1, если у живой записи мёртв её собственный адрес или брак в профиле владельца; иначе 0.
  */
 import { config } from 'dotenv'
 import { resolve } from 'node:path'
 import { writeFileSync } from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
+import { ownerDescriptionProblems } from '../src/lib/directoryModel'
 
 config({ path: resolve(process.cwd(), '.env.local') })
 config()
 
-type Entry = { id: number; title: string; state: string; url: string | null; description_source: string | null; hq_country_source: string | null; closed_source: string | null; reason_source: string | null }
-type Fact = { id: number; entry_id: number; kind: string; value: string; quote: string | null; evidence: string | null; source_url: string; confirmed: boolean | null; source_kind: string | null }
+type Entry = {
+  id: number; title: string; state: string; tier: string; url: string | null; description_source: string | null
+  hq_country_source: string | null; closed_source: string | null; reason_source: string | null
+  // s96 — профиль владельца: его ссылки проверяются на живость так же, как источники, описание — на превосходные степени
+  owner_description: string | null; pricing_url: string | null; terms_url: string | null; contact_url: string | null; also_in: string[]
+}
+type Fact = { id: number; entry_id: number; kind: string; value: string; quote: string | null; evidence: string | null; source_url: string; confirmed: boolean | null; source_kind: string | null; basis_for: string | null }
 type Page = { url: string; status: number | null; finalUrl: string | null; error: string | null; text: string; textLength: number; verdict: 'ok' | 'dead' | 'blocked' | 'script-only' | 'error' }
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
@@ -160,14 +171,14 @@ async function main() {
 
   const { data: entriesRaw, error: e1 } = await db
     .from('directory_entries')
-    .select('id, title, state, url, description_source, hq_country_source, closed_source, reason_source')
+    .select('id, title, state, tier, url, description_source, hq_country_source, closed_source, reason_source, owner_description, pricing_url, terms_url, contact_url, also_in')
     .order('id')
   if (e1) die(`directory_entries: ${e1.message}`)
   const facts: Fact[] = []
   for (let from = 0; ; from += 1000) {
     const { data, error } = await db
       .from('directory_facts')
-      .select('id, entry_id, kind, value, quote, evidence, source_url, confirmed, source_kind')
+      .select('id, entry_id, kind, value, quote, evidence, source_url, confirmed, source_kind, basis_for')
       .order('id')
       .range(from, from + 999)
     if (error) die(`directory_facts: ${error.message}`)
@@ -180,7 +191,8 @@ async function main() {
 
   const urls = new Set<string>()
   for (const e of entries) {
-    for (const u of [e.url, e.description_source, e.hq_country_source, e.closed_source, e.reason_source]) if (u) urls.add(u)
+    for (const u of [e.url, e.description_source, e.hq_country_source, e.closed_source, e.reason_source, e.pricing_url, e.terms_url]) if (u) urls.add(u)
+    if (e.contact_url && /^https?:/.test(e.contact_url)) urls.add(e.contact_url)
   }
   for (const f of scopedFacts) urls.add(f.source_url)
   const list = [...urls].sort()
@@ -210,6 +222,22 @@ async function main() {
     .filter((e) => e.state === 'live' && e.url && byUrl.get(e.url)?.verdict === 'dead')
     .map((e) => ({ id: e.id, title: e.title, url: e.url, error: byUrl.get(e.url!)?.error ?? byUrl.get(e.url!)?.status }))
 
+  // s96: профиль владельца — ссылки Pricing/Terms/Contact мёртвые? описание с превосходными степенями?
+  // дополнительная категория без подтверждённого основания?
+  const ownerProblems: string[] = []
+  for (const e of entries) {
+    for (const [k, u] of [['pricing_url', e.pricing_url], ['terms_url', e.terms_url], ['contact_url', e.contact_url]] as const) {
+      if (u && byUrl.get(u)?.verdict === 'dead') ownerProblems.push(`#${e.id} ${e.title}: ${k} мёртв — ${u}`)
+    }
+    for (const p of ownerDescriptionProblems(e.owner_description)) ownerProblems.push(`#${e.id} ${e.title}: owner_description — ${p}`)
+    for (const c of e.also_in ?? []) {
+      const basis = scopedFacts.filter((f) => f.entry_id === e.id && f.kind === 'feature' && f.basis_for === c)
+      if (!basis.length) ownerProblems.push(`#${e.id} ${e.title}: also_in «${c}» без факта-основания`)
+      else if (!basis.some((f) => f.confirmed === true || factResults.find((r) => r.id === f.id)?.found))
+        ownerProblems.push(`#${e.id} ${e.title}: основание для «${c}» не подтверждено — категория не печатается`)
+    }
+  }
+
   const date = new Date().toISOString().slice(0, 10)
   const report = {
     date,
@@ -218,6 +246,7 @@ async function main() {
     confirm: factResults.filter((r) => r.found).map((r) => r.id),
     unconfirm: factResults.filter((r) => !r.found && r.was === true && r.page === 'ok').map((r) => r.id),
     deadOwnUrl: deadOwn,
+    ownerProfile: ownerProblems,
   }
   const out = resolve(process.cwd(), `directory-check-${date}.json`)
   writeFileSync(out, JSON.stringify(report, null, 1))
@@ -252,10 +281,15 @@ async function main() {
     console.log(`  ${[...byKind].map(([k, v]) => `${k} ${v}`).join(' · ')}`)
   }
   if (fragments.length) console.log(`⚠ Цитата со строчной буквы без «…» (обрывок фразы?): ${fragments.map((f) => `#${f.id}`).join(', ')}`)
+  if (ownerProblems.length) {
+    console.log(`\n✗ Профиль владельца / дополнительные категории (${ownerProblems.length}):`)
+    for (const p of ownerProblems) console.log(`  ${p}`)
+  }
   const blocked = pages.filter((p) => p.verdict === 'blocked' || p.verdict === 'script-only').length
   if (blocked) console.log(`\n${blocked} страниц закрыты от скриптов или рисуются скриптом — их факты остаются неподтверждёнными.`)
   console.log(`\nОтчёт: ${out}`)
-  process.exit(deadOwn.length ? 1 : 0)
+  // Красный: мёртвый адрес живой записи или брак в профиле владельца (superlatives, мёртвые Pricing/Terms, also_in без основания).
+  process.exit(deadOwn.length || ownerProblems.length ? 1 : 0)
 }
 
 main().catch((e) => die(String(e)))

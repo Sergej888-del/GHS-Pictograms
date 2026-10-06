@@ -6,10 +6,17 @@
 //
 // ⭐⭐⭐ ШЕСТЬ ПРАВИЛ ЗАПИСИ (§18.2) — то, что этот модуль обязан держать:
 //   1. Факты из открытых источников + «Last verified». Ни оценок, ни звёзд, ни «best for».
-//   2. Без логотипов — только имена (чужие знаки не трогаем, пока владелец их не дал).
+//   2. Логотип — только от владельца: у `listed` ни одного <img>; у `claimed`+ логотип, который
+//      прислал владелец (`logo_path`, s96). Чужие знаки не трогаем, пока владелец их не дал.
 //   3. listed → claimed → featured; ⛔ ПОРЯДОК В РЕДАКЦИОННОМ СПИСКЕ НЕ ПРОДАЁТСЯ:
-//      claimed первыми, внутри — алфавит (`orderEntries`). featured — только отдельный блок
-//      Sponsored, не больше двух на категорию, и список под ним не меняет.
+//      заявленные первыми, внутри — ПО ДАТЕ ПОДТВЕРЖДЕНИЯ ФАКТОВ ВЛАДЕЛЬЦЕМ, свежие выше
+//      (`owner_confirmed_on`, решение Сергея s95: алфавит внутри claimed топил W–Z); внутри listed —
+//      алфавит (`orderEntries`, фраза ORDER_NOTE на странице). featured — только отдельный блок
+//      Sponsored, не больше двух на категорию, и список под ним не меняет; после `featured_until`
+//      карточка печатается как claimed (`effectiveTier`).
+//   2c. Запись в нескольких категориях (s95): основная `category` + `also_in[]`; дополнительная
+//      категория печатается ТОЛЬКО при подтверждённом факте-основании (`feature`, `confirmed`,
+//      `basis_for` = та категория) — `alsoInCategories()`. Страница записи одна (canonical под основной).
 //   4. Партнёрство раскрыто на карточке (`AFFILIATE_NOTE`), партнёрская ссылка —
 //      rel="sponsored nofollow noopener", как везде (§8).
 //   5. Ничего не удаляется: мёртвое → state 'closed' с датой и источником.
@@ -150,8 +157,90 @@ export function categoryBySlug(slug: string): Category | undefined {
   return CATEGORIES.find((c) => c.slug === slug)
 }
 
+/** Категории, в которые запись может входить дополнительно (`also_in`): живые разделы, не closed. */
+export const ALSO_IN_CATEGORIES: readonly CategorySlug[] = [
+  'sds-authoring-software', 'sds-management', 'label-design-printing', 'regulatory-databases',
+  'authoring-services-consultants', 'training',
+]
+
 export const categoryHref = (slug: string) => `${DIRECTORY_BASE}${slug}/`
 export const entryHref = (e: { category: string; slug: string }) => `${DIRECTORY_BASE}${e.category}/${e.slug}/`
+
+// ─────────────────────────── подразделы услуг (s95 §2b, s96) ───────────────────────────
+//
+// Раздел услуг — 39 записей; в одном алфавитном списке «конец» не читают. Решение Сергея s95: четыре
+// подраздела ~8–12 записей. `category` у записи остаётся, добавляется `subcategory`; страница раздела
+// остаётся хабом (все записи, по группам), у каждого подраздела своя страница
+// /directory/authoring-services-consultants/<sub>/. Слуги записей не меняются — редиректы не нужны.
+// ⚠ Слуг подраздела не должен совпадать со слугом записи того же раздела (один путь) — сторож dir-subcategories.
+
+export const SUBCATEGORY_PARENT: CategorySlug = 'authoring-services-consultants'
+
+export type SubcategorySlug = 'sds-translation' | 'sds-authoring-eu' | 'sds-authoring-north-america' | 'regulatory-consulting'
+
+export type Subcategory = {
+  slug: SubcategorySlug
+  title: string
+  h1: string
+  short: string
+  description: string
+  lead: string
+  /** Чем подраздел отличается — печатается на хабе раздела под заголовком группы. */
+  rule: string
+}
+
+export const SUBCATEGORIES: Subcategory[] = [
+  {
+    slug: 'sds-translation',
+    title: 'SDS Translation Services — Languages, ISO 17100 and Prices',
+    h1: 'SDS translation services',
+    short: 'SDS translation',
+    description:
+      'SDS translation services and agencies: languages offered, ISO 17100 certification, published per-document prices and what each says it is responsible for.',
+    lead:
+      'Translation companies that specialise in safety data sheets — {n} providers. A translation does not re-classify the mixture; where the provider also adapts the SDS to the target country, its card says so with the source.',
+    rule: 'Providers whose SDS offer is translation of an existing sheet.',
+  },
+  {
+    slug: 'sds-authoring-eu',
+    title: 'SDS Authoring Services in Europe — REACH and CLP',
+    h1: 'SDS authoring services — Europe',
+    short: 'SDS authoring · Europe',
+    description:
+      'Companies in Europe that write and update safety data sheets under REACH Annex II and CLP, with eSDS, UFI/PCN and EU languages: facts, prices and stated responsibilities.',
+    lead:
+      'Providers based in the EU or UK whose core service is writing and updating safety data sheets under REACH and CLP — {n} providers. Each card quotes what the provider itself says it is responsible for.',
+    rule: 'Based in the EU or UK; writes and updates SDSs under REACH and CLP as a core service.',
+  },
+  {
+    slug: 'sds-authoring-north-america',
+    title: 'SDS Authoring Services in the US and Canada — HazCom and WHMIS',
+    h1: 'SDS authoring services — North America',
+    short: 'SDS authoring · North America',
+    description:
+      'US and Canadian SDS authoring services for OSHA HazCom 2012 and WHMIS 2015, with GHS labels and translations: facts, prices and stated responsibilities.',
+    lead:
+      'Providers based in the United States or Canada whose core service is writing and updating safety data sheets for OSHA HazCom and WHMIS — {n} providers. Each card quotes what the provider itself says it is responsible for.',
+    rule: 'Based in the United States or Canada; writes and updates SDSs for HazCom and WHMIS as a core service.',
+  },
+  {
+    slug: 'regulatory-consulting',
+    title: 'CLP and REACH Consultants — Chemical Regulatory Consulting',
+    h1: 'Regulatory consultants — CLP, REACH and GHS',
+    short: 'Regulatory consulting',
+    description:
+      'Chemical regulatory consultancies for CLP classification, REACH registration, poison centre notification and global GHS, where SDS preparation is one service among several.',
+    lead:
+      'Consultancies whose main business is chemical regulatory work — REACH and other registrations, classification, notifications — and that prepare safety data sheets as part of it. {n} providers.',
+    rule: 'Regulatory consultancy first; SDS preparation is one service among registrations, dossiers and notifications.',
+  },
+]
+
+export function subcategoryBySlug(slug: string | null | undefined): Subcategory | undefined {
+  return slug ? SUBCATEGORIES.find((s) => s.slug === slug) : undefined
+}
+
+export const subcategoryHref = (sub: string) => `${DIRECTORY_BASE}${SUBCATEGORY_PARENT}/${sub}/`
 
 // ─────────────────────────── типы строк базы ───────────────────────────
 
@@ -181,6 +270,28 @@ export interface DirectoryEntry {
   tags: string[]
   claimed_on: string | null
   last_verified: string
+  // ── s96: профиль заявленной записи (миграция s96_directory_claim; что печатается — §2 tiers-doc s95).
+  //    ⚠ Адрес, имя и роль заявителя сюда НЕ входят: они в закрытой таблице directory_claims (service_role).
+  /** Дата, когда владелец последний раз подтвердил факты (ответом). Порядок внутри claimed. */
+  owner_confirmed_on: string | null
+  /** Файл логотипа в public/directory-logos/ (только от владельца, tier ≥ claimed). */
+  logo_path: string | null
+  /** Описание владельца ≤ 60 слов, без превосходных степеней (check:directory). tier ≥ claimed. */
+  owner_description: string | null
+  pricing_url: string | null
+  terms_url: string | null
+  /** Один скриншот продукта — только featured. */
+  screenshot_path: string | null
+  /** Кнопка «Contact vendor» — только featured. */
+  contact_url: string | null
+  rfq_opt_in: boolean
+  featured_from: string | null
+  featured_until: string | null
+  featured_slots: string[]
+  /** Дополнительные категории; печатаются только при подтверждённом факте-основании (alsoInCategories). */
+  also_in: string[]
+  /** Подраздел — только у authoring-services-consultants. */
+  subcategory: string | null
 }
 
 export type FactKind =
@@ -226,6 +337,10 @@ export interface DirectoryFact {
   confirmed_on: string | null
   /** Только у responsibility; у прочих видов null. */
   source_kind: SourceKind | null
+  /** Кто дал факт: редакция или владелец (s96). Факт владельца печатается с подписью «stated by the vendor». */
+  provided_by: 'editor' | 'owner'
+  /** Этот факт — основание для дополнительной категории (`also_in`); только у kind = 'feature'. */
+  basis_for: string | null
 }
 
 // ─────────────────────────── правила печати ───────────────────────────
@@ -244,10 +359,18 @@ export function legalSource(f: Pick<DirectoryFact, 'kind' | 'source_kind'>): boo
  * ценами — без подтверждённой цены условия к ней бессмысленны, поэтому гейт тот же.
  * ⚠ `responsibility` проходит два гейта: подтверждена дословность И источник — юридический документ.
  */
-export function printable(f: Pick<DirectoryFact, 'kind' | 'confirmed' | 'source_kind'>): boolean {
+export function printable(f: Pick<DirectoryFact, 'kind' | 'confirmed' | 'source_kind'> & { provided_by?: 'editor' | 'owner' }): boolean {
   if (!GATED_KINDS.includes(f.kind)) return true
+  // s96: цену, которую назвал сам владелец, печатаем и до подтверждения — это его цифра о себе, с подписью
+  // «stated by the vendor» (ownerStated). Цитата об ответственности — без исключений: оба гейта.
+  if (f.provided_by === 'owner' && f.kind !== 'responsibility') return true
   if (f.confirmed !== true) return false
   return legalSource(f)
+}
+
+/** Факт дал владелец, и check:directory ещё не нашёл его на странице — печатается с подписью OWNER_FACT_NOTE. */
+export function ownerStated(f: Pick<DirectoryFact, 'confirmed'> & { provided_by?: 'editor' | 'owner' }): boolean {
+  return f.provided_by === 'owner' && f.confirmed !== true
 }
 
 /**
@@ -278,20 +401,121 @@ export function entryIndexable(e: Pick<DirectoryEntry, 'id' | 'tier' | 'state'>,
   return printableFactCount(e.id, facts) >= ENTRY_INDEX_MIN_FACTS
 }
 
-/**
- * Правило 3: claimed (и featured — он тоже заявлен владельцем) первыми, внутри — алфавит.
- * ⚠ Алфавит по заголовку карточки, без учёта регистра, английская локаль. Порядок объявлен на
- * странице словами — эта функция и есть то, что там обещано.
- */
-export function orderEntries<T extends Pick<DirectoryEntry, 'tier' | 'title'>>(list: T[]): T[] {
-  const rank = (t: Tier) => (t === 'listed' ? 1 : 0)
-  return [...list].sort(
-    (a, b) => rank(a.tier) - rank(b.tier) || a.title.localeCompare(b.title, 'en', { sensitivity: 'base' }),
-  )
+/** Дата сборки (UTC) — по ней истекает featured. Одна функция на страницы и сторожа. */
+export function todayIso(): string {
+  return new Date().toISOString().slice(0, 10)
 }
+
+/**
+ * Уровень, который печатается: featured с истёкшим `featured_until` печатается как claimed
+ * (оплата кончилась — карточка остаётся заявленной, блок Sponsored и платные элементы уходят сами,
+ * без правки базы). Сторож dir-claimed сверяет страницы именно с этой функцией.
+ */
+export function effectiveTier(
+  e: Pick<DirectoryEntry, 'tier' | 'featured_until'>,
+  today: string = todayIso(),
+): Tier {
+  if (e.tier === 'featured' && e.featured_until && e.featured_until < today) return 'claimed'
+  return e.tier
+}
+
+type OrderRow = Pick<DirectoryEntry, 'tier' | 'title' | 'claimed_on' | 'owner_confirmed_on' | 'featured_until'>
+
+/**
+ * Правило 3 (s95): заявленные (claimed и featured — он тоже заявлен) первыми; внутри — по дате, когда
+ * владелец последний раз подтвердил факты, СВЕЖИЕ ВЫШЕ (`owner_confirmed_on`, запасной ключ —
+ * `claimed_on`), при равной дате — алфавит. Внутри listed — алфавит. Подтверждение бесплатно, не чаще
+ * раза в квартал, и это единственный способ подняться внутри списка; над списком стоит только Sponsored.
+ * ⚠ Алфавит по заголовку карточки, без учёта регистра, английская локаль. Порядок объявлен на
+ * странице словами (ORDER_NOTE) — эта функция и есть то, что там обещано.
+ */
+export function orderEntries<T extends OrderRow>(list: T[]): T[] {
+  const rank = (e: OrderRow) => (effectiveTier(e) === 'listed' ? 1 : 0)
+  const confirmed = (e: OrderRow) => e.owner_confirmed_on ?? e.claimed_on ?? ''
+  const alpha = (a: OrderRow, b: OrderRow) => a.title.localeCompare(b.title, 'en', { sensitivity: 'base' })
+  return [...list].sort((a, b) => {
+    const r = rank(a) - rank(b)
+    if (r) return r
+    if (rank(a) === 0) {
+      const d = confirmed(b).localeCompare(confirmed(a)) // свежая дата выше
+      if (d) return d
+    }
+    return alpha(a, b)
+  })
+}
+
+/** Фраза о порядке — на каждой странице категории и подраздела (сторож dir-order ищет её дословно). */
+export const ORDER_NOTE =
+  'Verified listings first, most recently confirmed at the top; then listed, alphabetical. Order is not for sale.'
 
 /** Sponsored-блок: только featured, не больше двух. Редакционный список под ним не меняется. */
 export const SPONSORED_MAX = 2
+
+// ─────────────────────────── несколько категорий (s95 §2c) ───────────────────────────
+
+/** Строки типизированы широко (string, не FactKind/EntryState): сторожа читают их из базы без приведения. */
+type BasisFact = { entry_id: number; kind: string; confirmed: boolean | null; basis_for: string | null }
+type AlsoInRow = { id: number; category: string; also_in: string[]; state: string }
+
+/**
+ * Дополнительные категории, в которых запись ПЕЧАТАЕТСЯ: из `also_in` остаются только те, под которыми
+ * есть подтверждённый факт-основание (kind = feature, confirmed = true, basis_for = категория, у факта
+ * есть source_url по построению). Нет факта — нет категории: «SDS Manager печатает этикетки» должно
+ * стоять на странице вендора, и check:directory должен это найти.
+ */
+export function alsoInCategories(e: AlsoInRow, facts: readonly BasisFact[]): string[] {
+  if (e.state !== 'live') return []
+  return e.also_in.filter(
+    (c) =>
+      c !== e.category &&
+      (ALSO_IN_CATEGORIES as readonly string[]).includes(c) &&
+      facts.some((f) => f.entry_id === e.id && f.kind === 'feature' && f.confirmed === true && f.basis_for === c),
+  )
+}
+
+/** Записи страницы категории: основная категория + подтверждённые дополнительные. */
+export function entriesInCategory<T extends AlsoInRow>(
+  entries: readonly T[],
+  slug: string,
+  facts: readonly BasisFact[],
+): T[] {
+  return entries.filter((e) => e.category === slug || alsoInCategories(e, facts).includes(slug))
+}
+
+/** Пометка в дополнительной категории: «Also listed under <основная>». */
+export const ALSO_IN_NOTE = 'Also listed under'
+
+// ─────────────────────────── профиль владельца (s96) ───────────────────────────
+
+export const LOGO_BASE = '/directory-logos/'
+export const SCREENSHOT_BASE = '/directory-screenshots/'
+export const OWNER_DESCRIPTION_MAX_WORDS = 60
+export const OWNER_DESCRIPTION_MAX_CHARS = 420
+
+/**
+ * Превосходные степени и оценки в описании владельца — запрещены (каталог не ранжирует, и чужое «leading»
+ * на нашей странице читается как наше). Одно выражение для check:directory, import:directory и сторожа.
+ */
+export const SUPERLATIVE_RE =
+  /\b(best|leading|leader|#\s?1|no\.?\s?1|number one|world[- ]class|trusted by|most (advanced|popular|trusted|complete|comprehensive)|top[- ]rated|award[- ]winning|unrivalled|unrivaled|premier)\b/i
+
+export function ownerDescriptionProblems(text: string | null | undefined): string[] {
+  if (!text) return []
+  const p: string[] = []
+  const words = text.trim().split(/\s+/).filter(Boolean).length
+  if (words > OWNER_DESCRIPTION_MAX_WORDS) p.push(`${words} words, max ${OWNER_DESCRIPTION_MAX_WORDS}`)
+  if (text.length > OWNER_DESCRIPTION_MAX_CHARS) p.push(`${text.length} chars, max ${OWNER_DESCRIPTION_MAX_CHARS}`)
+  const m = text.match(SUPERLATIVE_RE)
+  if (m) p.push(`superlative “${m[0]}”`)
+  if (/https?:\/\/|www\./i.test(text)) p.push('contains a link')
+  return p
+}
+
+/** Что из профиля владельца печатается на этом уровне (граница бесплатного и платного, tiers-doc s95 §2). */
+export function ownerProfileShown(tier: Tier): { logo: boolean; description: boolean; links: boolean; screenshot: boolean; contact: boolean } {
+  const claimed = tier === 'claimed' || tier === 'featured'
+  return { logo: claimed, description: claimed, links: claimed, screenshot: tier === 'featured', contact: tier === 'featured' }
+}
 
 export const AFFILIATE_NOTE: Record<'sds_manager' | 'ghslabels', string> = {
   sds_manager: 'Affiliate partner: this site earns a commission if you sign up through the link on this card.',
@@ -303,19 +527,23 @@ export const AFFILIATE_NOTE: Record<'sds_manager' | 'ghslabels', string> = {
  * партнёрская ссылка SDS Manager вместо обычной, rel по правилу §8 / решению Сергея s92 (nofollow у всех).
  * Сторож dir-entry-pages требует nofollow у каждой такой ссылки; dir-affiliate — fpr=ghs3 + sponsored у партнёра.
  */
-export function outboundLink(e: Pick<DirectoryEntry, 'url' | 'affiliate' | 'affiliate_url' | 'tier' | 'state'>): { href: string; rel: string } | null {
+export function outboundLink(
+  e: Pick<DirectoryEntry, 'url' | 'affiliate' | 'affiliate_url' | 'tier' | 'state' | 'featured_until'>,
+): { href: string; rel: string } | null {
   if (e.state === 'closed') return null
   const href = e.affiliate === 'sds_manager' && e.affiliate_url ? e.affiliate_url : e.url
   if (!href) return null
-  const rel = e.affiliate === 'sds_manager' || e.tier === 'featured' ? 'sponsored nofollow noopener' : 'nofollow noopener'
+  const rel = e.affiliate === 'sds_manager' || effectiveTier(e) === 'featured' ? 'sponsored nofollow noopener' : 'nofollow noopener'
   return { href, rel }
 }
 
-/** Где стоял клик к вендору — параметр `placement` события directory_outbound (GA4 / Umami). */
-export type OutboundPlacement = 'table' | 'card' | 'entry-hero' | 'entry'
+/** Где стоял клик к вендору — параметр `placement` события directory_outbound (GA4 / Umami). `contact` — кнопка featured. */
+export type OutboundPlacement = 'table' | 'card' | 'entry-hero' | 'entry' | 'contact'
 
 export const LISTED_NOTE = 'Listed, not ranked. Not verified by the owner.'
 export const CLAIMED_NOTE = 'Verified by owner: the company has confirmed or corrected these facts.'
+/** Подпись под фактом, который дал владелец и check:directory ещё не нашёл на его странице. */
+export const OWNER_FACT_NOTE = 'stated by the vendor'
 
 // ─────────────────────────── подписи ───────────────────────────
 

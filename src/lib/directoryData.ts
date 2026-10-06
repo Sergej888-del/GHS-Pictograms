@@ -14,10 +14,13 @@ import { supabase } from './supabase'
 import { must } from './mustQuery'
 import type { DirectoryEntry, DirectoryFact } from './directoryModel'
 
+// ⚠ s96: профиль владельца (owner_confirmed_on … subcategory) — здесь; адрес и имя заявителя — в закрытой
+//   directory_claims, которую сборка не читает (и не может: грантов у anon нет).
 const ENTRY_COLS =
-  'id, slug, category, state, tier, title, vendor, url, description, description_source, hq_country, hq_country_source, reason, reason_source, closed_on, closed_source, successor, affiliate, affiliate_url, tags, claimed_on, last_verified'
+  'id, slug, category, state, tier, title, vendor, url, description, description_source, hq_country, hq_country_source, reason, reason_source, closed_on, closed_source, successor, affiliate, affiliate_url, tags, claimed_on, last_verified, ' +
+  'owner_confirmed_on, logo_path, owner_description, pricing_url, terms_url, screenshot_path, contact_url, rfq_opt_in, featured_from, featured_until, featured_slots, also_in, subcategory'
 const FACT_COLS =
-  'id, entry_id, kind, label, value, detail, quote, source_url, evidence, sort, checked_on, confirmed, confirmed_on, source_kind'
+  'id, entry_id, kind, label, value, detail, quote, source_url, evidence, sort, checked_on, confirmed, confirmed_on, source_kind, provided_by, basis_for'
 
 export interface DirectorySnapshot {
   entries: DirectoryEntry[]
@@ -28,14 +31,14 @@ async function loadAll(): Promise<DirectorySnapshot> {
   const entries = must(
     'directory_entries for /directory/',
     await supabase.from('directory_entries').select(ENTRY_COLS).order('id').range(0, 999),
-  ) as DirectoryEntry[]
+  ) as unknown as DirectoryEntry[]
   if (entries.length >= 1000) throw new Error('build: directory_entries reached 1000 rows — page through them')
   const facts: DirectoryFact[] = []
   for (let from = 0; ; from += 1000) {
     const chunk = must(
       `directory_facts ${from}-${from + 999}`,
       await supabase.from('directory_facts').select(FACT_COLS).order('id').range(from, from + 999),
-    ) as DirectoryFact[]
+    ) as unknown as DirectoryFact[]
     facts.push(...chunk)
     if (chunk.length < 1000) break
   }

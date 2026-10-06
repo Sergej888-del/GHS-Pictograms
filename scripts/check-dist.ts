@@ -75,6 +75,10 @@ import {
   CATEGORIES as DIR_CATEGORIES, entryIndexable as dirEntryIndexable, orderEntries as dirOrderEntries,
   GATED_KINDS as DIR_GATED_KINDS, SPONSORED_MAX as DIR_SPONSORED_MAX, printable as dirPrintable,
   LEGAL_SOURCE_KINDS as DIR_LEGAL_SOURCE_KINDS,
+  // s96: порядок по дате подтверждения, несколько категорий, подразделы услуг, профиль владельца, бейджи
+  SUBCATEGORIES as DIR_SUBCATEGORIES, SUBCATEGORY_PARENT as DIR_SUB_PARENT, ORDER_NOTE as DIR_ORDER_NOTE,
+  ALSO_IN_NOTE as DIR_ALSO_IN_NOTE, effectiveTier as dirEffectiveTier, alsoInCategories as dirAlsoIn,
+  entriesInCategory as dirEntriesIn, ownerProfileShown as dirOwnerShown, ownerDescriptionProblems as dirOwnerDescProblems,
 } from '../src/lib/directoryModel'
 import type { LcssRecord } from '../src/lib/lcssProperties'
 // ⚠⚠ Раскладка «код знака → файл» берётся ИЗ ТОГО ЖЕ модуля, что и страница.
@@ -8117,16 +8121,22 @@ const CHECKS: Check[] = [
   // ⚠ Каждая проверка спрашивает ожидание У БАЗЫ (directory_entries / directory_facts) и у
   //   directoryModel.ts — тех же функций, по которым строятся страницы. Списков в этом файле нет.
   // ⚠ Правила §18.2, которые здесь сторожатся: «Listed, not ranked» и «Last verified» на каждой
-  //   категории · порядок claimed → алфавит · ни одного <img> в каталоге · партнёрство помечено на
-  //   каждой карточке партнёра · noindex у записей до заявки · цены и цитаты только подтверждённые
-  //   (confirmed = true) · sitemap несёт категории и только индексируемые записи.
+  //   категории · порядок: заявленные по дате подтверждения, listed — алфавит, фраза ORDER_NOTE (s95) ·
+  //   <img> только логотип владельца (claimed+) и скриншот (featured) · партнёрство помечено на каждой
+  //   карточке партнёра · noindex у записей до заявки · цены и цитаты только подтверждённые (confirmed = true;
+  //   цена владельца — с подписью) · sitemap несёт категории, подразделы и только индексируемые записи ·
+  //   s96: dir-claimed (граница бесплатного и платного), dir-multi-category (also_in только с подтверждённым
+  //   основанием), dir-subcategories (четыре подраздела услуг), dir-badges (два SVG + _headers).
   {
     id: 'dir-pages',
     group: 'Directory',
     title: 'Хаб и семь категорий: принцип, дата проверки, карточки и строки таблицы = база',
     run: async () => {
-      const rows = await selectAll<{ id: number; category: string; state: string }>('directory_entries', 'id, category, state', (q) => q.order('id'))
+      const rows = await selectAll<{ id: number; category: string; state: string; also_in: string[] }>('directory_entries', 'id, category, state, also_in', (q) => q.order('id'))
       assertNonEmpty('dir-pages', 'directory_entries', rows)
+      // s96: на странице категории стоят и записи с подтверждённой дополнительной категорией — считаем той же функцией.
+      const basisFacts = await selectAll<{ entry_id: number; kind: string; confirmed: boolean | null; basis_for: string | null }>(
+        'directory_facts', 'id, entry_id, kind, confirmed, basis_for', (q) => q.not('basis_for', 'is', null).order('id'))
       const problems: string[] = []
       const PRINCIPLE = 'data-dir-principle'
       const VERIFIED = 'Last verified'
@@ -8145,7 +8155,7 @@ const CHECKS: Check[] = [
         if (!html) { problems.push(`нет dist/directory/${c.slug}/index.html`); continue }
         if (!html.includes(PRINCIPLE)) problems.push(`${c.slug}: нет «Listed, not ranked»`)
         if (!html.includes(VERIFIED)) problems.push(`${c.slug}: нет «Last verified»`)
-        const expect = rows.filter((r) => r.category === c.slug).length
+        const expect = dirEntriesIn(rows, c.slug, basisFacts).length
         const cards = (html.match(/data-dir-entry="/g) ?? []).length
         if (cards !== expect) problems.push(`${c.slug}: карточек ${cards}, база ${expect}`)
         if (c.slug !== 'closed') {
@@ -8196,13 +8206,15 @@ const CHECKS: Check[] = [
           for (const tag of outs) {
             const outRel = tag.match(/\brel="([^"]*)"/)?.[1] ?? ''
             if (!/\bnofollow\b/.test(outRel)) problems.push(`${rel}: ссылка на вендора без nofollow (rel="${outRel}")`)
-            if (!/\bdata-dir-place="(table|card|entry-hero|entry)"/.test(tag)) problems.push(`${rel}: у ссылки на вендора нет data-dir-place`)
+            if (!/\bdata-dir-place="(table|card|entry-hero|entry|contact)"/.test(tag)) problems.push(`${rel}: у ссылки на вендора нет data-dir-place`)
           }
           if (!html.includes("'directory_outbound'")) problems.push(`${rel}: нет слушателя directory_outbound`)
         }
       }
+      const subSlugs = new Set<string>(DIR_SUBCATEGORIES.map((x) => x.slug))
       for (const c of DIR_CATEGORIES) {
         for (const slug of pageSlugs(`directory/${c.slug}`)) {
+          if (c.slug === DIR_SUB_PARENT && subSlugs.has(slug)) continue // s96: страницы подразделов, не записи
           if (!expected.has(`directory/${c.slug}/${slug}`)) problems.push(`лишняя страница: directory/${c.slug}/${slug}/ (в базе нет)`)
         }
       }
@@ -8218,46 +8230,91 @@ const CHECKS: Check[] = [
   {
     id: 'dir-order',
     group: 'Directory',
-    title: 'Порядок в списке: заявленные первыми, внутри — алфавит (порядок не продаётся)',
+    title: 'Порядок в списке: заявленные первыми по дате подтверждения владельцем (свежие выше), listed — алфавит; фраза о порядке на каждой странице списка (s95)',
     run: async () => {
-      const rows = await selectAll<{ id: number; category: string; state: string; tier: string; title: string }>(
-        'directory_entries', 'id, category, state, tier, title', (q) => q.order('id'))
+      const rows = await selectAll<{ id: number; category: string; state: string; tier: string; title: string; claimed_on: string | null; owner_confirmed_on: string | null; featured_until: string | null; also_in: string[]; subcategory: string | null }>(
+        'directory_entries', 'id, category, state, tier, title, claimed_on, owner_confirmed_on, featured_until, also_in, subcategory', (q) => q.order('id'))
+      const basisFacts = await selectAll<{ entry_id: number; kind: string; confirmed: boolean | null; basis_for: string | null }>(
+        'directory_facts', 'id, entry_id, kind, confirmed, basis_for', (q) => q.not('basis_for', 'is', null).order('id'))
+      assertAscii('dir-order', [DIR_ORDER_NOTE])
       const problems: string[] = []
-      for (const c of DIR_CATEGORIES) {
-        const html = readPage(`directory/${c.slug}/index.html`)
-        if (!html) continue
-        const expect = dirOrderEntries(rows.filter((r) => r.category === c.slug) as any).map((r: any) => String(r.id))
-        const marker = c.slug === 'closed' ? /data-dir-entry="(\d+)"/g : /data-dir-row="(\d+)"/g
+      // Страницы списков: семь категорий (+ подтверждённые also_in) и четыре подраздела услуг.
+      const pages: { rel: string; list: typeof rows; closed: boolean }[] = [
+        ...DIR_CATEGORIES.map((c) => ({ rel: `directory/${c.slug}`, list: dirEntriesIn(rows, c.slug, basisFacts), closed: c.slug === 'closed' })),
+        ...DIR_SUBCATEGORIES.map((x) => ({ rel: `directory/${DIR_SUB_PARENT}/${x.slug}`, list: dirEntriesIn(rows, DIR_SUB_PARENT, basisFacts).filter((r) => r.subcategory === x.slug), closed: false })),
+      ]
+      let withNote = 0
+      for (const pg of pages) {
+        const html = readPage(`${pg.rel}/index.html`)
+        if (!html) { problems.push(`нет ${pg.rel}/`); continue }
+        const expect = dirOrderEntries(pg.list as any).map((r: any) => String(r.id))
+        const marker = pg.closed ? /data-dir-entry="(\d+)"/g : /data-dir-row="(\d+)"/g
         const actual = [...html.matchAll(marker)].map((m) => m[1])
         if (actual.join(',') !== expect.join(',')) {
           const i = actual.findIndex((v, k) => v !== expect[k])
-          problems.push(`${c.slug}: порядок расходится с позиции ${i + 1} (на странице id ${actual[i]}, ожидался ${expect[i]})`)
+          problems.push(`${pg.rel}: порядок расходится с позиции ${i + 1} (на странице id ${actual[i]}, ожидался ${expect[i]})`)
+        }
+        if (!pg.closed) {
+          if (!html.includes(DIR_ORDER_NOTE)) problems.push(`${pg.rel}: нет фразы о порядке (ORDER_NOTE)`)
+          else withNote++
+          if (/alphabetical, with listings confirmed by their owners first/i.test(html)) problems.push(`${pg.rel}: старая фраза «alphabetical, with listings confirmed by their owners first» (до s95)`)
         }
       }
+      // Ключ порядка внутри claimed — дата: у каждой заявленной записи она есть (CHECK базы дублируется здесь).
+      for (const r of rows) if (r.tier !== 'listed' && !r.owner_confirmed_on) problems.push(`#${r.id} ${r.title}: tier=${r.tier} без owner_confirmed_on`)
       return {
         id: 'dir-order', group: 'Directory', ok: problems.length === 0,
-        headline: problems.length === 0 ? 'порядок совпадает с orderEntries на всех страницах' : `проблем: ${problems.length}`,
+        headline: problems.length === 0 ? `порядок = orderEntries на ${pages.length} страницах списков; фраза о порядке на ${withNote}` : `проблем: ${problems.length}`,
         detail: problems,
       }
     },
   },
   {
-    id: 'dir-no-logos',
+    id: 'dir-images',
     group: 'Directory',
-    title: 'В каталоге нет ни одного <img> — имена без логотипов (правило 2)',
+    title: 'Картинки в каталоге — только логотип владельца (tier ≥ claimed) и скриншот (featured); у listed — ни одного <img> (правило 2, s96)',
     run: async () => {
+      const rows = await selectAll<{ id: number; slug: string; tier: string; featured_until: string | null; logo_path: string | null; screenshot_path: string | null }>(
+        'directory_entries', 'id, slug, tier, featured_until, logo_path, screenshot_path', (q) => q.order('id'))
+      const bySlug = new Map(rows.map((r) => [r.slug, r]))
       const hits: string[] = []
       let pages = 0
+      let logos = 0
+      let shots = 0
       for (const { rel, html } of allPages()) {
         if (!rel.startsWith('directory/')) continue
         pages++
         const main = html.slice(html.indexOf('<main'), html.lastIndexOf('</main>'))
-        const n = (main.match(/<img\b/gi) ?? []).length
-        if (n) hits.push(`${rel}: <img> ${n}`)
+        for (const m of main.matchAll(/<img\b[^>]*>/gi)) {
+          const tag = m[0]
+          const logo = tag.match(/data-dir-logo="([^"]+)"/)?.[1]
+          if (logo) {
+            const r = bySlug.get(logo)
+            if (!r) { hits.push(`${rel}: логотип неизвестной записи ${logo}`); continue }
+            if (!dirOwnerShown(dirEffectiveTier(r as any)).logo) hits.push(`${rel}: логотип у записи уровня ${r.tier} (${logo})`)
+            if (!r.logo_path || !tag.includes(`/directory-logos/${r.logo_path}`)) hits.push(`${rel}: src логотипа ${logo} не совпадает с logo_path`)
+            else if (!existsSync(join(DIST, 'directory-logos', r.logo_path))) hits.push(`${rel}: файла dist/directory-logos/${r.logo_path} нет`)
+            if (!/\bwidth="\d+"/.test(tag) || !/\bheight="\d+"/.test(tag)) hits.push(`${rel}: логотип ${logo} без width/height (CLS)`)
+            logos++
+            continue
+          }
+          // Скриншот стоит внутри <figure data-dir-screenshot>: проверяем, что тег лежит в таком блоке.
+          const before = main.slice(0, m.index)
+          const figOpen = before.lastIndexOf('data-dir-screenshot')
+          const figClose = before.lastIndexOf('</figure>')
+          if (figOpen > -1 && figOpen > figClose) { shots++; continue }
+          hits.push(`${rel}: <img> вне логотипа/скриншота — ${tag.slice(0, 80)}`)
+        }
+      }
+      // Обратная сторона: у каждой заявленной записи с logo_path логотип напечатан на её странице.
+      for (const r of rows) {
+        if (!r.logo_path || !dirOwnerShown(dirEffectiveTier(r as any)).logo) continue
+        const page = allPages().find((p) => p.rel.startsWith('directory/') && p.rel.endsWith(`/${r.slug}/index.html`))
+        if (page && !page.html.includes(`data-dir-logo="${r.slug}"`)) hits.push(`${page.rel}: logo_path задан, логотип не напечатан`)
       }
       return {
-        id: 'dir-no-logos', group: 'Directory', ok: hits.length === 0 && pages > 0,
-        headline: hits.length === 0 ? `${pages} страниц каталога, <img> в <main>: 0` : `картинки на ${hits.length} страницах`,
+        id: 'dir-images', group: 'Directory', ok: hits.length === 0 && pages > 0,
+        headline: hits.length === 0 ? `${pages} страниц каталога: логотипов ${logos}, скриншотов ${shots}, прочих <img>: 0` : `проблем: ${hits.length}`,
         detail: pages === 0 ? ['в dist нет страниц каталога'] : hits.slice(0, 20),
       }
     },
@@ -8265,12 +8322,13 @@ const CHECKS: Check[] = [
   {
     id: 'dir-gated-facts',
     group: 'Directory',
-    title: 'Цены и цитаты печатаются только подтверждёнными check:directory и (цитаты) только из юридических документов — и всё, что прошло оба гейта, напечатано',
+    title: 'Цены и цитаты печатаются только подтверждёнными check:directory и (цитаты) только из юридических документов — и всё, что прошло оба гейта, напечатано; цена от владельца — с подписью (s96)',
     run: async () => {
       const entries = await selectAll<{ id: number; slug: string; category: string; state: string }>(
         'directory_entries', 'id, slug, category, state', (q) => q.order('id'))
-      const facts = await selectAll<{ id: number; entry_id: number; kind: string; quote: string | null; confirmed: boolean | null; source_kind: string | null }>(
-        'directory_facts', 'id, entry_id, kind, quote, confirmed, source_kind', (q) => q.in('kind', DIR_GATED_KINDS as unknown as string[]).order('id'))
+      // ⚠ provided_by участвует в printable (s96): цену владельца печатаем до подтверждения — с подписью.
+      const facts = await selectAll<{ id: number; entry_id: number; kind: string; quote: string | null; confirmed: boolean | null; source_kind: string | null; provided_by: string }>(
+        'directory_facts', 'id, entry_id, kind, quote, confirmed, source_kind, provided_by', (q) => q.in('kind', DIR_GATED_KINDS as unknown as string[]).order('id'))
       const byId = new Map(entries.map((e) => [e.id, e]))
       const problems: string[] = []
       let printed = 0
@@ -8293,6 +8351,8 @@ const CHECKS: Check[] = [
         const should = dirPrintable(f as any) && !dup
         if (should && !on) problems.push(`${e.slug}: подтверждённый ${f.kind} #${f.id} не напечатан`)
         if (!should && on) problems.push(`${e.slug}: ${f.kind} #${f.id} напечатан, хотя ${f.confirmed !== true ? 'НЕ подтверждён' : !legal ? `источник не юридический (${f.source_kind})` : 'это повтор цитаты'}`)
+        // Цена владельца без подтверждения — напечатана, но обязана нести подпись «stated by the vendor».
+        if (on && f.provided_by === 'owner' && f.confirmed !== true && !new RegExp(`data-fid="${f.id}"[^>]*data-dir-owner-fact`).test(html)) problems.push(`${e.slug}: ${f.kind} #${f.id} от владельца напечатан без подписи «stated by the vendor»`)
         if (on) printed++
         else hidden++
       }
@@ -8315,13 +8375,16 @@ const CHECKS: Check[] = [
     group: 'Directory',
     title: 'Партнёр помечен на каждой своей карточке и только на ней; ссылка SDS Manager — fpr + sponsored',
     run: async () => {
-      const rows = await selectAll<{ id: number; slug: string; category: string; state: string; affiliate: string | null }>(
-        'directory_entries', 'id, slug, category, state, affiliate', (q) => q.order('id'))
+      const rows = await selectAll<{ id: number; slug: string; category: string; state: string; affiliate: string | null; also_in: string[] }>(
+        'directory_entries', 'id, slug, category, state, affiliate, also_in', (q) => q.order('id'))
+      // s96: партнёр, стоящий в дополнительной категории (ExactSDS и SDS Manager в label-design-printing), помечен и там.
+      const basisFacts = await selectAll<{ entry_id: number; kind: string; confirmed: boolean | null; basis_for: string | null }>(
+        'directory_facts', 'id, entry_id, kind, confirmed, basis_for', (q) => q.not('basis_for', 'is', null).order('id'))
       const problems: string[] = []
       for (const c of DIR_CATEGORIES) {
         const html = readPage(`directory/${c.slug}/index.html`)
         if (!html) continue
-        const expect = rows.filter((r) => r.category === c.slug && r.affiliate).length
+        const expect = dirEntriesIn(rows, c.slug, basisFacts).filter((r) => r.affiliate).length
         const marks = (html.match(/data-dir-affiliate="/g) ?? []).length
         if (marks !== expect) problems.push(`${c.slug}: пометок «Affiliate partner» ${marks}, партнёров в базе ${expect}`)
       }
@@ -8345,13 +8408,14 @@ const CHECKS: Check[] = [
     group: 'Directory',
     title: 'Блок Sponsored — только featured и не больше двух на категорию',
     run: async () => {
-      const rows = await selectAll<{ id: number; category: string; state: string; tier: string }>(
-        'directory_entries', 'id, category, state, tier', (q) => q.order('id'))
+      const rows = await selectAll<{ id: number; category: string; state: string; tier: string; featured_until: string | null }>(
+        'directory_entries', 'id, category, state, tier, featured_until', (q) => q.order('id'))
       const problems: string[] = []
       for (const c of DIR_CATEGORIES) {
         const html = readPage(`directory/${c.slug}/index.html`)
         if (!html) continue
-        const featured = rows.filter((r) => r.category === c.slug && r.tier === 'featured' && r.state === 'live').map((r) => String(r.id))
+        // s96: истёкший featured в Sponsored не стоит — effectiveTier, как на странице.
+        const featured = rows.filter((r) => r.category === c.slug && dirEffectiveTier(r as any) === 'featured' && r.state === 'live').map((r) => String(r.id))
         const shown = [...html.matchAll(/data-dir-sponsored-card="(\d+)"/g)].map((m) => m[1])
         if (shown.length > DIR_SPONSORED_MAX) problems.push(`${c.slug}: в Sponsored ${shown.length} карточек, максимум ${DIR_SPONSORED_MAX}`)
         const wrong = shown.filter((id) => !featured.includes(id))
@@ -8362,7 +8426,7 @@ const CHECKS: Check[] = [
       }
       return {
         id: 'dir-sponsored', group: 'Directory', ok: problems.length === 0,
-        headline: problems.length === 0 ? `featured: ${rows.filter((r) => r.tier === 'featured').length}` : `проблем: ${problems.length}`,
+        headline: problems.length === 0 ? `featured: ${rows.filter((r) => dirEffectiveTier(r as any) === 'featured').length}` : `проблем: ${problems.length}`,
         detail: problems,
       }
     },
@@ -8402,6 +8466,206 @@ const CHECKS: Check[] = [
     },
   },
   {
+    id: 'dir-claimed',
+    group: 'Directory',
+    title: 'Заявленная запись: «Verified by owner · дата», логотип и слова владельца только при tier ≥ claimed; скриншот и Contact — только featured; истёкший featured печатается как claimed (s96)',
+    run: async () => {
+      const rows = await selectAll<{ id: number; slug: string; category: string; state: string; tier: string; title: string; claimed_on: string | null; owner_confirmed_on: string | null; featured_from: string | null; featured_until: string | null; logo_path: string | null; owner_description: string | null; pricing_url: string | null; terms_url: string | null; screenshot_path: string | null; contact_url: string | null }>(
+        'directory_entries', 'id, slug, category, state, tier, title, claimed_on, owner_confirmed_on, featured_from, featured_until, logo_path, owner_description, pricing_url, terms_url, screenshot_path, contact_url', (q) => q.order('id'))
+      const facts = await selectAll<{ id: number; entry_id: number; kind: string; confirmed: boolean | null; provided_by: string }>(
+        'directory_facts', 'id, entry_id, kind, confirmed, provided_by', (q) => q.eq('provided_by', 'owner').order('id'))
+      assertAscii('dir-claimed', ['data-dir-claimed', 'data-dir-owner-desc', 'data-dir-contact', 'data-dir-screenshot', 'data-dir-owner-links', 'data-dir-owner-fact', 'stated by the vendor'])
+      const problems: string[] = []
+      let claimed = 0
+      let featured = 0
+      let expired = 0
+      for (const r of rows) {
+        if (r.state !== 'live') continue
+        const html = readPage(`directory/${r.category}/${r.slug}/index.html`)
+        if (!html) continue
+        const tier = dirEffectiveTier(r as any)
+        const shown = dirOwnerShown(tier)
+        const rel = `${r.category}/${r.slug}`
+        const has = (marker: string) => html.includes(marker)
+        // ① Пометка «Verified by owner · дата» — ровно у claimed/featured, с датой подтверждения.
+        const date = r.owner_confirmed_on ?? r.claimed_on ?? ''
+        if (tier === 'listed') {
+          if (has('data-dir-claimed')) problems.push(`${rel}: listed, а на странице «Verified by owner»`)
+        } else {
+          if (!has(`data-dir-claimed="${date}"`)) problems.push(`${rel}: нет «Verified by owner» с датой ${date}`)
+          if (!has('Owner confirmed on')) problems.push(`${rel}: нет «Owner confirmed on …» в подвале карточки`)
+          tier === 'featured' ? featured++ : claimed++
+          if (r.tier === 'featured' && tier === 'claimed') expired++
+        }
+        // ② Логотип, описание, ссылки — по уровню.
+        if (!shown.logo && has('data-dir-logo=')) problems.push(`${rel}: логотип у уровня ${tier}`)
+        if (shown.description !== (has('data-dir-owner-desc') && !!r.owner_description)) {
+          if (shown.description && r.owner_description) problems.push(`${rel}: owner_description задано, не напечатано`)
+          if (!shown.description && has('data-dir-owner-desc')) problems.push(`${rel}: описание владельца у уровня ${tier}`)
+        }
+        for (const p of dirOwnerDescProblems(r.owner_description)) problems.push(`${rel}: owner_description — ${p}`)
+        if (!shown.links && has('data-dir-owner-links')) problems.push(`${rel}: ссылки Pricing/Terms у уровня ${tier}`)
+        if (shown.links && (r.pricing_url || r.terms_url) && !has('data-dir-owner-links')) problems.push(`${rel}: pricing_url/terms_url заданы, не напечатаны`)
+        // ③ Платное — только featured (и только пока не истёк срок).
+        if (!shown.screenshot && has('data-dir-screenshot')) problems.push(`${rel}: скриншот у уровня ${tier}`)
+        if (!shown.contact && has('data-dir-contact')) problems.push(`${rel}: кнопка Contact у уровня ${tier}`)
+        if (shown.contact && r.contact_url) {
+          const tag = html.match(/<a [^>]*data-dir-contact[^>]*>/)?.[0] ?? ''
+          if (!tag) problems.push(`${rel}: contact_url задан, кнопки нет`)
+          else if (!/\brel="sponsored nofollow noopener"/.test(tag) || !/data-dir-place="contact"/.test(tag)) problems.push(`${rel}: кнопка Contact без rel=sponsored или placement=contact`)
+        }
+        if (shown.screenshot && r.screenshot_path && !existsSync(join(DIST, 'directory-screenshots', r.screenshot_path))) problems.push(`${rel}: файла dist/directory-screenshots/${r.screenshot_path} нет`)
+        // ④ Факты владельца без подтверждения — с подписью «stated by the vendor».
+        const ownerFacts = facts.filter((f) => f.entry_id === r.id && f.confirmed !== true)
+        const stated = (html.match(/data-dir-owner-fact/g) ?? []).length
+        if (ownerFacts.length && !has('stated by the vendor')) problems.push(`${rel}: ${ownerFacts.length} фактов владельца без подписи «stated by the vendor»`)
+        if (stated !== ownerFacts.filter((f) => f.kind !== 'responsibility').length && ownerFacts.length) problems.push(`${rel}: фактов владельца с подписью ${stated}, в базе неподтверждённых ${ownerFacts.length}`)
+        // ⑤ Ссылка на вендора у featured — sponsored; у claimed — nofollow без sponsored (кроме партнёра).
+        if (tier === 'featured') {
+          const outs = [...html.matchAll(/<a [^>]*data-dir-out="[^"]*"[^>]*>/g)].map((m) => m[0])
+          if (outs.some((t) => !/\bsponsored\b/.test(t.match(/\brel="([^"]*)"/)?.[1] ?? ''))) problems.push(`${rel}: featured, а ссылка на вендора без rel=sponsored`)
+        }
+      }
+      return {
+        id: 'dir-claimed', group: 'Directory', ok: problems.length === 0,
+        headline: problems.length === 0 ? `заявленных ${claimed}, featured ${featured}, истёкших featured (печатаются как claimed) ${expired}` : `проблем: ${problems.length}`,
+        detail: problems.slice(0, 30),
+      }
+    },
+  },
+  {
+    id: 'dir-multi-category',
+    group: 'Directory',
+    title: 'Запись в дополнительной категории — только при подтверждённом факте-основании; та же карточка с пометкой «Also listed under»; страница записи одна (s96)',
+    run: async () => {
+      const rows = await selectAll<{ id: number; slug: string; category: string; state: string; title: string; also_in: string[] }>(
+        'directory_entries', 'id, slug, category, state, title, also_in', (q) => q.order('id'))
+      const facts = await selectAll<{ entry_id: number; kind: string; confirmed: boolean | null; basis_for: string | null }>(
+        'directory_facts', 'id, entry_id, kind, confirmed, basis_for', (q) => q.not('basis_for', 'is', null).order('id'))
+      assertAscii('dir-multi-category', [DIR_ALSO_IN_NOTE, 'data-dir-also-in', 'data-dir-also-note'])
+      const problems: string[] = []
+      let printed = 0
+      let held = 0
+      for (const r of rows) {
+        if (!r.also_in.length) continue
+        const shown = dirAlsoIn(r as any, facts)
+        for (const c of r.also_in) {
+          const html = readPage(`directory/${c}/index.html`) ?? ''
+          const cards = [...html.matchAll(new RegExp(`<article [^>]*data-dir-entry="${r.id}"[^>]*>`, 'g'))].map((m) => m[0])
+          if (shown.includes(c)) {
+            printed++
+            if (cards.length !== 1) problems.push(`#${r.id} ${r.title}: в /directory/${c}/ карточек ${cards.length}, ожидалась одна`)
+            else if (!cards[0].includes(`data-dir-also-in="${r.category}"`)) problems.push(`#${r.id} ${r.title}: карточка в /directory/${c}/ без пометки data-dir-also-in`)
+            const rows_ = (html.match(new RegExp(`data-dir-row="${r.id}"`, 'g')) ?? []).length
+            if (rows_ !== 1) problems.push(`#${r.id} ${r.title}: в таблице /directory/${c}/ строк ${rows_}`)
+            if (!html.includes(DIR_ALSO_IN_NOTE)) problems.push(`/directory/${c}/: нет текста «${DIR_ALSO_IN_NOTE}»`)
+            // Страница записи — одна, под основной категорией; в дополнительной её быть не должно.
+            if (existsSync(join(DIST, 'directory', c, r.slug, 'index.html'))) problems.push(`#${r.id}: вторая страница записи под /directory/${c}/${r.slug}/`)
+          } else {
+            held++
+            if (cards.length) problems.push(`#${r.id} ${r.title}: в /directory/${c}/ без подтверждённого основания`)
+          }
+        }
+        // На своей странице у записи канонический адрес под основной категорией.
+        const own = readPage(`directory/${r.category}/${r.slug}/index.html`) ?? ''
+        if (own && !own.includes(`rel="canonical" href="https://ghspictograms.com/directory/${r.category}/${r.slug}/"`)) problems.push(`#${r.id}: canonical не под основной категорией`)
+      }
+      // Пометка «also listed under» не должна стоять в ОСНОВНОЙ категории записи.
+      for (const c of DIR_CATEGORIES) {
+        const html = readPage(`directory/${c.slug}/index.html`) ?? ''
+        for (const m of html.matchAll(/<article [^>]*data-dir-entry="(\d+)"[^>]*data-dir-also-in="([^"]+)"/g)) {
+          const r = rows.find((x) => String(x.id) === m[1])
+          if (r && r.category === c.slug) problems.push(`#${r.id}: пометка also-in в основной категории ${c.slug}`)
+        }
+      }
+      return {
+        id: 'dir-multi-category', group: 'Directory', ok: problems.length === 0,
+        headline: problems.length === 0 ? `дополнительных категорий напечатано ${printed}, удержано без основания ${held}` : `проблем: ${problems.length}`,
+        detail: problems.slice(0, 30),
+      }
+    },
+  },
+  {
+    id: 'dir-subcategories',
+    group: 'Directory',
+    title: 'Подразделы услуг: четыре страницы, каждая запись услуг ровно в одном подразделе, хаб раздела показывает группы, слуги не пересекаются (s96)',
+    run: async () => {
+      const rows = await selectAll<{ id: number; slug: string; category: string; state: string; title: string; subcategory: string | null }>(
+        'directory_entries', 'id, slug, category, state, title, subcategory', (q) => q.order('id'))
+      const problems: string[] = []
+      const services = rows.filter((r) => r.category === DIR_SUB_PARENT)
+      const subSlugs = new Set<string>(DIR_SUBCATEGORIES.map((x) => x.slug))
+      for (const r of services) {
+        if (!r.subcategory || !subSlugs.has(r.subcategory)) problems.push(`#${r.id} ${r.title}: подраздел «${r.subcategory}» вне словаря`)
+        if (subSlugs.has(r.slug)) problems.push(`#${r.id}: слуг записи «${r.slug}» совпадает со слугом подраздела — один путь`)
+      }
+      for (const r of rows) if (r.category !== DIR_SUB_PARENT && r.subcategory) problems.push(`#${r.id} ${r.title}: subcategory у записи не из услуг`)
+      const hub = readPage(`directory/${DIR_SUB_PARENT}/index.html`) ?? ''
+      if (!hub.includes('data-dir-subnav')) problems.push(`${DIR_SUB_PARENT}: нет навигации по подразделам в hero`)
+      const seen = new Map<number, string[]>()
+      for (const x of DIR_SUBCATEGORIES) {
+        const html = readPage(`directory/${DIR_SUB_PARENT}/${x.slug}/index.html`)
+        if (!html) { problems.push(`нет страницы подраздела /directory/${DIR_SUB_PARENT}/${x.slug}/`); continue }
+        if (!html.includes('data-dir-principle')) problems.push(`${x.slug}: нет «Listed, not ranked»`)
+        if (!html.includes('data-dir-sub-rule')) problems.push(`${x.slug}: нет правила подраздела`)
+        if (!html.includes(`rel="canonical" href="https://ghspictograms.com/directory/${DIR_SUB_PARENT}/${x.slug}/"`)) problems.push(`${x.slug}: canonical`)
+        const expect = services.filter((r) => r.subcategory === x.slug).map((r) => r.id)
+        const ids = [...html.matchAll(/data-dir-entry="(\d+)"/g)].map((m) => Number(m[1]))
+        for (const id of ids) seen.set(id, [...(seen.get(id) ?? []), x.slug])
+        if (ids.length !== expect.length || expect.some((id) => !ids.includes(id))) problems.push(`${x.slug}: карточек ${ids.length}, база ${expect.length}`)
+        if (!hub.includes(`href="/directory/${DIR_SUB_PARENT}/${x.slug}/"`)) problems.push(`хаб раздела: нет ссылки на подраздел ${x.slug}`)
+        if (!(readPage('directory/index.html') ?? '').includes(`href="/directory/${DIR_SUB_PARENT}/${x.slug}/"`)) problems.push(`хаб /directory/: нет ссылки на подраздел ${x.slug}`)
+        if (!hub.includes(`data-dir-group="${x.slug}"`)) problems.push(`хаб раздела: нет группы ${x.slug}`)
+        if (!html.includes(`href="/directory/${DIR_SUB_PARENT}/"`)) problems.push(`${x.slug}: нет ссылки на хаб раздела`)
+      }
+      for (const r of services) {
+        const where = seen.get(r.id) ?? []
+        if (where.length !== 1) problems.push(`#${r.id} ${r.title}: на страницах подразделов ${where.length} раз (${where.join(', ') || 'нигде'})`)
+      }
+      return {
+        id: 'dir-subcategories', group: 'Directory', ok: problems.length === 0,
+        headline: problems.length === 0 ? `${DIR_SUBCATEGORIES.length} подраздела, ${services.length} записей услуг, каждая ровно в одном` : `проблем: ${problems.length}`,
+        detail: problems.slice(0, 30),
+      }
+    },
+  },
+  {
+    id: 'dir-badges',
+    group: 'Directory',
+    title: 'Бейджи для сайтов вендоров: два SVG в dist/badges/, живой текст, без внешних ссылок, _headers накрывает /badges/* (s96)',
+    run: async () => {
+      const problems: string[] = []
+      const want: Record<string, string> = { 'directory-listed.svg': 'LISTED IN', 'directory-verified.svg': 'VERIFIED LISTING' }
+      for (const [file, text] of Object.entries(want)) {
+        const abs = join(DIST, 'badges', file)
+        if (!existsSync(abs)) { problems.push(`нет dist/badges/${file}`); continue }
+        const svg = readFileSync(abs, 'utf8')
+        if (!/^\s*<svg\b/.test(svg) || !svg.trim().endsWith('</svg>')) problems.push(`${file}: не SVG`)
+        if (!/\swidth="256"/.test(svg) || !/\sheight="44"/.test(svg) || !/viewBox="0 0 256 44"/.test(svg)) problems.push(`${file}: размер не 256×44`)
+        if (!svg.includes(`>${text}<`)) problems.push(`${file}: нет текста «${text}»`)
+        if (!svg.includes('GHS Tools &amp; Services Directory')) problems.push(`${file}: нет имени каталога`)
+        if (/<text[^>]*>[^<]*<\/text>/.test(svg) === false) problems.push(`${file}: текст не живой (<text>)`)
+        // ⚠ xmlns="http://www.w3.org/2000/svg" — пространство имён, не ссылка: убираем его перед поиском http.
+        const body = svg.replace(/xmlns(:\w+)?="[^"]*"/g, '')
+        if (/href=|https?:|<script|<image|<foreignObject/i.test(body)) problems.push(`${file}: внешняя ссылка, скрипт или картинка внутри бейджа`)
+        if (!/fill="#0d9488"/.test(svg) || !/fill="#0f172a"/.test(svg)) problems.push(`${file}: цвета не #0f172a / #0d9488`)
+      }
+      // В dist/badges/ — только эти два файла; страниц под путём нет.
+      if (existsSync(join(DIST, 'badges'))) {
+        for (const f of readdirSync(join(DIST, 'badges'))) if (!(f in want)) problems.push(`лишний файл dist/badges/${f}`)
+      }
+      const headers = existsSync(join(DIST, '_headers')) ? readFileSync(join(DIST, '_headers'), 'utf8') : ''
+      for (const path of ['/badges/*', '/directory-logos/*', '/directory-screenshots/*']) {
+        if (!new RegExp(`^${path.replace(/[*/]/g, (c) => '\\' + c)}\\s*\\n\\s+Cache-Control:`, 'm').test(headers)) problems.push(`в _headers нет правила ${path} с Cache-Control`)
+      }
+      return {
+        id: 'dir-badges', group: 'Directory', ok: problems.length === 0,
+        headline: problems.length === 0 ? 'два бейджа в dist/badges/, кэш задан' : `проблем: ${problems.length}`,
+        detail: problems,
+      }
+    },
+  },
+  {
     id: 'dir-sitemap',
     group: 'Directory',
     title: 'sitemap несёт хаб, семь категорий и только индексируемые записи; ссылка в подвале',
@@ -8416,6 +8680,7 @@ const CHECKS: Check[] = [
       const SITE_URL = 'https://ghspictograms.com'
       if (!sitemap.includes(`<loc>${SITE_URL}/directory/</loc>`)) problems.push('в sitemap нет /directory/')
       for (const c of DIR_CATEGORIES) if (!sitemap.includes(`<loc>${SITE_URL}/directory/${c.slug}/</loc>`)) problems.push(`в sitemap нет /directory/${c.slug}/`)
+      for (const x of DIR_SUBCATEGORIES) if (!sitemap.includes(`<loc>${SITE_URL}/directory/${DIR_SUB_PARENT}/${x.slug}/</loc>`)) problems.push(`в sitemap нет подраздела /directory/${DIR_SUB_PARENT}/${x.slug}/`)
       for (const r of rows) {
         if (r.state === 'not-listed') continue
         const loc = `<loc>${SITE_URL}/directory/${r.category}/${r.slug}/</loc>`
@@ -8427,7 +8692,7 @@ const CHECKS: Check[] = [
       if (!home.includes('href="/directory/"')) problems.push('в подвале главной нет ссылки на /directory/')
       return {
         id: 'dir-sitemap', group: 'Directory', ok: problems.length === 0,
-        headline: problems.length === 0 ? `sitemap: хаб + ${DIR_CATEGORIES.length} категорий, записи по правилу 6` : `проблем: ${problems.length}`,
+        headline: problems.length === 0 ? `sitemap: хаб + ${DIR_CATEGORIES.length} категорий + ${DIR_SUBCATEGORIES.length} подраздела, записи по правилу 6` : `проблем: ${problems.length}`,
         detail: problems.slice(0, 30),
       }
     },

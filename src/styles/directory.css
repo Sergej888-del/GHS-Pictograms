@@ -359,3 +359,86 @@
 
 /* ── Hub category cards: counts line ── */
 .dir-cat-n { margin-top: 14px; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-3); }
+
+/* ── s96: профиль заявленной записи (логотип, слова владельца, ссылки Pricing/Terms; featured — скриншот, Contact) ── */
+.dir-card-name { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
+.dir-logo {
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+  overflow: hidden;
+}
+.dir-logo img { width: 40px; height: 40px; object-fit: contain; display: block; }
+.dir-owner-links { font-size: 12.5px; }
+.dir-owner-links a { color: var(--teal-700); text-decoration: underline dotted; }
+.dir-owner-links a + a::before { content: ' · '; color: var(--ink-3); text-decoration: none; display: inline-block; }
+.dir-card.is-featured .dir-owner-links a { font-weight: 600; text-decoration: underline; }
+.dir-owner-desc {
+  margin: 10px 0 0;
+  border-left: 3px solid var(--teal-200);
+  padding: 2px 0 2px 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 900px;
+}
+.dir-owner-lbl {
+  display: block;
+  margin-bottom: 2px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--teal-700);
+}
+.dir-stated {
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .04em;
+  color: var(--ink-3);
+}
+.dir-shot { margin: 14px 0 0; }
+.dir-shot img { display: block; width: 100%; max-width: 720px; height: auto; border: 1px solid var(--line); border-radius: 10px; }
+.dir-shot figcaption { margin-top: 6px; font-size: 12px; color: var(--ink-3); }
+.dir-out-btn.ghost { background: #ffffff; color: var(--teal-700) !important; box-shadow: none; }
+.dir-out-btn.ghost:hover { background: var(--teal-50); }
+.dir-card.is-featured { border-color: var(--teal-600); box-shadow: 0 2px 10px rgba(13, 148, 136, .12); }
+
+/* ── s96: запись в дополнительной категории ── */
+.dir-also { margin: 8px 0 0; font-size: 12.5px; color: var(--ink-3); }
+.dir-also a { color: var(--teal-700); }
+.dir-table .dir-also-mini { display: block; font-style: italic; }
+
+/* ── s96: подразделы услуг — навигация в hero, заголовки групп, правило подраздела ── */
+.dir-subnav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.dir-subnav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, .35);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  text-decoration: none;
+  background: rgba(255, 255, 255, .08);
+}
+.dir-subnav a:hover { background: rgba(255, 255, 255, .18); }
+.dir-subnav a .dir-cat-n { margin: 0; color: rgba(255, 255, 255, .75); }
+.dir-sub-rule { margin: 14px 0 0; font-size: 14px; color: rgba(255, 255, 255, .85); max-width: 760px; }
+.dir-group-head { margin-top: 34px; }
+.dir-group-head h3 { font-size: 22px; margin: 0; }
+.dir-group-head h3 a { color: inherit; text-decoration: none; }
+.dir-group-head h3 a:hover { color: var(--teal-700); text-decoration: underline; }
+.dir-group-head .dir-cat-n { margin: 0 0 0 6px; }
+.dir-group-rule { margin: 4px 0 0; font-size: 13.5px; color: var(--ink-3); }
+.dir-group-rule a { color: var(--teal-700); }
+.dir-hub-subs { margin-top: 14px; }
+.dir-hub-subs a { color: var(--teal-700); }

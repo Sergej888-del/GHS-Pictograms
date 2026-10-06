@@ -11,19 +11,21 @@
 import Layout from '../../layouts/Layout.astro'
 import DirectoryClaimForm from '../../components/DirectoryClaimForm'
 import '../../styles/directory.css'
-import { CATEGORIES, SITE, categoryHref, formatDate } from '../../lib/directoryModel'
+import { CATEGORIES, SITE, SUBCATEGORIES, categoryHref, entriesInCategory, formatDate, subcategoryHref } from '../../lib/directoryModel'
 import { loadDirectory } from '../../lib/directoryData'
 import { LEGAL_QUOTES, LEGAL_SUMMARY, LEGAL_DISCLAIMER, LEGAL_CHECKED } from '../../lib/directoryLegal'
 
 export const prerender = true
 
-const { entries } = await loadDirectory()
+const { entries, facts } = await loadDirectory()
 const listed = entries.filter((e) => e.state === 'live')
 const closed = entries.filter((e) => e.state === 'closed')
 const notListed = entries
   .filter((e) => e.state === 'not-listed')
   .sort((a, b) => a.title.localeCompare(b.title, 'en', { sensitivity: 'base' }))
-const count = (slug: string) => entries.filter((e) => e.category === slug).length
+// s96: число раздела = что стоит на его странице (основная категория + подтверждённые also_in);
+// итоги «listed» выше — уникальные записи.
+const count = (slug: string) => entriesInCategory(entries, slug, facts).length
 const lastVerified = entries.map((e) => e.last_verified).sort().at(-1) ?? null
 
 const title = 'GHS Tools & Services Directory — Listed, Not Ranked'
@@ -33,7 +35,7 @@ const canonical = `${SITE}/directory/`
 
 const principles = [
   ['Facts, not ratings', 'We have not used these products, so we do not score them. Each card lists what the vendor publishes, with a link to the page we read it on.'],
-  ['Order is never sold', 'Alphabetical, with listings confirmed by their owners first. A paid placement, if one ever appears, sits in a separate block marked Sponsored and moves nothing.'],
+  ['Order is never sold', 'Listings verified by their owners come first, most recently confirmed at the top; the rest follow alphabetically. A paid placement, if one ever appears, sits in a separate block marked Sponsored and moves nothing.'],
   ['Prices only as published', 'A price appears only if the vendor publishes it and a second reading of its page found the same figure. Otherwise: “price on request”.'],
   ['Responsibility, quoted from legal documents', 'Writing an SDS for someone does not take over their legal duty. Each card quotes what the vendor itself says it is, and is not, responsible for — taken only from its terms, licence, legal notice or published policy, never from its blog, help pages or marketing.'],
   ['Partnerships disclosed', 'Where this site earns from a vendor, the card says so next to the name. It changes nothing in the order.'],
@@ -91,6 +93,10 @@ const jsonLd = {
           </a>
         ))}
       </div>
+      <p class="hub-fine dir-hub-subs" data-dir-hub-subs>
+        Services are split into four sections:
+        {SUBCATEGORIES.map((x, i) => <>{i > 0 ? ' · ' : ' '}<a href={subcategoryHref(x.slug)}>{x.short}</a></>)}.
+      </p>
     </div>
   </section>
 
@@ -105,8 +111,9 @@ const jsonLd = {
       </div>
       <p class="hub-sub">
         Every listing starts as <strong>listed</strong>: facts from public pages, not verified by the owner. An owner can
-        <strong>claim</strong> it for free — confirm or correct the facts — and the card then shows “Verified by owner”
-        and moves ahead of the alphabetical list in its section. Links to vendors carry <code>nofollow</code>, claimed or not.
+        <strong>claim</strong> it for free — confirm or correct the facts — and the card then shows “Verified by owner” with
+        the date, a logo and a short description in the vendor’s words, and moves ahead of the alphabetical list in its
+        section. Links to vendors carry <code>nofollow</code>, claimed or not.
       </p>
     </div>
   </section>

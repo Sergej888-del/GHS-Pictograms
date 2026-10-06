@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="44" viewBox="0 0 256 44" role="img" aria-labelledby="t d">
+  <title id="t">Listed in the GHS Tools &amp; Services Directory</title>
+  <desc id="d">Badge of the GHS Tools and Services Directory at ghspictograms.com. Listed, not ranked.</desc>
+  <rect x="0.5" y="0.5" width="255" height="43" rx="8" fill="#0f172a" stroke="#1e293b"/>
+  <rect x="0.5" y="0.5" width="44" height="43" rx="8" fill="#0d9488"/>
+  <rect x="36" y="0.5" width="9" height="43" fill="#0d9488"/>
+  <path d="M22.5 11.5 L31 22 L22.5 32.5 L14 22 Z" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" fill="#ffffff">
+    <text x="56" y="18" font-size="11" letter-spacing="0.6" fill="#99f6e4">LISTED IN</text>
+    <text x="56" y="33" font-size="12.5" font-weight="600">GHS Tools &amp; Services Directory</text>
+  </g>
+</svg>

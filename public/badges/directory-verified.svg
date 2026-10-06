@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="44" viewBox="0 0 256 44" role="img" aria-labelledby="t d">
+  <title id="t">Verified listing — GHS Tools &amp; Services Directory</title>
+  <desc id="d">The owner has confirmed the facts of this listing in the GHS Tools and Services Directory at ghspictograms.com.</desc>
+  <rect x="0.5" y="0.5" width="255" height="43" rx="8" fill="#0f172a" stroke="#1e293b"/>
+  <rect x="0.5" y="0.5" width="44" height="43" rx="8" fill="#0d9488"/>
+  <rect x="36" y="0.5" width="9" height="43" fill="#0d9488"/>
+  <circle cx="22.5" cy="22" r="10.5" fill="none" stroke="#ffffff" stroke-width="2.2"/>
+  <path d="M16.5 22.2 L20.8 26.4 L29 17.8" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" fill="#ffffff">
+    <text x="56" y="18" font-size="11" letter-spacing="0.6" fill="#99f6e4">VERIFIED LISTING</text>
+    <text x="56" y="33" font-size="12.5" font-weight="600">GHS Tools &amp; Services Directory</text>
+  </g>
+</svg>

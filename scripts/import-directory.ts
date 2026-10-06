@@ -25,11 +25,22 @@
  * directoryModel.SourceKind); печатаются только terms / legal_notice / policy. И цитата, начатая
  * со строчной буквы, — обрывок фразы: ей положено ведущее «…» (урок Avery #621), иначе файл не
  * принимается.
+ *
+ * ⚠⚠ s96: ПОСЕВ — ИСТОЧНИК ПРАВДЫ И ДЛЯ ПРОФИЛЯ ВЛАДЕЛЬЦА (tier, claimed_on, owner_confirmed_on, logo_path,
+ * owner_description, pricing_url, terms_url, also_in, subcategory, featured_*). Заявка (tiers-doc §4) вносится
+ * СНАЧАЛА в посев, потом в базу — иначе следующая заливка молча вернёт запись в `listed`. Чего в посеве НЕТ
+ * и быть не должно: адрес, имя и роль заявителя — они в закрытой directory_claims (96-directory-claim.sql);
+ * репозиторий публичный. Проверки файла: описание владельца ≤ 60 слов и без превосходных степеней
+ * (SUPERLATIVE_RE из directoryModel), у каждой дополнительной категории (`also_in`) — факт-основание
+ * (`basis_for`) у той же записи, подраздел только у услуг и у всех услуг, claimed без даты не принимается.
  */
 import { config } from 'dotenv'
 import { resolve } from 'node:path'
 import { readFileSync } from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
+import {
+  ALSO_IN_CATEGORIES, SUBCATEGORIES, SUBCATEGORY_PARENT, ownerDescriptionProblems,
+} from '../src/lib/directoryModel'
 
 config({ path: resolve(process.cwd(), '.env.local') })
 config()
@@ -75,6 +86,35 @@ if (fragment.length) die(`цитата начинается со строчно�
 const legalKinds = resp.filter((f) => ['terms', 'legal_notice', 'policy'].includes(String(f.source_kind))).length
 console.log(`  цитат об ответственности ${resp.length}: из юридических документов ${legalKinds}, не печатаются ${resp.length - legalKinds}`)
 
+// ── s96: профиль владельца, несколько категорий, подразделы ──
+const PII_KEYS = ['owner_email', 'owner_name', 'owner_role', 'owner_domains', 'claim_requested_at', 'claim_verified_at']
+const pii = entries.filter((e) => PII_KEYS.some((k) => k in e))
+if (pii.length) die(`в посеве поля заявителя (${PII_KEYS.join(', ')}) — им место в directory_claims, не в публичном файле: записи ${pii.slice(0, 5).map((e) => e.id).join(', ')}`)
+const badTier = entries.filter((e) => e.tier !== 'listed' && (!e.claimed_on || !e.owner_confirmed_on))
+if (badTier.length) die(`claimed/featured без claimed_on или owner_confirmed_on: ${badTier.map((e) => e.id).join(', ')}`)
+const badDesc = entries.flatMap((e) => ownerDescriptionProblems(e.owner_description as string | null).map((p) => `#${e.id}: ${p}`))
+if (badDesc.length) die(`описание владельца не принимается:\n  ${badDesc.join('\n  ')}`)
+const SUB_SLUGS = new Set<string>(SUBCATEGORIES.map((s) => s.slug))
+const badSub = entries.filter((e) =>
+  e.category === SUBCATEGORY_PARENT ? !SUB_SLUGS.has(String(e.subcategory)) : e.subcategory != null)
+if (badSub.length) die(`подраздел: у услуг обязателен из {${[...SUB_SLUGS].join(', ')}}, у прочих — null: записи ${badSub.map((e) => e.id).join(', ')}`)
+const subClash = entries.filter((e) => e.category === SUBCATEGORY_PARENT && SUB_SLUGS.has(String(e.slug)))
+if (subClash.length) die(`слуг записи совпадает со слугом подраздела (один путь): ${subClash.map((e) => e.slug).join(', ')}`)
+for (const e of entries) {
+  const also = (e.also_in as string[] | undefined) ?? []
+  for (const c of also) {
+    if (!(ALSO_IN_CATEGORIES as readonly string[]).includes(c) || c === e.category) die(`#${e.id}: also_in «${c}» вне словаря или равна основной категории`)
+    const basis = facts.find((f) => f.entry_id === e.id && f.kind === 'feature' && f.basis_for === c)
+    if (!basis) die(`#${e.id}: дополнительная категория «${c}» без факта-основания (feature с basis_for = «${c}»)`)
+  }
+}
+const strayBasis = facts.filter((f) => f.basis_for != null && (f.kind !== 'feature' ||
+  !((entries.find((e) => e.id === f.entry_id)?.also_in as string[] | undefined) ?? []).includes(String(f.basis_for))))
+if (strayBasis.length) die(`basis_for у факта, которого нет в also_in записи (или не feature): ${strayBasis.slice(0, 5).map((f) => f.id).join(', ')}`)
+const badProvided = facts.filter((f) => f.provided_by != null && f.provided_by !== 'editor' && f.provided_by !== 'owner')
+if (badProvided.length) die(`provided_by только editor/owner: ${badProvided.slice(0, 5).map((f) => f.id).join(', ')}`)
+console.log(`  заявленных ${entries.filter((e) => e.tier !== 'listed').length} · с also_in ${entries.filter((e) => ((e.also_in as string[]) ?? []).length).length} · подразделов услуг ${new Set(entries.filter((e) => e.subcategory).map((e) => e.subcategory)).size}`)
+
 const byState = new Map<string, number>()
 for (const e of entries) byState.set(String(e.state), (byState.get(String(e.state)) ?? 0) + 1)
 const byKind = new Map<string, number>()
@@ -86,9 +126,14 @@ const ENTRY_COLS = [
   'id', 'slug', 'category', 'state', 'tier', 'title', 'vendor', 'url', 'description', 'description_source',
   'hq_country', 'hq_country_source', 'reason', 'reason_source', 'closed_on', 'closed_source', 'successor',
   'affiliate', 'affiliate_url', 'tags', 'last_verified',
+  // s96 — профиль владельца и устройство каталога (без полей заявителя, см. шапку)
+  'claimed_on', 'owner_confirmed_on', 'logo_path', 'owner_description', 'pricing_url', 'terms_url',
+  'screenshot_path', 'contact_url', 'rfq_opt_in', 'featured_from', 'featured_until', 'featured_slots', 'also_in', 'subcategory',
 ]
-const FACT_COLS = ['id', 'entry_id', 'kind', 'label', 'value', 'detail', 'quote', 'source_url', 'evidence', 'sort', 'checked_on', 'source_kind']
-const pick = (r: Row, cols: string[]) => Object.fromEntries(cols.map((c) => [c, r[c] ?? null]))
+const FACT_COLS = ['id', 'entry_id', 'kind', 'label', 'value', 'detail', 'quote', 'source_url', 'evidence', 'sort', 'checked_on', 'source_kind', 'provided_by', 'basis_for']
+// ⚠ NOT NULL-колонки с умолчанием: пустой массив / false, а не null (иначе 23502 на первой же строке).
+const DEFAULTS: Record<string, unknown> = { tags: [], featured_slots: [], also_in: [], rfq_opt_in: false, provided_by: 'editor' }
+const pick = (r: Row, cols: string[]) => Object.fromEntries(cols.map((c) => [c, r[c] ?? DEFAULTS[c] ?? null]))
 
 async function main() {
   const db = createClient(url!, key!, { auth: { persistSession: false } })

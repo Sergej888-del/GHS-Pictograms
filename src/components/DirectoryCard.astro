@@ -5,16 +5,25 @@
 //
 // ⚠ ПРАВИЛА §18.2, которые держит эта разметка:
 //   • ни звёзд, ни оценок, ни «best for» — только факты, у каждой строки ссылка «source»;
-//   • ни одного <img>: имена без логотипов (правило 2; сторож dir-no-logos);
+//   • <img> — только логотип от владельца при tier ≥ claimed и скриншот при featured (правило 2, s96;
+//     сторож dir-images): у listed-записи картинок нет вовсе;
 //   • цены и цитаты — только `printable()` (подтверждённые check-directory); цитата об ответственности —
 //     к тому же только из юридического документа (`source_kind`, s93), и под ней написано, из какого;
 //   • партнёрство раскрыто бейджем и строкой, партнёрская ссылка — sponsored nofollow noopener,
 //     и рядом ссылка на /affiliate-disclosure/ (сторож affiliate-marking требует её на странице);
 //   • внешняя ссылка listed-записи — nofollow (владелец не подтверждён); claimed — обычная ссылка
 //     (бесплатный стимул заявить запись); featured — sponsored (оплачено — так требует Google).
+//
+// ⭐ s96 — ГРАНИЦА БЕСПЛАТНОГО И ПЛАТНОГО (tiers-doc s95 §2, `ownerProfileShown`): claimed бесплатно получает
+//   «Verified by owner · дата», логотип, своё описание ≤ 60 слов, ссылки Pricing/Terms как источники; только
+//   featured — скриншот, кнопку «Contact vendor» (placement `contact`, rel sponsored). Уровень берётся из
+//   `effectiveTier`: истёкший featured печатается как claimed сам, без правки базы.
+// ⭐ s96 — в дополнительной категории (`also_in`, подтверждённое основание) та же карточка печатается со
+//   строкой «Also listed under <основная>»; страница записи одна, под основной категорией.
 import {
-  type CardModel, AFFILIATE_NOTE, CLAIMED_NOTE, LISTED_NOTE, JURISDICTION_SHORT, SOURCE_KIND_LABEL, TAG_LABEL,
-  countryName, entryHref, first, formatDate, jurisdictionsOf, outboundLink,
+  type CardModel, AFFILIATE_NOTE, ALSO_IN_NOTE, CLAIMED_NOTE, LISTED_NOTE, LOGO_BASE, SCREENSHOT_BASE, OWNER_FACT_NOTE,
+  JURISDICTION_SHORT, SOURCE_KIND_LABEL, TAG_LABEL, categoryBySlug, categoryHref, countryName, effectiveTier, entryHref,
+  first, formatDate, jurisdictionsOf, outboundLink, ownerProfileShown, ownerStated,
 } from '../lib/directoryModel'
 
 interface Props {
@@ -22,11 +31,22 @@ interface Props {
   variant: 'compact' | 'full'
   /** Копия в блоке Sponsored: свой id и пометка, чтобы не дублировать якорь редакционной карточки. */
   sponsored?: boolean
+  /** Слуг категории, на странице которой карточка стоит; если это не основная категория записи — пометка. */
+  inCategory?: string
 }
-const { card, variant, sponsored = false } = Astro.props
+const { card, variant, sponsored = false, inCategory } = Astro.props
 const e = card.entry
 const f = card.facts
 const closed = e.state === 'closed'
+const tier = effectiveTier(e)
+const shown = ownerProfileShown(tier)
+const primary = inCategory && inCategory !== e.category ? categoryBySlug(e.category) : undefined
+const logo = shown.logo && e.logo_path ? `${LOGO_BASE}${e.logo_path}` : null
+const ownerDesc = shown.description && e.owner_description ? e.owner_description : null
+const ownerLinks = shown.links ? ([['Pricing', e.pricing_url], ['Terms', e.terms_url]] as const).filter(([, u]) => !!u) : []
+const screenshot = shown.screenshot && e.screenshot_path ? `${SCREENSHOT_BASE}${e.screenshot_path}` : null
+const contact = shown.contact && e.contact_url ? e.contact_url : null
+const ownerConfirmed = tier !== 'listed' ? formatDate(e.owner_confirmed_on ?? e.claimed_on) : ''
 const country = countryName(e.hq_country)
 const juris = jurisdictionsOf(card)
 const lang = first(card, 'language')
@@ -84,43 +104,65 @@ const hasDetails =
 ---
 
 <article
-  class={`dir-card${closed ? ' is-closed' : ''}${e.tier !== 'listed' ? ' is-claimed' : ''}`}
+  class={`dir-card${closed ? ' is-closed' : ''}${tier !== 'listed' ? ' is-claimed' : ''}${tier === 'featured' ? ' is-featured' : ''}`}
   id={`${sponsored ? 's' : 'e'}-${e.slug}`}
   data-dir-entry={sponsored ? undefined : e.id}
   data-dir-sponsored-card={sponsored ? e.id : undefined}
   data-dir-title={e.title}
-  data-dir-tier={e.tier}
+  data-dir-tier={tier}
+  data-dir-also-in={primary ? e.category : undefined}
   data-juris={jurisData}
   data-country={e.hq_country ?? ''}
   data-search={searchBlob}
 >
   <header class="dir-card-head">
     <div class="dir-card-name">
-      <h3>
-        {variant === 'compact' ? <a href={entryHref(e)}>{e.title}</a> : e.title}
-      </h3>
-      <p class="dir-vendor">
-        {e.vendor && <span>{e.vendor}</span>}
-        {country && (
-          <span class="dir-country">
-            {country}
-            {e.hq_country_source && (
-              <a class="dir-src" href={e.hq_country_source} rel={src} target="_blank" title="Where we read the company address">source</a>
-            )}
-          </span>
-        )}
-      </p>
+      {logo && (
+        <span class="dir-logo">
+          <img src={logo} alt={`${e.title} logo`} width="48" height="48" loading="lazy" decoding="async" data-dir-logo={e.slug} />
+        </span>
+      )}
+      <div>
+        <h3>
+          {variant === 'compact' ? <a href={entryHref(e)}>{e.title}</a> : e.title}
+        </h3>
+        <p class="dir-vendor">
+          {e.vendor && <span>{e.vendor}</span>}
+          {country && (
+            <span class="dir-country">
+              {country}
+              {e.hq_country_source && (
+                <a class="dir-src" href={e.hq_country_source} rel={src} target="_blank" title="Where we read the company address">source</a>
+              )}
+            </span>
+          )}
+          {ownerLinks.length > 0 && (
+            <span class="dir-owner-links" data-dir-owner-links>
+              {ownerLinks.map(([label, u]) => <a href={u!} rel={src} target="_blank" title={`${label} page, as given by the owner`}>{label}</a>)}
+            </span>
+          )}
+        </p>
+      </div>
     </div>
     <div class="dir-badges">
       {closed && <span class="dir-badge closed">{closedBadge}</span>}
-      {e.tier !== 'listed' && <span class="dir-badge claimed" data-dir-claimed>Verified by owner</span>}
+      {tier !== 'listed' && <span class="dir-badge claimed" data-dir-claimed={e.owner_confirmed_on ?? e.claimed_on ?? ''}>Verified by owner · {ownerConfirmed}</span>}
       {e.affiliate && <span class="dir-badge aff" data-dir-affiliate={e.affiliate}>Affiliate partner</span>}
       {e.tags.map((t) => TAG_LABEL[t] && <span class="dir-badge tag">{TAG_LABEL[t]}</span>)}
+      {contact && (
+        <a class="dir-out dir-out-btn ghost" href={contact} rel="sponsored nofollow noopener" target="_blank" data-dir-out={e.slug} data-dir-cat={e.category} data-dir-tier={tier} data-dir-place="contact" data-dir-contact>Contact vendor ↗</a>
+      )}
       {out && (
-        <a class="dir-out dir-out-btn" href={out.href} rel={out.rel} target="_blank" data-dir-out={e.slug} data-dir-cat={e.category} data-dir-tier={e.tier} data-dir-place={place}>Vendor website ↗</a>
+        <a class="dir-out dir-out-btn" href={out.href} rel={out.rel} target="_blank" data-dir-out={e.slug} data-dir-cat={e.category} data-dir-tier={tier} data-dir-place={place}>Vendor website ↗</a>
       )}
     </div>
   </header>
+
+  {primary && (
+    <p class="dir-also" data-dir-also-note>
+      {ALSO_IN_NOTE} <a href={categoryHref(primary.slug)}>{primary.short}</a> — its main section; this card is the same listing.
+    </p>
+  )}
 
   <p class="dir-desc">
     {e.description}
@@ -128,6 +170,20 @@ const hasDetails =
       <a class="dir-src" href={e.description_source} rel={src} target="_blank" title="Where this description comes from">source</a>
     )}
   </p>
+
+  {ownerDesc && (
+    <p class="dir-owner-desc" data-dir-owner-desc>
+      <span class="dir-owner-lbl">In the vendor’s words</span>
+      {ownerDesc}
+    </p>
+  )}
+
+  {screenshot && (
+    <figure class="dir-shot" data-dir-screenshot>
+      <img src={screenshot} alt={`${e.title} — product screenshot supplied by the vendor`} width="1200" height="675" loading="lazy" decoding="async" />
+      <figcaption>Screenshot supplied by the vendor.</figcaption>
+    </figure>
+  )}
 
   {closed && (
     <dl class="dir-facts">
@@ -190,10 +246,11 @@ const hasDetails =
         {card.prices.length > 0 && (
           <ul class="dir-prices">
             {card.prices.map((p) => (
-              <li data-fact="price" data-fid={p.id}>
+              <li data-fact="price" data-fid={p.id} data-dir-owner-fact={ownerStated(p) ? '' : undefined}>
                 {p.label && <span class="tier">{p.label}</span>}
                 <span class="amt">{p.value}</span>
                 {p.detail && <span class="inc">{p.detail}</span>}
+                {ownerStated(p) && <span class="dir-stated">{OWNER_FACT_NOTE}</span>}
               </li>
             ))}
           </ul>
@@ -230,7 +287,10 @@ const hasDetails =
           <h4>What it does, according to the vendor</h4>
           <ul class="dir-features">
             {features.map((x) => (
-              <li>{x.value}<a class="dir-src" href={x.source_url} rel={src} target="_blank">source</a></li>
+              <li data-dir-owner-fact={ownerStated(x) ? '' : undefined} data-dir-basis={x.basis_for ?? undefined}>
+                {x.value}<a class="dir-src" href={x.source_url} rel={src} target="_blank">source</a>
+                {ownerStated(x) && <span class="dir-stated">{OWNER_FACT_NOTE}</span>}
+              </li>
             ))}
           </ul>
         </section>
@@ -288,10 +348,14 @@ const hasDetails =
   )}
 
   <footer class="dir-card-foot">
-    <span class="dir-status">{e.tier === 'listed' ? LISTED_NOTE : CLAIMED_NOTE} Last verified {verified}.</span>
+    <span class="dir-status">
+      {tier === 'listed' ? LISTED_NOTE : CLAIMED_NOTE}
+      {tier !== 'listed' && ownerConfirmed && ` Owner confirmed on ${ownerConfirmed}.`}
+      {' '}Last verified {verified}.
+    </span>
     <span class="dir-links">
       {variant === 'compact' && <a href={entryHref(e)}>Details · claim or correct</a>}
-      {variant === 'full' && e.state === 'live' && <a href="#claim">{e.tier === 'listed' ? 'Claim or correct this listing' : 'Report a correction'}</a>}
+      {variant === 'full' && e.state === 'live' && <a href="#claim">{tier === 'listed' ? 'Claim or correct this listing' : 'Report a correction'}</a>}
     </span>
   </footer>
 </article>

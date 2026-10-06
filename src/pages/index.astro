@@ -12,7 +12,7 @@ import SiteHeader from '../components/SiteHeader.astro'
 import SiteFooter from '../components/SiteFooter.astro'
 import { layoutLabel, renderSvg } from '../lib/labelEngine'
 import { JURISDICTION_BRANCHES } from '../lib/labelMakerHub'
-import { CATEGORIES as DIR_CATEGORIES, categoryHref as dirHref } from '../lib/directoryModel'
+import { CATEGORIES as DIR_CATEGORIES, categoryHref as dirHref, entriesInCategory } from '../lib/directoryModel'
 import { loadDirectory } from '../lib/directoryData'
 
 /**
@@ -282,13 +282,13 @@ const pillars = [
 // Карточки ведут сразу в разделы (один клик до таблицы сравнения), не на хаб. Числа — из того же
 // снимка базы, что строит /directory/ (loadDirectory кэшируется на сборку). ⚠ Без оценок и «best»:
 // §18.2 действует и на главной — только «N listed» и чем раздел полезен.
-const { entries: dirEntries } = await loadDirectory()
+const { entries: dirEntries, facts: dirFacts } = await loadDirectory()
 const dirLive = dirEntries.filter((e) => e.state === 'live')
 const dirCards = DIR_CATEGORIES.filter((c) => c.slug !== 'closed').map((c) => ({
   href: dirHref(c.slug),
   tag: c.eyebrow.replace('Directory · ', ''),
   title: c.h1.charAt(0).toUpperCase() + c.h1.slice(1),
-  n: dirLive.filter((e) => e.category === c.slug).length,
+  n: entriesInCategory(dirLive, c.slug, dirFacts).length,
   copy: {
     'sds-authoring-software': 'Write and classify SDSs: published prices, jurisdictions, languages, UFI/PCN.',
     'sds-management': 'Keep supplier SDSs current and reachable; chemical inventory where offered.',

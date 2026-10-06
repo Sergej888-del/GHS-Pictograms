@@ -1,0 +1,140 @@
+---
+// /directory/authoring-services-consultants/<sub>/ — страница подраздела услуг (№148, s96; решение Сергея s95 §2b).
+//
+// Раздел услуг — 39 записей, в одном алфавитном списке конец не читают. Четыре подраздела ~6–12 записей:
+// перевод SDS · авторинг EU · авторинг Северная Америка · регуляторный консалтинг (SUBCATEGORIES в
+// directoryModel). Страница раздела остаётся хабом (все записи по группам), здесь — только свой подраздел:
+// та же таблица, фильтры и карточки (DirectoryListing), свой title по спросу, свой блок «Who is responsible».
+//
+// ⚠ Путь делит сегмент с [category]/[entry]/ — статический сегмент `authoring-services-consultants` имеет
+//   приоритет в маршрутизации Astro, а сторож dir-subcategories и import:directory следят, чтобы слуг записи
+//   никогда не совпал со слугом подраздела.
+// ⚠ Индексируется: это страницы под запросы «sds translation services», «sds authoring services» (s91).
+import Layout from '../../../../layouts/Layout.astro'
+import DirectoryListing from '../../../../components/DirectoryListing.astro'
+import '../../../../styles/directory.css'
+import {
+  SITE, SPONSORED_MAX, SUBCATEGORIES, SUBCATEGORY_PARENT, buildCard, categoryBySlug, categoryHref, effectiveTier,
+  entriesInCategory, formatDate, orderEntries, subcategoryHref, type Subcategory,
+} from '../../../../lib/directoryModel'
+import { loadDirectory } from '../../../../lib/directoryData'
+import { LEGAL_QUOTES, LEGAL_SUMMARY, LEGAL_DISCLAIMER, LEGAL_CHECKED } from '../../../../lib/directoryLegal'
+
+export const prerender = true
+
+export function getStaticPaths() {
+  return SUBCATEGORIES.map((sub) => ({ params: { sub: sub.slug }, props: { sub } }))
+}
+
+const { sub } = Astro.props as { sub: Subcategory }
+const parent = categoryBySlug(SUBCATEGORY_PARENT)!
+const { entries, facts } = await loadDirectory()
+
+const inSub = entriesInCategory(entries, SUBCATEGORY_PARENT, facts).filter((e) => e.subcategory === sub.slug)
+const editorial = orderEntries(inSub)
+const sponsored = orderEntries(inSub.filter((e) => e.state === 'live' && effectiveTier(e) === 'featured')).slice(0, SPONSORED_MAX)
+const cards = editorial.map((e) => buildCard(e, facts))
+const sponsoredCards = sponsored.map((e) => buildCard(e, facts))
+const n = inSub.length
+const lastVerified = inSub.map((e) => e.last_verified).sort().at(-1) ?? null
+const siblings = SUBCATEGORIES.filter((s) => s.slug !== sub.slug)
+
+const title = sub.title
+const description = sub.description
+const canonical = `${SITE}${subcategoryHref(sub.slug)}`
+const lead = sub.lead.replace('{n}', String(n))
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: sub.h1,
+  description,
+  url: canonical,
+  isPartOf: { '@type': 'CollectionPage', name: parent.h1, url: `${SITE}${categoryHref(parent.slug)}` },
+  mainEntity: {
+    '@type': 'ItemList',
+    numberOfItems: n,
+    itemListOrder: 'https://schema.org/ItemListUnordered',
+    itemListElement: cards.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.entry.title, url: `${canonical}#e-${c.entry.slug}` })),
+  },
+}
+const breadcrumb = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'GHS Tools & Services Directory', item: `${SITE}/directory/` },
+    { '@type': 'ListItem', position: 2, name: parent.short, item: `${SITE}${categoryHref(parent.slug)}` },
+    { '@type': 'ListItem', position: 3, name: sub.short, item: canonical },
+  ],
+}
+---
+
+<Layout title={title} description={description} canonical={canonical} titleIsComplete>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+    <script type="application/ld+json" set:html={JSON.stringify(breadcrumb)} />
+  </Fragment>
+
+  <section class="hub-hero tint-teal">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+    <div class="hub-wrap hub-hero-inner">
+      <p class="hub-crumb">
+        <a href="/directory/">GHS Tools &amp; Services Directory</a><span class="sep">/</span>
+        <a href={categoryHref(parent.slug)}>{parent.short}</a><span class="sep">/</span>{sub.short}
+      </p>
+      <p class="hub-hero-eyebrow">{parent.eyebrow} · {sub.short}</p>
+      <h1>{sub.h1}</h1>
+      <p class="hub-hero-sub">{lead}</p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">{n} listed</span>
+        <span class="hub-hero-chip" data-dir-principle>Listed, not ranked</span>
+        {lastVerified && <span class="hub-hero-chip">Last verified {formatDate(lastVerified)}</span>}
+      </div>
+      <p class="dir-sub-rule" data-dir-sub-rule>What belongs here: {sub.rule}</p>
+      <nav class="dir-subnav" aria-label="Other sections" data-dir-subnav>
+        <a href={categoryHref(parent.slug)}>All {parent.short.toLowerCase()} →</a>
+        {siblings.map((s) => <a href={subcategoryHref(s.slug)}>{s.short}</a>)}
+      </nav>
+    </div>
+  </section>
+
+  <DirectoryListing cards={cards} sponsoredCards={sponsoredCards} groups={[{ id: 'entries', title: '', cards }]} isClosed={false} inCategory={SUBCATEGORY_PARENT} />
+
+  <section class="hub-sec-white" id="who-is-responsible">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">03 · The law</p>
+      <h2 class="hub-h2">Who is responsible for an SDS?</h2>
+      <p class="hub-sub">
+        The texts below were read in the official consolidated versions on {formatDate(LEGAL_CHECKED)}.
+      </p>
+      <div class="dir-legal">
+        {LEGAL_QUOTES.map((q) => (
+          <figure>
+            <figcaption>{q.instrument} · {q.provision} · <a href={q.url} rel="noopener" target="_blank">{q.version}</a></figcaption>
+            <blockquote>“{q.quote}”</blockquote>
+          </figure>
+        ))}
+      </div>
+      <p class="hub-sub">{LEGAL_SUMMARY}</p>
+      <p class="hub-fine">{LEGAL_DISCLAIMER}</p>
+    </div>
+  </section>
+
+  <section class="hub-sec-white">
+    <div class="hub-wrap">
+      <div class="hub-close-panel">
+        <div class="dots" aria-hidden="true"></div>
+        <h2>Is a listing wrong, or missing?</h2>
+        <p>
+          Owners can claim a listing for free and confirm or correct its facts — open the listing and use the form at the
+          bottom. To suggest a provider we have not listed, use the form on the
+          <a href="/directory/#suggest">directory home page</a>. The other sections of
+          <a href={categoryHref(parent.slug)}>{parent.short}</a>:
+          {siblings.map((s, i) => <>{i > 0 ? ' · ' : ' '}<a href={subcategoryHref(s.slug)}>{s.short}</a></>)}.
+        </p>
+      </div>
+    </div>
+  </section>
+</Layout>

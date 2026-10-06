@@ -38,10 +38,14 @@ export default function DirectoryClaimForm({ mode, slug, title }: Props) {
   const [role, setRole] = useState('employee')
   const [message, setMessage] = useState('')
   const [authorised, setAuthorised] = useState(false)
+  // s96: вторая галочка заявки — прислать код вставки бейджа «Verified listing» (tiers-doc §4 п. 1, §8).
+  const [badge, setBadge] = useState(true)
   const [state, setState] = useState<SendState>('idle')
   const [error, setError] = useState('')
 
-  const prefix = mode === 'suggest' ? '[suggest]' : `[${kind}:${slug ?? '?'}] role=${role}${name ? `; name=${name.trim()}` : ''};`
+  const prefix = mode === 'suggest'
+    ? '[suggest]'
+    : `[${kind}:${slug ?? '?'}] role=${role}${name ? `; name=${name.trim()}` : ''}${kind === 'claim' ? `; badge=${badge ? 'yes' : 'no'}` : ''};`
   const room = Math.max(0, MAX_COMMENT - prefix.length - 1)
 
   async function onSubmit(ev: FormEvent) {
@@ -64,7 +68,9 @@ export default function DirectoryClaimForm({ mode, slug, title }: Props) {
         <p className="dir-form-h">Thank you — it has reached us.</p>
         <p>
           A person reads every request. We reply from <strong>hello@ghspictograms.com</strong>, usually within a few
-          working days. A claimed listing shows “Verified by owner” once the facts are confirmed; claiming is free.
+          working days, with the list of facts the card prints so you can confirm or correct each line. A claimed listing
+          shows “Verified by owner” with the date, your logo and a short description once the facts are confirmed;
+          claiming is free, and verified listings come first in their section.
         </p>
       </div>
     )
@@ -121,10 +127,16 @@ export default function DirectoryClaimForm({ mode, slug, title }: Props) {
       </label>
 
       {mode === 'entry' && kind === 'claim' && (
-        <label className="dir-form-check">
-          <input type="checkbox" checked={authorised} onChange={(e) => setAuthorised(e.target.checked)} />
-          I work for, or am authorised to represent, this company. We check that the reply address belongs to its domain.
-        </label>
+        <>
+          <label className="dir-form-check">
+            <input type="checkbox" checked={authorised} onChange={(e) => setAuthorised(e.target.checked)} />
+            I work for, or am authorised to represent, this company. We check that the reply address belongs to its domain.
+          </label>
+          <label className="dir-form-check">
+            <input type="checkbox" checked={badge} onChange={(e) => setBadge(e.target.checked)} />
+            Send me the embed code for the “Verified listing” badge once the facts are confirmed (free; it links to this card).
+          </label>
+        </>
       )}
 
       {error && <p className="dir-form-error" role="alert">{error}</p>}
