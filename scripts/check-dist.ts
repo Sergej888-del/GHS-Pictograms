@@ -4352,6 +4352,11 @@ const CHECKS: Check[] = [
         if (!html.includes(`uri=CELEX:${c.act}`)) problems.push(`нет ссылки на корриджендум ${c.act}`)
         if (!text.includes(c.oj)) problems.push(`нет выпуска ОЖ корриджендума ${c.act}: «${c.oj}»`)
       }
+      // s94: входы на страницу — подвал (с каждой страницы) и карточка на хабе /compliance/.
+      const home = readPage('index.html') ?? ''
+      if (!home.includes('href="/compliance/clp-translation-errors/"')) problems.push('в подвале главной нет ссылки на страницу errata')
+      const hub = readPage('compliance/index.html') ?? ''
+      if (!hub.includes('data-research-errata')) problems.push('на хабе /compliance/ нет карточки «Original research» со ссылкой на errata')
       const fixedMarks = (html.match(/data-errata-fixed="/g) ?? []).length
       if (fixedMarks !== CORRECTED_COUNT) problems.push(`плашек «Corrected by» ${fixedMarks}, в модуле исправленных ${CORRECTED_COUNT}`)
       if (CORRECTED_COUNT > 0 && !html.includes('data-errata-corrigenda')) problems.push('нет абзаца о корриджендумах в разделе Status')

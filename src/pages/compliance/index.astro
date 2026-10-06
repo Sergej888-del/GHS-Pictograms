@@ -13,6 +13,7 @@
 import Layout from '../../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
 import { PILLARS, PILLAR_BY_SLUG, pillarAccentStyle } from '../../lib/complianceHub';
+import { ERRATA_COUNT, CORRECTED_COUNT, CORRIGENDA, humanDate } from '../../lib/annex6Errata';
 // ⚠⚠ Акцент ссылок «на остальной сайт» приходит ИЗ КАРТЫ РАЗДЕЛОВ, а не
 // подбирается на глаз: /substances/ обязан быть бирюзовым и здесь, и везде.
 import { withAccent, accentBadge } from '../../lib/sectionAccent';
@@ -138,6 +139,30 @@ const breadcrumbJsonLd = {
             </a>
           );
         })}
+      </div>
+    </div>
+  </section>
+
+  {/* ── НАШЕ ИССЛЕДОВАНИЕ (s94) ─────────────────────────────────────────────
+      Страница errata жила только под столпом CLP; после корриджендумов 22–23.09.2026 это главный
+      материал хаба — ему место на первом экране после столпов. Числа — из модуля annex6Errata. */}
+  <section class="hub-sec-a" id="research">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">Original research</p>
+      <h2 class="hub-h2">Where the language editions of Annex VI disagree</h2>
+      <p class="hub-sub">
+        We compared the substance name in every row of CLP Annex VI across all 23 language editions against
+        the EC and CAS numbers of the same row and found {ERRATA_COUNT} entries that did not match — each
+        quoted from the Official Journal with the act and the page, reported to ECHA and the EU Publications
+        Office on 10 August 2026. Corrigenda published on {humanDate(CORRIGENDA.map((c) => c.date).sort().at(-1)!)}
+        {' '}corrected {CORRECTED_COUNT} of them.
+      </p>
+      <div class="hub-mini-cards">
+        <a class="hub-mini-card" href="/compliance/clp-translation-errors/" data-research-errata>
+          <span class="sect">CLP · Annex VI</span>
+          <h4>The {ERRATA_COUNT} findings, the three corrigenda, and the status of every entry</h4>
+          <p class="copy">Text as first published, what the row’s own identifiers say, and which corrigendum fixed it — with the data as CSV and JSON.</p>
+        </a>
       </div>
     </div>
   </section>

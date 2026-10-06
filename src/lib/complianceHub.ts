@@ -32,6 +32,9 @@
 //
 // ⚠ Тексты английские, комментарии русские — как везде в проекте.
 
+// ⚠ Чистый модуль (без базы) — импорт отсюда безопасен для check-dist.
+import { ERRATA_COUNT, CORRECTED_COUNT } from './annex6Errata';
+
 export type Pillar = {
   /** Слаг раздела: он же имя папки в `src/content/compliance/`. */
   slug: string;
@@ -104,8 +107,10 @@ export const PILLARS: Pillar[] = [
       {
         href: '/compliance/clp-translation-errors/',
         title: 'Where the language editions of Annex VI disagree',
-        desc: 'Thirty entries where one language edition of Annex VI prints something the rest of '
-          + 'its own row contradicts — each quoted from the Official Journal, with the act and the page.',
+        // ⚠ s94: число — из модуля, не прописью («Thirty» простояло при 33 находках два месяца).
+        desc: `${ERRATA_COUNT} entries where one language edition of Annex VI printed something the rest of `
+          + `its own row contradicts — each quoted from the Official Journal, with the act and the page. `
+          + `Corrigenda of September 2026 corrected ${CORRECTED_COUNT} of them.`,
       },
     ],
   },
