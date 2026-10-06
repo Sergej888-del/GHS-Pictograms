@@ -63,7 +63,7 @@ import { acuteToxModule } from '../src/lib/classifier/modules/acuteTox'
 import { CUTOFF_PLANS } from '../src/lib/classifier/modules/cutoff'
 import {
   erratumFor, erratumLanguages, erratumCitation,
-  ERRATA_INDEX_NUMBERS, ERRATA_COUNT, ERRATA_TABLE_NOTE, ACKNOWLEDGEMENT,
+  ERRATA_INDEX_NUMBERS, ERRATA_COUNT, ERRATA_TABLE_NOTE, ACKNOWLEDGEMENT, CORRIGENDA, CORRECTED_COUNT,
 } from '../src/lib/annex6Errata'
 import { casShapeOk, ecShapeOk, indexShapeOk } from '../src/lib/substanceIdentifiers'
 import { substanceSlug, casFromSlug } from '../src/lib/substanceSlug'
@@ -4346,6 +4346,18 @@ const CHECKS: Check[] = [
       const eurlexLinks = html.split(EURLEX).length - 1
       if (eurlexLinks < ERRATA_COUNT + 1) problems.push(`ссылок на EUR-Lex ${eurlexLinks}, ожидалось ≥ ${ERRATA_COUNT + 1} (по одной на находку + корриджендум R(01))`)
       if (!html.includes('uri=CELEX:32018R0669R(01)')) problems.push('нет ссылки на корриджендум 32018R0669R(01)')
+      // s94: корриджендумы 22–23.09.2026 — каждый назван и слинкован; у каждой исправленной находки плашка со
+      // ссылкой на свой корриджендум; число плашек = CORRECTED_COUNT; «still wrong»-формулировок на странице нет.
+      for (const c of CORRIGENDA) {
+        if (!html.includes(`uri=CELEX:${c.act}`)) problems.push(`нет ссылки на корриджендум ${c.act}`)
+        if (!text.includes(c.oj)) problems.push(`нет выпуска ОЖ корриджендума ${c.act}: «${c.oj}»`)
+      }
+      const fixedMarks = (html.match(/data-errata-fixed="/g) ?? []).length
+      if (fixedMarks !== CORRECTED_COUNT) problems.push(`плашек «Corrected by» ${fixedMarks}, в модуле исправленных ${CORRECTED_COUNT}`)
+      if (CORRECTED_COUNT > 0 && !html.includes('data-errata-corrigenda')) problems.push('нет абзаца о корриджендумах в разделе Status')
+      for (const bad of ['has not been corrected', 'no further corrigendum', 'still read as described', 'because of our report', 'as a result of our report']) {
+        if (text.toLowerCase().includes(bad)) problems.push(`формулировка, которая устарела или утверждает лишнее: «${bad}»`)
+      }
       // Файлы данных: те же ERRATA_COUNT строк, что на странице.
       const jsonAbs = join(DIST, 'data', 'annex6-errata.json')
       if (!existsSync(jsonAbs)) problems.push('нет dist/data/annex6-errata.json')
@@ -4354,9 +4366,13 @@ const CHECKS: Check[] = [
           const j = JSON.parse(readFileSync(jsonAbs, 'utf8')) as { count?: number; findings?: unknown[]; acknowledgement?: { ref?: string } }
           if (!Array.isArray(j.findings) || j.findings.length !== ERRATA_COUNT) problems.push(`в JSON ${j.findings?.length ?? 'нет'} находок, ожидалось ${ERRATA_COUNT}`)
           if (j.acknowledgement?.ref !== ACKNOWLEDGEMENT.ref) problems.push('в JSON нет ссылки на обращение Бюро')
-          const rows = (j.findings ?? []) as { act?: string; language?: string; eur_lex_url?: string }[]
+          const rows = (j.findings ?? []) as { act?: string; language?: string; eur_lex_url?: string; status?: string; corrigendum?: string | null; corrigendum_url?: string | null; status_date?: string | null }[]
           const badUrl = rows.filter((r) => !r.eur_lex_url || !r.eur_lex_url.startsWith('https://eur-lex.europa.eu/legal-content/') || !r.eur_lex_url.endsWith(`CELEX:${r.act}`) || !r.eur_lex_url.includes(`/${r.language}/`))
           if (badUrl.length > 0) problems.push(`в JSON ${badUrl.length} находок без верного eur_lex_url (язык + CELEX акта)`)
+          const corrected = rows.filter((r) => r.status === 'corrected')
+          if (corrected.length !== CORRECTED_COUNT) problems.push(`в JSON исправленных ${corrected.length}, в модуле ${CORRECTED_COUNT}`)
+          const badCorr = corrected.filter((r) => !r.corrigendum || !r.status_date || !r.corrigendum_url || !r.corrigendum_url.endsWith(`CELEX:${r.corrigendum}`) || !r.corrigendum_url.includes(`/${r.language}/`))
+          if (badCorr.length > 0) problems.push(`в JSON ${badCorr.length} исправленных без корриджендума, даты или верной ссылки на него`)
         } catch (e) {
           problems.push(`JSON не разбирается: ${(e as Error).message}`)
         }

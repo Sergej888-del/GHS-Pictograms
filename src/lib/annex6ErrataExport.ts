@@ -9,7 +9,7 @@
  * у страницы: свидетельство из досье ≠ свидетельству из модуля → сборка падает.
  */
 import dossier from '../data/errata-dossier.json'
-import { ERRATA_COUNT, erratumFor, erratumSourceUrl, erratumStatus } from './annex6Errata'
+import { ERRATA_COUNT, corrigendumUrl, erratumFor, erratumReported, erratumSourceUrl, erratumStatus } from './annex6Errata'
 
 export type ErratumExport = {
   index_number: string
@@ -25,8 +25,15 @@ export type ErratumExport = {
   oj_page: number
   citation: string
   eur_lex_url: string
+  /** `corrected` · `reported` · `not reported`. Исправленная находка остаётся поданной — см. `reported`. */
   status: string
+  /** Дата подачи у `reported`, дата публикации корриджендума у `corrected`. */
   status_date: string | null
+  /** Была ли находка подана до исправления (s94). */
+  reported: boolean
+  /** CELEX корриджендума и его адрес на EUR-Lex в редакции находки — только у `corrected`. */
+  corrigendum: string | null
+  corrigendum_url: string | null
 }
 
 export function errataRows(): ErratumExport[] {
@@ -50,7 +57,10 @@ export function errataRows(): ErratumExport[] {
       citation: f.citation,
       eur_lex_url: erratumSourceUrl(e, f.lang),
       status: st.kind === 'corrected' ? 'corrected' : st.kind === 'submitted' ? 'reported' : 'not reported',
-      status_date: st.kind === 'submitted' ? st.date : null,
+      status_date: st.kind === 'submitted' || st.kind === 'corrected' ? st.date : null,
+      reported: erratumReported(f.index, f.lang),
+      corrigendum: st.kind === 'corrected' ? st.act : null,
+      corrigendum_url: st.kind === 'corrected' ? corrigendumUrl(st.act, f.lang) : null,
     }
   })
   if (rows.length !== ERRATA_COUNT) throw new Error(`В досье ${rows.length} находок, в модуле ${ERRATA_COUNT}.`)

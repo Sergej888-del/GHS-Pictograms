@@ -3949,6 +3949,26 @@ a.sub-alpha-item:hover { border-color: var(--teal-200); background: var(--teal-5
 }
 .err-foot a:hover { text-decoration-color: var(--acc-ink, var(--ink-2)); }
 
+/* s94: находка, закрытая корриджендумом, — зелёная плашка со ссылкой на сам корриджендум.
+   Текст находки выше остаётся «как напечатано» — исправление читается в подвале, не правкой цитаты. */
+.err-fixed {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+  border-radius: 6px;
+  background: var(--teal-50);
+  border: 1px solid var(--teal-200);
+  padding: 2px 8px;
+  color: var(--teal-700);
+}
+.err-fixed .cite,
+.err-foot .err-fixed a { color: var(--teal-700); font-weight: 600; }
+.err-fixed::before { content: '✓'; font-weight: 700; }
+.hub-hero-chip[data-errata-corrected] { background: rgba(94, 234, 212, .18); border-color: rgba(94, 234, 212, .5); }
+[data-errata-corrigenda-list] { margin: 10px 0 0; padding-left: 18px; }
+[data-errata-corrigenda-list] li { margin: 4px 0; }
+
 @media (max-width: 640px) {
   .err-item { padding: 16px; }
   .err-quote { font-size: 12.5px; }

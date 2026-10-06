@@ -416,8 +416,99 @@ export type ErratumStatus =
   | { kind: 'unreported' }
   /** Сообщено: дата отправки и канал. */
   | { kind: 'submitted'; date: string; channel: string }
-  /** Исправлено корриджендумом: чем именно и на какой полосе. */
-  | { kind: 'corrected'; act: string; oj: string; page: number };
+  /**
+   * Исправлено корриджендумом. С 2023 года Официальный журнал выходит
+   * поактно (OJ L, 2026/90791), без сквозных полос, — поэтому вместо полосы
+   * здесь дата публикации и ELI документа. `reported` — было ли сообщено до
+   * исправления: страница «О нас» считает поданные, и исправленная находка
+   * не перестаёт быть поданной.
+   */
+  | { kind: 'corrected'; act: string; oj: string; date: string; eli: string; reported: boolean };
+
+/**
+ * Корриджендумы, закрывшие наши находки, — ОДНИМ списком, чтобы страница,
+ * JSON и сторож говорили об одних и тех же документах.
+ *
+ * ⭐⭐⭐ SESSION 94 (06.10.2026): ТРИ КОРРИДЖЕНДУМА ОТ 22–23 СЕНТЯБРЯ 2026,
+ * автор — Генеральный директорат по переводам Комиссии, номера документов
+ * подряд (C/2026/6696, 6697, 6698). Вместе они исправляют 29 из 33 наших
+ * находок во всех трёх актах — через шесть недель после подачи 10 августа.
+ * ⚠⚠ Причинную связь страница НЕ утверждает: письмо Бюро обещало только
+ * переслать, и ни один из трёх документов нас не упоминает. Хронологию —
+ * печатаем; вывод оставляем читателю.
+ * ⚠ Сверка построчна: каждая языковая редакция корриджендума прочитана
+ * (`fetch` HTML всех 13 редакций, 06.10.2026), индексные номера сопоставлены
+ * с ERRATA по паре «редакция + номер». Не исправлены четыре: SV 607-091-00-1
+ * и 612-008-00-7 в EN, MT, SV (эти три — из второй подачи, которая ещё не
+ * отправлена). Одна поправка в R(03) к нашему списку не относится:
+ * PL 601-031-00-8 («2,4,4-trimetylopent-1-en; diizobutylen» → без второго
+ * имени) — родственна нашей PL 601-087-00-3; записана в CORRECTED_BEYOND_LIST.
+ */
+export type Corrigendum = {
+  /** CELEX корриджендума, например `32018R0669R(03)`. */
+  act: string;
+  /** Исправляемый акт. */
+  corrects: string;
+  /** Выпуск ОЖ в новой нумерации. */
+  oj: string;
+  /** Дата публикации `YYYY-MM-DD`. */
+  date: string;
+  eli: string;
+  /** Номер документа Комиссии. */
+  commissionDoc: string;
+  /** Языковые редакции, которых касается. */
+  languages: string[];
+  /** Сколько строк Annex VI правит (всего, не только наших). */
+  rows: number;
+};
+
+export const CORRIGENDA: Corrigendum[] = [
+  {
+    act: '32018R0669R(03)',
+    corrects: '32018R0669',
+    oj: 'OJ L, 2026/90791, 22.9.2026',
+    date: '2026-09-22',
+    eli: 'http://data.europa.eu/eli/reg/2018/669/corrigendum/2026-09-22/oj',
+    commissionDoc: 'C/2026/6698',
+    languages: ['DA', 'ET', 'FR', 'IT', 'LT', 'LV', 'MT', 'NL', 'PL', 'SK', 'SV'],
+    rows: 28,
+  },
+  {
+    act: '32020R1182R(02)',
+    corrects: '32020R1182',
+    oj: 'OJ L, 2026/90787, 23.9.2026',
+    date: '2026-09-23',
+    eli: 'http://data.europa.eu/eli/reg_del/2020/1182/corrigendum/2026-09-23/oj',
+    commissionDoc: 'C/2026/6697',
+    languages: ['BG'],
+    rows: 1,
+  },
+  {
+    act: '32022R0692R(03)',
+    corrects: '32022R0692',
+    oj: 'OJ L, 2026/90790, 22.9.2026',
+    date: '2026-09-22',
+    eli: 'http://data.europa.eu/eli/reg_del/2022/692/corrigendum/2026-09-22/oj',
+    commissionDoc: 'C/2026/6696',
+    languages: ['CS'],
+    rows: 1,
+  },
+];
+
+/** Адрес корриджендума на EUR-Lex в редакции находки. */
+export function corrigendumUrl(act: string, lang: string): string {
+  return `https://eur-lex.europa.eu/legal-content/${lang.toUpperCase()}/TXT/?uri=CELEX:${act}`;
+}
+
+/** Поправки тех же корриджендумов, которых в нашем списке не было. Только факт, без вывода. */
+export const CORRECTED_BEYOND_LIST: { index: string; lang: string; act: string; note: string }[] = [
+  {
+    index: '601-031-00-8',
+    lang: 'PL',
+    act: '32018R0669R(03)',
+    note: 'The Polish edition read «2,4,4-trimetylopent-1-en; diizobutylen»; the corrigendum removes the second designation. Related to the reported entry 601-087-00-3, but not on our list.',
+  },
+];
 
 /**
  * Состояние ПОДАЧИ ЦЕЛИКОМ.
@@ -478,14 +569,45 @@ export const ACKNOWLEDGEMENT: {
 };
 
 /**
- * Находки, которые УЖЕ исправлены отдельным актом.
- *
- * ⚠ Сегодня список пуст, и это утверждение, а не заготовка: ни одна из
- * тридцати наших находок корриджендумом не закрыта. Чешскую `615-050-00-4`
- * корриджендум `32022R0692R(01)` пережила — у строки нет метки `►C`, и это
- * проверено, а не предположено (session 58).
+ * Находки, которые УЖЕ исправлены отдельным актом — построчно, по паре
+ * «индексный номер + редакция». До 22.09.2026 список был пуст (и это было
+ * утверждение: чешскую `615-050-00-4` корриджендум `32022R0692R(01)` пережила —
+ * session 58). Теперь — 29 строк из трёх корриджендумов CORRIGENDA.
+ * ⚠ Строится из короткой таблицы, а не вписывается 29 раз руками: ошибка в
+ * одном месте лучше, чем в двадцати девяти.
  */
+const CORRECTED_BY: Record<string, Record<string, string[]>> = {
+  '32018R0669R(03)': {
+    DA: ['613-116-00-7'],
+    ET: ['042-003-00-X', '613-286-00-2'],
+    FR: ['016-018-00-7', '607-692-00-9', '612-034-01-6'],
+    IT: ['006-018-00-5', '016-064-00-8', '017-026-00-3', '019-001-00-2', '607-536-00-X'],
+    LT: ['603-221-00-6', '608-066-00-8', '612-253-01-7'],
+    LV: ['603-221-00-6', '612-253-01-7'],
+    MT: ['006-012-00-2', '006-082-00-4', '607-132-00-3', '607-260-00-X', '612-104-00-9'],
+    NL: ['612-001-01-6'],
+    PL: ['015-011-00-6', '601-087-00-3', '601-088-00-9'],
+    SK: ['613-043-00-0'],
+    SV: ['612-122-01-4'],
+  },
+  '32020R1182R(02)': { BG: ['007-004-00-1'] },
+  '32022R0692R(03)': { CS: ['615-050-00-4'] },
+};
+
 const CORRECTED: Record<string, Record<string, Extract<ErratumStatus, { kind: 'corrected' }>>> = {};
+for (const [act, byLang] of Object.entries(CORRECTED_BY)) {
+  const c = CORRIGENDA.find((x) => x.act === act);
+  if (!c) throw new Error(`annex6Errata: корриджендум ${act} не описан в CORRIGENDA`);
+  for (const [lang, indexes] of Object.entries(byLang)) {
+    for (const index of indexes) {
+      if (!ERRATA[index]?.[lang]) throw new Error(`annex6Errata: CORRECTED_BY называет ${index} · ${lang}, которой нет в ERRATA`);
+      (CORRECTED[index] ??= {})[lang] = { kind: 'corrected', act, oj: c.oj, date: c.date, eli: c.eli, reported: false };
+    }
+  }
+}
+
+/** Сколько находок закрыто корриджендумами. */
+export const CORRECTED_COUNT: number = Object.values(CORRECTED).reduce((n, byLang) => n + Object.keys(byLang).length, 0);
 
 /**
  * ВТОРАЯ подача — находки, которых 10 августа ещё не существовало.
@@ -525,11 +647,17 @@ const IN_SUPPLEMENT: Record<string, string[]> = {
  */
 export function erratumStatus(indexNumber: string, lang: string): ErratumStatus {
   const L = (lang ?? '').trim().toUpperCase();
-  const fixed = CORRECTED[indexNumber]?.[L];
-  if (fixed) return fixed;
   const sent = IN_SUPPLEMENT[indexNumber]?.includes(L) ? SUPPLEMENT : SUBMISSION;
+  const fixed = CORRECTED[indexNumber]?.[L];
+  if (fixed) return { ...fixed, reported: !!sent.date };
   if (sent.date) return { kind: 'submitted', date: sent.date, channel: sent.channel };
   return { kind: 'unreported' };
+}
+
+/** Была ли находка подана (независимо от того, исправлена ли уже). */
+export function erratumReported(indexNumber: string, lang: string): boolean {
+  const st = erratumStatus(indexNumber, lang);
+  return st.kind === 'submitted' || (st.kind === 'corrected' && st.reported);
 }
 
 /**
@@ -540,7 +668,7 @@ export function erratumStatus(indexNumber: string, lang: string): ErratumStatus 
  */
 export function erratumStatusLabel(st: ErratumStatus): string {
   if (st.kind === 'corrected') {
-    return `Corrected by ${st.act}, ${st.oj}, p. ${st.page}.`;
+    return `Corrected by Corrigendum ${st.act}, ${st.oj}.`;
   }
   if (st.kind === 'submitted') {
     return `Reported ${humanDate(st.date)}. No reply is implied by this note.`;
