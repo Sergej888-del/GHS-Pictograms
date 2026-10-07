@@ -75,7 +75,9 @@ const breadcrumb = {
       <p class="hub-hero-eyebrow">{category.eyebrow}</p>
       <h1>{entry.title}</h1>
       <div class="hub-hero-chips">
-        <span class="hub-hero-chip">{tier === 'listed' ? 'Listed · not verified by owner' : `Verified by owner · ${formatDate(entry.owner_confirmed_on ?? entry.claimed_on)}`}</span>
+        {tier === 'listed'
+          ? <span class="hub-hero-chip">Listed · not verified by owner</span>
+          : <span class="hub-hero-chip dir-hero-verified"><svg class="dir-check" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="8" fill="#ffffff" /><path d="M4.4 8.4l2.3 2.3 4.9-5.1" fill="none" stroke="#d97706" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" /></svg>Verified by owner · {formatDate(entry.owner_confirmed_on ?? entry.claimed_on)}</span>}
         <span class="hub-hero-chip">Last verified {formatDate(entry.last_verified)}</span>
       </div>
       {out && (

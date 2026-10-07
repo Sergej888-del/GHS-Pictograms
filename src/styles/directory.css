@@ -442,3 +442,114 @@
 .dir-group-rule a { color: var(--teal-700); }
 .dir-hub-subs { margin-top: 14px; }
 .dir-hub-subs a { color: var(--teal-700); }
+
+/* ── s97: verified listings get a visible reward ─────────────────────────────
+   Gold/amber, not the CTA orange: #f97316 is reserved for the main action
+   (design-tokens §2.7, "Build a label"). Amber reads as orange on screen and
+   as a medal, and it is already in the palette (acc-pict ladder).
+   Ladder: deep #d97706 · main #f59e0b · light #fbbf24 · border #fcd34d ·
+   soft #fffbeb · ink #92400e. Teal stays the brand/action colour. */
+.dir-check { flex: 0 0 auto; display: inline-block; vertical-align: -3px; }
+
+/* badge in the card head */
+.dir-badge.claimed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px 5px 6px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 45%, #d97706 100%);
+  color: #ffffff;
+  font-size: 11px;
+  letter-spacing: .07em;
+  text-shadow: 0 1px 0 rgba(146, 64, 14, .35);
+  box-shadow: 0 2px 8px rgba(217, 119, 6, .32), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+
+/* the verified card itself */
+.dir-card { scroll-margin-top: 104px; }
+.dir-card.is-claimed {
+  position: relative;
+  overflow: hidden;
+  border-color: #fcd34d;
+  background: linear-gradient(180deg, #fffbeb 0, #ffffff 140px);
+  box-shadow: 0 4px 18px rgba(217, 119, 6, .12), 0 1px 3px rgba(15, 23, 41, .05);
+  padding-top: 22px;
+}
+.dir-card.is-claimed::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: linear-gradient(90deg, #d97706 0%, #fbbf24 40%, #14b8a6 100%);
+}
+.dir-card.is-claimed .dir-card-name h3 { color: var(--ink); }
+.dir-card.is-claimed .dir-logo { border-color: #fcd34d; }
+.dir-card.is-claimed .dir-owner-desc { border-left-color: #f59e0b; background: rgba(255, 251, 235, .7); border-radius: 0 8px 8px 0; padding: 8px 12px; }
+.dir-card.is-claimed .dir-owner-lbl { color: #92400e; font-weight: 700; }
+.dir-card.is-claimed .dir-card-foot { border-top-color: #fde68a; }
+.dir-card.is-claimed .dir-status { display: inline-flex; align-items: flex-start; gap: 7px; color: #92400e; }
+.dir-card.is-claimed .dir-status .dir-check { margin-top: 1px; }
+.dir-card.is-featured { border-color: var(--teal-600); }
+
+/* "stated by the vendor" — never break across lines */
+.dir-stated { white-space: nowrap; }
+
+/* feature lists: a short teal rule before each item (amber on verified cards) */
+.dir-features { list-style: none; padding-left: 0; }
+.dir-features li { position: relative; padding-left: 20px; margin: 3px 0; }
+.dir-features li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: .8em;
+  width: 10px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--teal-500);
+}
+.dir-card.is-claimed .dir-features li::before { background: #f59e0b; }
+
+/* comparison table: verified rows */
+.dir-table tbody tr.is-verified { background: #fffbeb; }
+.dir-table tbody tr.is-verified:hover { background: #fef3c7; }
+.dir-table tbody tr.is-verified td.c-name { box-shadow: inset 3px 0 0 #f59e0b; }
+.dir-verified-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 1px 8px 1px 3px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #fbbf24, #d97706);
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+.dir-verified-mini .dir-check { width: 13px; height: 13px; vertical-align: 0; }
+
+/* entry-page hero chip on the navy hero */
+.hub-hero-chip.dir-hero-verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 15px 6px 7px;
+  border: 0;
+  color: #ffffff;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 45%, #d97706 100%);
+  box-shadow: 0 4px 14px rgba(245, 158, 11, .35);
+  text-shadow: 0 1px 0 rgba(146, 64, 14, .35);
+}
+
+/* s97: owner logos are often wide wordmarks (Kallik: 512x95). The slot keeps a
+   fixed height (no layout shift vertically) and lets the width follow the logo. */
+.dir-logo { flex: 0 0 auto; width: auto; min-width: 48px; padding: 0 10px; }
+.dir-logo img { width: auto; height: 30px; max-width: 168px; }
+.dir-card.is-claimed .dir-logo { background: #ffffff; }
+@media (max-width: 640px) { .dir-card-name { flex-wrap: wrap; } }

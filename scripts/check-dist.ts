@@ -8474,7 +8474,7 @@ const CHECKS: Check[] = [
         'directory_entries', 'id, slug, category, state, tier, title, claimed_on, owner_confirmed_on, featured_from, featured_until, logo_path, owner_description, pricing_url, terms_url, screenshot_path, contact_url', (q) => q.order('id'))
       const facts = await selectAll<{ id: number; entry_id: number; kind: string; confirmed: boolean | null; provided_by: string }>(
         'directory_facts', 'id, entry_id, kind, confirmed, provided_by', (q) => q.eq('provided_by', 'owner').order('id'))
-      assertAscii('dir-claimed', ['data-dir-claimed', 'data-dir-owner-desc', 'data-dir-contact', 'data-dir-screenshot', 'data-dir-owner-links', 'data-dir-owner-fact', 'stated by the vendor'])
+      assertAscii('dir-claimed', ['data-dir-claimed', 'data-dir-verified-mini', 'dir-hero-verified', 'data-dir-owner-desc', 'data-dir-contact', 'data-dir-screenshot', 'data-dir-owner-links', 'data-dir-owner-fact', 'stated by the vendor'])
       const problems: string[] = []
       let claimed = 0
       let featured = 0
@@ -8489,9 +8489,16 @@ const CHECKS: Check[] = [
         const has = (marker: string) => html.includes(marker)
         // ① Пометка «Verified by owner · дата» — ровно у claimed/featured, с датой подтверждения.
         const date = r.owner_confirmed_on ?? r.claimed_on ?? ''
+        // s97: пометка видна везде — строка таблицы сравнения на странице категории и hero страницы записи.
+        const catHtml = readPage(`directory/${r.category}/index.html`) ?? ''
+        const mini = catHtml.includes(`data-dir-verified-mini="${r.slug}"`)
         if (tier === 'listed') {
           if (has('data-dir-claimed')) problems.push(`${rel}: listed, а на странице «Verified by owner»`)
+          if (mini) problems.push(`${rel}: listed, а в таблице категории пометка Verified`)
+          if (has('dir-hero-verified')) problems.push(`${rel}: listed, а в hero записи пометка Verified`)
         } else {
+          if (!mini) problems.push(`${rel}: в таблице категории нет пометки Verified у строки`)
+          if (!has('dir-hero-verified')) problems.push(`${rel}: в hero записи нет пометки Verified`)
           if (!has(`data-dir-claimed="${date}"`)) problems.push(`${rel}: нет «Verified by owner» с датой ${date}`)
           if (!has('Owner confirmed on')) problems.push(`${rel}: нет «Owner confirmed on …» в подвале карточки`)
           tier === 'featured' ? featured++ : claimed++

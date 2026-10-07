@@ -150,7 +150,7 @@ const hasDetails =
     </div>
     <div class="dir-badges">
       {closed && <span class="dir-badge closed">{closedBadge}</span>}
-      {tier !== 'listed' && <span class="dir-badge claimed" data-dir-claimed={e.owner_confirmed_on ?? e.claimed_on ?? ''}>Verified by owner · {ownerConfirmed}</span>}
+      {tier !== 'listed' && <span class="dir-badge claimed" data-dir-claimed={e.owner_confirmed_on ?? e.claimed_on ?? ''}><svg class="dir-check" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="8" fill="#ffffff" /><path d="M4.4 8.4l2.3 2.3 4.9-5.1" fill="none" stroke="#d97706" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" /></svg><span>Verified by owner · {ownerConfirmed}</span></span>}
       {e.affiliate && <span class="dir-badge aff" data-dir-affiliate={e.affiliate}>Affiliate partner</span>}
       {e.tags.map((t) => TAG_LABEL[t] && <span class="dir-badge tag">{TAG_LABEL[t]}</span>)}
       {contact && (
@@ -357,6 +357,7 @@ const hasDetails =
 
   <footer class="dir-card-foot">
     <span class="dir-status">
+      {tier !== 'listed' && <Fragment set:html={`<svg class="dir-check" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="8" fill="#f59e0b" /><path d="M4.4 8.4l2.3 2.3 4.9-5.1" fill="none" stroke="#ffffff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" /></svg>`} />}
       {tier === 'listed' ? LISTED_NOTE : CLAIMED_NOTE}
       {tier !== 'listed' && ownerConfirmed && ` Owner confirmed on ${ownerConfirmed}.`}
       {' '}Last verified {verified}.

@@ -14,7 +14,7 @@
 import DirectoryCard from './DirectoryCard.astro'
 import {
   type CardModel, JURISDICTION_ORDER, JURISDICTION_SHORT, ORDER_NOTE, countryName, effectiveTier, first, jurisdictionsOf,
-  languageShort, outboundLink,
+  languageShort, outboundLink, formatDate
 } from '../lib/directoryModel'
 
 export interface ListingGroup {
@@ -104,6 +104,7 @@ const jurisPresent = JURISDICTION_ORDER.filter((j) => cards.some((c) => jurisdic
               const alsoIn = e.category !== inCategory
               return (
                 <tr
+                  class={effectiveTier(e) !== 'listed' ? 'is-verified' : undefined}
                   data-dir-row={e.id}
                   data-dir-title={e.title}
                   data-dir-tier={effectiveTier(e)}
@@ -113,6 +114,9 @@ const jurisPresent = JURISDICTION_ORDER.filter((j) => cards.some((c) => jurisdic
                 >
                   <td class="c-name">
                     <a href={`#e-${e.slug}`}>{e.title}</a>
+                    {effectiveTier(e) !== 'listed' && (
+                      <span class="dir-verified-mini" data-dir-verified-mini={e.slug} title={`Verified by owner · ${formatDate(e.owner_confirmed_on ?? e.claimed_on)}`}><svg class="dir-check" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="8" fill="#ffffff" /><path d="M4.4 8.4l2.3 2.3 4.9-5.1" fill="none" stroke="#d97706" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" /></svg>Verified</span>
+                    )}
                     {e.vendor && <span class="v">{e.vendor}</span>}
                     {alsoIn && <span class="v dir-also-mini">also listed under its main section</span>}
                   </td>
