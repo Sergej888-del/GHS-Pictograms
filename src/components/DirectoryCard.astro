@@ -62,7 +62,11 @@ const features = f.feature ?? []
 const certs = f.certification ?? []
 const integrations = f.integration ?? []
 const platforms = f.platform ?? []
-const notes = (f.pricing_note ?? []).filter((n) => n.confirmed === true)
+const notes = (f.pricing_note ?? []).filter((n) => n.confirmed === true || ownerStated(n))
+// s97: подпись «stated by the vendor» обязана стоять у КАЖДОГО неподтверждённого факта владельца, в каком бы блоке он ни
+// печатался — сетка (Covers, Languages, Also, Integrations…) тоже; сторож dir-claimed считает маркеры data-dir-owner-fact
+// против фактов владельца в базе. Kallik (07.10): языки/интеграции/API шли без подписи — сторож поймал.
+const STATED = `<span class="dir-stated" data-dir-owner-fact>${OWNER_FACT_NOTE}</span>`
 
 // ⚠ Решение Сергея s92 (05.10): ссылка на вендора — nofollow у всех, заявленных тоже («пока оставляем
 // nofollow»). Стимул заявить — «Verified by owner» и место наверху раздела, не вес ссылки.
@@ -200,9 +204,11 @@ const hasDetails =
       <div>
         <dt>Covers</dt>
         <dd>
-          {juris.length ? juris.join(' · ') : <span class="dir-none">not stated by the vendor</span>}
+          {juris.length
+            ? (f.jurisdiction ?? []).map((j, i) => <Fragment>{i > 0 && ' · '}{j.value}{ownerStated(j) && <Fragment set:html={STATED} />}</Fragment>)
+            : <span class="dir-none">not stated by the vendor</span>}
           {juris.length > 0 && f.jurisdiction?.[0] && <a class="dir-src" href={f.jurisdiction[0].source_url} rel={src} target="_blank">source</a>}
-          {claimText && <span class="dir-claim">{claimText}</span>}
+          {claimText && <span class="dir-claim">{claimText}{claim && ownerStated(claim) && <Fragment set:html={STATED} />}</span>}
         </dd>
       </div>
       <div>
@@ -210,6 +216,7 @@ const hasDetails =
         <dd>
           {lang ? langText : <span class="dir-none">not stated</span>}
           {lang && <a class="dir-src" href={lang.source_url} rel={src} target="_blank">source</a>}
+          {lang && ownerStated(lang) && <Fragment set:html={STATED} />}
         </dd>
       </div>
       <div>
@@ -218,19 +225,20 @@ const hasDetails =
           {pricingModel ? pricingModel.value : <span class="dir-none">not stated</span>}
           {card.fromPrice && <span class="dir-from"> · from {card.fromPrice}</span>}
           {pricingModel && <a class="dir-src" href={pricingModel.source_url} rel={src} target="_blank">source</a>}
+          {pricingModel && ownerStated(pricingModel) && <Fragment set:html={STATED} />}
         </dd>
       </div>
       {deployment && (
-        <div><dt>Delivered as</dt><dd>{deployment.value}<a class="dir-src" href={deployment.source_url} rel={src} target="_blank">source</a></dd></div>
+        <div><dt>Delivered as</dt><dd>{deployment.value}<a class="dir-src" href={deployment.source_url} rel={src} target="_blank">source</a>{ownerStated(deployment) && <Fragment set:html={STATED} />}</dd></div>
       )}
       {(trial || api || ufi || iso17100) && (
         <div>
           <dt>Also</dt>
           <dd class="dir-flags">
-            {trial && <span>Free trial or free account<a class="dir-src" href={trial.source_url} rel={src} target="_blank">source</a></span>}
-            {api && <span>API<a class="dir-src" href={api.source_url} rel={src} target="_blank">source</a></span>}
-            {ufi && <span>UFI / poison centre notification<a class="dir-src" href={ufi.source_url} rel={src} target="_blank">source</a></span>}
-            {iso17100 && <span>ISO 17100 certified<a class="dir-src" href={iso17100.source_url} rel={src} target="_blank">source</a></span>}
+            {trial && <span>Free trial or free account<a class="dir-src" href={trial.source_url} rel={src} target="_blank">source</a>{ownerStated(trial) && <Fragment set:html={STATED} />}</span>}
+            {api && <span>API<a class="dir-src" href={api.source_url} rel={src} target="_blank">source</a>{ownerStated(api) && <Fragment set:html={STATED} />}</span>}
+            {ufi && <span>UFI / poison centre notification<a class="dir-src" href={ufi.source_url} rel={src} target="_blank">source</a>{ownerStated(ufi) && <Fragment set:html={STATED} />}</span>}
+            {iso17100 && <span>ISO 17100 certified<a class="dir-src" href={iso17100.source_url} rel={src} target="_blank">source</a>{ownerStated(iso17100) && <Fragment set:html={STATED} />}</span>}
           </dd>
         </div>
       )}
@@ -255,7 +263,7 @@ const hasDetails =
             ))}
           </ul>
         )}
-        {notes.map((n) => <p class="dir-fine" data-fact="pricing_note" data-fid={n.id}>{n.value}</p>)}
+        {notes.map((n) => <p class="dir-fine" data-fact="pricing_note" data-fid={n.id}>{n.value}{ownerStated(n) && <Fragment set:html={STATED} />}</p>)}
         {card.prices.length > 0 && (
           <p class="dir-fine">
             As published by the vendor, checked {formatDate(card.prices[0].confirmed_on ?? card.prices[0].checked_on)}.
@@ -300,13 +308,13 @@ const hasDetails =
         <section class="dir-block">
           <dl class="dir-facts tight">
             {certs.length > 0 && (
-              <div><dt>Certifications</dt><dd>{certs.map((c) => <span class="dir-chip">{c.value}<a class="dir-src" href={c.source_url} rel={src} target="_blank">source</a></span>)}</dd></div>
+              <div><dt>Certifications</dt><dd>{certs.map((c) => <span class="dir-chip">{c.value}<a class="dir-src" href={c.source_url} rel={src} target="_blank">source</a>{ownerStated(c) && <Fragment set:html={STATED} />}</span>)}</dd></div>
             )}
             {integrations.length > 0 && (
-              <div><dt>Integrations</dt><dd>{integrations.map((c) => c.value).join(' · ')}<a class="dir-src" href={integrations[0].source_url} rel={src} target="_blank">source</a></dd></div>
+              <div><dt>Integrations</dt><dd>{integrations.map((c, i) => <Fragment>{i > 0 && ' · '}{c.value}{ownerStated(c) && <Fragment set:html={STATED} />}</Fragment>)}<a class="dir-src" href={integrations[0].source_url} rel={src} target="_blank">source</a></dd></div>
             )}
             {platforms.length > 0 && (
-              <div><dt>Platforms</dt><dd>{platforms.map((c) => c.value).join(' · ')}<a class="dir-src" href={platforms[0].source_url} rel={src} target="_blank">source</a></dd></div>
+              <div><dt>Platforms</dt><dd>{platforms.map((c, i) => <Fragment>{i > 0 && ' · '}{c.value}{ownerStated(c) && <Fragment set:html={STATED} />}</Fragment>)}<a class="dir-src" href={platforms[0].source_url} rel={src} target="_blank">source</a></dd></div>
             )}
           </dl>
         </section>

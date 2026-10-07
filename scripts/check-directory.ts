@@ -97,12 +97,18 @@ function normNumbers(s: string): string {
 }
 
 function priceFound(evidence: string, text: string): boolean {
-  const m = evidence.match(/\d[\d,.\u00a0 ']*/)
-  if (!m) return new RegExp(`\\b${evidence.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text)
-  let n = normNumbers(m[0].trim().replace(/[.,]$/, ''))
-  n = n.replace(/[.,]00$/, '')
-  const esc = n.replace(/[.]/g, '[.,]')
-  return new RegExp(`(?<![\\d.,])${esc}(?:[.,]0{1,2})?(?![\\d])`).test(normNumbers(text))
+  // s97: у диапазона («0.09 to $0.19», «597–7,197») на странице обязано найтись КАЖДОЕ число признака, не только первое —
+  // иначе «USD 0.09–0.19» подтвердился бы страницей, где стоит «$0.09 to $0.25» (GTS, 07.10).
+  const nums = evidence.match(/\d[\d,.\u00a0 ']*/g)
+  if (!nums) return new RegExp(`\\b${evidence.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text)
+  const page = normNumbers(text)
+  return nums.every((raw) => {
+    let n = normNumbers(raw.trim().replace(/[.,]$/, ''))
+    n = n.replace(/[.,]00$/, '')
+    if (!n) return true
+    const esc = n.replace(/[.]/g, '[.,]')
+    return new RegExp(`(?<![\\d.,])${esc}(?:[.,]0{1,2})?(?![\\d])`).test(page)
+  })
 }
 
 function evidenceFound(f: Fact, text: string): boolean {
