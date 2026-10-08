@@ -69,7 +69,11 @@
   // One delegated listener for every "Vendor website" link on /directory/ (category cards and
   // entry pages). vendor = listing slug, the number a vendor can be shown: "we sent you N visitors".
   // An SDS Manager link fires affiliate_click as well - two rulers, FirstPromoter stays the truth.
-  document.addEventListener('click', function (e) {
+  // s99: the same click also goes to our own counter (POST /api/directory-click -> Supabase
+  // directory_clicks) - THAT is the number we show a vendor; GA4/Umami are second rulers.
+  // Middle-click (auxclick, button 1) opens a tab too, so it counts as well.
+  function dirOut(e) {
+    if (e.type === 'auxclick' && e.button !== 1) return;
     var t = e.target;
     var a = t && t.closest ? t.closest('a[data-dir-out]') : null;
     if (!a) return;
@@ -85,7 +89,21 @@
     if (window.umami && typeof window.umami.track === 'function') {
       window.umami.track('directory_outbound', ev);
     }
-  }, true);
+    // Own counter: only real clicks by a person (isTrusted), nothing stored on the device -
+    // the server builds a daily key from the request (see functions/api/directory-click.ts).
+    if (!e.isTrusted || location.pathname.indexOf('/directory/') !== 0) return;
+    try {
+      var host = '';
+      try { host = new URL(a.href).hostname; } catch (err) {}
+      var body = JSON.stringify({ cat: ev.category, slug: ev.vendor, place: ev.placement, page: location.pathname, host: host });
+      var sent = navigator.sendBeacon ? navigator.sendBeacon('/api/directory-click', body) : false;
+      if (!sent && window.fetch) {
+        fetch('/api/directory-click', { method: 'POST', body: body, keepalive: true, headers: { 'Content-Type': 'text/plain' } }).catch(function () {});
+      }
+    } catch (err) {}
+  }
+  document.addEventListener('click', dirOut, true);
+  document.addEventListener('auxclick', dirOut, true);
 
   // ---- Cookie consent banner -------------------------------------------------
   (function () {

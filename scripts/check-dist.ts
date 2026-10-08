@@ -8209,6 +8209,9 @@ const CHECKS: Check[] = [
             if (!/\bdata-dir-place="(table|card|entry-hero|entry|contact)"/.test(tag)) problems.push(`${rel}: у ссылки на вендора нет data-dir-place`)
           }
           if (!html.includes("'directory_outbound'")) problems.push(`${rel}: нет слушателя directory_outbound`)
+          // s99: тот же слушатель шлёт клик в свой счётчик (functions/api/directory-click.ts → directory_clicks) —
+          // это цифра для вендора «we sent you N visitors». Пропал вызов — отчёт вендору молча обнулится.
+          if (!html.includes("'/api/directory-click'")) problems.push(`${rel}: слушатель не шлёт клик в /api/directory-click`)
         }
       }
       const subSlugs = new Set<string>(DIR_SUBCATEGORIES.map((x) => x.slug))
