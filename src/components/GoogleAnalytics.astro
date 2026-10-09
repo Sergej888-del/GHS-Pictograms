@@ -29,13 +29,27 @@
       gtag('consent', 'update', { analytics_storage: 'granted' });
     }
   } catch (e) {}
+
+  // s99: a browser driven by automation (headless Chrome, Puppeteer, Playwright, Selenium) reports
+  // navigator.webdriver === true; a person's Chrome / Edge / Safari / Firefox never does.
+  // Such a visit is counted nowhere: GA4 is switched off by Google's own opt-out flag (it must be
+  // set before gtag('config')), Umami drops every send in ghsUmamiBeforeSend (data-before-send on
+  // its tag), and the directory listener below sends no beacon to our click counter.
+  // The scripts still load, so a lab test (Lighthouse) measures the same page a person gets.
+  // Why: Umami 08-09.10.2026 - ~400 "Singapore" and ~150 "China" visitors a day, 100 % direct,
+  // 1-second single-page visits; a WAF rule by country is ruled out (lesson s68, CLAUDE.md s15).
+  window.ghsAutomated = false;
+  try { window.ghsAutomated = navigator.webdriver === true; } catch (e) {}
+  if (window.ghsAutomated) window['ga-disable-G-7T76LL8ZF3'] = true;
+  window.ghsUmamiBeforeSend = function (type, payload) { return window.ghsAutomated ? null : payload; };
 </script>
 <script is:inline async src="https://www.googletagmanager.com/gtag/js?id=G-7T76LL8ZF3"></script>
 {/* Umami Cloud (s92): cookieless statistics, no consent banner needed - counts the visitors GA4 does not see
     after they decline. data-domains: only ghspictograms.com is counted (not *.pages.dev previews, not localhost).
     data-exclude-search: page reports by path; query strings (tool deep links, label-maker state) are not sent.
+    data-before-send (s99): ghsUmamiBeforeSend above returns null for an automated browser - nothing is sent.
     Free Hobby plan: 100K events / month, one website, 6 months retention. */}
-<script is:inline defer src="https://cloud.umami.is/script.js" data-website-id="825a9f36-85a7-416f-b44d-b5a0937db4b8" data-domains="ghspictograms.com" data-exclude-search="true"></script>
+<script is:inline defer src="https://cloud.umami.is/script.js" data-website-id="825a9f36-85a7-416f-b44d-b5a0937db4b8" data-domains="ghspictograms.com" data-exclude-search="true" data-before-send="ghsUmamiBeforeSend"></script>
 <script is:inline>
   gtag('js', new Date());
   gtag('config', 'G-7T76LL8ZF3');
@@ -89,9 +103,9 @@
     if (window.umami && typeof window.umami.track === 'function') {
       window.umami.track('directory_outbound', ev);
     }
-    // Own counter: only real clicks by a person (isTrusted), nothing stored on the device -
-    // the server builds a daily key from the request (see functions/api/directory-click.ts).
-    if (!e.isTrusted || location.pathname.indexOf('/directory/') !== 0) return;
+    // Own counter: only real clicks by a person (isTrusted, not an automated browser), nothing
+    // stored on the device - the server builds a daily key from the request (functions/api/directory-click.ts).
+    if (!e.isTrusted || window.ghsAutomated || location.pathname.indexOf('/directory/') !== 0) return;
     try {
       var host = '';
       try { host = new URL(a.href).hostname; } catch (err) {}

@@ -3044,6 +3044,8 @@ const CHECKS: Check[] = [
   // Сторож держит: на каждой странице с GA4 ровно один тег Umami, у всех один website-id, ограничение
   // data-domains на прод-домен (иначе превью *.pages.dev и localhost портят счёт), оба делегированных
   // слушателя зовут umami.track, и в бандлах островов второго тега нет.
+  // s99: и автоматический браузер (navigator.webdriver) не считается нигде — флаг отказа GA4,
+  // data-before-send у тега Umami и пропуск маячка счётчика каталога должны быть на каждой странице.
   {
     id: 'umami-tag',
     group: 'Analytics',
@@ -3054,7 +3056,12 @@ const CHECKS: Check[] = [
       const DOMAINS = 'data-domains="ghspictograms.com"'
       const TRACK_AFF = "umami.track('affiliate_click'"
       const TRACK_DIR = "umami.track('directory_outbound'"
-      assertAscii('umami-tag', [GA, SRC, DOMAINS, TRACK_AFF, TRACK_DIR])
+      const BOT_FLAG = 'window.ghsAutomated = navigator.webdriver === true'
+      const GA_OFF = "if (window.ghsAutomated) window['ga-disable-G-7T76LL8ZF3'] = true"
+      const BEFORE_ATTR = 'data-before-send="ghsUmamiBeforeSend"'
+      const BEFORE_FN = 'window.ghsUmamiBeforeSend = function (type, payload) { return window.ghsAutomated ? null : payload; }'
+      const DIR_SKIP = '!e.isTrusted || window.ghsAutomated ||'
+      assertAscii('umami-tag', [GA, SRC, DOMAINS, TRACK_AFF, TRACK_DIR, BOT_FLAG, GA_OFF, BEFORE_ATTR, BEFORE_FN, DIR_SKIP])
       const problems: string[] = []
       const ids = new Set<string>()
       let withGa = 0
@@ -3072,6 +3079,13 @@ const CHECKS: Check[] = [
         else ids.add(id)
         if (!tag.includes(DOMAINS)) problems.push(`${rel}: у тега Umami нет ${DOMAINS}`)
         if (!html.includes(TRACK_AFF) || !html.includes(TRACK_DIR)) problems.push(`${rel}: слушатели не зовут umami.track`)
+        if (!tag.includes(BEFORE_ATTR)) problems.push(`${rel}: у тега Umami нет ${BEFORE_ATTR}`)
+        for (const [label, needle] of [['флаг автоматического браузера', BOT_FLAG], ['отказ GA4 для него', GA_OFF], ['ghsUmamiBeforeSend', BEFORE_FN], ['пропуск маячка каталога', DIR_SKIP]] as const) {
+          if (!html.includes(needle)) problems.push(`${rel}: нет «${label}» (s99)`)
+        }
+        const flagAt = html.indexOf(GA_OFF)
+        const configAt = html.indexOf("gtag('config', 'G-7T76LL8ZF3')")
+        if (flagAt !== -1 && configAt !== -1 && flagAt > configAt) problems.push(`${rel}: отказ GA4 стоит после gtag('config') — не сработает`)
       }
       if (ids.size > 1) problems.push(`разные website-id: ${[...ids].join(', ')}`)
       for (const { name, text } of assetFiles()) {
@@ -3081,7 +3095,7 @@ const CHECKS: Check[] = [
       return {
         id: 'umami-tag', group: 'Analytics', ok,
         headline: ok ? `тег Umami на ${tagged} страницах (с GA4 — ${withGa}), website-id ${[...ids][0] ?? '—'}` : `нарушений: ${problems.length}`,
-        detail: ok ? ['data-domains=ghspictograms.com, data-exclude-search; клики: affiliate_click и directory_outbound'] : problems.slice(0, 40),
+        detail: ok ? ['data-domains=ghspictograms.com, data-exclude-search; клики: affiliate_click и directory_outbound', 'navigator.webdriver: GA4 выключен, Umami — data-before-send, маячок каталога не уходит (s99)'] : problems.slice(0, 40),
       }
     },
   },
