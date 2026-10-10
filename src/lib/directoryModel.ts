@@ -552,7 +552,7 @@ const COUNTRY: Record<string, string> = {
   DE: 'Germany', DK: 'Denmark', EE: 'Estonia', ES: 'Spain', FI: 'Finland', FR: 'France', GB: 'United Kingdom',
   HU: 'Hungary', IE: 'Ireland', IN: 'India', IT: 'Italy', JP: 'Japan', KR: 'South Korea', LU: 'Luxembourg',
   LV: 'Latvia', MY: 'Malaysia', NL: 'Netherlands', NO: 'Norway', NZ: 'New Zealand', PL: 'Poland', PT: 'Portugal',
-  SE: 'Sweden', SG: 'Singapore', SI: 'Slovenia', US: 'United States',
+  SE: 'Sweden', SG: 'Singapore', SI: 'Slovenia', SK: 'Slovakia', US: 'United States',
 }
 export function countryName(code: string | null | undefined): string | null {
   if (!code) return null
