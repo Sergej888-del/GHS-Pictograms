@@ -652,7 +652,8 @@ export function buildCard(entry: DirectoryEntry, all: DirectoryFact[]): CardMode
     })
   // ⚠ «from» — по тарифам самого продукта: обучение, услуги и надбавки («Training», «(service)», «add-on»,
   // «translation pack») в «from» не идут, иначе SBLCore читался бы «from EUR 30» — это цена проверки этикетки.
-  const NOT_A_PLAN = /training|service|add-on|certification|translation pack/i
+  // s101: и обновления для тех, у кого лицензия уже есть («Upgrade …»): иначе SDScribe читался бы «from USD 615».
+  const NOT_A_PLAN = /training|service|add-on|certification|translation pack|upgrade/i
   const paid = prices.filter(
     (p) => p.value !== 'Free' && p.value !== 'Custom quote' && !NOT_A_PLAN.test(p.label ?? ''),
   )
