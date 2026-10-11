@@ -21,7 +21,7 @@
  *   founded    — год основания (num = год, unit = year, num_qual = exact).
  *   hosting    — где хранятся данные (только софт); detail как у market.
  *   format     — форматы обмена SDS (только софт); value из FORMAT_VALUES.
- * ⚠ Сайт их пока не печатает (directoryModel.STORED_KINDS) — решение Сергея s104: сначала собрать.
+ * ⚠ Печатаются только подтверждёнными (directoryModel.GATED_KINDS, PHASE_C_KINDS) — решение Сергея s104 (вечер).
  *
  * ⚠ Источник правды — посев (scripts/data/directory-v3.json). Здесь — словари и сверка, которые
  * scripts/import-directory.ts прогоняет до любой записи: число цены обязано стоять в её тексте, иначе

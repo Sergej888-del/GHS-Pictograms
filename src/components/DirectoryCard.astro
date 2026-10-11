@@ -9,6 +9,7 @@
 //     сторож dir-images): у listed-записи картинок нет вовсе;
 //   • цены и цитаты — только `printable()` (подтверждённые check-directory); цитата об ответственности —
 //     к тому же только из юридического документа (`source_kind`, s93), и под ней написано, из какого;
+//     s104: так же гейтятся market / founded / turnaround (сетка) и regulation / format / hosting (блок);
 //   • партнёрство раскрыто бейджем и строкой, партнёрская ссылка — sponsored nofollow noopener,
 //     и рядом ссылка на /affiliate-disclosure/ (сторож affiliate-marking требует её на странице);
 //   • внешняя ссылка listed-записи — nofollow (владелец не подтверждён); claimed — обычная ссылка
@@ -21,9 +22,9 @@
 // ⭐ s96 — в дополнительной категории (`also_in`, подтверждённое основание) та же карточка печатается со
 //   строкой «Also listed under <основная>»; страница записи одна, под основной категорией.
 import {
-  type CardModel, AFFILIATE_NOTE, ALSO_IN_NOTE, CLAIMED_NOTE, LISTED_NOTE, LOGO_BASE, SCREENSHOT_BASE, OWNER_FACT_NOTE,
-  JURISDICTION_SHORT, SOURCE_KIND_LABEL, TAG_LABEL, categoryBySlug, categoryHref, countryName, effectiveTier, entryHref,
-  first, formatDate, jurisdictionsOf, outboundLink, ownerProfileShown, ownerStated,
+  type CardModel, type FactKind, AFFILIATE_NOTE, ALSO_IN_NOTE, CLAIMED_NOTE, LISTED_NOTE, LOGO_BASE, SCREENSHOT_BASE, OWNER_FACT_NOTE,
+  JURISDICTION_SHORT, REGULATION_LABEL, SOURCE_KIND_LABEL, TAG_LABEL, categoryBySlug, categoryHref, countryName, effectiveTier, entryHref,
+  first, formatDate, jurisdictionsOf, outboundLink, ownerProfileShown, ownerStated, printable,
 } from '../lib/directoryModel'
 
 interface Props {
@@ -63,6 +64,16 @@ const certs = f.certification ?? []
 const integrations = f.integration ?? []
 const platforms = f.platform ?? []
 const notes = (f.pricing_note ?? []).filter((n) => n.confirmed === true || ownerStated(n))
+// s104: шесть видов шага C печатаются только подтверждёнными (PHASE_C_KINDS ⊂ GATED_KINDS) — как цены: сторож dir-gated-facts
+// сверяет каждый напечатанный data-fid с confirmed в базе. market / founded / turnaround — в сетке, regulation / hosting /
+// format — в раскрывающемся блоке. Статус названного акта (действует / заменён) карточка НЕ печатает (REGULATION_LABEL).
+const gated = (k: FactKind) => (f[k] ?? []).filter(printable)
+const market = gated('market')[0]
+const founded = gated('founded')[0]
+const turnarounds = gated('turnaround')
+const regulations = gated('regulation')
+const hostings = gated('hosting')
+const formats = gated('format')
 // s97: подпись «stated by the vendor» обязана стоять у КАЖДОГО неподтверждённого факта владельца, в каком бы блоке он ни
 // печатался — сетка (Covers, Languages, Also, Integrations…) тоже; сторож dir-claimed считает маркеры data-dir-owner-fact
 // против фактов владельца в базе. Kallik (07.10): языки/интеграции/API шли без подписи — сторож поймал.
@@ -98,13 +109,14 @@ const claimText = claim ? claim.value.replace(/^named:\s*/i, 'Countries named: '
 const langText = lang ? lang.value.replace(/\s*\(no count stated\)/i, '') : null
 const closedBadge = e.closed_on ? 'Closed ' + formatDate(e.closed_on) : 'Closed'
 const jurisData = juris.map((j) => (JURISDICTION_SHORT[j] ?? j).toLowerCase().replace(/\s+/g, '-')).join(' ')
-const searchBlob = [e.title, e.vendor, country, e.description, ...juris, ...features.map((x) => x.value)]
+const searchBlob = [e.title, e.vendor, country, e.description, ...juris, ...features.map((x) => x.value), market?.value ?? '']
   .filter(Boolean)
   .join(' | ')
   .toLowerCase()
 const hasDetails =
   card.prices.length > 0 || card.pricesPending || features.length > 0 || card.responsibility.length > 0 ||
-  card.termsUrl || certs.length > 0 || integrations.length > 0 || platforms.length > 0
+  card.termsUrl || certs.length > 0 || integrations.length > 0 || platforms.length > 0 ||
+  regulations.length > 0 || hostings.length > 0 || formats.length > 0
 ---
 
 <article
@@ -231,6 +243,28 @@ const hasDetails =
       {deployment && (
         <div><dt>Delivered as</dt><dd>{deployment.value}<a class="dir-src" href={deployment.source_url} rel={src} target="_blank">source</a>{ownerStated(deployment) && <Fragment set:html={STATED} />}</dd></div>
       )}
+      {market && (
+        <div data-fact="market" data-fid={market.id} data-dir-owner-fact={ownerStated(market) ? '' : undefined}>
+          <dt>Markets</dt>
+          <dd>{market.value}<a class="dir-src" href={market.source_url} rel={src} target="_blank">source</a>{ownerStated(market) && <Fragment set:html={STATED} />}</dd>
+        </div>
+      )}
+      {turnarounds.length > 0 && (
+        <div>
+          <dt>Turnaround</dt>
+          <dd>
+            {turnarounds.map((t, i) => (
+              <Fragment>{i > 0 && ' · '}<span data-fact="turnaround" data-fid={t.id} data-dir-owner-fact={ownerStated(t) ? '' : undefined}>{t.value}<a class="dir-src" href={t.source_url} rel={src} target="_blank">source</a>{ownerStated(t) && <Fragment set:html={STATED} />}</span></Fragment>
+            ))}
+          </dd>
+        </div>
+      )}
+      {founded && (
+        <div data-fact="founded" data-fid={founded.id} data-dir-owner-fact={ownerStated(founded) ? '' : undefined}>
+          <dt>Founded</dt>
+          <dd>{founded.value}<a class="dir-src" href={founded.source_url} rel={src} target="_blank">source</a>{ownerStated(founded) && <Fragment set:html={STATED} />}</dd>
+        </div>
+      )}
       {(trial || api || ufi || iso17100) && (
         <div>
           <dt>Also</dt>
@@ -304,9 +338,18 @@ const hasDetails =
         </section>
       )}
 
-      {(certs.length > 0 || integrations.length > 0 || platforms.length > 0) && (
+      {(certs.length > 0 || integrations.length > 0 || platforms.length > 0 || regulations.length > 0 || hostings.length > 0 || formats.length > 0) && (
         <section class="dir-block">
           <dl class="dir-facts tight">
+            {regulations.length > 0 && (
+              <div><dt>Regulations named</dt><dd>{regulations.map((r) => <span class="dir-chip" data-fact="regulation" data-fid={r.id} data-dir-owner-fact={ownerStated(r) ? '' : undefined} title={REGULATION_LABEL[r.label ?? ''] ?? ''}>{r.value}<a class="dir-src" href={r.source_url} rel={src} target="_blank">source</a>{ownerStated(r) && <Fragment set:html={STATED} />}</span>)}</dd></div>
+            )}
+            {formats.length > 0 && (
+              <div><dt>SDS formats</dt><dd>{formats.map((x) => <span class="dir-chip" data-fact="format" data-fid={x.id} data-dir-owner-fact={ownerStated(x) ? '' : undefined}>{x.value}<a class="dir-src" href={x.source_url} rel={src} target="_blank">source</a>{ownerStated(x) && <Fragment set:html={STATED} />}</span>)}</dd></div>
+            )}
+            {hostings.length > 0 && (
+              <div><dt>Data hosting</dt><dd>{hostings.map((h, i) => <Fragment>{i > 0 && ' · '}<span data-fact="hosting" data-fid={h.id} data-dir-owner-fact={ownerStated(h) ? '' : undefined}>{h.value}<a class="dir-src" href={h.source_url} rel={src} target="_blank">source</a>{ownerStated(h) && <Fragment set:html={STATED} />}</span></Fragment>)}</dd></div>
+            )}
             {certs.length > 0 && (
               <div><dt>Certifications</dt><dd>{certs.map((c) => <span class="dir-chip">{c.value}<a class="dir-src" href={c.source_url} rel={src} target="_blank">source</a>{ownerStated(c) && <Fragment set:html={STATED} />}</span>)}</dd></div>
             )}

@@ -298,16 +298,15 @@ export type FactKind =
   | 'jurisdiction' | 'jurisdiction_claim' | 'language' | 'deployment' | 'platform' | 'free_trial' | 'api'
   | 'iso17100' | 'ufi_pcn' | 'pricing_model' | 'price' | 'pricing_note' | 'pricing_statement' | 'feature'
   | 'certification' | 'integration' | 'responsibility'
-  // s104 (104-directory-phase-c-kinds.sql): собраны при перепроверке, печать — отдельным шагом (STORED_KINDS)
+  // s104 (104-directory-phase-c-kinds.sql): собраны при перепроверке; печатаются только подтверждёнными (PHASE_C_KINDS)
   | 'regulation' | 'market' | 'turnaround' | 'founded' | 'hosting' | 'format'
 
 /**
- * s104: виды, которые каталог хранит, но ПОКА НЕ ПЕЧАТАЕТ (решение Сергея 11.10: «сначала собрать, печать —
- * отдельным шагом»). Они не идут в `printable`, а значит и в порог индексации записи (ENTRY_INDEX_MIN_FACTS):
- * тонкая страница не станет индексируемой за счёт строк, которых читатель не видит. Словари значений —
- * directoryNumbers.ts. Когда строки появятся на карточке, вид уходит из этого списка.
+ * s104: шесть видов, собранных при перепроверке (11.10). Решение Сергея тем же вечером: печатать сразу — но ТОЛЬКО
+ * ПОДТВЕРЖДЁННЫМИ (они в GATED_KINDS): 35 из 359 собраны с сайтов, закрытых от сторожа, и строка на странице не
+ * найдена — такие остаются в базе невидимыми, как неподтверждённая цена. Словари значений — directoryNumbers.ts.
  */
-export const STORED_KINDS: readonly FactKind[] = ['regulation', 'market', 'turnaround', 'founded', 'hosting', 'format']
+export const PHASE_C_KINDS: readonly FactKind[] = ['regulation', 'market', 'turnaround', 'founded', 'hosting', 'format']
 
 /**
  * Тип документа, из которого взята цитата об ответственности (только у kind = 'responsibility').
@@ -318,6 +317,16 @@ export const STORED_KINDS: readonly FactKind[] = ['regulation', 'market', 'turna
  *   other             — блог, справка, FAQ, маркетинг, пересказ закона («according to CLP Article 4…»).
  */
 export type SourceKind = 'terms' | 'legal_notice' | 'policy' | 'inline_disclaimer' | 'other'
+
+/** Подпись к акту, который вендор называет (kind = regulation, label = режим). Статус акта (действует / заменён) карточка не
+ * печатает намеренно (s104): это отдельный словарь с датами, который появится только после проверки по EUR-Lex / eCFR. */
+export const REGULATION_LABEL: Record<string, string> = {
+  eu_sds_format: 'EU SDS format',
+  eu_clp_revision: 'CLP revision',
+  us_hcs: 'US HazCom',
+  ca_whmis: 'Canada WHMIS',
+  ghs_revision: 'UN GHS',
+}
 
 /** Из чего разрешено цитировать ответственность вендора (решение Сергея s93). */
 export const LEGAL_SOURCE_KINDS: readonly SourceKind[] = ['terms', 'legal_notice', 'policy']
@@ -355,8 +364,8 @@ export interface DirectoryFact {
 
 // ─────────────────────────── правила печати ───────────────────────────
 
-/** Факты, которые печатаются только подтверждёнными (см. шапку файла). */
-export const GATED_KINDS: readonly FactKind[] = ['price', 'pricing_note', 'responsibility']
+/** Факты, которые печатаются только подтверждёнными (см. шапку файла; s104 — и шесть видов шага C). */
+export const GATED_KINDS: readonly FactKind[] = ['price', 'pricing_note', 'responsibility', ...PHASE_C_KINDS]
 
 /** Цитата об ответственности взята из юридического документа (а не из блога, FAQ или страницы продукта). */
 export function legalSource(f: Pick<DirectoryFact, 'kind' | 'source_kind'>): boolean {
@@ -370,7 +379,6 @@ export function legalSource(f: Pick<DirectoryFact, 'kind' | 'source_kind'>): boo
  * ⚠ `responsibility` проходит два гейта: подтверждена дословность И источник — юридический документ.
  */
 export function printable(f: Pick<DirectoryFact, 'kind' | 'confirmed' | 'source_kind'> & { provided_by?: 'editor' | 'owner' }): boolean {
-  if (STORED_KINDS.includes(f.kind)) return false
   if (!GATED_KINDS.includes(f.kind)) return true
   // s96: цену, которую назвал сам владелец, печатаем и до подтверждения — это его цифра о себе, с подписью
   // «stated by the vendor» (ownerStated). Цитата об ответственности — без исключений: оба гейта.

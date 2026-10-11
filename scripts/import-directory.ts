@@ -43,7 +43,7 @@
  *
  * ⚠ s104: ШЕСТЬ НОВЫХ ВИДОВ (104-directory-phase-c-kinds.sql): regulation (label = режим, value из словаря актов),
  * market / hosting (detail = коды стран или unspecified), turnaround и founded (числа), format (словарь форматов).
- * Проверяет тот же factNumberProblems. Сайт их пока не печатает (directoryModel.STORED_KINDS).
+ * Проверяет тот же factNumberProblems. Печатаются только подтверждёнными (directoryModel.PHASE_C_KINDS ⊂ GATED_KINDS).
  */
 import { config } from 'dotenv'
 import { resolve } from 'node:path'
