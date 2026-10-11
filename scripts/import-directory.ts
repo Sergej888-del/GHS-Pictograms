@@ -40,6 +40,10 @@
  * src/lib/directoryNumbers.ts до любой записи: цена без price_role или с числом, которого нет в её
  * тексте, не принимается. После записи заливка снимает версию каталога — directory_snapshot() пишет
  * в directory_fact_history / directory_entry_history только то, что изменилось.
+ *
+ * ⚠ s104: ШЕСТЬ НОВЫХ ВИДОВ (104-directory-phase-c-kinds.sql): regulation (label = режим, value из словаря актов),
+ * market / hosting (detail = коды стран или unspecified), turnaround и founded (числа), format (словарь форматов).
+ * Проверяет тот же factNumberProblems. Сайт их пока не печатает (directoryModel.STORED_KINDS).
  */
 import { config } from 'dotenv'
 import { resolve } from 'node:path'

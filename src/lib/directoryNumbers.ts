@@ -10,6 +10,19 @@
  *   price_role               — что это за цена (тариф, услуга, обучение, надбавка…).
  * У записи: terms_kind / terms_doc_url / terms_dated — в каком виде вендор публикует условия.
  *
+ * s104 (104-directory-phase-c-kinds.sql) — шесть видов, собранных при перепроверке 171 коммерческой записи:
+ *   regulation — какой акт о формате SDS / hazard communication вендор НАЗЫВАЕТ (label = режим из
+ *                REGULATION_LABELS, value из REGULATION_VALUES или «GHS Rev. N»; evidence = номер как напечатан).
+ *                ⚠ Статус акта (действует / заменён) в факте не хранится — факт есть только то, что сказал вендор;
+ *                статус появится словарём при печати, после проверки по первоисточникам (EUR-Lex, eCFR).
+ *   market     — страны и регионы, названные обслуживаемыми; detail = коды ISO 3166-1 alpha-2 через запятую
+ *                и/или EU · EEA · worldwide; unspecified — «over 80 countries» без имён.
+ *   turnaround — названный срок (num, num_max, num_qual, unit из TURNAROUND_UNITS; label — к чему срок).
+ *   founded    — год основания (num = год, unit = year, num_qual = exact).
+ *   hosting    — где хранятся данные (только софт); detail как у market.
+ *   format     — форматы обмена SDS (только софт); value из FORMAT_VALUES.
+ * ⚠ Сайт их пока не печатает (directoryModel.STORED_KINDS) — решение Сергея s104: сначала собрать.
+ *
  * ⚠ Источник правды — посев (scripts/data/directory-v3.json). Здесь — словари и сверка, которые
  * scripts/import-directory.ts прогоняет до любой записи: число цены обязано стоять в её тексте, иначе
  * отчёт посчитал бы то, чего на карточке нет. База держит только формат (словари расширяются здесь,
@@ -45,6 +58,28 @@ export const PRICE_ROLES = [
 
 /** html — условия сделки страницей; pdf — только файлом; website_only — только условия пользования сайтом; none — не нашли. */
 export const TERMS_KINDS = ['html', 'pdf', 'website_only', 'none'] as const
+
+/** Срок: unit — в чём он назван. */
+export const TURNAROUND_UNITS = ['working_days', 'days', 'hours', 'weeks'] as const
+export const TURNAROUND_LABELS = ['standard', 'express', 'translation', 'label'] as const
+
+/** Режимы, к которым относится названный акт. */
+export const REGULATION_LABELS = ['eu_sds_format', 'eu_clp_revision', 'us_hcs', 'ca_whmis', 'ghs_revision'] as const
+/** Имена актов так, как их печатает каталог (evidence — как напечатал вендор). «GHS Rev. N» — по образцу GHS_REV_RE. */
+export const REGULATION_VALUES: Record<(typeof REGULATION_LABELS)[number], readonly string[]> = {
+  eu_sds_format: ['Regulation (EU) 2020/878', 'Regulation (EU) 2015/830', 'Regulation (EU) No 453/2010'],
+  eu_clp_revision: ['Regulation (EU) 2024/2865'],
+  us_hcs: ['OSHA HCS 2024', 'OSHA HCS 2012', '29 CFR 1910.1200'],
+  ca_whmis: ['WHMIS 2015', 'WHMIS 2023', 'Hazardous Products Regulations'],
+  ghs_revision: [],
+}
+export const GHS_REV_RE = /^GHS Rev\. \d{1,2}$/
+
+/** Форматы обмена SDS. */
+export const FORMAT_VALUES = ['SDScomXML', 'PDF', 'Word (DOCX)', 'XML', 'JSON', 'Excel / CSV', 'IUCLID', 'SAP EH&S', 'HTML'] as const
+
+/** detail у market / hosting: коды стран ISO 3166-1 alpha-2 и/или EU · EEA · worldwide, либо unspecified. */
+export const REGION_DETAIL_RE = /^(unspecified|(?:[A-Z]{2}|EU|EEA|worldwide)(?:,(?:[A-Z]{2}|EU|EEA|worldwide))*)$/
 
 export const NUMERIC_FACT_COLS = ['num', 'num_max', 'num_qual', 'unit', 'unit_qty', 'period', 'currency', 'price_role'] as const
 export const TERMS_ENTRY_COLS = ['terms_kind', 'terms_doc_url', 'terms_dated'] as const
@@ -106,8 +141,33 @@ export function factNumberProblems(f: Loose): string[] {
       if (f.unit !== 'days' || !isNum(f.num)) p.push('у пробного периода — num дней и unit days')
       else if (!numbersInText(value).includes(f.num)) p.push(`num ${f.num} нет в тексте «${value}»`)
     }
+  } else if (kind === 'turnaround') {
+    if (!has(TURNAROUND_UNITS, f.unit)) p.push(`unit обязателен: ${TURNAROUND_UNITS.join(' | ')}`)
+    if (!isNum(f.num)) p.push('у срока нет num')
+    else if (!numbersInText(value).includes(f.num)) p.push(`num ${f.num} нет в тексте «${value}»`)
+    if (isNum(f.num_max) && !numbersInText(value).includes(f.num_max)) p.push(`num_max ${f.num_max} нет в тексте «${value}»`)
+    if (set('label') && !has(TURNAROUND_LABELS, f.label)) p.push(`label «${f.label}» вне словаря сроков`)
+    if (set('unit_qty')) p.push('у срока нет unit_qty')
+  } else if (kind === 'founded') {
+    if (f.unit !== 'year' || f.num_qual !== 'exact' || !isNum(f.num)) p.push('у года основания — num = год, unit year, num_qual exact')
+    else if (f.num < 1800 || f.num > new Date().getUTCFullYear()) p.push(`год ${f.num} вне диапазона`)
+    else if (!numbersInText(value).includes(f.num)) p.push(`год ${f.num} нет в тексте «${value}»`)
+    if (set('unit_qty')) p.push('у года нет unit_qty')
   } else if (set('num') || set('unit') || set('unit_qty')) {
-    p.push(`числа — только у price / language / free_trial, не у ${kind}`)
+    p.push(`числа — только у price / language / free_trial / turnaround / founded, не у ${kind}`)
+  }
+
+  // s104: словари значений у видов без чисел
+  if (kind === 'regulation') {
+    const label = String(f.label ?? '')
+    if (!has(REGULATION_LABELS, label)) p.push(`label обязателен: ${REGULATION_LABELS.join(' | ')}`)
+    else if (label === 'ghs_revision' ? !GHS_REV_RE.test(value) : !REGULATION_VALUES[label as (typeof REGULATION_LABELS)[number]].includes(value))
+      p.push(`value «${value}» вне словаря актов для ${label}`)
+    if (!set('evidence')) p.push('у акта обязателен evidence (номер как напечатан)')
+  } else if (kind === 'format') {
+    if (!has(FORMAT_VALUES, value)) p.push(`формат «${value}» вне словаря: ${FORMAT_VALUES.join(' | ')}`)
+  } else if (kind === 'market' || kind === 'hosting') {
+    if (!REGION_DETAIL_RE.test(String(f.detail ?? ''))) p.push(`detail «${f.detail ?? ''}» — коды ISO 3166-1 alpha-2 / EU / EEA / worldwide через запятую, либо unspecified`)
   }
   return p
 }

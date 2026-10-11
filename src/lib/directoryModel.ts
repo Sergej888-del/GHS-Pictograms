@@ -298,6 +298,16 @@ export type FactKind =
   | 'jurisdiction' | 'jurisdiction_claim' | 'language' | 'deployment' | 'platform' | 'free_trial' | 'api'
   | 'iso17100' | 'ufi_pcn' | 'pricing_model' | 'price' | 'pricing_note' | 'pricing_statement' | 'feature'
   | 'certification' | 'integration' | 'responsibility'
+  // s104 (104-directory-phase-c-kinds.sql): собраны при перепроверке, печать — отдельным шагом (STORED_KINDS)
+  | 'regulation' | 'market' | 'turnaround' | 'founded' | 'hosting' | 'format'
+
+/**
+ * s104: виды, которые каталог хранит, но ПОКА НЕ ПЕЧАТАЕТ (решение Сергея 11.10: «сначала собрать, печать —
+ * отдельным шагом»). Они не идут в `printable`, а значит и в порог индексации записи (ENTRY_INDEX_MIN_FACTS):
+ * тонкая страница не станет индексируемой за счёт строк, которых читатель не видит. Словари значений —
+ * directoryNumbers.ts. Когда строки появятся на карточке, вид уходит из этого списка.
+ */
+export const STORED_KINDS: readonly FactKind[] = ['regulation', 'market', 'turnaround', 'founded', 'hosting', 'format']
 
 /**
  * Тип документа, из которого взята цитата об ответственности (только у kind = 'responsibility').
@@ -360,6 +370,7 @@ export function legalSource(f: Pick<DirectoryFact, 'kind' | 'source_kind'>): boo
  * ⚠ `responsibility` проходит два гейта: подтверждена дословность И источник — юридический документ.
  */
 export function printable(f: Pick<DirectoryFact, 'kind' | 'confirmed' | 'source_kind'> & { provided_by?: 'editor' | 'owner' }): boolean {
+  if (STORED_KINDS.includes(f.kind)) return false
   if (!GATED_KINDS.includes(f.kind)) return true
   // s96: цену, которую назвал сам владелец, печатаем и до подтверждения — это его цифра о себе, с подписью
   // «stated by the vendor» (ownerStated). Цитата об ответственности — без исключений: оба гейта.
