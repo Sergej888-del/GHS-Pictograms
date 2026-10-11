@@ -33,6 +33,13 @@
  * репозиторий публичный. Проверки файла: описание владельца ≤ 60 слов и без превосходных степеней
  * (SUPERLATIVE_RE из directoryModel), у каждой дополнительной категории (`also_in`) — факт-основание
  * (`basis_for`) у той же записи, подраздел только у услуг и у всех услуг, claimed без даты не принимается.
+ *
+ * ⚠ s103: ЧИСЛА И ИСТОРИЯ (103-directory-numbers-history.sql). У цен, языков и пробных периодов в посеве —
+ * разобранные поля (num, num_max, num_qual, unit, unit_qty, period, currency, price_role), у записей —
+ * terms_kind / terms_doc_url / terms_dated. Словари и сверку числа с текстом факта проверяет
+ * src/lib/directoryNumbers.ts до любой записи: цена без price_role или с числом, которого нет в её
+ * тексте, не принимается. После записи заливка снимает версию каталога — directory_snapshot() пишет
+ * в directory_fact_history / directory_entry_history только то, что изменилось.
  */
 import { config } from 'dotenv'
 import { resolve } from 'node:path'
@@ -41,6 +48,9 @@ import { createClient } from '@supabase/supabase-js'
 import {
   ALSO_IN_CATEGORIES, SUBCATEGORIES, SUBCATEGORY_PARENT, ownerDescriptionProblems,
 } from '../src/lib/directoryModel'
+import {
+  NUMERIC_FACT_COLS, TERMS_ENTRY_COLS, entryTermsProblems, factNumberProblems,
+} from '../src/lib/directoryNumbers'
 
 config({ path: resolve(process.cwd(), '.env.local') })
 config()
@@ -115,6 +125,15 @@ const badProvided = facts.filter((f) => f.provided_by != null && f.provided_by !
 if (badProvided.length) die(`provided_by только editor/owner: ${badProvided.slice(0, 5).map((f) => f.id).join(', ')}`)
 console.log(`  заявленных ${entries.filter((e) => e.tier !== 'listed').length} · с also_in ${entries.filter((e) => ((e.also_in as string[]) ?? []).length).length} · подразделов услуг ${new Set(entries.filter((e) => e.subcategory).map((e) => e.subcategory)).size}`)
 
+// ── s103: числа рядом с текстом и условия вендора ──
+const numBad = facts.flatMap((f) => factNumberProblems(f).map((p) => `факт #${f.id} (${f.kind} «${f.value}»): ${p}`))
+const termsBad = entries.flatMap((e) => entryTermsProblems(e).map((p) => `запись #${e.id}: ${p}`))
+if (numBad.length || termsBad.length) die(`числовые поля не принимаются:\n  ${[...numBad, ...termsBad].slice(0, 20).join('\n  ')}${numBad.length + termsBad.length > 20 ? `\n  … и ещё ${numBad.length + termsBad.length - 20}` : ''}`)
+const priced = facts.filter((f) => f.kind === 'price' && f.num != null).length
+const langs = facts.filter((f) => f.kind === 'language' && f.num != null).length
+const termsKnown = entries.filter((e) => e.terms_kind != null).length
+console.log(`  числа: цен с суммой ${priced} из ${facts.filter((f) => f.kind === 'price').length} · языков с числом ${langs} из ${facts.filter((f) => f.kind === 'language').length} · условия известны у ${termsKnown} записей из ${entries.filter((e) => e.state === 'live').length} живых`)
+
 const byState = new Map<string, number>()
 for (const e of entries) byState.set(String(e.state), (byState.get(String(e.state)) ?? 0) + 1)
 const byKind = new Map<string, number>()
@@ -129,8 +148,14 @@ const ENTRY_COLS = [
   // s96 — профиль владельца и устройство каталога (без полей заявителя, см. шапку)
   'claimed_on', 'owner_confirmed_on', 'logo_path', 'owner_description', 'pricing_url', 'terms_url',
   'screenshot_path', 'contact_url', 'rfq_opt_in', 'featured_from', 'featured_until', 'featured_slots', 'also_in', 'subcategory',
+  // s103 — в каком виде вендор публикует условия
+  ...TERMS_ENTRY_COLS,
 ]
-const FACT_COLS = ['id', 'entry_id', 'kind', 'label', 'value', 'detail', 'quote', 'source_url', 'evidence', 'sort', 'checked_on', 'source_kind', 'provided_by', 'basis_for']
+const FACT_COLS = [
+  'id', 'entry_id', 'kind', 'label', 'value', 'detail', 'quote', 'source_url', 'evidence', 'sort', 'checked_on', 'source_kind', 'provided_by', 'basis_for',
+  // s103 — разобранные числа (directoryNumbers.ts)
+  ...NUMERIC_FACT_COLS,
+]
 // ⚠ NOT NULL-колонки с умолчанием: пустой массив / false, а не null (иначе 23502 на первой же строке).
 const DEFAULTS: Record<string, unknown> = { tags: [], featured_slots: [], also_in: [], rfq_opt_in: false, provided_by: 'editor' }
 const pick = (r: Row, cols: string[]) => Object.fromEntries(cols.map((c) => [c, r[c] ?? DEFAULTS[c] ?? null]))
@@ -193,7 +218,20 @@ async function main() {
   const { count: nF, error: e2 } = await db.from('directory_facts').select('id', { count: 'exact', head: true }).in('entry_id', entryIds)
   if (e1 || e2) die(`сверка: ${(e1 ?? e2)!.message}`)
   if (nE !== entries.length || nF !== facts.length) die(`сверка не сошлась: записей ${nE}/${entries.length}, фактов ${nF}/${facts.length}`)
-  console.log(`\n✓ Записано: ${nE} записей, ${nF} фактов. Дальше: npm run check:directory`)
+  console.log(`\n✓ Записано: ${nE} записей, ${nF} фактов.`)
+
+  // ── s103: версия каталога в историю (пишется только изменившееся) ──
+  // ⚠ Отказ снимка заливку не отменяет — данные уже в базе; следующий снимок (заливка или SQL подтверждений)
+  // догонит. Но сказать об этом надо громко: иначе дыра в истории останется незамеченной.
+  const { data: snap, error: snapErr } = await db.rpc('directory_snapshot')
+  if (snapErr) {
+    console.error(`\n⚠ История не записана: ${snapErr.message}\n  Данные залиты. Перешли это сообщение Claude.`)
+    process.exitCode = 1
+  } else {
+    const s = (Array.isArray(snap) ? snap[0] : snap) as Record<string, number>
+    console.log(`✓ История: фактов новых версий ${s.opened_facts}, закрыто ${s.closed_facts}, исправлено за день ${s.corrected_facts}; записей новых версий ${s.opened_entries}, закрыто ${s.closed_entries}.`)
+  }
+  console.log('Дальше: npm run check:directory')
 }
 
 main().catch((e) => die(String(e)))
