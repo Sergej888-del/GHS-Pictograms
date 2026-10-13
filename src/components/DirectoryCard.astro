@@ -297,7 +297,7 @@ const hasDetails =
             ))}
           </ul>
         )}
-        {notes.map((n) => <p class="dir-fine" data-fact="pricing_note" data-fid={n.id}>{n.value}{ownerStated(n) && <Fragment set:html={STATED} />}</p>)}
+        {notes.map((n) => <p class="dir-fine" data-fact="pricing_note" data-fid={n.id} data-dir-owner-fact={ownerStated(n) ? '' : undefined}>{n.value}{ownerStated(n) && <span class="dir-stated">{OWNER_FACT_NOTE}</span>}</p>)}
         {card.prices.length > 0 && (
           <p class="dir-fine">
             As published by the vendor, checked {formatDate(card.prices[0].confirmed_on ?? card.prices[0].checked_on)}.
