@@ -126,6 +126,15 @@ config()
 
 const ARGV = process.argv.slice(2)
 
+// Russian plural of 'подраздел' for the directory subsection count in report lines.
+function subWord(n: number): string {
+  const m10 = n % 10
+  const m100 = n % 100
+  if (m10 === 1 && m100 !== 11) return 'подраздел'
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'подраздела'
+  return 'подразделов'
+}
+
 function argValue(name: string): string | null {
   const i = ARGV.indexOf(name)
   if (i >= 0 && ARGV[i + 1] && !ARGV[i + 1].startsWith('--')) return ARGV[i + 1]
@@ -8145,7 +8154,7 @@ const CHECKS: Check[] = [
   //   карточке партнёра · noindex у записей до заявки · цены и цитаты только подтверждённые (confirmed = true;
   //   цена владельца — с подписью) · sitemap несёт категории, подразделы и только индексируемые записи ·
   //   s96: dir-claimed (граница бесплатного и платного), dir-multi-category (also_in только с подтверждённым
-  //   основанием), dir-subcategories (четыре подраздела услуг), dir-badges (два SVG + _headers).
+  //   основанием), dir-subcategories (подразделы услуг), dir-badges (два SVG + _headers).
   {
     id: 'dir-pages',
     group: 'Directory',
@@ -8260,7 +8269,7 @@ const CHECKS: Check[] = [
         'directory_facts', 'id, entry_id, kind, confirmed, basis_for', (q) => q.not('basis_for', 'is', null).order('id'))
       assertAscii('dir-order', [DIR_ORDER_NOTE])
       const problems: string[] = []
-      // Страницы списков: семь категорий (+ подтверждённые also_in) и четыре подраздела услуг.
+      // Страницы списков: семь категорий (+ подтверждённые also_in) и подразделы услуг.
       const pages: { rel: string; list: typeof rows; closed: boolean }[] = [
         ...DIR_CATEGORIES.map((c) => ({ rel: `directory/${c.slug}`, list: dirEntriesIn(rows, c.slug, basisFacts), closed: c.slug === 'closed' })),
         ...DIR_SUBCATEGORIES.map((x) => ({ rel: `directory/${DIR_SUB_PARENT}/${x.slug}`, list: dirEntriesIn(rows, DIR_SUB_PARENT, basisFacts).filter((r) => r.subcategory === x.slug), closed: false })),
@@ -8617,7 +8626,7 @@ const CHECKS: Check[] = [
   {
     id: 'dir-subcategories',
     group: 'Directory',
-    title: 'Подразделы услуг: четыре страницы, каждая запись услуг ровно в одном подразделе, хаб раздела показывает группы, слуги не пересекаются (s96)',
+    title: 'Подразделы услуг: по странице на каждый, каждая запись услуг ровно в одном подразделе, хаб раздела показывает группы, слуги не пересекаются (s96)',
     run: async () => {
       const rows = await selectAll<{ id: number; slug: string; category: string; state: string; title: string; subcategory: string | null }>(
         'directory_entries', 'id, slug, category, state, title, subcategory', (q) => q.order('id'))
@@ -8653,7 +8662,7 @@ const CHECKS: Check[] = [
       }
       return {
         id: 'dir-subcategories', group: 'Directory', ok: problems.length === 0,
-        headline: problems.length === 0 ? `${DIR_SUBCATEGORIES.length} подраздела, ${services.length} записей услуг, каждая ровно в одном` : `проблем: ${problems.length}`,
+        headline: problems.length === 0 ? `${DIR_SUBCATEGORIES.length} ${subWord(DIR_SUBCATEGORIES.length)}, ${services.length} записей услуг, каждая ровно в одном` : `проблем: ${problems.length}`,
         detail: problems.slice(0, 30),
       }
     },
@@ -8721,7 +8730,7 @@ const CHECKS: Check[] = [
       if (!home.includes('href="/directory/"')) problems.push('в подвале главной нет ссылки на /directory/')
       return {
         id: 'dir-sitemap', group: 'Directory', ok: problems.length === 0,
-        headline: problems.length === 0 ? `sitemap: хаб + ${DIR_CATEGORIES.length} категорий + ${DIR_SUBCATEGORIES.length} подраздела, записи по правилу 6` : `проблем: ${problems.length}`,
+        headline: problems.length === 0 ? `sitemap: хаб + ${DIR_CATEGORIES.length} категорий + ${DIR_SUBCATEGORIES.length} ${subWord(DIR_SUBCATEGORIES.length)}, записи по правилу 6` : `проблем: ${problems.length}`,
         detail: problems.slice(0, 30),
       }
     },
