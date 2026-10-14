@@ -185,7 +185,7 @@ const jsonLd = {
         </div>
       </div>
       <p class="hub-fine dir-hub-subs" data-dir-hub-subs>
-        Services are split into four sections:
+        Services are split into {NUM_WORD[SUBCATEGORIES.length]} sections:
         {SUBCATEGORIES.map((x, i) => <>{i > 0 ? ' · ' : ' '}<a href={subcategoryHref(x.slug)}>{x.short}</a></>)}.
       </p>
     </div>

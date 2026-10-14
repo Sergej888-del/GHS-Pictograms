@@ -239,7 +239,12 @@ export const entryHref = (e: { category: string; slug: string }) => `${DIRECTORY
 
 export const SUBCATEGORY_PARENT: CategorySlug = 'authoring-services-consultants'
 
-export type SubcategorySlug = 'sds-translation' | 'sds-authoring-eu' | 'sds-authoring-north-america' | 'regulatory-consulting'
+export type SubcategorySlug =
+  | 'sds-translation'
+  | 'sds-authoring-eu'
+  | 'sds-authoring-north-america'
+  | 'regulatory-consulting'
+  | 'registration-or-pcn'
 
 export type Subcategory = {
   slug: SubcategorySlug
@@ -295,7 +300,21 @@ export const SUBCATEGORIES: Subcategory[] = [
       'Chemical regulatory consultancies for CLP classification, REACH registration, poison centre notification and global GHS, where SDS preparation is one service among several.',
     lead:
       'Consultancies whose main business is chemical regulatory work — REACH and other registrations, classification, notifications — and that prepare safety data sheets as part of it. {n} providers.',
-    rule: 'Regulatory consultancy first; SDS preparation is one service among registrations, dossiers and notifications.',
+    rule:
+      'Regulatory consultancy first; SDS preparation is one service among registrations, dossiers and notifications. Providers whose main business is Only Representative, registration or PCN have their own subsection.',
+  },
+  // s109 (A2): fifth subsection. Strict rule: the Only Representative / REACH registration / poison centre
+  // notification offer is the provider's main business. Broader consultancies stay in regulatory-consulting.
+  {
+    slug: 'registration-or-pcn',
+    title: 'Only Representative, REACH Registration and PCN Services',
+    h1: 'Only Representative, REACH registration and PCN services',
+    short: 'OR · registration · PCN',
+    description:
+      'Providers whose main business is Only Representative, REACH registration dossiers or poison centre notifications: services, regimes and the scope each one states.',
+    lead:
+      'Providers whose main business is acting as Only Representative, preparing registration dossiers or submitting poison centre notifications — {n} providers. Each card lists the regimes and services the provider names on its own pages.',
+    rule: 'Only Representative, REACH registration or poison centre notification is the main business of the provider; broader consultancies stay under Regulatory consulting.',
   },
 ]
 
