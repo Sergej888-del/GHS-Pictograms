@@ -40,6 +40,7 @@
 // печатаются — даже подтверждённые. Под цитатой читатель видит, из какого документа она.
 
 import { GEO, geoTokens, marketSummary, marketTokens } from './directoryGeo'
+import { SERVICE_FACT_KINDS, SERVICE_REGIMES } from './directoryNumbers'
 
 export const DIRECTORY_BASE = '/directory/'
 export const SITE = 'https://ghspictograms.com'
@@ -362,6 +363,8 @@ export type FactKind =
   | 'certification' | 'integration' | 'responsibility'
   // s104 (104-directory-phase-c-kinds.sql): собраны при перепроверке; печатаются только подтверждёнными (PHASE_C_KINDS)
   | 'regulation' | 'market' | 'turnaround' | 'founded' | 'hosting' | 'format'
+  // s109 (109-directory-a2-kinds-or-emergency.sql): kinds for service providers; printed only when confirmed (SERVICE_KINDS)
+  | 'service_scope' | 'sector' | 'billing_model' | 'contract_term' | 'accreditation'
 
 /**
  * s104: шесть видов, собранных при перепроверке (11.10). Решение Сергея тем же вечером: печатать сразу — но ТОЛЬКО
@@ -369,6 +372,25 @@ export type FactKind =
  * найдена — такие остаются в базе невидимыми, как неподтверждённая цена. Словари значений — directoryNumbers.ts.
  */
 export const PHASE_C_KINDS: readonly FactKind[] = ['regulation', 'market', 'turnaround', 'founded', 'hosting', 'format']
+
+/**
+ * s109: five kinds for service providers (Only Representative / registration / PCN, emergency numbers, laboratories).
+ * Same gate as PHASE_C_KINDS: a fact prints only when check:directory has found its evidence on the source page
+ * (confirmed = true); an accreditation additionally rests on a register page (source_url). The list lives in
+ * directoryNumbers.ts together with the value vocabularies.
+ */
+export const SERVICE_KINDS: readonly FactKind[] = SERVICE_FACT_KINDS
+
+/** The service as the card prints it: «Only Representative (EU REACH, UK REACH)». Regime codes come from SERVICE_REGIMES. */
+export function serviceScopeText(f: Pick<DirectoryFact, 'value' | 'detail'>): string {
+  const names = (f.detail ?? '').split(',').map((c) => c.trim()).filter(Boolean).map((c) => SERVICE_REGIMES[c] ?? c)
+  return names.length ? `${f.value} (${names.join(', ')})` : f.value
+}
+
+/** «ISO/IEC 17025 accredited · DAkkS D-PL-12345»: the recognition plus the accrediting body or register line. */
+export function accreditationText(f: Pick<DirectoryFact, 'value' | 'detail'>): string {
+  return f.detail ? `${f.value} · ${f.detail}` : f.value
+}
 
 /**
  * Тип документа, из которого взята цитата об ответственности (только у kind = 'responsibility').
@@ -426,8 +448,8 @@ export interface DirectoryFact {
 
 // ─────────────────────────── правила печати ───────────────────────────
 
-/** Факты, которые печатаются только подтверждёнными (см. шапку файла; s104 — и шесть видов шага C). */
-export const GATED_KINDS: readonly FactKind[] = ['price', 'pricing_note', 'responsibility', ...PHASE_C_KINDS]
+/** Факты, которые печатаются только подтверждёнными (см. шапку файла; s104 — и шесть видов шага C; s109 — и пять видов услуг). */
+export const GATED_KINDS: readonly FactKind[] = ['price', 'pricing_note', 'responsibility', ...PHASE_C_KINDS, ...SERVICE_KINDS]
 
 /** Цитата об ответственности взята из юридического документа (а не из блога, FAQ или страницы продукта). */
 export function legalSource(f: Pick<DirectoryFact, 'kind' | 'source_kind'>): boolean {

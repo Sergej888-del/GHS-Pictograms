@@ -29,6 +29,20 @@
  * без миграции).
  *
  * Сайт эти поля пока не читает (directoryData.ts их не выбирает) — карточки от них не меняются.
+ *
+ * s109 (109-directory-a2-kinds-or-emergency.sql) - five kinds for service providers (Only Representative / registration /
+ * PCN now, emergency numbers and laboratories later). Same rules as step C: the database holds the format only, the
+ * vocabularies below are the source of truth, and the kinds print only when confirmed (directoryModel.SERVICE_KINDS).
+ *   service_scope - value from SERVICE_SCOPE_VALUES; detail = comma-separated regime codes from SERVICE_REGIMES
+ *                   (mandatory for Only Representative, OR appointment support and Registration dossiers);
+ *                   evidence = the phrase as printed on the vendor page.
+ *   sector        - industry the vendor says it serves; value from SECTOR_VALUES.
+ *   billing_model - the unit a service is charged by; value from BILLING_MODEL_VALUES. Not pricing_model (software licensing).
+ *   contract_term - numeric only: num = length, unit from CONTRACT_TERM_UNITS, label from CONTRACT_TERM_LABELS.
+ *   accreditation - recognition that can be looked up in a public register; value from ACCREDITATION_VALUES, detail = the
+ *                   accrediting body and scope or number, source_url = the register page, evidence = the register line.
+ * Every one of them needs `evidence`: check:directory confirms a fact only by finding its evidence on the source page,
+ * so a fact without it could never be confirmed and would never print.
  */
 
 import { parseMarket } from './directoryGeo'
@@ -82,6 +96,64 @@ export const FORMAT_VALUES = ['SDScomXML', 'PDF', 'Word (DOCX)', 'XML', 'JSON', 
 
 /** detail у market / hosting: коды стран ISO 3166-1 alpha-2 и/или EU · EEA · worldwide, либо unspecified. */
 export const REGION_DETAIL_RE = /^(unspecified|(?:[A-Z]{2}|EU|EEA|worldwide)(?:,(?:[A-Z]{2}|EU|EEA|worldwide))*)$/
+
+/** s109: kinds for service providers. directoryModel.SERVICE_KINDS and GATED_KINDS are built from this list. */
+export const SERVICE_FACT_KINDS = ['service_scope', 'sector', 'billing_model', 'contract_term', 'accreditation'] as const
+
+/**
+ * service_scope values. «Only Representative» means the vendor acts as the OR; «OR appointment support» means it helps
+ * the customer appoint one (the two are not the same, measure doc 2026-10-13 section 4).
+ */
+export const SERVICE_SCOPE_VALUES = [
+  'Only Representative',
+  'OR appointment support',
+  'Registration dossiers',
+  'Poison centre notification (PCN)',
+  'UFI generation',
+  'SCIP notification',
+  'C&L Inventory notification',
+  'Product notifications (cosmetics, biocides, detergents)',
+  'Emergency telephone service',
+] as const
+/** Values whose regime list is the point of the fact: detail is mandatory. */
+export const SCOPE_NEEDS_REGIME: readonly string[] = ['Only Representative', 'OR appointment support', 'Registration dossiers']
+
+/** Regime codes for service_scope.detail and their printed names. Extend here (no migration) when a vendor names another regime. */
+export const SERVICE_REGIMES: Record<string, string> = {
+  eu_reach: 'EU REACH',
+  uk_reach: 'UK REACH',
+  ch_chemo: 'Swiss ChemO',
+  tr_kkdik: 'Turkey KKDIK',
+  kr_kreach: 'Korea K-REACH',
+  cn_mee: 'China MEE',
+  ua_reach: 'Ukraine REACH',
+  eu_clp: 'EU CLP',
+  gb_clp: 'GB CLP',
+  us_tsca: 'US TSCA',
+  au_aicis: 'Australia AICIS',
+  jp_cscl: 'Japan CSCL',
+  tw_tcca: 'Taiwan TCCA',
+  in_bis: 'India BIS',
+}
+export const REGIME_DETAIL_RE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*(?:,[a-z][a-z0-9]*(?:_[a-z0-9]+)*)*$/
+
+export const SECTOR_VALUES = [
+  'Cosmetics and personal care', 'Fragrances and perfumes', 'Paints, coatings and inks', 'Adhesives and sealants',
+  'Cleaning products and detergents', 'Biocides', 'Agrochemicals', 'Pharmaceuticals and medical',
+  'Industrial and specialty chemicals', 'Electronics and batteries', 'Fuels and lubricants', 'Food and flavourings',
+  'Aerosols', 'Plastics and polymers',
+] as const
+
+export const BILLING_MODEL_VALUES = [
+  'Per substance', 'Per dossier', 'Per product', 'Per SDS', 'Per call or incident', 'Annual fee', 'Monthly fee',
+  'Fixed fee per project', 'Hourly rate',
+] as const
+
+export const CONTRACT_TERM_UNITS = ['days', 'months', 'years'] as const
+export const CONTRACT_TERM_LABELS = ['minimum_term', 'notice_period', 'renewal_period'] as const
+
+/** accreditation values: only recognitions with a public register. Management-system certificates stay in `certification`. */
+export const ACCREDITATION_VALUES = ['ISO/IEC 17025 accredited', 'OECD GLP test facility', 'Approved training provider'] as const
 
 export const NUMERIC_FACT_COLS = ['num', 'num_max', 'num_qual', 'unit', 'unit_qty', 'period', 'currency', 'price_role'] as const
 export const TERMS_ENTRY_COLS = ['terms_kind', 'terms_doc_url', 'terms_dated'] as const
@@ -155,8 +227,15 @@ export function factNumberProblems(f: Loose): string[] {
     else if (f.num < 1800 || f.num > new Date().getUTCFullYear()) p.push(`год ${f.num} вне диапазона`)
     else if (!numbersInText(value).includes(f.num)) p.push(`год ${f.num} нет в тексте «${value}»`)
     if (set('unit_qty')) p.push('у года нет unit_qty')
+  } else if (kind === 'contract_term') {
+    if (!has(CONTRACT_TERM_UNITS, f.unit)) p.push(`unit is required: ${CONTRACT_TERM_UNITS.join(' | ')}`)
+    if (!isNum(f.num) || f.num <= 0) p.push('contract_term needs a positive num (text-only terms go to feature or pricing_note)')
+    else if (!numbersInText(value).includes(f.num)) p.push(`num ${f.num} is not in the text "${value}"`)
+    if (isNum(f.num_max) && !numbersInText(value).includes(f.num_max)) p.push(`num_max ${f.num_max} is not in the text "${value}"`)
+    if (set('label') && !has(CONTRACT_TERM_LABELS, f.label)) p.push(`label "${f.label}" is outside CONTRACT_TERM_LABELS`)
+    if (set('unit_qty')) p.push('contract_term has no unit_qty')
   } else if (set('num') || set('unit') || set('unit_qty')) {
-    p.push(`числа — только у price / language / free_trial / turnaround / founded, не у ${kind}`)
+    p.push(`числа — только у price / language / free_trial / turnaround / founded / contract_term, не у ${kind}`)
   }
 
   // s104: словари значений у видов без чисел
@@ -172,6 +251,26 @@ export function factNumberProblems(f: Loose): string[] {
     if (!REGION_DETAIL_RE.test(String(f.detail ?? ''))) p.push(`detail «${f.detail ?? ''}» — коды ISO 3166-1 alpha-2 / EU / EEA / worldwide через запятую, либо unspecified`)
     // s108 (A1): код должен быть в таблице directoryGeo.GEO — иначе фильтр «Operates in» молча потеряет эту страну.
     else for (const u of parseMarket(String(f.detail ?? '')).unknown) p.push(`код «${u}» нет в таблице directoryGeo.GEO (src/lib/directoryGeo.ts) — добавить страну или исправить detail`)
+  }
+
+  // s109: service-provider kinds. Evidence is mandatory for all five (see the header); vocabularies are above.
+  if ((SERVICE_FACT_KINDS as readonly string[]).includes(kind)) {
+    if (!set('evidence')) p.push(`${kind} needs evidence (the phrase as printed on the source page): without it the fact can never be confirmed or printed`)
+    const detail = String(f.detail ?? '')
+    if (kind === 'service_scope') {
+      if (!has(SERVICE_SCOPE_VALUES, value)) p.push(`value "${value}" is outside SERVICE_SCOPE_VALUES`)
+      if (detail) {
+        if (!REGIME_DETAIL_RE.test(detail)) p.push(`detail "${detail}" must be comma-separated regime codes (lower case, e.g. eu_reach,uk_reach)`)
+        else for (const c of detail.split(',')) if (!Object.prototype.hasOwnProperty.call(SERVICE_REGIMES, c)) p.push(`regime "${c}" is not in SERVICE_REGIMES (src/lib/directoryNumbers.ts)`)
+      } else if (SCOPE_NEEDS_REGIME.includes(value)) p.push(`"${value}" needs detail = the regime codes the vendor names`)
+    } else if (kind === 'sector') {
+      if (!has(SECTOR_VALUES, value)) p.push(`value "${value}" is outside SECTOR_VALUES`)
+    } else if (kind === 'billing_model') {
+      if (!has(BILLING_MODEL_VALUES, value)) p.push(`value "${value}" is outside BILLING_MODEL_VALUES`)
+    } else if (kind === 'accreditation') {
+      if (!has(ACCREDITATION_VALUES, value)) p.push(`value "${value}" is outside ACCREDITATION_VALUES`)
+      if (!detail) p.push('accreditation needs detail = the accrediting body and the scope or register number')
+    }
   }
   return p
 }

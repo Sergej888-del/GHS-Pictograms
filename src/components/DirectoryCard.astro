@@ -23,7 +23,7 @@
 //   строкой «Also listed under <основная>»; страница записи одна, под основной категорией.
 import {
   type CardModel, type FactKind, AFFILIATE_NOTE, ALSO_IN_NOTE, CLAIMED_NOTE, LISTED_NOTE, LOGO_BASE, SCREENSHOT_BASE, OWNER_FACT_NOTE,
-  JURISDICTION_SHORT, REGULATION_LABEL, SOURCE_KIND_LABEL, TAG_LABEL, categoryBySlug, categoryHref, countryName, effectiveTier, entryHref,
+  JURISDICTION_SHORT, REGULATION_LABEL, SOURCE_KIND_LABEL, TAG_LABEL, accreditationText, serviceScopeText, categoryBySlug, categoryHref, countryName, effectiveTier, entryHref,
   first, formatDate, hqTokensOf, jurisdictionsOf, opsTokensOf, outboundLink, ownerProfileShown, ownerStated, printable,
 } from '../lib/directoryModel'
 import { geoSearchWords } from '../lib/directoryGeo'
@@ -75,6 +75,13 @@ const turnarounds = gated('turnaround')
 const regulations = gated('regulation')
 const hostings = gated('hosting')
 const formats = gated('format')
+// s109: kinds for service providers (SERVICE_KINDS ⊂ GATED_KINDS): services, billing, contract and sectors in the grid,
+// accreditations (register-backed) in the details block. The dir-gated-facts guard checks every printed data-fid.
+const scopes = gated('service_scope')
+const sectors = gated('sector')
+const billings = gated('billing_model')
+const contractTerms = gated('contract_term')
+const accreditations = gated('accreditation')
 // s97: подпись «stated by the vendor» обязана стоять у КАЖДОГО неподтверждённого факта владельца, в каком бы блоке он ни
 // печатался — сетка (Covers, Languages, Also, Integrations…) тоже; сторож dir-claimed считает маркеры data-dir-owner-fact
 // против фактов владельца в базе. Kallik (07.10): языки/интеграции/API шли без подписи — сторож поймал.
@@ -113,14 +120,14 @@ const jurisData = juris.map((j) => (JURISDICTION_SHORT[j] ?? j).toLowerCase().re
 // s108 (A1): токены для фильтров «Based in» (штаб-квартира) и «Operates in» (подтверждённые рынки) — см. directoryModel.
 const geoData = hqTokensOf(e).join(' ')
 const opsData = opsTokensOf(card).join(' ')
-const searchBlob = [e.title, e.vendor, country, ...geoSearchWords(e.hq_country), e.description, ...juris, ...features.map((x) => x.value), market?.value ?? '']
+const searchBlob = [e.title, e.vendor, country, ...geoSearchWords(e.hq_country), e.description, ...juris, ...features.map((x) => x.value), market?.value ?? '', ...scopes.map(serviceScopeText), ...sectors.map((x) => x.value)]
   .filter(Boolean)
   .join(' | ')
   .toLowerCase()
 const hasDetails =
   card.prices.length > 0 || card.pricesPending || features.length > 0 || card.responsibility.length > 0 ||
   card.termsUrl || certs.length > 0 || integrations.length > 0 || platforms.length > 0 ||
-  regulations.length > 0 || hostings.length > 0 || formats.length > 0
+  regulations.length > 0 || hostings.length > 0 || formats.length > 0 || accreditations.length > 0
 ---
 
 <article
@@ -265,6 +272,46 @@ const hasDetails =
           </dd>
         </div>
       )}
+      {scopes.length > 0 && (
+        <div>
+          <dt>Services</dt>
+          <dd class="dir-flags">
+            {scopes.map((x) => (
+              <span data-fact="service_scope" data-fid={x.id} data-dir-owner-fact={ownerStated(x) ? '' : undefined}>{serviceScopeText(x)}<a class="dir-src" href={x.source_url} rel={src} target="_blank">source</a>{ownerStated(x) && <Fragment set:html={STATED} />}</span>
+            ))}
+          </dd>
+        </div>
+      )}
+      {billings.length > 0 && (
+        <div>
+          <dt>Billed</dt>
+          <dd class="dir-flags">
+            {billings.map((x) => (
+              <span data-fact="billing_model" data-fid={x.id} data-dir-owner-fact={ownerStated(x) ? '' : undefined}>{x.value}<a class="dir-src" href={x.source_url} rel={src} target="_blank">source</a>{ownerStated(x) && <Fragment set:html={STATED} />}</span>
+            ))}
+          </dd>
+        </div>
+      )}
+      {contractTerms.length > 0 && (
+        <div>
+          <dt>Contract</dt>
+          <dd class="dir-flags">
+            {contractTerms.map((x) => (
+              <span data-fact="contract_term" data-fid={x.id} data-dir-owner-fact={ownerStated(x) ? '' : undefined}>{x.value}<a class="dir-src" href={x.source_url} rel={src} target="_blank">source</a>{ownerStated(x) && <Fragment set:html={STATED} />}</span>
+            ))}
+          </dd>
+        </div>
+      )}
+      {sectors.length > 0 && (
+        <div>
+          <dt>Sectors</dt>
+          <dd class="dir-flags">
+            {sectors.map((x) => (
+              <span data-fact="sector" data-fid={x.id} data-dir-owner-fact={ownerStated(x) ? '' : undefined}>{x.value}<a class="dir-src" href={x.source_url} rel={src} target="_blank">source</a>{ownerStated(x) && <Fragment set:html={STATED} />}</span>
+            ))}
+          </dd>
+        </div>
+      )}
       {founded && (
         <div data-fact="founded" data-fid={founded.id} data-dir-owner-fact={ownerStated(founded) ? '' : undefined}>
           <dt>Founded</dt>
@@ -344,7 +391,7 @@ const hasDetails =
         </section>
       )}
 
-      {(certs.length > 0 || integrations.length > 0 || platforms.length > 0 || regulations.length > 0 || hostings.length > 0 || formats.length > 0) && (
+      {(certs.length > 0 || integrations.length > 0 || platforms.length > 0 || regulations.length > 0 || hostings.length > 0 || formats.length > 0 || accreditations.length > 0) && (
         <section class="dir-block">
           <dl class="dir-facts tight">
             {regulations.length > 0 && (
@@ -355,6 +402,9 @@ const hasDetails =
             )}
             {hostings.length > 0 && (
               <div><dt>Data hosting</dt><dd>{hostings.map((h, i) => <Fragment>{i > 0 && ' · '}<span data-fact="hosting" data-fid={h.id} data-dir-owner-fact={ownerStated(h) ? '' : undefined}>{h.value}<a class="dir-src" href={h.source_url} rel={src} target="_blank">source</a>{ownerStated(h) && <Fragment set:html={STATED} />}</span></Fragment>)}</dd></div>
+            )}
+            {accreditations.length > 0 && (
+              <div><dt>Accreditations</dt><dd>{accreditations.map((x) => <span class="dir-chip" data-fact="accreditation" data-fid={x.id} data-dir-owner-fact={ownerStated(x) ? '' : undefined}>{accreditationText(x)}<a class="dir-src" href={x.source_url} rel={src} target="_blank">register</a>{ownerStated(x) && <Fragment set:html={STATED} />}</span>)}</dd></div>
             )}
             {certs.length > 0 && (
               <div><dt>Certifications</dt><dd>{certs.map((c) => <span class="dir-chip">{c.value}<a class="dir-src" href={c.source_url} rel={src} target="_blank">source</a>{ownerStated(c) && <Fragment set:html={STATED} />}</span>)}</dd></div>
