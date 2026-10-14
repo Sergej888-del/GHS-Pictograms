@@ -1,0 +1,102 @@
+---
+// DirectoryFilters — панель фильтров каталога (s108, шаг A1b): одна на страницы категорий и на общий вид /directory/all/.
+//
+// Только разметка: прячет строки скрипт src/lib/directoryFilterClient.ts (его подключает страница). Опции приходят
+// готовыми из directoryGeo.geoFilterOptions — число в скобках = сколько строк останется при выборе.
+// ⚠ Фильтр показывается, только если из него есть что выбрать (две и больше разные страны); на странице из одной страны
+//   «Based in» был бы пустой формальностью.
+// ⚠ В вёрстке нет HTML-комментариев и русских строк: сторож «русский текст в сборке» смотрит на собранные страницы.
+import { JURISDICTION_SHORT } from '../lib/directoryModel'
+import type { GeoOptions } from '../lib/directoryGeo'
+
+interface Props {
+  /** Сколько строк на странице всего (в счётчике «N of N shown»). */
+  total: number
+  hq: GeoOptions
+  ops: GeoOptions
+  /** Сколько записей страницы называют рынки (пояснение под панелью). */
+  opsStated: number
+  /** Юрисдикции, которые есть на странице (поле «Covers»); пусто — поля нет. */
+  jurisdictions?: string[]
+  /** Разделы (поле «Section», только общий вид): value = слаг категории. */
+  sections?: { value: string; label: string; n: number }[]
+}
+const { total, hq, ops, opsStated, jurisdictions = [], sections = [] } = Astro.props
+const showHq = hq.countries.length > 1
+const showOps = ops.countries.length + ops.extra.length > 1
+const hasWw = ops.extra.some((o) => o.value === 'ww')
+const jurisValue = (j: string) => (JURISDICTION_SHORT[j] ?? j).toLowerCase().replace(/\s+/g, '-')
+---
+
+<div class="dir-filters" data-dir-filters>
+  {sections.length > 1 && (
+    <label>Section
+      <select data-filter="section">
+        <option value="">All sections</option>
+        {sections.map((s) => <option value={s.value}>{s.label} ({s.n})</option>)}
+      </select>
+    </label>
+  )}
+  {jurisdictions.length > 0 && (
+    <label>Covers
+      <select data-filter="juris">
+        <option value="">Any jurisdiction</option>
+        {jurisdictions.map((j) => <option value={jurisValue(j)}>{j}</option>)}
+      </select>
+    </label>
+  )}
+  {showHq && (
+    <label>Based in
+      <select data-filter="geo">
+        <option value="">Anywhere</option>
+        {hq.continents.length > 1 && (
+          <optgroup label="Continents">{hq.continents.map((o) => <option value={o.value}>{o.label} ({o.n})</option>)}</optgroup>
+        )}
+        {hq.regions.length > 1 && (
+          <optgroup label="Regions">{hq.regions.map((o) => <option value={o.value}>{o.label} ({o.n})</option>)}</optgroup>
+        )}
+        <optgroup label="Countries">{hq.countries.map((o) => <option value={o.value}>{o.label} ({o.n})</option>)}</optgroup>
+      </select>
+    </label>
+  )}
+  {showOps && (
+    <label>Operates in
+      <select data-filter="ops">
+        <option value="">Anywhere</option>
+        {ops.extra.length > 0 && (
+          <optgroup label="Stated by the vendor">{ops.extra.map((o) => <option value={o.value} data-label={o.label} data-n={o.n} data-nn={o.nn}>{o.label} ({o.n})</option>)}</optgroup>
+        )}
+        {ops.continents.length > 1 && (
+          <optgroup label="Continents">{ops.continents.map((o) => <option value={o.value} data-label={o.label} data-n={o.n} data-nn={o.nn}>{o.label} ({o.n})</option>)}</optgroup>
+        )}
+        {ops.regions.length > 1 && (
+          <optgroup label="Regions">{ops.regions.map((o) => <option value={o.value} data-label={o.label} data-n={o.n} data-nn={o.nn}>{o.label} ({o.n})</option>)}</optgroup>
+        )}
+        <optgroup label="Countries">{ops.countries.map((o) => <option value={o.value} data-label={o.label} data-n={o.n} data-nn={o.nn}>{o.label} ({o.n})</option>)}</optgroup>
+      </select>
+    </label>
+  )}
+  {showOps && hasWw && (
+    <label class="dir-inline" title="Hide vendors that only say “worldwide” when a country or region is chosen">
+      <input type="checkbox" data-filter="named" /> Only vendors that name it
+    </label>
+  )}
+  <label>Verified
+    <select data-filter="tier">
+      <option value="">All listings</option>
+      <option value="verified">Verified by owner only</option>
+    </select>
+  </label>
+  <label>Search
+    <input type="search" data-filter="q" placeholder="Name, feature, country…" autocomplete="off" />
+  </label>
+  <button type="button" class="dir-reset" data-dir-reset hidden>Clear filters</button>
+  <span class="dir-count"><span data-dir-visible>{total}</span> of {total} shown</span>
+</div>
+{showOps && (
+  <p class="hub-fine" data-dir-ops-note>
+    “Operates in” uses the markets a vendor names on its own pages: {opsStated} of {total} listings state them, and only
+    confirmed statements are used. A vendor that says “worldwide” stays in every country unless you tick “Only vendors
+    that name it”; a listing that names no market is hidden once you pick one.
+  </p>
+)}

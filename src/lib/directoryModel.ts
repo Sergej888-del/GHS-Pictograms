@@ -39,6 +39,8 @@
 // блог / FAQ / маркетинг / пересказ закона (`other`) остаются в базе как след проверки, но не
 // печатаются — даже подтверждённые. Под цитатой читатель видит, из какого документа она.
 
+import { GEO, geoTokens, marketSummary, marketTokens } from './directoryGeo'
+
 export const DIRECTORY_BASE = '/directory/'
 export const SITE = 'https://ghspictograms.com'
 
@@ -164,6 +166,66 @@ export const ALSO_IN_CATEGORIES: readonly CategorySlug[] = [
 ]
 
 export const categoryHref = (slug: string) => `${DIRECTORY_BASE}${slug}/`
+
+// ─────────────────────────── четыре группы навигации (s106 решение 13.10, шаг A1 s108) ───────────────────────────
+//
+// СЛОЙ над категориями — в меню и на хабе `/directory/`; адреса категорий и записей НЕ меняются (их вручную подают в
+// Google, смена адресов сбросила бы очередь — s105). Группа — список слугов категорий; миграция для групп не нужна.
+// ⚠ Группа без живых категорий на хабе не печатается (`visibleGroups`): «Logistics & Emergency» появится с первой
+//   своей категорией (аварийные номера, перевозка опасных грузов). Пустой раздел читается как обещание.
+// ⚠ `label-design-printing` смешанная: программы для этикеток и принтеры с материалами. Основная группа — Hardware &
+//   Equipment (мастер-план §3), в Software & Tech она стоит второй карточкой (`alsoCategories`). Адрес один.
+// ⚠ `closed` — не группа, а архив: хаб печатает его отдельным блоком под группами.
+
+export type GroupSlug = 'software-tech' | 'regulatory-advisory' | 'logistics-emergency' | 'hardware-equipment'
+
+export type Group = {
+  slug: GroupSlug
+  name: string
+  blurb: string
+  /** Категории группы (основные). */
+  categories: CategorySlug[]
+  /** Категории, которые показаны и здесь, но основная группа у них другая. */
+  alsoCategories?: CategorySlug[]
+}
+
+export const GROUPS: Group[] = [
+  {
+    slug: 'software-tech',
+    name: 'Software & Tech',
+    blurb: 'Software that writes, manages and looks up safety data sheets, and the databases behind them.',
+    categories: ['sds-authoring-software', 'sds-management', 'regulatory-databases'],
+    alsoCategories: ['label-design-printing'],
+  },
+  {
+    slug: 'regulatory-advisory',
+    name: 'Regulatory & Advisory',
+    blurb: 'People and organisations that write, translate and advise: SDS authoring services, consultants and training.',
+    categories: ['authoring-services-consultants', 'training'],
+  },
+  {
+    slug: 'logistics-emergency',
+    name: 'Logistics & Emergency',
+    blurb: 'Dangerous goods transport and 24/7 emergency response lines.',
+    categories: [],
+  },
+  {
+    slug: 'hardware-equipment',
+    name: 'Hardware & Equipment',
+    blurb: 'Labelling systems, label printers and label stock.',
+    categories: ['label-design-printing'],
+  },
+]
+
+/** Группы, у которых есть хотя бы одна категория (основная или дополнительная). */
+export function visibleGroups(): Group[] {
+  return GROUPS.filter((g) => g.categories.length + (g.alsoCategories?.length ?? 0) > 0)
+}
+
+/** Основная группа категории (для хлебных крошек и подписей); `closed` и неизвестные — null. */
+export function groupOfCategory(slug: string): Group | null {
+  return GROUPS.find((g) => g.categories.includes(slug as CategorySlug)) ?? null
+}
 export const entryHref = (e: { category: string; slug: string }) => `${DIRECTORY_BASE}${e.category}/${e.slug}/`
 
 // ─────────────────────────── подразделы услуг (s95 §2b, s96) ───────────────────────────
@@ -566,16 +628,10 @@ export const OWNER_FACT_NOTE = 'stated by the vendor'
 
 // ─────────────────────────── подписи ───────────────────────────
 
-const COUNTRY: Record<string, string> = {
-  AT: 'Austria', AU: 'Australia', BE: 'Belgium', CA: 'Canada', CH: 'Switzerland', CN: 'China', CZ: 'Czechia',
-  DE: 'Germany', DK: 'Denmark', EE: 'Estonia', ES: 'Spain', FI: 'Finland', FR: 'France', GB: 'United Kingdom',
-  HU: 'Hungary', IE: 'Ireland', IN: 'India', IT: 'Italy', JP: 'Japan', KR: 'South Korea', LU: 'Luxembourg',
-  LV: 'Latvia', MY: 'Malaysia', NL: 'Netherlands', NO: 'Norway', NZ: 'New Zealand', PL: 'Poland', PT: 'Portugal',
-  SE: 'Sweden', SG: 'Singapore', SI: 'Slovenia', SK: 'Slovakia', US: 'United States',
-}
+// s108 (A1): названия стран — в directoryGeo.GEO (одна таблица на каталог: страна → субрегион → континент).
 export function countryName(code: string | null | undefined): string | null {
   if (!code) return null
-  return COUNTRY[code] ?? code
+  return GEO[code]?.name ?? code
 }
 
 export const JURISDICTION_ORDER = ['EU CLP', 'GB CLP', 'US OSHA HCS', 'Canada WHMIS', 'other GHS countries'] as const
@@ -709,4 +765,30 @@ export function first(card: CardModel, kind: FactKind): DirectoryFact | null {
 
 export function jurisdictionsOf(card: CardModel): string[] {
   return (card.facts.jurisdiction ?? []).map((f) => f.value)
+}
+
+// ─────────────────────────── география для фильтров (s108, шаг A1) ───────────────────────────
+//
+// Фильтры «Based in» и «Operates in» на страницах категорий — на клиенте, прячут строки; без JS видно всё. Данные для
+// них лежат в атрибутах строки и карточки: `data-geo` (штаб-квартира: страна, субрегион, континент) и `data-ops`
+// (рынки). ⚠ Рынки берутся ТОЛЬКО из подтверждённых фактов (`printable`): рынок, который карточка не печатает, и
+// фильтром не должен быть — иначе фильтр раскрыл бы то, что сторож dir-gated-facts не пустил на страницу.
+// ⚠ `ww` — вендор называет весь мир. При выборе страны такие вендоры остаются (их заявление покрывает и её); выбор
+//   «Worldwide» оставляет только их. Правило сравнения повторено в скрипте DirectoryListing — одна строка.
+
+/** Токены штаб-квартиры записи: `c:DE r:dach k:europe` (пусто, если страна не названа). */
+export function hqTokensOf(e: Pick<DirectoryEntry, 'hq_country'>): string[] {
+  return geoTokens(e.hq_country)
+}
+
+/** Токены рынков карточки: только подтверждённые факты `market`. */
+export function opsTokensOf(card: Pick<CardModel, 'facts'>): string[] {
+  const rows = (card.facts.market ?? []).filter(printable)
+  return marketTokens(rows.map((f) => f.detail))
+}
+
+/** Короткая подпись рынков для таблицы общего вида (/directory/all/): только подтверждённые факты `market`. */
+export function opsSummaryOf(card: Pick<CardModel, 'facts'>): string {
+  const rows = (card.facts.market ?? []).filter(printable)
+  return marketSummary(rows.map((f) => f.detail))
 }

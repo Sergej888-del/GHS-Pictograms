@@ -79,7 +79,10 @@ import {
   SUBCATEGORIES as DIR_SUBCATEGORIES, SUBCATEGORY_PARENT as DIR_SUB_PARENT, ORDER_NOTE as DIR_ORDER_NOTE,
   ALSO_IN_NOTE as DIR_ALSO_IN_NOTE, effectiveTier as dirEffectiveTier, alsoInCategories as dirAlsoIn,
   entriesInCategory as dirEntriesIn, ownerProfileShown as dirOwnerShown, ownerDescriptionProblems as dirOwnerDescProblems,
+  hqTokensOf as dirHqTokens,
 } from '../src/lib/directoryModel'
+// s108 (A1b): география общего вида /directory/all/ — те же функции, по которым собрана страница.
+import { marketTokens as dirMarketTokens } from '../src/lib/directoryGeo'
 import type { LcssRecord } from '../src/lib/lcssProperties'
 // ⚠⚠ Раскладка «код знака → файл» берётся ИЗ ТОГО ЖЕ модуля, что и страница.
 // Списать сюда список кодов — значит завести вторую копию словаря, которая
@@ -8717,6 +8720,87 @@ const CHECKS: Check[] = [
       return {
         id: 'dir-sitemap', group: 'Directory', ok: problems.length === 0,
         headline: problems.length === 0 ? `sitemap: хаб + ${DIR_CATEGORIES.length} категорий + ${DIR_SUBCATEGORIES.length} подраздела, записи по правилу 6` : `проблем: ${problems.length}`,
+        detail: problems.slice(0, 30),
+      }
+    },
+  },
+  {
+    id: 'dir-all',
+    group: 'Directory',
+    title: 'Общий вид /directory/all/ (s108): закрыт от индекса и вне sitemap; каждая живая запись ровно раз, в порядке каталога; география строк = география базы',
+    run: async () => {
+      const rows = await selectAll<{
+        id: number; slug: string; category: string; state: string; tier: string; title: string; hq_country: string | null
+        claimed_on: string | null; owner_confirmed_on: string | null; featured_until: string | null
+      }>('directory_entries', 'id, slug, category, state, tier, title, hq_country, claimed_on, owner_confirmed_on, featured_until', (q) => q.order('id'))
+      const facts = await selectAll<{ entry_id: number; kind: string; confirmed: boolean | null; source_kind: string | null; provided_by: string | null; detail: string | null }>(
+        'directory_facts', 'id, entry_id, kind, confirmed, source_kind, provided_by, detail', (q) => q.eq('kind', 'market').order('id'))
+      const problems: string[] = []
+      const html = readPage('directory/all/index.html')
+      if (!html) return { id: 'dir-all', group: 'Directory', ok: false, headline: 'нет dist/directory/all/index.html', detail: [] }
+
+      // ① Страница закрыта от индекса и не объявлена в sitemap (решение Сергея 13.10, правило s105 п. 5).
+      if (!/<meta[^>]+name="robots"[^>]+content="noindex/i.test(html)) problems.push('нет <meta name="robots" content="noindex…">')
+      if (!html.includes('rel="canonical" href="https://ghspictograms.com/directory/all/"')) problems.push('canonical не /directory/all/')
+      const sitemap = existsSync(join(DIST, 'sitemap.xml')) ? readFileSync(join(DIST, 'sitemap.xml'), 'utf8') : ''
+      if (sitemap.includes('/directory/all/')) problems.push('/directory/all/ попала в sitemap (страница под noindex)')
+
+      // ② Фраза о порядке и принцип — как на страницах категорий.
+      if (!html.includes(DIR_ORDER_NOTE)) problems.push('нет ORDER_NOTE дословно')
+      if (!html.includes('data-dir-principle')) problems.push('нет «Listed, not ranked»')
+
+      // ③ Строки: живые записи, каждая один раз, в порядке orderEntries.
+      const live = rows.filter((r) => r.state === 'live')
+      const expectedOrder = dirOrderEntries(live.map((r) => ({ ...r, tier: r.tier as any }))).map((r) => r.id)
+      const chunks = html.split('<tr').slice(1).filter((c) => c.slice(0, c.indexOf('>') + 1).includes('data-dir-all-row='))
+      const heads = chunks.map((c) => c.slice(0, c.indexOf('<td')))
+      const ids = heads.map((h) => Number(h.match(/data-dir-all-row="(\d+)"/)?.[1]))
+      if (ids.length !== live.length) problems.push(`строк ${ids.length}, живых записей ${live.length}`)
+      if (new Set(ids).size !== ids.length) problems.push('есть повторяющиеся строки')
+      if (ids.join(',') !== expectedOrder.join(',')) problems.push('порядок строк не совпадает с orderEntries')
+
+      // ④ География каждой строки = география базы (штаб-квартира; рынки — только напечатанные факты).
+      const byId = new Map(rows.map((r) => [r.id, r]))
+      const attr = (h: string, name: string) => h.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? ''
+      let geoRows = 0
+      let opsRows = 0
+      heads.forEach((h, i) => {
+        const r = byId.get(ids[i])
+        if (!r) { problems.push(`строка ${ids[i]}: записи нет в базе`); return }
+        const tag = `#${r.id} ${r.slug}`
+        const wantGeo = dirHqTokens(r).join(' ')
+        if (attr(h, 'data-geo') !== wantGeo) problems.push(`${tag}: data-geo «${attr(h, 'data-geo')}», база даёт «${wantGeo}»`)
+        const mk = facts.filter((f) => f.entry_id === r.id && dirPrintable(f as any)).map((f) => f.detail)
+        const wantOps = dirMarketTokens(mk).join(' ')
+        if (attr(h, 'data-ops') !== wantOps) problems.push(`${tag}: data-ops «${attr(h, 'data-ops')}», подтверждённые рынки дают «${wantOps}»`)
+        if (attr(h, 'data-section') !== r.category) problems.push(`${tag}: data-section «${attr(h, 'data-section')}», категория ${r.category}`)
+        if (wantGeo) geoRows++
+        if (wantOps) opsRows++
+      })
+
+      // ⑤ Ссылки на вендоров: nofollow и метка места; факты со статусом «подтверждено» здесь не печатаются вовсе.
+      for (const tag of html.match(/<a [^>]*data-dir-out="[^"]*"[^>]*>/g) ?? []) {
+        if (!/\brel="[^"]*\bnofollow\b/.test(tag)) problems.push(`ссылка на вендора без nofollow: ${tag.slice(0, 90)}`)
+        if (!/\bdata-dir-place="table"/.test(tag)) problems.push(`ссылка на вендора без data-dir-place="table": ${tag.slice(0, 90)}`)
+      }
+      if (html.includes('data-fid=')) problems.push('на общем виде напечатан факт (data-fid): здесь только таблица')
+
+      // ⑥ Хаб ведёт сюда: форма «Find by country» и ссылка на весь список.
+      const hub = readPage('directory/index.html') ?? ''
+      if (!hub.includes('data-dir-find') || !hub.includes('action="/directory/all/"')) problems.push('на /directory/ нет формы «Find by country» → /directory/all/')
+      if (!hub.includes('data-dir-find-all')) problems.push('на /directory/ нет ссылки «Browse all»')
+      // Страницы категорий и подразделов (кроме архива) ведут на общий вид — иначе фильтр по странице не найти.
+      for (const c of DIR_CATEGORIES) {
+        if (c.slug === 'closed') continue
+        const page = readPage(`directory/${c.slug}/index.html`) ?? ''
+        if (!page.includes('data-dir-all-link')) problems.push(`/directory/${c.slug}/: нет ссылки на общий вид (data-dir-all-link)`)
+      }
+
+      return {
+        id: 'dir-all', group: 'Directory', ok: problems.length === 0,
+        headline: problems.length === 0
+          ? `${ids.length} строк в порядке каталога; штаб-квартира названа у ${geoRows}, рынки — у ${opsRows}; noindex, вне sitemap`
+          : `проблем: ${problems.length}`,
         detail: problems.slice(0, 30),
       }
     },

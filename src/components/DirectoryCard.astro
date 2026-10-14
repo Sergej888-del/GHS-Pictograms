@@ -24,8 +24,9 @@
 import {
   type CardModel, type FactKind, AFFILIATE_NOTE, ALSO_IN_NOTE, CLAIMED_NOTE, LISTED_NOTE, LOGO_BASE, SCREENSHOT_BASE, OWNER_FACT_NOTE,
   JURISDICTION_SHORT, REGULATION_LABEL, SOURCE_KIND_LABEL, TAG_LABEL, categoryBySlug, categoryHref, countryName, effectiveTier, entryHref,
-  first, formatDate, jurisdictionsOf, outboundLink, ownerProfileShown, ownerStated, printable,
+  first, formatDate, hqTokensOf, jurisdictionsOf, opsTokensOf, outboundLink, ownerProfileShown, ownerStated, printable,
 } from '../lib/directoryModel'
+import { geoSearchWords } from '../lib/directoryGeo'
 
 interface Props {
   card: CardModel
@@ -109,7 +110,10 @@ const claimText = claim ? claim.value.replace(/^named:\s*/i, 'Countries named: '
 const langText = lang ? lang.value.replace(/\s*\(no count stated\)/i, '') : null
 const closedBadge = e.closed_on ? 'Closed ' + formatDate(e.closed_on) : 'Closed'
 const jurisData = juris.map((j) => (JURISDICTION_SHORT[j] ?? j).toLowerCase().replace(/\s+/g, '-')).join(' ')
-const searchBlob = [e.title, e.vendor, country, e.description, ...juris, ...features.map((x) => x.value), market?.value ?? '']
+// s108 (A1): токены для фильтров «Based in» (штаб-квартира) и «Operates in» (подтверждённые рынки) — см. directoryModel.
+const geoData = hqTokensOf(e).join(' ')
+const opsData = opsTokensOf(card).join(' ')
+const searchBlob = [e.title, e.vendor, country, ...geoSearchWords(e.hq_country), e.description, ...juris, ...features.map((x) => x.value), market?.value ?? '']
   .filter(Boolean)
   .join(' | ')
   .toLowerCase()
@@ -129,6 +133,8 @@ const hasDetails =
   data-dir-also-in={primary ? e.category : undefined}
   data-juris={jurisData}
   data-country={e.hq_country ?? ''}
+  data-geo={geoData}
+  data-ops={opsData}
   data-search={searchBlob}
 >
   <header class="dir-card-head">

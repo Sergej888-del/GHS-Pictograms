@@ -59,6 +59,26 @@
   text-transform: none;
   color: var(--ink);
 }
+/* Галочка рядом с фильтром (s108): тот же ряд, но обычным шрифтом, не заглавными буквами. */
+.dir-filters label.dir-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 9px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.dir-filters label.dir-inline input[type="checkbox"] {
+  min-width: 0;
+  width: auto;
+  padding: 0;
+  margin: 0;
+}
 .dir-filters .dir-count {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -553,3 +573,91 @@
 .dir-logo img { width: auto; height: 30px; max-width: 168px; }
 .dir-card.is-claimed .dir-logo { background: #ffffff; }
 @media (max-width: 640px) { .dir-card-name { flex-wrap: wrap; } }
+
+/* ── Общий вид и поиск по странам (s108, шаг A1b) ── */
+.dir-filters .dir-reset {
+  align-self: end;
+  margin-bottom: 1px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: #ffffff;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.dir-filters .dir-reset:hover { border-color: var(--teal-600); color: var(--teal-700); }
+.dir-filters .dir-reset[hidden] { display: none; }
+
+.dir-table-all { min-width: 760px; }
+.dir-table-all td.c-name .dir-all-ver {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #fef3c7;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .04em;
+  color: #92400e;
+  white-space: nowrap;
+}
+.dir-table-all td a:not(.dir-out-mini) { color: var(--ink); text-decoration: none; }
+.dir-table-all td a:not(.dir-out-mini):hover { color: var(--teal-700); text-decoration: underline; }
+
+.dir-find {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 14px;
+  align-items: end;
+  margin: 18px 0 8px;
+  padding: 18px 20px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(15, 23, 41, .06);
+}
+.dir-find .dir-find-head { flex: 1 1 100%; }
+.dir-find .dir-find-head h3 { margin: 0 0 4px; font-family: var(--font-heading); font-size: 17px; color: var(--ink); }
+.dir-find .dir-find-head p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink-2); max-width: 760px; }
+.dir-find label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.dir-find select {
+  min-width: 200px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px 10px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+.dir-find .dir-find-go {
+  padding: 9px 16px;
+  border: 1px solid var(--teal-600);
+  border-radius: 8px;
+  background: var(--teal-600);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+}
+.dir-find .dir-find-go:hover { background: var(--teal-700); border-color: var(--teal-700); }
+.dir-find .dir-find-all { align-self: center; font-size: 14px; color: var(--teal-700); }
+@media (max-width: 560px) {
+  .dir-find select { min-width: 0; width: 100%; }
+  .dir-find label { flex: 1 1 100%; }
+}

@@ -8,14 +8,16 @@
 // ⚠ Порядок карточек и строк — тот, в котором пришли `cards` (orderEntries у вызывающей страницы). Таблица и
 //   карточки идут в ОДНОМ порядке; сторож dir-order проверяет его по data-dir-row / data-dir-entry.
 // ⚠ Фраза о порядке (ORDER_NOTE) печатается здесь дословно — сторож dir-order ищет её на каждой странице списка.
-// ⚠ Фильтры — на клиенте, только прячут строки; без JS видно всё.
+// ⚠ Фильтры — на клиенте, только прячут строки; без JS видно всё. Панель — DirectoryFilters, скрипт — directoryFilterClient (s108).
 // ⚠ `inCategory` — слуг категории страницы: карточка записи из другой основной категории (`also_in`) получает
 //   пометку «Also listed under …» (DirectoryCard).
 import DirectoryCard from './DirectoryCard.astro'
+import DirectoryFilters from './DirectoryFilters.astro'
 import {
-  type CardModel, JURISDICTION_ORDER, JURISDICTION_SHORT, ORDER_NOTE, countryName, effectiveTier, first, jurisdictionsOf,
-  languageShort, outboundLink, formatDate
+  type CardModel, JURISDICTION_ORDER, JURISDICTION_SHORT, ORDER_NOTE, countryName, effectiveTier, first, hqTokensOf, jurisdictionsOf,
+  languageShort, opsTokensOf, outboundLink, formatDate
 } from '../lib/directoryModel'
+import { geoFilterOptions, geoProblems, geoSearchWords } from '../lib/directoryGeo'
 
 export interface ListingGroup {
   id: string
@@ -42,9 +44,17 @@ interface Props {
 const { cards, sponsoredCards, groups, isClosed, inCategory, compareNo = '01', listNo = '02' } = Astro.props
 const n = cards.length
 const juris = (c: CardModel) => jurisdictionsOf(c).map((j) => (JURISDICTION_SHORT[j] ?? j).toLowerCase().replace(/\s+/g, '-')).join(' ')
-const countries = [...new Set(cards.map((c) => c.entry.hq_country).filter(Boolean) as string[])]
-  .map((c) => ({ code: c, name: countryName(c) ?? c }))
-  .sort((a, b) => a.name.localeCompare(b.name))
+// s108 (A1): фильтры «Based in» (страна → субрегион → континент) и «Operates in» (подтверждённые рынки вендора).
+// Опции строятся из того, что есть на этой странице; число в скобках — сколько строк останется при выборе.
+// ⚠ Неизвестный код страны роняет сборку: иначе запись молча выпала бы из фильтра (таблица — directoryGeo.GEO).
+const geoBad = geoProblems(cards.map((c) => c.entry.hq_country), (cards.flatMap((c) => c.facts.market ?? [])).map((f) => f.detail))
+if (geoBad.length) throw new Error(`directory: ${geoBad.join('; ')}`)
+const hqOf = cards.map((c) => hqTokensOf(c.entry))
+const opsOf = cards.map((c) => opsTokensOf(c))
+// Опции — directoryGeo.geoFilterOptions; «Operates in»: вендор с `ww` («worldwide») остаётся при выборе любой страны.
+const hqOpts = geoFilterOptions(hqOf, false)
+const opsOpts = geoFilterOptions(opsOf, true)
+const opsStated = opsOf.filter((t) => t.length > 0).length
 const jurisPresent = JURISDICTION_ORDER.filter((j) => cards.some((c) => jurisdictionsOf(c).includes(j)))
 ---
 
@@ -58,34 +68,11 @@ const jurisPresent = JURISDICTION_ORDER.filter((j) => cards.some((c) => jurisdic
         the full card with the source of every line, or go straight to the vendor’s site from the last column.
       </p>
 
-      <div class="dir-filters" data-dir-filters>
-        {jurisPresent.length > 0 && (
-          <label>Covers
-            <select data-filter="juris">
-              <option value="">Any jurisdiction</option>
-              {jurisPresent.map((j) => <option value={(JURISDICTION_SHORT[j] ?? j).toLowerCase().replace(/\s+/g, '-')}>{j}</option>)}
-            </select>
-          </label>
-        )}
-        {countries.length > 1 && (
-          <label>Based in
-            <select data-filter="country">
-              <option value="">Any country</option>
-              {countries.map((c) => <option value={c.code}>{c.name}</option>)}
-            </select>
-          </label>
-        )}
-        <label>Verified
-          <select data-filter="tier">
-            <option value="">All listings</option>
-            <option value="verified">Verified by owner only</option>
-          </select>
-        </label>
-        <label>Search
-          <input type="search" data-filter="q" placeholder="Name, feature, country…" autocomplete="off" />
-        </label>
-        <span class="dir-count"><span data-dir-visible>{n}</span> of {n} shown</span>
-      </div>
+      <DirectoryFilters total={n} hq={hqOpts} ops={opsOpts} opsStated={opsStated} jurisdictions={jurisPresent} />
+      <p class="hub-fine dir-all-link">
+        Looking for a vendor in a country across every section?
+        <a href="/directory/all/" data-dir-all-link>Filter all listings by country →</a>
+      </p>
 
       <div class="dir-table-wrap">
         <table class="dir-table" data-dir-table>
@@ -110,7 +97,9 @@ const jurisPresent = JURISDICTION_ORDER.filter((j) => cards.some((c) => jurisdic
                   data-dir-tier={effectiveTier(e)}
                   data-juris={juris(c)}
                   data-country={e.hq_country ?? ''}
-                  data-search={[e.title, e.vendor, countryName(e.hq_country), e.description].filter(Boolean).join(' | ').toLowerCase()}
+                  data-geo={hqOf[cards.indexOf(c)].join(' ')}
+                  data-ops={opsOf[cards.indexOf(c)].join(' ')}
+                  data-search={[e.title, e.vendor, countryName(e.hq_country), ...geoSearchWords(e.hq_country), e.description].filter(Boolean).join(' | ').toLowerCase()}
                 >
                   <td class="c-name">
                     <a href={`#e-${e.slug}`}>{e.title}</a>
@@ -191,43 +180,7 @@ const jurisPresent = JURISDICTION_ORDER.filter((j) => cards.some((c) => jurisdic
 </section>
 
 <script>
-  // Фильтры: прячут строки таблицы и карточки по юрисдикции, стране, подтверждению владельцем и тексту.
-  // Без JS видно всё. «Verified only» — фильтр из синтеза s95 (vendors see the value of claiming).
-  const root = document.querySelector<HTMLElement>('[data-dir-filters]')
-  if (root) {
-    const juris = root.querySelector<HTMLSelectElement>('[data-filter="juris"]')
-    const country = root.querySelector<HTMLSelectElement>('[data-filter="country"]')
-    const tier = root.querySelector<HTMLSelectElement>('[data-filter="tier"]')
-    const q = root.querySelector<HTMLInputElement>('[data-filter="q"]')
-    const visibleEl = root.querySelector('[data-dir-visible]')
-    const empty = document.getElementById('dir-empty')
-    const rows = Array.from(document.querySelectorAll<HTMLElement>('tr[data-dir-row]'))
-    const cards = Array.from(document.querySelectorAll<HTMLElement>('article[data-dir-entry]'))
-    const match = (el: HTMLElement) => {
-      const j = juris?.value ?? ''
-      const c = country?.value ?? ''
-      const t = tier?.value ?? ''
-      const tokens = (q?.value ?? '').toLowerCase().split(/\s+/).filter(Boolean)
-      if (j && !(el.dataset.juris ?? '').split(' ').includes(j)) return false
-      if (c && el.dataset.country !== c) return false
-      if (t === 'verified' && el.dataset.dirTier === 'listed') return false
-      const blob = el.dataset.search ?? ''
-      return tokens.every((tk) => blob.includes(tk))
-    }
-    const apply = () => {
-      let n = 0
-      rows.forEach((r) => {
-        const ok = match(r)
-        r.classList.toggle('hub-hide', !ok)
-        if (ok) n++
-      })
-      cards.forEach((a) => a.classList.toggle('hub-hide', !match(a)))
-      if (visibleEl) visibleEl.textContent = String(n)
-      empty?.classList.toggle('hub-hide', n > 0)
-    }
-    juris?.addEventListener('change', apply)
-    country?.addEventListener('change', apply)
-    tier?.addEventListener('change', apply)
-    q?.addEventListener('input', apply)
-  }
+  // Фильтры — общий скрипт каталога (src/lib/directoryFilterClient.ts). Без JS видно всё.
+  import { initDirectoryFilters } from '../lib/directoryFilterClient'
+  initDirectoryFilters()
 </script>

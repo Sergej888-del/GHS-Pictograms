@@ -31,6 +31,8 @@
  * Сайт эти поля пока не читает (directoryData.ts их не выбирает) — карточки от них не меняются.
  */
 
+import { parseMarket } from './directoryGeo'
+
 export const NUM_QUALS = ['exact', 'from', 'at_least', 'up_to', 'approx', 'range'] as const
 
 /**
@@ -168,6 +170,8 @@ export function factNumberProblems(f: Loose): string[] {
     if (!has(FORMAT_VALUES, value)) p.push(`формат «${value}» вне словаря: ${FORMAT_VALUES.join(' | ')}`)
   } else if (kind === 'market' || kind === 'hosting') {
     if (!REGION_DETAIL_RE.test(String(f.detail ?? ''))) p.push(`detail «${f.detail ?? ''}» — коды ISO 3166-1 alpha-2 / EU / EEA / worldwide через запятую, либо unspecified`)
+    // s108 (A1): код должен быть в таблице directoryGeo.GEO — иначе фильтр «Operates in» молча потеряет эту страну.
+    else for (const u of parseMarket(String(f.detail ?? '')).unknown) p.push(`код «${u}» нет в таблице directoryGeo.GEO (src/lib/directoryGeo.ts) — добавить страну или исправить detail`)
   }
   return p
 }

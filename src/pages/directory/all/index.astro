@@ -1,0 +1,149 @@
+---
+// /directory/all/ — ОБЩИЙ вид каталога (s108, шаг A1b): все живые записи всех разделов в одной таблице, с фильтрами по
+// разделу, стране штаб-квартиры («Based in») и рынкам («Operates in»). Выбрал Германию — видишь всех вендоров из
+// Германии, по всем темам и услугам сразу.
+//
+// ⚠ ЗАКРЫТА ОТ ИНДЕКСА (noindex, follow) и НЕ в sitemap — решение Сергея 13.10 (правило s105 п. 5: пока индекс Google
+//   не восстановится, новые массовые страницы в sitemap не кладём). Это инструмент для читателя, не страница под поиск.
+//   Открыть позже — убрать мета-тег ниже, добавить адрес в sitemap.xml.ts и поправить сторож dir-all.
+// ⚠ Порядок — orderEntries (заявленные первыми по дате подтверждения, остальные по алфавиту), ORDER_NOTE дословно.
+//   Каждая запись стоит ОДИН раз — под своей основной категорией (дополнительные категории `also_in` здесь не размножают строки).
+// ⚠ Строка ведёт на страницу записи; клик «Visit ↗» помечен data-dir-place="table" — тот же счётчик, что у таблиц категорий.
+import Layout from '../../../layouts/Layout.astro'
+import DirectoryFilters from '../../../components/DirectoryFilters.astro'
+import '../../../styles/directory.css'
+import {
+  CATEGORIES, SITE, buildCard, categoryBySlug, categoryHref, countryName, effectiveTier, entryHref, formatDate, hqTokensOf,
+  opsSummaryOf, opsTokensOf, orderEntries, outboundLink, ORDER_NOTE,
+} from '../../../lib/directoryModel'
+import { geoFilterOptions, geoProblems, geoSearchWords } from '../../../lib/directoryGeo'
+import { loadDirectory } from '../../../lib/directoryData'
+
+export const prerender = true
+
+const { entries, facts } = await loadDirectory()
+const cards = orderEntries(entries.filter((e) => e.state === 'live')).map((e) => buildCard(e, facts))
+const n = cards.length
+
+const geoBad = geoProblems(cards.map((c) => c.entry.hq_country), cards.flatMap((c) => c.facts.market ?? []).map((f) => f.detail))
+if (geoBad.length) throw new Error(`directory: ${geoBad.join('; ')}`)
+const hqOf = cards.map((c) => hqTokensOf(c.entry))
+const opsOf = cards.map((c) => opsTokensOf(c))
+const hqOpts = geoFilterOptions(hqOf, false)
+const opsOpts = geoFilterOptions(opsOf, true)
+const opsStated = opsOf.filter((t) => t.length > 0).length
+const hqStated = hqOf.filter((t) => t.length > 0).length
+
+// Разделы с живыми записями (архив `closed` сюда не входит: там нет живых).
+const sections = CATEGORIES.filter((c) => c.slug !== 'closed')
+  .map((c) => ({ value: c.slug, label: c.short, n: cards.filter((x) => x.entry.category === c.slug).length }))
+  .filter((s) => s.n > 0)
+// ⚠ Запись в категории, которой нет в списке разделов, молча выпала бы из фильтра «Section».
+const orphan = cards.filter((c) => !sections.some((s) => s.value === c.entry.category))
+if (orphan.length) throw new Error(`directory: записи без раздела в общем виде: ${orphan.map((c) => c.entry.slug).join(', ')}`)
+
+const lastVerified = cards.map((c) => c.entry.last_verified).sort().at(-1) ?? null
+const title = 'All GHS Directory Listings by Country'
+const description = 'Every vendor in the GHS Tools & Services Directory in one list: filter by country, region, section and owner verification.'
+const canonical = `${SITE}/directory/all/`
+---
+
+<Layout title={title} description={description} canonical={canonical} titleIsComplete>
+  <Fragment slot="head">
+    <meta name="robots" content="noindex, follow" />
+  </Fragment>
+
+  <section class="hub-hero tint-teal">
+    <div class="dots-a" aria-hidden="true"></div>
+    <div class="dots-b" aria-hidden="true"></div>
+    <div class="sheen" aria-hidden="true"></div>
+    <div class="hub-wrap hub-hero-inner">
+      <p class="hub-crumb"><a href="/directory/">GHS Tools &amp; Services Directory</a><span class="sep">/</span>All listings</p>
+      <p class="hub-hero-eyebrow">Directory · Find by country</p>
+      <h1>All listings, by country and region</h1>
+      <p class="hub-hero-sub">
+        Every vendor in the directory in one list. Pick a country or region to see who is based there, or who says it works
+        there, across every section — software, services, databases and training.
+      </p>
+      <div class="hub-hero-chips">
+        <span class="hub-hero-chip">{n} listings</span>
+        <span class="hub-hero-chip" data-dir-principle>Listed, not ranked</span>
+        {lastVerified && <span class="hub-hero-chip">Last verified {formatDate(lastVerified)}</span>}
+      </div>
+    </div>
+  </section>
+
+  <section class="hub-sec-a">
+    <div class="hub-wrap">
+      <p class="hub-eyebrow">01 · Filter</p>
+      <h2 class="hub-h2">{n} listings, all sections</h2>
+      <p class="hub-sub">
+        <span data-dir-order-note>{ORDER_NOTE}</span> Each listing appears once, under its main section; open it for the full
+        card with the source of every line.
+      </p>
+
+      <DirectoryFilters total={n} hq={hqOpts} ops={opsOpts} opsStated={opsStated} sections={sections} />
+      <p class="hub-fine" data-dir-hq-note>
+        “Based in” is the country of the vendor’s head office as its own pages state it: {hqStated} of {n} listings have one
+        on record. A listing without it is hidden once you pick a place.
+      </p>
+
+      <div class="dir-table-wrap">
+        <table class="dir-table dir-table-all" data-dir-all-table>
+          <thead>
+            <tr><th>Name</th><th>Section</th><th>Based in</th><th>Operates in</th><th>Website</th></tr>
+          </thead>
+          <tbody>
+            {cards.map((c, i) => {
+              const e = c.entry
+              const tier = effectiveTier(e)
+              const out = outboundLink(e)
+              const cat = categoryBySlug(e.category)
+              const ops = opsSummaryOf(c)
+              return (
+                <tr
+                  class={tier !== 'listed' ? 'is-verified' : undefined}
+                  data-dir-all-row={e.id}
+                  data-dir-row={e.id}
+                  data-dir-title={e.title}
+                  data-dir-tier={tier}
+                  data-section={e.category}
+                  data-geo={hqOf[i].join(' ')}
+                  data-ops={opsOf[i].join(' ')}
+                  data-search={[e.title, e.vendor, countryName(e.hq_country), ...geoSearchWords(e.hq_country), cat?.short, e.description].filter(Boolean).join(' | ').toLowerCase()}
+                >
+                  <td class="c-name">
+                    <a href={entryHref(e)}>{e.title}</a>
+                    {tier !== 'listed' && <span class="dir-all-ver">Verified by owner</span>}
+                    {e.vendor && <span class="v">{e.vendor}</span>}
+                  </td>
+                  <td>{cat ? <a href={categoryHref(cat.slug)}>{cat.short}</a> : <span class="no">—</span>}</td>
+                  <td>{countryName(e.hq_country) ?? <span class="no">—</span>}</td>
+                  <td>{ops || <span class="no">—</span>}</td>
+                  <td>
+                    {out ? (
+                      <a class="dir-out-mini" href={out.href} rel={out.rel} target="_blank" data-dir-out={e.slug} data-dir-cat={e.category} data-dir-tier={tier} data-dir-place="table" title={`Open the ${e.title} website`}>Visit ↗</a>
+                    ) : (
+                      <span class="no">—</span>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p id="dir-empty" class="hub-note hub-hide">Nothing matches these filters. Use “Clear filters” to start again.</p>
+      <p class="hub-fine">
+        “—” means the vendor’s pages did not state it when we checked. A listing is placed by what its vendor publishes, never
+        by a score. Looking for one section only? <a href="/directory/">Back to the directory home</a>.
+      </p>
+    </div>
+  </section>
+</Layout>
+
+<script>
+  // Общий скрипт фильтров каталога; syncUrl — выбор живёт в адресе (?geo=c:DE), чтобы им можно было поделиться.
+  import { initDirectoryFilters } from '../../../lib/directoryFilterClient'
+  initDirectoryFilters({ syncUrl: true })
+</script>

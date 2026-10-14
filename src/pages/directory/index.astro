@@ -11,7 +11,11 @@
 import Layout from '../../layouts/Layout.astro'
 import DirectoryClaimForm from '../../components/DirectoryClaimForm'
 import '../../styles/directory.css'
-import { CATEGORIES, SITE, SUBCATEGORIES, categoryHref, entriesInCategory, formatDate, subcategoryHref } from '../../lib/directoryModel'
+import {
+  CATEGORIES, SITE, SUBCATEGORIES, buildCard, categoryBySlug, categoryHref, entriesInCategory, formatDate, groupOfCategory,
+  hqTokensOf, opsTokensOf, subcategoryHref, visibleGroups,
+} from '../../lib/directoryModel'
+import { geoFilterOptions, geoProblems } from '../../lib/directoryGeo'
 import { loadDirectory } from '../../lib/directoryData'
 import { LEGAL_QUOTES, LEGAL_SUMMARY, LEGAL_DISCLAIMER, LEGAL_CHECKED } from '../../lib/directoryLegal'
 
@@ -27,6 +31,32 @@ const notListed = entries
 // итоги «listed» выше — уникальные записи.
 const count = (slug: string) => entriesInCategory(entries, slug, facts).length
 const lastVerified = entries.map((e) => e.last_verified).sort().at(-1) ?? null
+
+// s108 (A1): четыре группы навигации — СЛОЙ над категориями (адреса не меняются, directoryModel.GROUPS). Группа без живых
+// категорий не печатается; `closed` — не группа, а архив под группами. Запись в нескольких категориях одной группы
+// считается один раз (число группы = уникальные записи основных категорий).
+const NUM_WORD = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']
+const shownGroups = visibleGroups()
+const groupCount = (slugs: readonly string[]) => new Set(slugs.flatMap((s) => entriesInCategory(entries, s, facts).map((e) => e.id))).size
+const tile = (slug: string, also: boolean) => {
+  const c = categoryBySlug(slug)!
+  return { c, also, other: also ? groupOfCategory(slug)?.name ?? null : null, n: count(slug) }
+}
+const groupTiles = shownGroups.map((g) => ({
+  g,
+  n: groupCount(g.categories),
+  tiles: [...g.categories.map((s) => tile(s, false)), ...(g.alsoCategories ?? []).map((s) => tile(s, true))],
+}))
+const archiveTile = tile('closed', false)
+const sectionsTitle = `${NUM_WORD[CATEGORIES.length][0].toUpperCase()}${NUM_WORD[CATEGORIES.length].slice(1)} sections in ${NUM_WORD[shownGroups.length]} groups, one set of rules`
+
+// s108 (A1b): форма «Find by country or region» ведёт на общий вид /directory/all/ (?geo=…&ops=…). Опции — по ВСЕМ живым
+// записям; число в скобках — сколько вендоров покажет общий вид. Неизвестный код страны роняет сборку (как в DirectoryListing).
+const liveCards = listed.map((e) => buildCard(e, facts))
+const geoBad = geoProblems(liveCards.map((c) => c.entry.hq_country), liveCards.flatMap((c) => c.facts.market ?? []).map((f) => f.detail))
+if (geoBad.length) throw new Error(`directory: ${geoBad.join('; ')}`)
+const findHq = geoFilterOptions(liveCards.map((c) => hqTokensOf(c.entry)), false)
+const findOps = geoFilterOptions(liveCards.map((c) => opsTokensOf(c)), true)
 
 const title = 'GHS Tools & Services Directory — Listed, Not Ranked'
 const description =
@@ -82,16 +112,77 @@ const jsonLd = {
   <section class="hub-sec-a">
     <div class="hub-wrap">
       <p class="hub-eyebrow">01 · Sections</p>
-      <h2 class="hub-h2">Seven sections, one set of rules</h2>
-      <div class="hub-cards four">
-        {CATEGORIES.map((c) => (
-          <a class="hub-card" href={categoryHref(c.slug)}>
-            <p class="tag">{c.eyebrow.replace('Directory · ', '')}</p>
-            <h3>{c.h1.charAt(0).toUpperCase() + c.h1.slice(1)}</h3>
-            <p class="copy">{c.description}</p>
-            <p class="dir-cat-n">{count(c.slug)} {c.slug === 'closed' ? 'entries' : 'listings'}</p>
+      <h2 class="hub-h2">{sectionsTitle}</h2>
+      <form class="dir-find" method="get" action="/directory/all/" data-dir-find>
+        <div class="dir-find-head">
+          <h3>Looking for a vendor in a particular country?</h3>
+          <p>
+            Pick a country or region and see every vendor across all sections — software, services, databases and training —
+            in one list. <strong>Based in</strong> is where the vendor’s head office is; <strong>Operates in</strong> is the
+            markets the vendor names on its own pages.
+          </p>
+        </div>
+        <label>Based in
+          <select name="geo" data-dir-find-geo>
+            <option value="">Anywhere</option>
+            {findHq.continents.length > 1 && (
+              <optgroup label="Continents">{findHq.continents.map((o) => <option value={o.value}>{o.label} ({o.n})</option>)}</optgroup>
+            )}
+            {findHq.regions.length > 1 && (
+              <optgroup label="Regions">{findHq.regions.map((o) => <option value={o.value}>{o.label} ({o.n})</option>)}</optgroup>
+            )}
+            <optgroup label="Countries">{findHq.countries.map((o) => <option value={o.value}>{o.label} ({o.n})</option>)}</optgroup>
+          </select>
+        </label>
+        <label>Operates in
+          <select name="ops" data-dir-find-ops>
+            <option value="">Anywhere</option>
+            {findOps.extra.length > 0 && (
+              <optgroup label="Stated by the vendor">{findOps.extra.map((o) => <option value={o.value}>{o.label} ({o.n})</option>)}</optgroup>
+            )}
+            {findOps.continents.length > 1 && (
+              <optgroup label="Continents">{findOps.continents.map((o) => <option value={o.value}>{o.label} ({o.n})</option>)}</optgroup>
+            )}
+            {findOps.regions.length > 1 && (
+              <optgroup label="Regions">{findOps.regions.map((o) => <option value={o.value}>{o.label} ({o.n})</option>)}</optgroup>
+            )}
+            <optgroup label="Countries">{findOps.countries.map((o) => <option value={o.value}>{o.label} ({o.n})</option>)}</optgroup>
+          </select>
+        </label>
+        <button type="submit" class="dir-find-go">Show vendors</button>
+        <a class="dir-find-all" href="/directory/all/" data-dir-find-all>Browse all {listed.length} listings →</a>
+      </form>
+      {groupTiles.map(({ g, n, tiles }) => (
+        <div data-dir-hub-group={g.slug}>
+          <div class="dir-group-head">
+            <h3 class="hub-h2" id={`g-${g.slug}`}>{g.name} <span class="dir-cat-n">{n}</span></h3>
+            <p class="dir-group-rule">{g.blurb}</p>
+          </div>
+          <div class="hub-cards four">
+            {tiles.map(({ c, also, other, n: tn }) => (
+              <a class="hub-card" href={categoryHref(c.slug)}>
+                <p class="tag">{c.eyebrow.replace('Directory · ', '')}{also && other ? ` · mainly under ${other}` : ''}</p>
+                <h3>{c.h1.charAt(0).toUpperCase() + c.h1.slice(1)}</h3>
+                <p class="copy">{c.description}</p>
+                <p class="dir-cat-n">{tn} listings</p>
+              </a>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div data-dir-hub-group="archive">
+        <div class="dir-group-head">
+          <h3 class="hub-h2" id="g-archive">Archive</h3>
+          <p class="dir-group-rule">Resources that closed or moved, kept on purpose: library guides still link to them.</p>
+        </div>
+        <div class="hub-cards four">
+          <a class="hub-card" href={categoryHref(archiveTile.c.slug)}>
+            <p class="tag">{archiveTile.c.eyebrow.replace('Directory · ', '')}</p>
+            <h3>{archiveTile.c.h1.charAt(0).toUpperCase() + archiveTile.c.h1.slice(1)}</h3>
+            <p class="copy">{archiveTile.c.description}</p>
+            <p class="dir-cat-n">{archiveTile.n} entries</p>
           </a>
-        ))}
+        </div>
       </div>
       <p class="hub-fine dir-hub-subs" data-dir-hub-subs>
         Services are split into four sections:

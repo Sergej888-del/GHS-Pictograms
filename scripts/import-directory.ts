@@ -55,6 +55,7 @@ import {
 import {
   NUMERIC_FACT_COLS, TERMS_ENTRY_COLS, entryTermsProblems, factNumberProblems,
 } from '../src/lib/directoryNumbers'
+import { geoProblems } from '../src/lib/directoryGeo'
 
 config({ path: resolve(process.cwd(), '.env.local') })
 config()
@@ -132,6 +133,9 @@ console.log(`  заявленных ${entries.filter((e) => e.tier !== 'listed')
 // ── s103: числа рядом с текстом и условия вендора ──
 const numBad = facts.flatMap((f) => factNumberProblems(f).map((p) => `факт #${f.id} (${f.kind} «${f.value}»): ${p}`))
 const termsBad = entries.flatMap((e) => entryTermsProblems(e).map((p) => `запись #${e.id}: ${p}`))
+// s108 (A1): страна штаб-квартиры — только из таблицы directoryGeo.GEO (market / hosting проверяет factNumberProblems).
+const geoBad = geoProblems(entries.map((e) => e.hq_country as string | null), [])
+if (geoBad.length) die(`страна не из таблицы GEO:\n  ${geoBad.join('\n  ')}`)
 if (numBad.length || termsBad.length) die(`числовые поля не принимаются:\n  ${[...numBad, ...termsBad].slice(0, 20).join('\n  ')}${numBad.length + termsBad.length > 20 ? `\n  … и ещё ${numBad.length + termsBad.length - 20}` : ''}`)
 const priced = facts.filter((f) => f.kind === 'price' && f.num != null).length
 const langs = facts.filter((f) => f.kind === 'language' && f.num != null).length
