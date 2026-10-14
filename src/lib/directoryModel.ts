@@ -40,7 +40,7 @@
 // печатаются — даже подтверждённые. Под цитатой читатель видит, из какого документа она.
 
 import { GEO, geoTokens, marketSummary, marketTokens } from './directoryGeo'
-import { SERVICE_FACT_KINDS, SERVICE_REGIMES } from './directoryNumbers'
+import { SERVICE_FACT_KINDS, SERVICE_REGIMES, SERVICE_SCOPE_VALUES } from './directoryNumbers'
 
 export const DIRECTORY_BASE = '/directory/'
 export const SITE = 'https://ghspictograms.com'
@@ -813,4 +813,51 @@ export function opsTokensOf(card: Pick<CardModel, 'facts'>): string[] {
 export function opsSummaryOf(card: Pick<CardModel, 'facts'>): string {
   const rows = (card.facts.market ?? []).filter(printable)
   return marketSummary(rows.map((f) => f.detail))
+}
+
+// ─────────────────────────── Service and Regime filters (s109, A2.2) ───────────────────────────
+//
+// «Service» and «Regime» on the list pages hide rows on the client, like «Operates in». The data sits in `data-svc` on the
+// row and on the card: up to three tokens per confirmed service_scope fact —
+//   <slug>            the service                        («only-representative»)
+//   <slug>@<regime>   the service for one regime         («only-representative@uk_reach»)
+//   @<regime>         any service for that regime        («@uk_reach»)
+// ⚠ Only confirmed facts (`printable`): a service the card does not print must not be a filter either (the dir-gated-facts
+//   idea, same as opsTokensOf). The dir-service-filter guard in check-dist compares every data-svc with the database.
+// ⚠ The client rule (directoryFilterClient.match) picks the token from the two selects: both → <slug>@<regime>,
+//   service only → <slug>, regime only → @<regime>. Change one, change the other.
+
+/** Token of a service: «Poison centre notification (PCN)» → «poison-centre-notification-pcn». */
+export function serviceSlug(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+}
+
+/** Filter tokens of a card, from confirmed service_scope facts only. */
+export function serviceTokensOf(card: Pick<CardModel, 'facts'>): string[] {
+  const out: string[] = []
+  const add = (t: string) => { if (!out.includes(t)) out.push(t) }
+  for (const f of (card.facts.service_scope ?? []).filter(printable)) {
+    const slug = serviceSlug(f.value)
+    add(slug)
+    for (const code of (f.detail ?? '').split(',').map((c) => c.trim()).filter(Boolean)) {
+      add(`${slug}@${code}`)
+      add(`@${code}`)
+    }
+  }
+  return out
+}
+
+export interface ServiceOption { value: string; label: string; n: number }
+
+/** Options of the two selects, from the token lists of the cards on one page. A value nobody on the page offers is not an option. */
+export function serviceFilterOptions(tokensOf: readonly (readonly string[])[]): { services: ServiceOption[]; regimes: ServiceOption[] } {
+  const count = (token: string) => tokensOf.filter((t) => t.includes(token)).length
+  const services = SERVICE_SCOPE_VALUES.map((v) => ({ value: serviceSlug(v), label: String(v), n: count(serviceSlug(v)) })).filter((o) => o.n > 0)
+  const regimes = Object.keys(SERVICE_REGIMES).map((c) => ({ value: c, label: SERVICE_REGIMES[c], n: count(`@${c}`) })).filter((o) => o.n > 0)
+  return { services, regimes }
+}
+
+/** Words for the search field of a row: the services and regimes the card prints. */
+export function serviceSearchWords(card: Pick<CardModel, 'facts'>): string[] {
+  return (card.facts.service_scope ?? []).filter(printable).map(serviceScopeText)
 }

@@ -15,7 +15,7 @@ import DirectoryCard from './DirectoryCard.astro'
 import DirectoryFilters from './DirectoryFilters.astro'
 import {
   type CardModel, JURISDICTION_ORDER, JURISDICTION_SHORT, ORDER_NOTE, countryName, effectiveTier, first, hqTokensOf, jurisdictionsOf,
-  languageShort, opsTokensOf, outboundLink, formatDate
+  languageShort, opsTokensOf, outboundLink, formatDate, serviceFilterOptions, serviceSearchWords, serviceTokensOf
 } from '../lib/directoryModel'
 import { geoFilterOptions, geoProblems, geoSearchWords } from '../lib/directoryGeo'
 
@@ -55,6 +55,10 @@ const opsOf = cards.map((c) => opsTokensOf(c))
 const hqOpts = geoFilterOptions(hqOf, false)
 const opsOpts = geoFilterOptions(opsOf, true)
 const opsStated = opsOf.filter((t) => t.length > 0).length
+// s109 (A2.2): «Service» and «Regime» come from confirmed service_scope facts; no field when nobody on the page states a service.
+const svcOf = cards.map((c) => serviceTokensOf(c))
+const svcOpts = serviceFilterOptions(svcOf)
+const svcStated = svcOf.filter((t) => t.length > 0).length
 const jurisPresent = JURISDICTION_ORDER.filter((j) => cards.some((c) => jurisdictionsOf(c).includes(j)))
 ---
 
@@ -68,7 +72,7 @@ const jurisPresent = JURISDICTION_ORDER.filter((j) => cards.some((c) => jurisdic
         the full card with the source of every line, or go straight to the vendor’s site from the last column.
       </p>
 
-      <DirectoryFilters total={n} hq={hqOpts} ops={opsOpts} opsStated={opsStated} jurisdictions={jurisPresent} />
+      <DirectoryFilters total={n} hq={hqOpts} ops={opsOpts} opsStated={opsStated} jurisdictions={jurisPresent} services={svcOpts.services} regimes={svcOpts.regimes} svcStated={svcStated} />
       <p class="hub-fine dir-all-link">
         Looking for a vendor in a country across every section?
         <a href="/directory/all/" data-dir-all-link>Filter all listings by country →</a>
@@ -99,7 +103,8 @@ const jurisPresent = JURISDICTION_ORDER.filter((j) => cards.some((c) => jurisdic
                   data-country={e.hq_country ?? ''}
                   data-geo={hqOf[cards.indexOf(c)].join(' ')}
                   data-ops={opsOf[cards.indexOf(c)].join(' ')}
-                  data-search={[e.title, e.vendor, countryName(e.hq_country), ...geoSearchWords(e.hq_country), e.description].filter(Boolean).join(' | ').toLowerCase()}
+                  data-svc={svcOf[cards.indexOf(c)].join(' ')}
+                  data-search={[e.title, e.vendor, countryName(e.hq_country), ...geoSearchWords(e.hq_country), e.description, ...serviceSearchWords(c)].filter(Boolean).join(' | ').toLowerCase()}
                 >
                   <td class="c-name">
                     <a href={`#e-${e.slug}`}>{e.title}</a>

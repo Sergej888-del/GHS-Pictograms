@@ -5,7 +5,9 @@
 //
 // Что делает: читает значения полей внутри [data-dir-filters] и прячет строки таблицы (tr[data-dir-row]) и карточки
 // (article[data-dir-entry]), у которых data-атрибуты не подходят. Без JS видно всё.
-// Поля: select[data-filter] = juris | geo | ops | tier | section, галочка named, поле q, кнопка [data-dir-reset].
+// Поля: select[data-filter] = juris | geo | ops | tier | section | svc | regime, галочка named, поле q, кнопка [data-dir-reset].
+// s109: svc and regime read the tokens in data-svc (directoryModel.serviceTokensOf): both chosen → <service>@<regime>,
+//   service only → <service>, regime only → @<regime>. The page decides which selects exist; an absent select is ignored.
 //
 // ⚠ Правило «Operates in» повторяет count() в directoryGeo.geoFilterOptions: токен `ww` («worldwide») подходит под любой
 //   выбор, кроме самого «Worldwide», а галочка «Only vendors that name it» это отключает. Меняешь одно — меняй другое.
@@ -23,6 +25,8 @@ export function initDirectoryFilters({ syncUrl = false }: Opts = {}): void {
   const ops = select('ops')
   const tier = select('tier')
   const section = select('section')
+  const svc = select('svc')
+  const regime = select('regime')
   const named = root.querySelector<HTMLInputElement>('input[data-filter="named"]')
   const q = root.querySelector<HTMLInputElement>('input[data-filter="q"]')
   const reset = root.querySelector<HTMLButtonElement>('[data-dir-reset]')
@@ -30,7 +34,7 @@ export function initDirectoryFilters({ syncUrl = false }: Opts = {}): void {
   const empty = document.getElementById('dir-empty')
   const rows = Array.from(document.querySelectorAll<HTMLElement>('tr[data-dir-row]'))
   const cards = Array.from(document.querySelectorAll<HTMLElement>('article[data-dir-entry]'))
-  const selects: [string, HTMLSelectElement | null][] = [['juris', juris], ['geo', geo], ['ops', ops], ['tier', tier], ['section', section]]
+  const selects: [string, HTMLSelectElement | null][] = [['juris', juris], ['geo', geo], ['ops', ops], ['tier', tier], ['section', section], ['svc', svc], ['regime', regime]]
 
   const match = (el: HTMLElement): boolean => {
     const j = juris?.value ?? ''
@@ -46,6 +50,12 @@ export function initDirectoryFilters({ syncUrl = false }: Opts = {}): void {
       if (!(have.includes(o) || (o !== 'ww' && !named?.checked && have.includes('ww')))) return false
     }
     if (s && el.dataset.section !== s) return false
+    const sv = svc?.value ?? ''
+    const rg = regime?.value ?? ''
+    if (sv || rg) {
+      const token = sv && rg ? `${sv}@${rg}` : sv || `@${rg}`
+      if (!(el.dataset.svc ?? '').split(' ').includes(token)) return false
+    }
     if (t === 'verified' && el.dataset.dirTier === 'listed') return false
     const blob = el.dataset.search ?? ''
     return words.every((w) => blob.includes(w))
@@ -72,7 +82,7 @@ export function initDirectoryFilters({ syncUrl = false }: Opts = {}): void {
 
   const writeUrl = () => {
     if (!syncUrl) return
-    const query = queryOf(['juris', 'geo', 'ops', 'tier', 'section'])
+    const query = queryOf(['juris', 'geo', 'ops', 'tier', 'section', 'svc', 'regime'])
     history.replaceState(null, '', location.pathname + (query ? `?${query}` : ''))
   }
 

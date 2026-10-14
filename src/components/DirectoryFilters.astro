@@ -6,7 +6,7 @@
 // ⚠ Фильтр показывается, только если из него есть что выбрать (две и больше разные страны); на странице из одной страны
 //   «Based in» был бы пустой формальностью.
 // ⚠ В вёрстке нет HTML-комментариев и русских строк: сторож «русский текст в сборке» смотрит на собранные страницы.
-import { JURISDICTION_SHORT } from '../lib/directoryModel'
+import { JURISDICTION_SHORT, type ServiceOption } from '../lib/directoryModel'
 import type { GeoOptions } from '../lib/directoryGeo'
 
 interface Props {
@@ -20,8 +20,13 @@ interface Props {
   jurisdictions?: string[]
   /** Разделы (поле «Section», только общий вид): value = слаг категории. */
   sections?: { value: string; label: string; n: number }[]
+  /** s109: Service and Regime options from confirmed service_scope facts (directoryModel.serviceFilterOptions); empty — no field. */
+  services?: ServiceOption[]
+  regimes?: ServiceOption[]
+  /** How many listings of the page state a service (the note under the panel). */
+  svcStated?: number
 }
-const { total, hq, ops, opsStated, jurisdictions = [], sections = [] } = Astro.props
+const { total, hq, ops, opsStated, jurisdictions = [], sections = [], services = [], regimes = [], svcStated = 0 } = Astro.props
 const showHq = hq.countries.length > 1
 const showOps = ops.countries.length + ops.extra.length > 1
 const hasWw = ops.extra.some((o) => o.value === 'ww')
@@ -42,6 +47,22 @@ const jurisValue = (j: string) => (JURISDICTION_SHORT[j] ?? j).toLowerCase().rep
       <select data-filter="juris">
         <option value="">Any jurisdiction</option>
         {jurisdictions.map((j) => <option value={jurisValue(j)}>{j}</option>)}
+      </select>
+    </label>
+  )}
+  {services.length > 0 && (
+    <label>Service
+      <select data-filter="svc">
+        <option value="">Any service</option>
+        {services.map((o) => <option value={o.value}>{o.label} ({o.n})</option>)}
+      </select>
+    </label>
+  )}
+  {regimes.length > 0 && (
+    <label>Regime
+      <select data-filter="regime">
+        <option value="">Any regime</option>
+        {regimes.map((o) => <option value={o.value}>{o.label} ({o.n})</option>)}
       </select>
     </label>
   )}
@@ -98,5 +119,12 @@ const jurisValue = (j: string) => (JURISDICTION_SHORT[j] ?? j).toLowerCase().rep
     “Operates in” uses the markets a vendor names on its own pages: {opsStated} of {total} listings state them, and only
     confirmed statements are used. A vendor that says “worldwide” stays in every country unless you tick “Only vendors
     that name it”; a listing that names no market is hidden once you pick one.
+  </p>
+)}
+{services.length > 0 && (
+  <p class="hub-fine" data-dir-svc-note>
+    “Service” and “Regime” use what a vendor states about its own services on its own pages: {svcStated} of {total} listings
+    state one, and only confirmed statements are used. A listing that states none is hidden once you pick one. “Regime” on
+    its own matches any service offered for that regime; with a service chosen it matches that service for that regime.
   </p>
 )}

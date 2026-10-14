@@ -80,6 +80,8 @@ import {
   ALSO_IN_NOTE as DIR_ALSO_IN_NOTE, effectiveTier as dirEffectiveTier, alsoInCategories as dirAlsoIn,
   entriesInCategory as dirEntriesIn, ownerProfileShown as dirOwnerShown, ownerDescriptionProblems as dirOwnerDescProblems,
   hqTokensOf as dirHqTokens,
+  // s109 (A2.2): Service and Regime filters
+  serviceTokensOf as dirServiceTokens, serviceFilterOptions as dirServiceOptions,
 } from '../src/lib/directoryModel'
 // s108 (A1b): география общего вида /directory/all/ — те же функции, по которым собрана страница.
 import { marketTokens as dirMarketTokens } from '../src/lib/directoryGeo'
@@ -8800,6 +8802,64 @@ const CHECKS: Check[] = [
         id: 'dir-all', group: 'Directory', ok: problems.length === 0,
         headline: problems.length === 0
           ? `${ids.length} строк в порядке каталога; штаб-квартира названа у ${geoRows}, рынки — у ${opsRows}; noindex, вне sitemap`
+          : `проблем: ${problems.length}`,
+        detail: problems.slice(0, 30),
+      }
+    },
+  },
+  {
+    id: 'dir-service-filter',
+    group: 'Directory',
+    title: 'Фильтры Service и Regime (s109): data-svc каждой строки и карточки = подтверждённые факты service_scope из базы; опции и счётчики = база; без таких фактов поля нет',
+    run: async () => {
+      const facts = await selectAll<{ entry_id: number; kind: string; value: string; detail: string | null; confirmed: boolean | null; source_kind: string | null; provided_by: string | null }>(
+        'directory_facts', 'id, entry_id, kind, value, detail, confirmed, source_kind, provided_by', (q) => q.eq('kind', 'service_scope').order('id'))
+      const problems: string[] = []
+      // The same function the pages use, fed with the database rows (confirmed facts only, through printable).
+      const tokensOf = (entryId: number): string[] =>
+        dirServiceTokens({ facts: { service_scope: facts.filter((f) => f.entry_id === entryId) } } as any)
+      const pages: string[] = [
+        ...DIR_CATEGORIES.filter((c) => c.slug !== 'closed').map((c) => `directory/${c.slug}/index.html`),
+        ...DIR_SUBCATEGORIES.map((x) => `directory/${DIR_SUB_PARENT}/${x.slug}/index.html`),
+      ]
+      const optionsOf = (html: string, name: string): string[] => {
+        const sel = html.match(new RegExp(`<select data-filter="${name}">([\\s\\S]*?)</select>`))?.[1]
+        if (!sel) return []
+        return [...sel.matchAll(/<option value="([^"]+)"[^>]*>[^<]*\((\d+)\)<\/option>/g)].map((m) => `${m[1]}:${m[2]}`)
+      }
+      const fmt = (os: { value: string; n: number }[]) => os.map((o) => `${o.value}:${o.n}`).join(', ')
+      let read = 0
+      let withService = 0
+      for (const rel of pages) {
+        const html = readPage(rel)
+        if (!html) { problems.push(`${rel}: страницы нет`); continue }
+        read++
+        const ids: number[] = []
+        // The tag pattern skips quoted values: a title may hold a raw ">" (TUeV Rheinland go>safe), which ends a plain [^>]* match early.
+        for (const m of html.matchAll(/<(tr|article)\b(?:[^>"']|"[^"]*"|'[^']*')*>/g)) {
+          const idm = m[0].match(/\bdata-dir-(?:row|entry)="(\d+)"/)
+          if (!idm) continue
+          const id = Number(idm[1])
+          // Astro prints an empty attribute bare (data-svc, like data-ops): bare means no tokens, a missing attribute is a defect.
+          const attr = m[0].match(/\bdata-svc(?:="([^"]*)")?(?=[\s>])/)
+          const have = attr ? (attr[1] ?? '') : undefined
+          const want = tokensOf(id).join(' ')
+          if (have === undefined) problems.push(`${rel}: #${id} без data-svc`)
+          else if (have !== want) problems.push(`${rel}: #${id} data-svc «${have}», база даёт «${want}»`)
+          if (m[1] === 'tr') ids.push(id)
+        }
+        const lists = ids.map(tokensOf)
+        const want = dirServiceOptions(lists)
+        const haveSvc = optionsOf(html, 'svc').join(', ')
+        const haveReg = optionsOf(html, 'regime').join(', ')
+        if (haveSvc !== fmt(want.services)) problems.push(`${rel}: опции Service «${haveSvc}», база даёт «${fmt(want.services)}»`)
+        if (haveReg !== fmt(want.regimes)) problems.push(`${rel}: опции Regime «${haveReg}», база даёт «${fmt(want.regimes)}»`)
+        withService += lists.filter((t) => t.length > 0).length
+      }
+      return {
+        id: 'dir-service-filter', group: 'Directory', ok: problems.length === 0 && read === pages.length,
+        headline: problems.length === 0
+          ? `${read} страниц со списками; data-svc и опции Service / Regime совпали с базой; строк с названной услугой: ${withService}`
           : `проблем: ${problems.length}`,
         detail: problems.slice(0, 30),
       }
