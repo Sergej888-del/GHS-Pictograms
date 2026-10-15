@@ -65,3 +65,6 @@ _to_delete/
 commit-*.txt
 indexnow-*.txt
 .tmp-analysis/
+
+# local draft preview of /directory/emergency-numbers/ (scripts/emergency-preview.ts): draft rows, never committed
+.emergency-preview.json

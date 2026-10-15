@@ -11,6 +11,7 @@
     "build:local": "node --use-system-ca ./node_modules/astro/bin/astro.mjs build",
     "preview": "astro preview",
     "preview:local": "node --use-system-ca ./node_modules/astro/bin/astro.mjs preview",
+    "preview:emergency": "node --use-system-ca --import tsx scripts/emergency-preview.ts",
     "check:types": "node --use-system-ca ./node_modules/typescript/bin/tsc --noEmit",
     "check:dist": "node --use-system-ca --import tsx scripts/check-dist.ts",
     "check:seo": "node --use-system-ca --import tsx scripts/check-seo.ts",
