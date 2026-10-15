@@ -160,3 +160,32 @@ export function accentBadge(href: string | null | undefined): string | null {
   const key = accentKeyFor(href);
   return key ? (ACCENT_BY_KEY.get(key)?.badge ?? null) : null;
 }
+
+// ── Directory (/directory/) ──────────────────────────────────────────────────
+// The directory is ONE area of the site, but it holds several topics, and the
+// topic is the group a category belongs to (directoryModel.GROUPS). Same rule as
+// everywhere above: colour follows the topic, and the same colour never names a
+// different topic inside the directory.
+//
+//   Software & Tech        → subst      (teal)
+//   Regulatory & Advisory  → reg        (violet)
+//   Hardware & Equipment   → class      (blue)
+//   Logistics & Emergency  → transport  (sky; the group is hidden until it has a category)
+//   Archive (`closed`)     → none       (neutral on purpose: a closed listing is not a topic)
+//
+// ⚠ Amber (`pict`) is NOT in this map. Amber in the directory means exactly one
+//   thing — "Verified by owner" — and must stay the brightest reward on a page.
+// ⚠ Keyed by plain strings so this file does not import the directory model:
+//   the model imports this file, not the other way round.
+export const DIRECTORY_GROUP_ACCENT: Record<string, AccentKey> = {
+  'software-tech': 'subst',
+  'regulatory-advisory': 'reg',
+  'hardware-equipment': 'class',
+  'logistics-emergency': 'transport',
+};
+
+/** `'acc-reg'` for a directory group slug, or `''` (archive, unknown group). */
+export function directoryAccentClass(groupSlug: string | null | undefined): string {
+  const key = groupSlug ? DIRECTORY_GROUP_ACCENT[groupSlug] : undefined;
+  return key ? `acc-${key}` : '';
+}

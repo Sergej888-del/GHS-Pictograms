@@ -12,8 +12,8 @@ import DirectoryCard from '../../../../components/DirectoryCard.astro'
 import DirectoryClaimForm from '../../../../components/DirectoryClaimForm'
 import '../../../../styles/directory.css'
 import {
-  SITE, buildCard, categoryBySlug, categoryHref, effectiveTier, entryHref, entryIndexable, formatDate, outboundLink,
-  subcategoryBySlug, subcategoryHref, type DirectoryEntry,
+  SITE, accentClassOfCategory, buildCard, categoryBySlug, categoryHref, effectiveTier, entryHref, entryIndexable, formatDate,
+  outboundLink, subcategoryBySlug, subcategoryHref, type DirectoryEntry,
 } from '../../../../lib/directoryModel'
 import { loadDirectory } from '../../../../lib/directoryData'
 
@@ -89,7 +89,7 @@ const breadcrumb = {
     </div>
   </section>
 
-  <section class="hub-sec-b">
+  <section class={`hub-sec-b dir-band ${accentClassOfCategory(entry.category)}`.trim()}>
     <div class="hub-wrap">
       <DirectoryCard card={card} variant="full" />
       <p class="hub-fine">

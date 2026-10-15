@@ -13,7 +13,7 @@ import Layout from '../../../layouts/Layout.astro'
 import DirectoryFilters from '../../../components/DirectoryFilters.astro'
 import '../../../styles/directory.css'
 import {
-  CATEGORIES, SITE, buildCard, categoryBySlug, categoryHref, countryName, effectiveTier, entryHref, formatDate, hqTokensOf,
+  CATEGORIES, SITE, accentClassOfCategory, buildCard, categoryBySlug, categoryHref, countryName, effectiveTier, entryHref, formatDate, hqTokensOf,
   opsSummaryOf, opsTokensOf, orderEntries, outboundLink, ORDER_NOTE,
 } from '../../../lib/directoryModel'
 import { geoFilterOptions, geoProblems, geoSearchWords } from '../../../lib/directoryGeo'
@@ -102,7 +102,7 @@ const canonical = `${SITE}/directory/all/`
               const ops = opsSummaryOf(c)
               return (
                 <tr
-                  class={tier !== 'listed' ? 'is-verified' : undefined}
+                  class={[tier !== 'listed' ? 'is-verified' : '', accentClassOfCategory(e.category)].filter(Boolean).join(' ') || undefined}
                   data-dir-all-row={e.id}
                   data-dir-row={e.id}
                   data-dir-title={e.title}
@@ -117,7 +117,7 @@ const canonical = `${SITE}/directory/all/`
                     {tier !== 'listed' && <span class="dir-all-ver">Verified by owner</span>}
                     {e.vendor && <span class="v">{e.vendor}</span>}
                   </td>
-                  <td>{cat ? <a href={categoryHref(cat.slug)}>{cat.short}</a> : <span class="no">—</span>}</td>
+                  <td>{cat ? <a class="dir-sect" href={categoryHref(cat.slug)}>{cat.short}</a> : <span class="no">—</span>}</td>
                   <td>{countryName(e.hq_country) ?? <span class="no">—</span>}</td>
                   <td>{ops || <span class="no">—</span>}</td>
                   <td>
