@@ -15,7 +15,7 @@ import DirectoryListing from '../../../../components/DirectoryListing.astro'
 import '../../../../styles/directory.css'
 import {
   SITE, SPONSORED_MAX, SUBCATEGORIES, SUBCATEGORY_PARENT, buildCard, categoryBySlug, categoryHref, effectiveTier,
-  entriesInCategory, formatDate, heroTintOfCategory, orderEntries, subcategoryHref, type Subcategory,
+  entriesInCategory, formatDate, orderEntries, subcategoryHref, type Subcategory,
 } from '../../../../lib/directoryModel'
 import { loadDirectory } from '../../../../lib/directoryData'
 import { LEGAL_QUOTES, LEGAL_SUMMARY, LEGAL_DISCLAIMER, LEGAL_CHECKED } from '../../../../lib/directoryLegal'
@@ -75,7 +75,7 @@ const breadcrumb = {
     <script type="application/ld+json" set:html={JSON.stringify(breadcrumb)} />
   </Fragment>
 
-  <section class={`hub-hero ${heroTintOfCategory(SUBCATEGORY_PARENT)}`.trim()}>
+  <section class="hub-hero tint-teal">
     <div class="dots-a" aria-hidden="true"></div>
     <div class="dots-b" aria-hidden="true"></div>
     <div class="sheen" aria-hidden="true"></div>

@@ -184,22 +184,8 @@ export const DIRECTORY_GROUP_ACCENT: Record<string, AccentKey> = {
   'logistics-emergency': 'transport',
 };
 
-/** Dark end of a hero gradient per accent (classes live in hub.css next to `.tint-teal`). */
-const ACCENT_HERO_TINT: Partial<Record<AccentKey, string>> = {
-  subst: 'tint-teal',
-  class: 'tint-blue',
-  reg: 'tint-violet',
-  transport: 'tint-sky',
-};
-
 /** `'acc-reg'` for a directory group slug, or `''` (archive, unknown group). */
 export function directoryAccentClass(groupSlug: string | null | undefined): string {
   const key = groupSlug ? DIRECTORY_GROUP_ACCENT[groupSlug] : undefined;
   return key ? `acc-${key}` : '';
-}
-
-/** Hero tint class (`'tint-violet'`) for a directory group slug, or `''` for the default navy hero. */
-export function directoryHeroTint(groupSlug: string | null | undefined): string {
-  const key = groupSlug ? DIRECTORY_GROUP_ACCENT[groupSlug] : undefined;
-  return (key && ACCENT_HERO_TINT[key]) || '';
 }

@@ -41,7 +41,7 @@
 
 import { GEO, geoTokens, marketSummary, marketTokens } from './directoryGeo'
 import { SERVICE_FACT_KINDS, SERVICE_REGIMES, SERVICE_SCOPE_VALUES } from './directoryNumbers'
-import { directoryAccentClass, directoryHeroTint } from './sectionAccent'
+import { directoryAccentClass } from './sectionAccent'
 
 export const DIRECTORY_BASE = '/directory/'
 export const SITE = 'https://ghspictograms.com'
@@ -231,8 +231,6 @@ export function groupOfCategory(slug: string): Group | null {
 
 /** Accent class (`acc-reg`, …) of a category, taken from its main group; `''` for the archive. Map: sectionAccent.ts. */
 export const accentClassOfCategory = (slug: string): string => directoryAccentClass(groupOfCategory(slug)?.slug)
-/** Hero tint class (`tint-violet`, …) of a category; `''` for the archive (default navy hero). */
-export const heroTintOfCategory = (slug: string): string => directoryHeroTint(groupOfCategory(slug)?.slug)
 export const entryHref = (e: { category: string; slug: string }) => `${DIRECTORY_BASE}${e.category}/${e.slug}/`
 
 // ─────────────────────────── подразделы услуг (s95 §2b, s96) ───────────────────────────

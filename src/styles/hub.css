@@ -573,9 +573,6 @@
    #5a2616) — warm-vs-navy contrast read as too loud on a live page. Default to
    no tint unless the page already has a colour identity of its own. */
 .hub-hero.tint-teal { --hub-tint: #134e4a; }
-.hub-hero.tint-blue { --hub-tint: #1e3a8a; }
-.hub-hero.tint-violet { --hub-tint: #2e1065; }
-.hub-hero.tint-sky { --hub-tint: #0c4a6e; }
 
 /* ── Animated dot field for ANY dark hero (session 13) ─────────────────────
    Sergej's call: the rest of the site keeps its existing hero colours, we only

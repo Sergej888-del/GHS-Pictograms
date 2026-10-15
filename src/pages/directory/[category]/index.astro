@@ -19,7 +19,7 @@ import type { ListingGroup } from '../../../components/DirectoryListing.astro'
 import '../../../styles/directory.css'
 import {
   CATEGORIES, SITE, SPONSORED_MAX, SUBCATEGORIES, SUBCATEGORY_PARENT, buildCard, categoryHref, effectiveTier,
-  entriesInCategory, formatDate, heroTintOfCategory, orderEntries, subcategoryHref, type Category,
+  entriesInCategory, formatDate, orderEntries, subcategoryHref, type Category,
 } from '../../../lib/directoryModel'
 import { loadDirectory } from '../../../lib/directoryData'
 import { LEGAL_QUOTES, LEGAL_SUMMARY, LEGAL_DISCLAIMER, LEGAL_CHECKED } from '../../../lib/directoryLegal'
@@ -97,7 +97,7 @@ const jsonLd = {
     <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
   </Fragment>
 
-  <section class={`hub-hero ${heroTintOfCategory(category.slug)}`.trim()}>
+  <section class="hub-hero tint-teal">
     <div class="dots-a" aria-hidden="true"></div>
     <div class="dots-b" aria-hidden="true"></div>
     <div class="sheen" aria-hidden="true"></div>
