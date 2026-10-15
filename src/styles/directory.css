@@ -921,17 +921,56 @@
   background: linear-gradient(180deg, var(--bg-a) 0%, var(--bg-b) 100%);
 }
 
-/* ── Verified by owner: amber keeps the lead; the group hue closes its top bar ── */
-.dir-card.is-claimed { border-top-width: 1px; }
-.dir-card.is-claimed:hover { border-color: #f59e0b; box-shadow: 0 8px 26px rgba(217, 119, 6, .20), 0 1px 3px rgba(15, 23, 41, .06); }
+/* ── Verified by owner: amber keeps the lead and gets the FULL depth treatment ──
+   Same four steps as every other card, in the amber ladder (acc-pict tokens):
+   a warm gradient that fades over the first 190 px, a soft glow of the group hue
+   in the top-right corner (so the card still says which group it belongs to), a
+   four-layer shadow (inset highlight, contact, amber ambient, wide drop), an inset
+   warm facts panel and a warm footer step. The top bar ends in the group hue. */
+.dir-card.is-claimed {
+  border-top-width: 1px;
+  background:
+    radial-gradient(ellipse 340px 150px at 100% 0, color-mix(in srgb, var(--acc-soft, transparent) 85%, transparent) 0%, transparent 100%),
+    linear-gradient(180deg, var(--acc-pict-soft) 0%, #ffffff 190px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .95),
+    0 1px 3px rgba(15, 23, 41, .07),
+    0 6px 14px -4px rgba(217, 119, 6, .20),
+    0 20px 36px -14px rgba(217, 119, 6, .30);
+}
+.dir-card.is-claimed:hover {
+  border-color: #f59e0b;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .95),
+    0 2px 4px rgba(15, 23, 41, .08),
+    0 10px 20px -4px rgba(217, 119, 6, .28),
+    0 26px 46px -14px rgba(217, 119, 6, .40);
+}
 .dir-card.is-claimed::before { background: linear-gradient(90deg, #d97706 0%, #fbbf24 40%, var(--acc, var(--teal-500)) 100%); }
-.dir-card.is-claimed .dir-facts { background: var(--acc-pict-soft); border-color: var(--acc-pict-border); }
+.dir-card.is-claimed .dir-logo { box-shadow: 0 1px 2px rgba(146, 64, 14, .12), 0 4px 10px -4px rgba(217, 119, 6, .30); }
+.dir-card.is-claimed .dir-owner-desc {
+  background: linear-gradient(90deg, #fef3c7 0%, var(--acc-pict-soft) 45%, rgba(255, 251, 235, 0) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8);
+}
+.dir-card.is-claimed .dir-facts {
+  background: linear-gradient(180deg, var(--acc-pict-soft) 0%, #ffffff 100%);
+  border-color: var(--acc-pict-border);
+  box-shadow: inset 0 1px 2px rgba(146, 64, 14, .08), inset 0 0 0 1px rgba(255, 255, 255, .7);
+}
 .dir-card.is-claimed .dir-more { border-top-color: var(--acc-pict-border); }
-.dir-card.is-claimed .dir-more > summary { border-color: var(--acc-pict-border); color: var(--acc-pict-ink); }
-.dir-card.is-claimed .dir-more > summary:hover { background: var(--acc-pict-soft); border-color: #f59e0b; }
+.dir-card.is-claimed .dir-more > summary {
+  border-color: var(--acc-pict-border);
+  background: linear-gradient(180deg, #ffffff 0%, var(--acc-pict-soft) 100%);
+  color: var(--acc-pict-ink);
+  box-shadow: 0 1px 2px rgba(146, 64, 14, .12);
+}
+.dir-card.is-claimed .dir-more > summary:hover { background: #fef3c7; border-color: #f59e0b; }
 .dir-card.is-claimed .dir-block h4 { border-left-color: #f59e0b; }
-.dir-card.is-claimed .dir-card-foot { background: var(--acc-pict-soft); border-top-color: var(--acc-pict-border); }
-.dir-card.is-claimed .dir-prices li { background: #ffffff; border-color: var(--acc-pict-border); }
+.dir-card.is-claimed .dir-prices li { background: linear-gradient(180deg, #ffffff 0%, var(--acc-pict-soft) 100%); border-color: var(--acc-pict-border); }
+.dir-card.is-claimed .dir-card-foot {
+  background: linear-gradient(180deg, var(--acc-pict-soft) 0%, #fef3c7 100%);
+  border-top-color: var(--acc-pict-border);
+}
 
 /* ── Legal quotes and "not listed" rows: raised from the white band ── */
 .dir-legal figure {
