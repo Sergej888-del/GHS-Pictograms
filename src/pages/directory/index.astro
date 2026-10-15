@@ -12,12 +12,13 @@ import Layout from '../../layouts/Layout.astro'
 import DirectoryClaimForm from '../../components/DirectoryClaimForm'
 import '../../styles/directory.css'
 import {
-  CATEGORIES, SITE, SUBCATEGORIES, buildCard, categoryBySlug, categoryHref, entriesInCategory, formatDate, groupOfCategory,
+  CATEGORIES, SITE, SUBCATEGORIES, accentClassOfCategory, buildCard, categoryBySlug, categoryHref, entriesInCategory, formatDate, groupOfCategory,
   hqTokensOf, opsTokensOf, subcategoryHref, visibleGroups,
 } from '../../lib/directoryModel'
 import { geoFilterOptions, geoProblems } from '../../lib/directoryGeo'
 import { loadDirectory } from '../../lib/directoryData'
 import { LEGAL_QUOTES, LEGAL_SUMMARY, LEGAL_DISCLAIMER, LEGAL_CHECKED } from '../../lib/directoryLegal'
+import { directoryAccentClass } from '../../lib/sectionAccent'
 
 export const prerender = true
 
@@ -153,14 +154,14 @@ const jsonLd = {
         <a class="dir-find-all" href="/directory/all/" data-dir-find-all>Browse all {listed.length} listings →</a>
       </form>
       {groupTiles.map(({ g, n, tiles }) => (
-        <div data-dir-hub-group={g.slug}>
+        <div data-dir-hub-group={g.slug} class={`dir-group ${directoryAccentClass(g.slug)}`}>
           <div class="dir-group-head">
             <h3 class="hub-h2" id={`g-${g.slug}`}>{g.name} <span class="dir-cat-n">{n}</span></h3>
             <p class="dir-group-rule">{g.blurb}</p>
           </div>
           <div class="hub-cards four">
             {tiles.map(({ c, also, other, n: tn }) => (
-              <a class="hub-card" href={categoryHref(c.slug)}>
+              <a class={`hub-card ${accentClassOfCategory(c.slug)}`.trim()} href={categoryHref(c.slug)}>
                 <p class="tag">{c.eyebrow.replace('Directory · ', '')}{also && other ? ` · mainly under ${other}` : ''}</p>
                 <h3>{c.h1.charAt(0).toUpperCase() + c.h1.slice(1)}</h3>
                 <p class="copy">{c.description}</p>
@@ -170,7 +171,7 @@ const jsonLd = {
           </div>
         </div>
       ))}
-      <div data-dir-hub-group="archive">
+      <div data-dir-hub-group="archive" class="dir-group">
         <div class="dir-group-head">
           <h3 class="hub-h2" id="g-archive">Archive</h3>
           <p class="dir-group-rule">Resources that closed or moved, kept on purpose: library guides still link to them.</p>

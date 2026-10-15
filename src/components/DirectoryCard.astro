@@ -23,7 +23,7 @@
 //   строкой «Also listed under <основная>»; страница записи одна, под основной категорией.
 import {
   type CardModel, type FactKind, AFFILIATE_NOTE, ALSO_IN_NOTE, CLAIMED_NOTE, LISTED_NOTE, LOGO_BASE, SCREENSHOT_BASE, OWNER_FACT_NOTE,
-  JURISDICTION_SHORT, REGULATION_LABEL, SOURCE_KIND_LABEL, TAG_LABEL, accreditationText, serviceScopeText, categoryBySlug, categoryHref, countryName, effectiveTier, entryHref,
+  JURISDICTION_SHORT, REGULATION_LABEL, SOURCE_KIND_LABEL, TAG_LABEL, accentClassOfCategory, accreditationText, serviceScopeText, categoryBySlug, categoryHref, countryName, effectiveTier, entryHref,
   first, formatDate, hqTokensOf, jurisdictionsOf, opsTokensOf, outboundLink, ownerProfileShown, ownerStated, printable, serviceTokensOf,
 } from '../lib/directoryModel'
 import { geoSearchWords } from '../lib/directoryGeo'
@@ -133,7 +133,7 @@ const hasDetails =
 ---
 
 <article
-  class={`dir-card${closed ? ' is-closed' : ''}${tier !== 'listed' ? ' is-claimed' : ''}${tier === 'featured' ? ' is-featured' : ''}`}
+  class={`dir-card${closed ? ' is-closed' : ''}${tier !== 'listed' ? ' is-claimed' : ''}${tier === 'featured' ? ' is-featured' : ''} ${accentClassOfCategory(e.category)}`.trimEnd()}
   id={`${sponsored ? 's' : 'e'}-${e.slug}`}
   data-dir-entry={sponsored ? undefined : e.id}
   data-dir-sponsored-card={sponsored ? e.id : undefined}

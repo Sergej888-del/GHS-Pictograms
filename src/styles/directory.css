@@ -661,3 +661,301 @@
   .dir-find select { min-width: 0; width: 100%; }
   .dir-find label { flex: 1 1 100%; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Depth and topic colour (design pass, 15 Oct 2026)
+
+   WHY THIS BLOCK EXISTS. The directory used to be flat: white cards on a
+   near-white band, a 5 % shadow, one grey border, and no connection to the
+   site's accent system (hub.css `.acc-*`, sectionAccent.ts). Two fixes:
+
+   1. TOPIC COLOUR. Every category belongs to a group (directoryModel.GROUPS) and
+      every group has ONE hue (sectionAccent.DIRECTORY_GROUP_ACCENT): Software &
+      Tech teal, Regulatory & Advisory violet, Hardware & Equipment blue,
+      Logistics & Emergency sky. The Archive has no accent on purpose. The
+      markup carries `acc-<key>`; everything below reads `--acc`, `--acc-line`,
+      `--acc-soft`, `--acc-ink`, `--acc-strip` and ALWAYS has a neutral fallback
+      (a bare `var(--acc-soft)` inside color-mix() would void the whole
+      declaration on an unaccented element).
+
+   2. DEPTH FROM STEPS AND SHADOWS ONLY. No new hues. Four tonal steps, each one
+      lighter or darker than its neighbour:
+         band   (--bg-a → --bg-b, tinted by --acc-soft)
+         tray   (--acc-soft → --bg-c mix)            hub groups
+         card   (--acc-soft → white, 3 px --acc rule on top, layered shadow)
+         inset  (--bg-a + --line-r + inset shadow)   facts, prices, filters
+      Shadows are three layers: an inset top highlight, a tight contact shadow
+      and a wide soft drop. Rest and raised states differ only in the last two.
+
+   ⚠ AMBER STAYS THE BRIGHTEST THING ON A PAGE. "Verified by owner" keeps its own
+     rules above; here it only gains the group hue at the end of its top bar.
+   ⚠ Teal buttons (.dir-out-btn, .dir-find-go) are the ACTION colour and never
+     take the group hue, exactly like the orange CTA elsewhere on the site.
+   ⚠ Colour is never the only carrier of meaning (WCAG 1.4.1): hub tiles print
+     the group in their mono tag, the "all" table prints the section name in a
+     pill, and category pages say it in the hero. */
+
+:root {
+  --dir-sh-rest:
+    inset 0 1px 0 rgba(255, 255, 255, .85),
+    0 1px 2px rgba(15, 23, 41, .07),
+    0 8px 18px -6px rgba(15, 23, 41, .12);
+  --dir-sh-raise:
+    inset 0 1px 0 rgba(255, 255, 255, .9),
+    0 2px 4px rgba(15, 23, 41, .08),
+    0 16px 30px -8px rgba(15, 23, 41, .20);
+  --dir-sh-inset:
+    inset 0 1px 2px rgba(15, 23, 41, .06),
+    inset 0 0 0 1px rgba(255, 255, 255, .55);
+}
+
+/* ── Bands behind the table and the card list ── */
+.hub-sec-a.dir-band,
+.hub-sec-b.dir-band {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--acc-soft, var(--bg-a)) 55%, var(--bg-a)) 0%, var(--bg-b) 100%);
+}
+
+/* ── Hub: one tray per group, tiles stand on it ── */
+.dir-group {
+  margin-top: 30px;
+  padding: 2px 24px 26px;
+  border: 1px solid var(--acc-line, var(--line-b));
+  border-radius: 20px;
+  background: linear-gradient(180deg, var(--acc-soft, var(--bg-b)) 0%, color-mix(in srgb, var(--acc-soft, var(--bg-b)) 35%, var(--bg-c)) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 1px 2px rgba(15, 23, 41, .05);
+}
+.dir-group .dir-group-head { margin-top: 22px; }
+.dir-group .hub-cards { margin-top: 18px; }
+.dir-group .hub-card {
+  border-top: 3px solid var(--acc, var(--line-2));
+  background: linear-gradient(180deg, var(--acc-soft, var(--bg-a)) 0%, #ffffff 62%);
+  box-shadow: var(--dir-sh-rest);
+}
+.dir-group .hub-card:hover { box-shadow: var(--dir-sh-raise); }
+.dir-group .hub-card .dir-cat-n {
+  align-self: flex-start;
+  margin-top: 16px;
+  padding: 3px 10px;
+  border: 1px solid var(--acc-line, var(--line-b));
+  border-radius: 999px;
+  background: #ffffff;
+  font-weight: 600;
+  color: var(--acc-ink, var(--ink-2));
+}
+
+/* ── Group heading: a rule in the group hue, count as a pill ── */
+.dir-group-head { position: relative; padding-left: 16px; }
+.dir-group-head::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 3px;
+  bottom: 3px;
+  width: 5px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--acc, var(--line-2)) 0%, var(--acc-line, var(--line-b)) 100%);
+}
+.dir-group-head .dir-cat-n {
+  display: inline-block;
+  vertical-align: 3px;
+  padding: 1px 9px;
+  border: 1px solid var(--acc-line, var(--line-b));
+  border-radius: 999px;
+  background: #ffffff;
+  font-weight: 600;
+  color: var(--acc-ink, var(--ink-2));
+}
+.dir-group-head h3 a:hover { color: var(--acc-ink, var(--teal-700)); }
+.dir-group-rule a { color: var(--acc-ink, var(--teal-700)); }
+
+/* ── Panels: find form, principles, filters ── */
+.dir-find {
+  border-color: var(--line-b);
+  border-top: 3px solid var(--teal-600);
+  background: linear-gradient(180deg, #ffffff 0%, var(--bg-a) 100%);
+  box-shadow: var(--dir-sh-rest);
+}
+.dir-find select,
+.dir-filters select,
+.dir-filters input {
+  border-color: var(--line-b);
+  box-shadow: var(--dir-sh-inset);
+}
+.dir-find select:focus-visible,
+.dir-filters select:focus-visible,
+.dir-filters input:focus-visible {
+  outline: 2px solid var(--acc, var(--teal-500));
+  outline-offset: 1px;
+}
+.dir-find .dir-find-go { box-shadow: 0 4px 12px rgba(13, 148, 136, .22), inset 0 1px 0 rgba(255, 255, 255, .22); }
+
+.dir-filters {
+  padding: 14px 18px;
+  border: 1px solid var(--acc-line, var(--line-b));
+  border-left: 4px solid var(--acc, var(--line-2));
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, var(--acc-soft, var(--bg-a)) 100%);
+  box-shadow: var(--dir-sh-rest);
+}
+.dir-filters label { color: var(--acc-ink, var(--ink-3)); }
+.dir-filters label.dir-inline { color: var(--ink-2); }
+.dir-filters .dir-reset { border-color: var(--line-b); box-shadow: 0 1px 2px rgba(15, 23, 41, .06); }
+.dir-filters .dir-reset:hover { border-color: var(--acc, var(--teal-600)); color: var(--acc-ink, var(--teal-700)); }
+
+.dir-principle {
+  border-color: var(--line-b);
+  border-top: 3px solid var(--hero-2);
+  background: linear-gradient(180deg, #ffffff 0%, var(--bg-a) 100%);
+  box-shadow: var(--dir-sh-rest);
+}
+
+/* ── Comparison table ── */
+.dir-table-wrap {
+  border-color: var(--acc-line, var(--line-b));
+  border-top: 3px solid var(--acc, var(--hero-2));
+  box-shadow: var(--dir-sh-rest), 0 22px 40px -22px rgba(15, 23, 41, .22);
+}
+.dir-table thead th {
+  background: linear-gradient(180deg, var(--acc-soft, var(--bg-a)) 0%, var(--bg-b) 100%);
+  border-bottom: 2px solid var(--acc-line, var(--line-b));
+  color: var(--acc-ink, var(--ink-3));
+}
+.dir-table td { border-bottom-color: var(--line-r); }
+.dir-table tbody tr:hover { background: var(--acc-soft, var(--teal-50)); }
+.dir-table td.c-name a:hover { color: var(--acc-ink, var(--teal-700)); }
+.dir-table .jur {
+  border: 1px solid var(--acc-line, var(--line-r));
+  background: var(--acc-soft, var(--bg-a));
+  color: var(--acc-ink, var(--ink-2));
+}
+/* the "all listings" table mixes sections: each row carries its own group hue */
+.dir-table-all tbody tr:not(.is-verified) td.c-name { box-shadow: inset 3px 0 0 var(--acc, transparent); }
+.dir-table-all td a.dir-sect {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px 2px 8px;
+  border: 1px solid var(--acc-line, var(--line-r));
+  border-radius: 999px;
+  background: var(--acc-soft, var(--bg-a));
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--acc-ink, var(--ink-2));
+  white-space: nowrap;
+}
+.dir-table-all td a.dir-sect::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--acc, var(--line-2));
+}
+.dir-table-all td a.dir-sect:hover { border-color: var(--acc, var(--line-2)); text-decoration: none; }
+
+/* ── Cards ── */
+.dir-card {
+  border: 1px solid var(--acc-line, var(--line-b));
+  border-top: var(--acc-strip, 1px) solid var(--acc, var(--line-b));
+  background: linear-gradient(180deg, var(--acc-soft, var(--bg-a)) 0, #ffffff 150px);
+  box-shadow: var(--dir-sh-rest);
+  transition: box-shadow 250ms ease, border-color 250ms ease;
+}
+.dir-card:hover { border-color: var(--acc, var(--line-2)); box-shadow: var(--dir-sh-raise); }
+.dir-card.is-closed { background: linear-gradient(180deg, var(--bg-b) 0%, var(--bg-a) 100%); }
+.dir-card-name h3 a:hover { color: var(--acc-ink, var(--teal-700)); }
+.dir-logo { border-color: var(--line-r); box-shadow: 0 1px 2px rgba(15, 23, 41, .07); }
+
+/* tag badges take the group hue; the claimed (amber) and affiliate badges do not */
+.dir-badge.tag {
+  background: var(--acc-soft, var(--bg-a));
+  border-color: var(--acc-line, var(--line-r));
+  color: var(--acc-ink, var(--ink-2));
+}
+.dir-badge.closed { background: var(--bg-b); border-color: var(--line-b); }
+
+/* facts sit in an inset panel one step below the card surface */
+.dir-facts {
+  padding: 12px 14px;
+  border: 1px solid var(--line-r);
+  border-radius: 10px;
+  background: var(--bg-a);
+  box-shadow: var(--dir-sh-inset);
+}
+.dir-facts.tight { padding: 10px 12px; }
+
+.dir-owner-desc {
+  border-left-color: var(--acc-line, var(--teal-200));
+  border-radius: 0 8px 8px 0;
+  background: var(--acc-soft, var(--bg-a));
+  padding: 8px 12px;
+}
+
+/* details: a button-like summary, hairline above, tick before each block title */
+.dir-more { border-top: 1px solid var(--line-r); }
+.dir-more > summary {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border: 1px solid var(--acc-line, var(--line-2));
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 41, .07);
+  color: var(--acc-ink, var(--teal-700));
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.dir-more > summary:hover { border-color: var(--acc, var(--teal-500)); background: var(--acc-soft, var(--teal-50)); }
+.dir-block h4 { padding-left: 9px; border-left: 3px solid var(--acc, var(--line-b)); }
+.dir-prices li { border-color: var(--line-r); background: var(--bg-a); }
+.dir-features li::before { background: var(--acc, var(--teal-500)); }
+.dir-fine a { color: var(--acc-ink, var(--teal-700)); }
+.dir-links a { color: var(--acc-ink, var(--teal-700)); }
+
+/* footer: the lowest step of the card */
+.dir-card .dir-card-foot {
+  margin: 14px -20px -18px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--line-r);
+  border-radius: 0 0 13px 13px;
+  background: linear-gradient(180deg, var(--bg-a) 0%, var(--bg-b) 100%);
+}
+
+/* ── Verified by owner: amber keeps the lead; the group hue closes its top bar ── */
+.dir-card.is-claimed { border-top-width: 1px; }
+.dir-card.is-claimed:hover { border-color: #f59e0b; box-shadow: 0 8px 26px rgba(217, 119, 6, .20), 0 1px 3px rgba(15, 23, 41, .06); }
+.dir-card.is-claimed::before { background: linear-gradient(90deg, #d97706 0%, #fbbf24 40%, var(--acc, var(--teal-500)) 100%); }
+.dir-card.is-claimed .dir-facts { background: var(--acc-pict-soft); border-color: var(--acc-pict-border); }
+.dir-card.is-claimed .dir-more { border-top-color: var(--acc-pict-border); }
+.dir-card.is-claimed .dir-more > summary { border-color: var(--acc-pict-border); color: var(--acc-pict-ink); }
+.dir-card.is-claimed .dir-more > summary:hover { background: var(--acc-pict-soft); border-color: #f59e0b; }
+.dir-card.is-claimed .dir-block h4 { border-left-color: #f59e0b; }
+.dir-card.is-claimed .dir-card-foot { background: var(--acc-pict-soft); border-top-color: var(--acc-pict-border); }
+.dir-card.is-claimed .dir-prices li { background: #ffffff; border-color: var(--acc-pict-border); }
+
+/* ── Legal quotes and "not listed" rows: raised from the white band ── */
+.dir-legal figure {
+  border-color: var(--line-b);
+  border-left: 3px solid var(--acc-reg);
+  background: linear-gradient(180deg, var(--acc-reg-soft) 0%, #ffffff 70%);
+  box-shadow: var(--dir-sh-rest);
+}
+.dir-legal figcaption { color: var(--acc-reg-ink); }
+.dir-notlisted li {
+  border-color: var(--line-b);
+  border-left: 3px solid var(--line-2);
+  background: linear-gradient(180deg, #ffffff 0%, var(--bg-a) 100%);
+  box-shadow: 0 1px 2px rgba(15, 23, 41, .06), 0 6px 14px -8px rgba(15, 23, 41, .12);
+}
+.dir-form input[type='email'],
+.dir-form input[type='text'],
+.dir-form select,
+.dir-form textarea { border-color: var(--line-b); box-shadow: var(--dir-sh-inset); }
+
+@media (max-width: 560px) {
+  .dir-group { padding: 0 14px 20px; border-radius: 16px; }
+  .dir-filters { padding: 12px 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dir-card, .dir-more > summary { transition: none; }
+}

@@ -12,8 +12,8 @@ import DirectoryCard from '../../../../components/DirectoryCard.astro'
 import DirectoryClaimForm from '../../../../components/DirectoryClaimForm'
 import '../../../../styles/directory.css'
 import {
-  SITE, buildCard, categoryBySlug, categoryHref, effectiveTier, entryHref, entryIndexable, formatDate, outboundLink,
-  subcategoryBySlug, subcategoryHref, type DirectoryEntry,
+  SITE, accentClassOfCategory, buildCard, categoryBySlug, categoryHref, effectiveTier, entryHref, entryIndexable, formatDate,
+  heroTintOfCategory, outboundLink, subcategoryBySlug, subcategoryHref, type DirectoryEntry,
 } from '../../../../lib/directoryModel'
 import { loadDirectory } from '../../../../lib/directoryData'
 
@@ -63,7 +63,7 @@ const breadcrumb = {
     <script type="application/ld+json" set:html={JSON.stringify(breadcrumb)} />
   </Fragment>
 
-  <section class="hub-hero tint-teal">
+  <section class={`hub-hero ${heroTintOfCategory(entry.category)}`.trim()}>
     <div class="dots-a" aria-hidden="true"></div>
     <div class="dots-b" aria-hidden="true"></div>
     <div class="hub-wrap hub-hero-left" style="padding-top:clamp(36px,5vw,64px);padding-bottom:clamp(30px,4vw,52px);position:relative">
@@ -89,7 +89,7 @@ const breadcrumb = {
     </div>
   </section>
 
-  <section class="hub-sec-b">
+  <section class={`hub-sec-b dir-band ${accentClassOfCategory(entry.category)}`.trim()}>
     <div class="hub-wrap">
       <DirectoryCard card={card} variant="full" />
       <p class="hub-fine">

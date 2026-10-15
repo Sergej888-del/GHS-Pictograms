@@ -15,7 +15,7 @@ import DirectoryCard from './DirectoryCard.astro'
 import DirectoryFilters from './DirectoryFilters.astro'
 import {
   type CardModel, JURISDICTION_ORDER, JURISDICTION_SHORT, ORDER_NOTE, countryName, effectiveTier, first, hqTokensOf, jurisdictionsOf,
-  languageShort, opsTokensOf, outboundLink, formatDate, serviceFilterOptions, serviceSearchWords, serviceTokensOf
+  languageShort, opsTokensOf, outboundLink, formatDate, serviceFilterOptions, serviceSearchWords, serviceTokensOf, accentClassOfCategory
 } from '../lib/directoryModel'
 import { geoFilterOptions, geoProblems, geoSearchWords } from '../lib/directoryGeo'
 
@@ -43,6 +43,8 @@ interface Props {
 }
 const { cards, sponsoredCards, groups, isClosed, inCategory, compareNo = '01', listNo = '02' } = Astro.props
 const n = cards.length
+// Topic colour of the page: the main group of the category (archive = none, neutral). Bands and table read --acc*.
+const accent = accentClassOfCategory(inCategory)
 const juris = (c: CardModel) => jurisdictionsOf(c).map((j) => (JURISDICTION_SHORT[j] ?? j).toLowerCase().replace(/\s+/g, '-')).join(' ')
 // s108 (A1): фильтры «Based in» (страна → субрегион → континент) и «Operates in» (подтверждённые рынки вендора).
 // Опции строятся из того, что есть на этой странице; число в скобках — сколько строк останется при выборе.
@@ -63,7 +65,7 @@ const jurisPresent = JURISDICTION_ORDER.filter((j) => cards.some((c) => jurisdic
 ---
 
 {!isClosed && (
-  <section class="hub-sec-a">
+  <section class={`hub-sec-a dir-band ${accent}`.trim()}>
     <div class="hub-wrap">
       <p class="hub-eyebrow">{compareNo} · Compare</p>
       <h2 class="hub-h2">{n} listings side by side</h2>
@@ -145,7 +147,7 @@ const jurisPresent = JURISDICTION_ORDER.filter((j) => cards.some((c) => jurisdic
   </section>
 )}
 
-<section class={isClosed ? 'hub-sec-a' : 'hub-sec-b'}>
+<section class={`${isClosed ? 'hub-sec-a' : 'hub-sec-b'} dir-band ${accent}`.trim()}>
   <div class="hub-wrap">
     <p class="hub-eyebrow navy">{isClosed ? `${compareNo} · Closed and moved` : `${listNo} · Every listing`}</p>
     <h2 class="hub-h2">{isClosed ? 'Where they went' : 'Facts, prices and terms'}</h2>
