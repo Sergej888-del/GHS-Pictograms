@@ -85,6 +85,7 @@ import {
 } from '../src/lib/directoryModel'
 // s108 (A1b): география общего вида /directory/all/ — те же функции, по которым собрана страница.
 import { marketTokens as dirMarketTokens } from '../src/lib/directoryGeo'
+import { EMERGENCY_VERIFICATIONS } from '../src/lib/emergencyVocab'
 import type { LcssRecord } from '../src/lib/lcssProperties'
 // ⚠⚠ Раскладка «код знака → файл» берётся ИЗ ТОГО ЖЕ модуля, что и страница.
 // Списать сюда список кодов — значит завести вторую копию словаря, которая
@@ -8866,6 +8867,107 @@ const CHECKS: Check[] = [
         id: 'dir-terms', group: 'Directory', ok: problems.length === 0,
         headline: problems.length === 0
           ? `условия: ${MARKERS.length} обещаний в тексте, canonical, sitemap, ссылка с хаба и с ${cards} карточек, платных записей нет`
+          : `проблем: ${problems.length}`,
+        detail: problems.slice(0, 30),
+      }
+    },
+  },
+  {
+    id: 'dir-emergency',
+    group: 'Directory',
+    title: 'Справочник горячих линий (s111): страница /directory/emergency-numbers/ есть только при live-строках, номера = live-строки базы, у каждой источник и дата, плашка 112/911, нет черновиков и unconfirmed; sitemap и хаб согласованы',
+    run: async () => {
+      const PAGE = 'directory/emergency-numbers/index.html'
+      const URL_PATH = '/directory/emergency-numbers/'
+      const SITE_URL = 'https://ghspictograms.com'
+      // Page text is English; markers are ASCII (rule 3).
+      const MARKERS = [
+        'Someone is in danger or may have been poisoned?',
+        'href="tel:112"',
+        'href="tel:911"',
+        'They do not replace the emergency services.',
+        'Before you print a number on a safety data sheet.',
+        'mailto:hello@ghspictograms.com',
+      ]
+      assertAscii('dir-emergency', MARKERS)
+      const esc = (u: string) => u.replace(/&/g, '&amp;')
+
+      // The anon key sees live rows only (row-level security): this is exactly what a deploy build sees.
+      const countries = await selectAll<{ country_code: string; name_en: string; general_number: string | null; state: string }>(
+        'emergency_countries', 'country_code, name_en, general_number, state', (q) => q.order('country_code'))
+      const services = await selectAll<{ country_code: string; slug: string; phone_tel: string; source_url: string; verification: string; state: string }>(
+        'emergency_services', 'id, country_code, slug, phone_tel, source_url, verification, state', (q) => q.order('id'))
+      const problems: string[] = []
+      for (const r of [...countries, ...services]) if (r.state !== 'live') problems.push('публичный ключ видит строку не в live: проверить политику RLS')
+
+      const shown = services.filter((s) => s.verification !== 'unconfirmed')
+      const byCountry = new Map<string, typeof shown>()
+      for (const s of shown) byCountry.set(s.country_code, [...(byCountry.get(s.country_code) ?? []), s])
+      const expected = countries.filter((c) => (byCountry.get(c.country_code)?.length ?? 0) > 0 || c.general_number)
+
+      const html = readPage(PAGE)
+      const sitemap = existsSync(join(DIST, 'sitemap.xml')) ? readFileSync(join(DIST, 'sitemap.xml'), 'utf8') : ''
+      const hub = readPage('directory/index.html') ?? ''
+      const inSitemap = sitemap.includes(`<loc>${SITE_URL}${URL_PATH}</loc>`)
+      const hubBlock = hub.includes('data-dir-hub-reference="emergency-numbers"')
+
+      if (expected.length === 0) {
+        // Nothing live: no empty page may ship, and nothing may point to it.
+        if (html !== null) problems.push('live-строк нет, а страница собрана: пустая или чужая страница горячих линий')
+        if (inSitemap) problems.push('live-строк нет, а адрес стоит в sitemap')
+        if (hubBlock || hub.includes(`href="${URL_PATH}"`)) problems.push('live-строк нет, а хаб ссылается на страницу')
+        return {
+          id: 'dir-emergency', group: 'Directory', ok: problems.length === 0,
+          headline: problems.length === 0 ? 'live-строк нет: страницы нет, в sitemap и на хабе её тоже нет (так и должно быть до публикации)' : `проблем: ${problems.length}`,
+          detail: problems.slice(0, 30),
+        }
+      }
+
+      if (html === null) {
+        problems.push(`есть live-строки (${expected.length} стран), а страницы нет: dist/${PAGE}`)
+      } else {
+        const text = html.replace(/\s+/g, ' ')
+        for (const m of MARKERS) if (!text.includes(m)) problems.push(`в тексте нет: ${m}`)
+        if (html.includes('data-emergency-preview')) problems.push('в странице плашка PREVIEW: это сборка с черновиками, её нельзя публиковать')
+        if (/<meta[^>]+name="robots"[^>]+noindex/i.test(html)) problems.push('страница под noindex')
+        const canonicalTag = html.match(/<link\b[^>]*\brel="canonical"[^>]*>/)?.[0] ?? ''
+        if (!canonicalTag.includes(`${SITE_URL}${URL_PATH}`)) problems.push(`canonical не указывает на ${SITE_URL}${URL_PATH}`)
+        if (html.includes(EMERGENCY_VERIFICATIONS.unconfirmed.label)) problems.push(`на странице подпись «${EMERGENCY_VERIFICATIONS.unconfirmed.label}»: непроверенный номер не печатается`)
+
+        const countryMarks = [...html.matchAll(/data-emergency-country="([A-Z]{2})"/g)].map((m) => m[1])
+        if (countryMarks.length !== expected.length) problems.push(`стран на странице ${countryMarks.length}, ожидается ${expected.length}`)
+        for (const c of expected) {
+          if (!countryMarks.includes(c.country_code)) problems.push(`нет раздела страны ${c.country_code}`)
+          if (!html.includes(`id="${c.country_code.toLowerCase()}"`)) problems.push(`нет якоря #${c.country_code.toLowerCase()}`)
+        }
+
+        const serviceMarks = [...html.matchAll(/data-emergency-service="([^"]+)"/g)].map((m) => m[1])
+        if (serviceMarks.length !== shown.length) problems.push(`линий на странице ${serviceMarks.length}, live-строк в базе ${shown.length}`)
+        const chunks = html.split('data-emergency-service="').slice(1)
+        for (const s of shown) {
+          const key = `${s.country_code.toLowerCase()}/${s.slug}`
+          const whole = chunks.find((ch) => ch.startsWith(`${key}"`))
+          if (whole === undefined) { problems.push(`нет линии ${key}`); continue }
+          // One card = up to its closing </li>.
+          const chunk = whole.split('</li>')[0]
+          if (!chunk.includes(`href="tel:${s.phone_tel}"`)) problems.push(`${key}: номер ${s.phone_tel} не стоит ссылкой tel:`)
+          if (!chunk.includes(`href="${esc(s.source_url)}"`)) problems.push(`${key}: нет ссылки на источник`)
+          if (!/checked \d{1,2} [A-Z][a-z]+ \d{4}/.test(chunk)) problems.push(`${key}: нет даты проверки`)
+        }
+
+        const telMarks = (html.match(/data-emergency-tel/g) ?? []).length
+        const telExpected = shown.length + expected.filter((c) => c.general_number).length
+        if (telMarks !== telExpected) problems.push(`телефонных ссылок ${telMarks}, ожидается ${telExpected}`)
+      }
+
+      if (!inSitemap) problems.push(`в sitemap нет ${URL_PATH}`)
+      if (!hubBlock) problems.push('на хабе /directory/ нет блока «Official reference»')
+      if (!hub.includes(`href="${URL_PATH}"`)) problems.push('на хабе нет ссылки на страницу горячих линий')
+
+      return {
+        id: 'dir-emergency', group: 'Directory', ok: problems.length === 0,
+        headline: problems.length === 0
+          ? `горячие линии: ${expected.length} стран, ${shown.length} линий = live-строки базы; источник, дата, tel:, плашка 112/911, sitemap, хаб`
           : `проблем: ${problems.length}`,
         detail: problems.slice(0, 30),
       }

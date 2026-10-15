@@ -17,6 +17,7 @@ import { BRANCHES, TEMPLATES } from '../lib/labelMakerHub';
 // `entryIndexable`, что ставит noindex на странице записи; сторож dir-sitemap сверяет обе стороны.
 import { CATEGORIES, SUBCATEGORIES, categoryHref, entryHref, entryIndexable, subcategoryHref } from '../lib/directoryModel';
 import { loadDirectory } from '../lib/directoryData';
+import { emergencyPageExists } from '../lib/emergencyData';
 
 export const prerender = true;
 
@@ -334,10 +335,13 @@ async function fetchSubstanceSitemapEntries(): Promise<
 
 async function fetchDirectorySitemapEntries() {
   const { entries, facts } = await loadDirectory();
+  // s111: one reference page, listed only while it is built (at least one emergency row is live)
+  const emergencyBuilt = await emergencyPageExists();
   return [
     { url: '/directory/', changefreq: 'weekly', priority: '0.8' },
     // s110: public listing terms — the conditions vendors ask about before claiming
     { url: '/directory/terms/', changefreq: 'yearly', priority: '0.4' },
+    ...(emergencyBuilt ? [{ url: '/directory/emergency-numbers/', changefreq: 'monthly', priority: '0.6' }] : []),
     ...CATEGORIES.map((c) => ({ url: categoryHref(c.slug), changefreq: 'weekly', priority: '0.75' })),
     // s96: четыре подраздела услуг — свои страницы под «sds translation services», «sds authoring services»
     ...SUBCATEGORIES.map((s) => ({ url: subcategoryHref(s.slug), changefreq: 'weekly', priority: '0.7' })),

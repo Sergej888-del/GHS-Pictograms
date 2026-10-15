@@ -19,10 +19,15 @@ import { geoFilterOptions, geoProblems } from '../../lib/directoryGeo'
 import { loadDirectory } from '../../lib/directoryData'
 import { LEGAL_QUOTES, LEGAL_SUMMARY, LEGAL_DISCLAIMER, LEGAL_CHECKED } from '../../lib/directoryLegal'
 import { directoryAccentClass } from '../../lib/sectionAccent'
+import { loadEmergency } from '../../lib/emergencyData'
 
 export const prerender = true
 
 const { entries, facts } = await loadDirectory()
+// s111: the official emergency-lines page is a reference, not a vendor group (no tiles, no listing counts). The block
+// appears only while that page is built, i.e. while at least one emergency row is live.
+const emergency = await loadEmergency()
+const emergencyBuilt = emergency.blocks.length > 0
 const listed = entries.filter((e) => e.state === 'live')
 const closed = entries.filter((e) => e.state === 'closed')
 const notListed = entries
@@ -171,6 +176,17 @@ const jsonLd = {
           </div>
         </div>
       ))}
+      {emergencyBuilt && (
+        <div class="dir-reference" data-dir-hub-reference="emergency-numbers">
+          <p class="dir-reference-tag">Official reference</p>
+          <h3 class="hub-h2" id="g-reference">Emergency numbers for SDS section 1.4</h3>
+          <p class="dir-group-rule">
+            Official poison centres and national helplines, with what each country’s sources say about the emergency number in
+            section 1.4 of a safety data sheet. Not a vendor listing: nothing here is ranked, claimed or paid.
+          </p>
+          <a class="dir-reference-link" href="/directory/emergency-numbers/">See the numbers for {emergency.blocks.length} {emergency.blocks.length === 1 ? 'country' : 'countries'} →</a>
+        </div>
+      )}
       <div data-dir-hub-group="archive" class="dir-group">
         <div class="dir-group-head">
           <h3 class="hub-h2" id="g-archive">Archive</h3>

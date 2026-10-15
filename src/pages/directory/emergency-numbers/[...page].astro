@@ -1,0 +1,242 @@
+---
+// /directory/emergency-numbers/ - official poison-information lines by country, with what each country's sources say about
+// the emergency telephone number in SDS section 1.4 (s111, 15.10.2026).
+//
+// One page, countries are anchors (#de, #pl ...). Decision of Sergej, 15.10.2026: not a vendor category and not a set of
+// per-country pages; the lines are official bodies, not commercial organisations. Commercial emergency-response services
+// will be a separate group of the directory later. Per-country pages wait for the Google index to recover (s105, item 5).
+//
+// Data: public.emergency_countries / public.emergency_services through src/lib/emergencyData.ts. The page is generated only
+// while at least one row is live (rest route + empty getStaticPaths), so publishing = setting rows to live and rebuilding.
+// Every printed word that describes a value comes from src/lib/emergencyVocab.ts; the database holds facts and format only.
+//
+// The red 112 / 911 box is fixed text, not data: it is the first thing a reader in danger must see.
+import Layout from '../../../layouts/Layout.astro'
+import { SITE, formatDate } from '../../../lib/directoryModel'
+import { loadEmergency, emergencyPageExists } from '../../../lib/emergencyData'
+import {
+  EMERGENCY_AUDIENCES, EMERGENCY_HOURS, EMERGENCY_KINDS, EMERGENCY_SDS_RULES, EMERGENCY_SDS_USES, EMERGENCY_VERIFICATIONS,
+  type EmergencyAudience, type EmergencyHours, type EmergencyKind, type EmergencySdsRule, type EmergencySdsUse,
+  type EmergencyVerification,
+} from '../../../lib/emergencyVocab'
+
+export const prerender = true
+
+export async function getStaticPaths() {
+  return (await emergencyPageExists()) ? [{ params: { page: undefined } }] : []
+}
+
+const snap = await loadEmergency()
+const { blocks, preview } = snap
+
+const title = 'SDS Emergency Telephone Numbers by Country'
+const description =
+  'Official poison centres by country, and what each country’s sources say about the emergency number in SDS section 1.4. Source and check date for every number.'
+const canonical = `${SITE}/directory/emergency-numbers/`
+const H2 = "font-family: 'Space Grotesk', system-ui, sans-serif"
+
+const anchor = (code: string) => code.toLowerCase()
+const tel = (n: string) => `tel:${n.replace(/[^0-9+]/g, '')}`
+const ruleOf = (kind: string) => EMERGENCY_SDS_RULES[kind as EmergencySdsRule]
+
+// Only the labels that appear on the page are explained in "How to read this page".
+const rulesUsed = [...new Set(blocks.map((b) => b.country.sds_rule_kind))] as EmergencySdsRule[]
+const usesUsed = [...new Set(blocks.flatMap((b) => b.services.map((s) => s.sds_use)))] as EmergencySdsUse[]
+const verificationsUsed = [...new Set(blocks.flatMap((b) => b.services.map((s) => s.verification)))] as EmergencyVerification[]
+const countryWord = blocks.length === 1 ? 'country' : 'countries'
+const lineWord = snap.serviceCount === 1 ? 'line' : 'lines'
+---
+
+<Layout title={title} description={description} canonical={canonical}>
+  <Fragment slot="head">
+    {preview && <meta name="robots" content="noindex, nofollow" />}
+  </Fragment>
+
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    {preview && (
+      <p class="mb-6 rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-3 text-amber-900 font-semibold" data-emergency-preview>
+        PREVIEW - draft rows read from your computer. This page is not published.
+      </p>
+    )}
+
+    <nav class="text-sm text-gray-500 mb-6" aria-label="Breadcrumb">
+      <a href="/" class="text-[#062A78] hover:underline">Home</a>
+      <span class="mx-2">→</span>
+      <a href="/directory/" class="text-[#062A78] hover:underline">Directory</a>
+      <span class="mx-2">→</span>
+      <span class="text-gray-700">Emergency numbers</span>
+    </nav>
+
+    <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight" style={H2}>
+      SDS emergency telephone numbers by country
+    </h1>
+    <p class="mt-4 text-gray-700 leading-relaxed text-lg">
+      Section 1.4 of a safety data sheet carries an emergency telephone number. Below are the official poison centres and
+      national helplines we could read in each country, what the country’s own sources say about using them in section 1.4,
+      and where every number comes from.
+    </p>
+    <p class="mt-3 flex flex-wrap gap-2 text-sm text-gray-700">
+      <span class="rounded-full border border-gray-300 bg-white px-3 py-1" data-emergency-count>{blocks.length} {countryWord} · {snap.serviceCount} {lineWord}</span>
+      {snap.lastChecked && <span class="rounded-full border border-gray-300 bg-white px-3 py-1">Last checked {formatDate(snap.lastChecked)}</span>}
+      <span class="rounded-full border border-gray-300 bg-white px-3 py-1">Official sources only</span>
+    </p>
+
+    <aside class="mt-6 rounded-xl border-2 border-red-300 bg-red-50 px-5 py-4 text-red-900" role="note" data-emergency-112>
+      <p class="font-semibold">Someone is in danger or may have been poisoned?</p>
+      <p class="mt-1 leading-relaxed">
+        Call the local emergency number first:
+        <a href="tel:112" class="font-bold underline">112</a> in the European Union,
+        <a href="tel:911" class="font-bold underline">911</a> in the United States.
+        The lines on this page give poison information. They do not replace the emergency services.
+      </p>
+    </aside>
+
+    <section class="mt-10" id="how-to-read">
+      <h2 class="text-xl font-semibold text-[#062A78] mb-3" style={H2}>How to read this page</h2>
+      <ul class="space-y-3 text-gray-700 leading-relaxed">
+        <li>
+          <strong>The rule for each country.</strong> Each country starts with what its official sources say about the number in
+          section 1.4, with a link and the date we read it.
+          <dl class="mt-2 grid gap-2 sm:grid-cols-2">
+            {rulesUsed.map((k) => (
+              <div class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+                <dt class="font-semibold text-gray-900">{ruleOf(k).label}</dt>
+                <dd>{ruleOf(k).meaning}</dd>
+              </div>
+            ))}
+          </dl>
+        </li>
+        <li>
+          <strong>“For section 1.4” on each line.</strong> How the service itself, or the official source, relates the line to
+          safety data sheets.
+          <dl class="mt-2 grid gap-2 sm:grid-cols-2">
+            {usesUsed.map((u) => (
+              <div class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+                <dt class="font-semibold text-gray-900">{EMERGENCY_SDS_USES[u].label}</dt>
+                <dd>{EMERGENCY_SDS_USES[u].meaning}</dd>
+              </div>
+            ))}
+          </dl>
+        </li>
+        <li>
+          <strong>The check label on each number.</strong>
+          <dl class="mt-2 grid gap-2 sm:grid-cols-2">
+            {verificationsUsed.map((v) => (
+              <div class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+                <dt class="font-semibold text-gray-900">{EMERGENCY_VERIFICATIONS[v].label}</dt>
+                <dd>{EMERGENCY_VERIFICATIONS[v].meaning}</dd>
+              </div>
+            ))}
+          </dl>
+        </li>
+        <li>
+          <strong>Before you print a number on a safety data sheet.</strong> Numbers change. Open the source page next to the
+          number, and ask the service whether it agrees to be named in section 1.4. This page is a reading aid, not legal advice.
+        </li>
+      </ul>
+    </section>
+
+    <section class="mt-10" id="countries">
+      <h2 class="text-xl font-semibold text-[#062A78] mb-3" style={H2}>Countries</h2>
+      <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+        <table class="min-w-full text-sm text-left" data-emergency-table>
+          <thead class="bg-gray-50 text-gray-600">
+            <tr>
+              <th scope="col" class="px-4 py-2 font-semibold">Country</th>
+              <th scope="col" class="px-4 py-2 font-semibold">What the sources say about section 1.4</th>
+              <th scope="col" class="px-4 py-2 font-semibold">Lines</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {blocks.map((b) => (
+              <tr>
+                <th scope="row" class="px-4 py-2 font-semibold"><a href={`#${anchor(b.country.country_code)}`} class="text-[#062A78] hover:underline">{b.country.name_en}</a></th>
+                <td class="px-4 py-2 text-gray-700">{ruleOf(b.country.sds_rule_kind).label}</td>
+                <td class="px-4 py-2 text-gray-700">{b.services.length > 0 ? b.services.length : 'National number only'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="mt-10 space-y-12">
+      {blocks.map((b) => (
+        <section id={anchor(b.country.country_code)} class="scroll-mt-28" data-emergency-country={b.country.country_code}>
+          <h2 class="text-2xl font-bold text-gray-900" style={H2}>{b.country.name_en}</h2>
+
+          <div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-700 leading-relaxed">
+            <p><strong>{ruleOf(b.country.sds_rule_kind).label}.</strong> {b.country.sds_rule_summary}</p>
+            <p class="mt-1 text-sm text-gray-600">
+              <a href={b.country.sds_rule_source_url} rel="noopener" target="_blank" class="text-[#062A78] font-semibold hover:underline">Source ↗</a>
+              · read {formatDate(b.country.sds_rule_checked_on)}
+            </p>
+          </div>
+
+          {b.country.general_number && b.country.general_number_src && (
+            <p class="mt-3 text-gray-700">
+              <strong>National number:</strong>
+              <a href={tel(b.country.general_number)} class="ml-1 font-semibold text-[#062A78] hover:underline" data-emergency-tel>{b.country.general_number}</a>
+              · <a href={b.country.general_number_src} rel="noopener" target="_blank" class="text-[#062A78] hover:underline">Source ↗</a>
+            </p>
+          )}
+
+          {b.services.length > 0 && (
+            <ul class="mt-4 grid gap-4 lg:grid-cols-2">
+              {b.services.map((s) => (
+                <li class="rounded-xl border border-gray-200 bg-white p-4" data-emergency-service={`${s.country_code.toLowerCase()}/${s.slug}`}>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">{EMERGENCY_KINDS[s.kind as EmergencyKind].label}</p>
+                  <h3 class="mt-1 text-lg font-semibold text-gray-900" style={H2}>{s.name}</h3>
+                  {s.operator && <p class="text-sm text-gray-600">{s.operator}</p>}
+                  <p class="mt-2 text-xl font-bold">
+                    <a href={`tel:${s.phone_tel}`} class="text-[#062A78] hover:underline" data-emergency-tel>{s.phone_display}</a>
+                  </p>
+                  <dl class="mt-3 space-y-1 text-sm text-gray-700">
+                    <div>
+                      <dt class="inline font-semibold">Hours:</dt>
+                      <dd class="inline">{EMERGENCY_HOURS[s.hours_kind as EmergencyHours].label}{s.hours_note ? `. ${s.hours_note}` : ''}</dd>
+                    </div>
+                    <div>
+                      <dt class="inline font-semibold">Who may call:</dt>
+                      <dd class="inline">{EMERGENCY_AUDIENCES[s.audience as EmergencyAudience].label}</dd>
+                    </div>
+                    {s.languages.length > 0 && (
+                      <div>
+                        <dt class="inline font-semibold">Languages:</dt>
+                        <dd class="inline">{s.languages.join(', ')}</dd>
+                      </div>
+                    )}
+                    <div>
+                      <dt class="inline font-semibold">For section 1.4:</dt>
+                      <dd class="inline">{EMERGENCY_SDS_USES[s.sds_use as EmergencySdsUse].label}{s.sds_use_note ? `. ${s.sds_use_note}` : ''}</dd>
+                    </div>
+                    {s.cost_note && (
+                      <div>
+                        <dt class="inline font-semibold">Cost:</dt>
+                        <dd class="inline">{s.cost_note}</dd>
+                      </div>
+                    )}
+                  </dl>
+                  <p class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-600">
+                    <span class="rounded-full border border-gray-300 bg-gray-50 px-2 py-0.5 font-semibold text-gray-800">{EMERGENCY_VERIFICATIONS[s.verification as EmergencyVerification].label}</span>
+                    <a href={s.source_url} rel="noopener" target="_blank" class="text-[#062A78] font-semibold hover:underline">Source ↗</a>
+                    {s.source_date && <span>page dated {formatDate(s.source_date)}</span>}
+                    <span>checked {formatDate(s.checked_on)}</span>
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ))}
+    </div>
+
+    <section class="mt-12 rounded-xl border border-gray-200 bg-gray-50 px-5 py-4 text-gray-700 leading-relaxed" id="corrections">
+      <h2 class="text-lg font-semibold text-[#062A78] mb-1" style={H2}>Spotted a wrong or missing number?</h2>
+      <p>
+        Write to <a href="mailto:hello@ghspictograms.com" class="text-[#062A78] font-semibold hover:underline">hello@ghspictograms.com</a>
+        with the country and the page that shows the correct number. We check it against that page and correct this one.
+      </p>
+    </section>
+  </div>
+</Layout>
