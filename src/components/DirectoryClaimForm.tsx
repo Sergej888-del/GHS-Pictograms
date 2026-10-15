@@ -70,7 +70,8 @@ export default function DirectoryClaimForm({ mode, slug, title }: Props) {
           A person reads every request. We reply from <strong>hello@ghspictograms.com</strong>, usually within a few
           working days, with the list of facts the card prints so you can confirm or correct each line. A claimed listing
           shows “Verified by owner” with the date, your logo and a short description once the facts are confirmed;
-          claiming is free, and verified listings come first in their section.
+          claiming is free, and verified listings come first in their section. The{' '}
+          <a href="/directory/terms/">listing terms</a> say what claiming does and does not involve.
         </p>
       </div>
     )

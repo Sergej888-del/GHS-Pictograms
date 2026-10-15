@@ -336,6 +336,8 @@ async function fetchDirectorySitemapEntries() {
   const { entries, facts } = await loadDirectory();
   return [
     { url: '/directory/', changefreq: 'weekly', priority: '0.8' },
+    // s110: public listing terms — the conditions vendors ask about before claiming
+    { url: '/directory/terms/', changefreq: 'yearly', priority: '0.4' },
     ...CATEGORIES.map((c) => ({ url: categoryHref(c.slug), changefreq: 'weekly', priority: '0.75' })),
     // s96: четыре подраздела услуг — свои страницы под «sds translation services», «sds authoring services»
     ...SUBCATEGORIES.map((s) => ({ url: subcategoryHref(s.slug), changefreq: 'weekly', priority: '0.7' })),

@@ -8817,6 +8817,61 @@ const CHECKS: Check[] = [
     },
   },
   {
+    id: 'dir-terms',
+    group: 'Directory',
+    title: 'Условия размещения (s110): /directory/terms/ есть, индексируется, в sitemap; в тексте все обещания вендору; ссылка с хаба и с каждой карточки; платных записей нет (§2 пишет, что их нет)',
+    run: async () => {
+      const raw = readPage('directory/terms/index.html')
+      if (!raw) {
+        return { id: 'dir-terms', group: 'Directory', ok: false, headline: 'нет dist/directory/terms/index.html', detail: [] }
+      }
+      const problems: string[] = []
+      const text = raw.replace(/\s+/g, ' ')
+      // Promises made to vendors in writing (Every Software Solutions, 15.10.2026). Markers are ASCII (rule 3).
+      const MARKERS = [
+        'Listing, claiming and keeping a claimed listing are free',
+        'creates no contract',
+        'ask for its listing to be removed at any time, claimed or not',
+        'withdraw any of them at any time',
+        'offered, never required',
+        'It does not override',
+        'None exists today',
+        'mailto:hello@ghspictograms.com',
+      ]
+      assertAscii('dir-terms', MARKERS)
+      for (const m of MARKERS) if (!text.includes(m)) problems.push(`в тексте условий нет: ${m}`)
+
+      const canonicalTag = raw.match(/<link\b[^>]*\brel="canonical"[^>]*>/)?.[0] ?? ''
+      if (!canonicalTag.includes('https://ghspictograms.com/directory/terms/')) problems.push('canonical не указывает на https://ghspictograms.com/directory/terms/')
+      if (/<meta[^>]+name="robots"[^>]+noindex/i.test(raw)) problems.push('страница условий под noindex')
+
+      const sitemap = existsSync(join(DIST, 'sitemap.xml')) ? readFileSync(join(DIST, 'sitemap.xml'), 'utf8') : ''
+      if (!sitemap.includes('<loc>https://ghspictograms.com/directory/terms/</loc>')) problems.push('в sitemap нет /directory/terms/')
+
+      const LINK = 'href="/directory/terms/"'
+      if (!(readPage('directory/index.html') ?? '').includes(LINK)) problems.push('на хабе /directory/ нет ссылки на условия')
+
+      const rows = await selectAll<{ id: number; slug: string; category: string; state: string; tier: string }>(
+        'directory_entries', 'id, slug, category, state, tier', (q) => q.order('id'))
+      let cards = 0
+      for (const r of rows) {
+        if (r.tier === 'featured') problems.push(`платная запись ${r.slug}: §2 условий пишет, что платных размещений нет — обновить текст`)
+        if (r.state !== 'live' && r.state !== 'closed') continue
+        const page = readPage(`directory/${r.category}/${r.slug}/index.html`)
+        if (page === null) { problems.push(`нет страницы карточки: ${r.category}/${r.slug}`); continue }
+        cards++
+        if (!page.includes(LINK)) problems.push(`на карточке ${r.category}/${r.slug} нет ссылки на условия`)
+      }
+      return {
+        id: 'dir-terms', group: 'Directory', ok: problems.length === 0,
+        headline: problems.length === 0
+          ? `условия: ${MARKERS.length} обещаний в тексте, canonical, sitemap, ссылка с хаба и с ${cards} карточек, платных записей нет`
+          : `проблем: ${problems.length}`,
+        detail: problems.slice(0, 30),
+      }
+    },
+  },
+  {
     id: 'dir-service-filter',
     group: 'Directory',
     title: 'Фильтры Service и Regime (s109): data-svc каждой строки и карточки = подтверждённые факты service_scope из базы; опции и счётчики = база; без таких фактов поля нет',

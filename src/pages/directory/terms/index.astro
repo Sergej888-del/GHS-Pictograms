@@ -1,0 +1,129 @@
+---
+// /directory/terms/ — public listing terms of the GHS Tools & Services Directory (s110, 15.10.2026).
+//
+// Why it exists: a vendor (Every Software Solutions) asked for the conditions we state by e-mail — free listing,
+// no contract, removal on request, optional badge and links, the right to withdraw logo and content — to be
+// written down publicly before it considers claiming. Policy source: Sergej's decisions of 15.10.2026
+// (vendor-requested removal is fine; a paid Sponsored placement is mentioned only as an optional possibility).
+//
+// ⚠ §2 says that no paid placement exists today. check:dist (dir-terms) fails if any entry has tier 'featured',
+//   so this text cannot silently go stale.
+// ⚠ §4 does not contradict the hub principle "Nothing is deleted": that principle is about tools that closed down.
+import Layout from '../../../layouts/Layout.astro'
+
+const title = 'Directory Listing Terms'
+const description =
+  'The terms that apply to every listing in the GHS Tools & Services Directory: free to list and to claim, no contract, removal on request, optional badge and links.'
+const canonical = 'https://ghspictograms.com/directory/terms/'
+const updated = '15 October 2026'
+export const prerender = true
+
+const H2 = "font-family: 'Space Grotesk', system-ui, sans-serif"
+---
+
+<Layout title={title} description={description} canonical={canonical}>
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <nav class="text-sm text-gray-500 mb-6" aria-label="Breadcrumb">
+      <a href="/" class="text-[#062A78] hover:underline">Home</a>
+      <span class="mx-2">→</span>
+      <a href="/directory/" class="text-[#062A78] hover:underline">Directory</a>
+      <span class="mx-2">→</span>
+      <span class="text-gray-700">Listing terms</span>
+    </nav>
+
+    <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight" style={H2}>
+      Directory listing terms
+    </h1>
+    <p class="mt-4 text-gray-700 leading-relaxed text-lg">
+      These terms apply to every listing in the
+      <a href="/directory/" class="text-[#062A78] font-semibold hover:underline">GHS Tools &amp; Services Directory</a>,
+      claimed or not. They supplement the <a href="/terms/" class="text-[#062A78] font-semibold hover:underline">Terms of Service</a>
+      of ghspictograms.com. The directory is run by SIA Basis Assets, Riga, Latvia.
+    </p>
+    <p class="mt-2 text-sm text-gray-500">Last updated: {updated}</p>
+
+    <ul class="mt-6 grid gap-2 sm:grid-cols-2 text-gray-800">
+      <li class="rounded-lg border border-gray-200 bg-white px-4 py-3"><strong>Free.</strong> Listing, claiming and keeping a claimed listing cost nothing.</li>
+      <li class="rounded-lg border border-gray-200 bg-white px-4 py-3"><strong>No contract.</strong> No signature, no minimum period, no penalty.</li>
+      <li class="rounded-lg border border-gray-200 bg-white px-4 py-3"><strong>Removal on request.</strong> At any time, claimed or not.</li>
+      <li class="rounded-lg border border-gray-200 bg-white px-4 py-3"><strong>Your content is yours.</strong> Logo and text can be withdrawn at any time.</li>
+      <li class="rounded-lg border border-gray-200 bg-white px-4 py-3 sm:col-span-2"><strong>Badge and links are optional.</strong> Nothing about a listing depends on them.</li>
+    </ul>
+
+    <div class="mt-10 space-y-8 text-gray-700 leading-relaxed">
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style={H2}>1. What a listing is</h2>
+        <p>
+          A listing is a card of facts about a vendor’s product or service. Each fact comes from the vendor’s own public
+          pages or an official register, with its source and the date we checked it. We do not rate, rank or score anyone.
+          A card is marked “not verified by owner” until the vendor claims it.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style={H2}>2. Cost</h2>
+        <p>
+          Listing, claiming and keeping a claimed listing are free: no fee, subscription, renewal or other payment is
+          required, now or later. The order inside a section is never sold: verified listings come first, ordered by the date
+          the owner last confirmed the facts, and any vendor can reach that by claiming for free. A paid placement may be
+          offered one day; if so, it would be optional, would sit in a separate block marked Sponsored, would move nothing
+          in the list and would have nothing to do with claiming. None exists today.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style={H2}>3. No contract</h2>
+        <p>
+          Claiming is an exchange of e-mails from an address on the vendor’s own domain. It creates no contract: no
+          signature, no minimum period, no penalty, nothing to cancel. The owner may stop at any time.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style={H2}>4. Removal</h2>
+        <p>
+          A vendor may ask for its listing to be removed at any time, claimed or not, by writing to
+          <a href="mailto:hello@ghspictograms.com" class="text-[#062A78] font-semibold hover:underline">hello@ghspictograms.com</a>
+          from an address on its own domain. Within a few working days we remove the card and everything the owner supplied,
+          and we do not list the vendor again unless it asks us to. The principle “Nothing is deleted” on the
+          <a href="/directory/" class="text-[#062A78] font-semibold hover:underline">directory page</a> concerns tools that have
+          closed down: they stay on record as closed. It does not override a vendor’s own request.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style={H2}>5. Logo, description and other content from the owner</h2>
+        <p>
+          A logo, a short description and links appear only if the owner supplies them. The owner may withdraw any of them at
+          any time by writing to the same address. We then take them off, together with anything on the card that rests only
+          on the owner’s word, and the card returns to the sourced facts.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style={H2}>6. Badge and links</h2>
+        <p>
+          The directory’s badges, such as “Verified listing”, are offered, never required. A vendor is not obliged to display
+          a badge or to link to this site, and nothing about its listing depends on it.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style={H2}>7. Corrections</h2>
+        <p>
+          If a fact on a card is wrong or out of date, write to
+          <a href="mailto:hello@ghspictograms.com" class="text-[#062A78] font-semibold hover:underline">hello@ghspictograms.com</a>.
+          We check it against the vendor’s page and correct it, usually within a few working days. Corrections are free.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold text-[#062A78] mb-3" style={H2}>Contact</h2>
+        <p>
+          <a href="mailto:hello@ghspictograms.com" class="text-[#062A78] font-semibold hover:underline">hello@ghspictograms.com</a>
+          · SIA Basis Assets, Riga, Latvia
+        </p>
+      </section>
+    </div>
+  </div>
+</Layout>
