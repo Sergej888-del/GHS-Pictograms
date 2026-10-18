@@ -33,6 +33,7 @@
     "check:facts": "node --experimental-strip-types scripts/check-facts.ts",
     "check:search": "node --experimental-strip-types scripts/check-search.ts",
     "import:directory": "node --use-system-ca --import tsx scripts/import-directory.ts",
+    "import:research": "node --use-system-ca --import tsx scripts/import-research.ts",
     "check:directory": "node --use-system-ca --import tsx scripts/check-directory.ts",
     "check:directory-geo": "node --experimental-strip-types scripts/check-directory-geo.ts",
     "build:annex6-classification": "node --use-system-ca --experimental-strip-types scripts/build-annex6-classification.ts"

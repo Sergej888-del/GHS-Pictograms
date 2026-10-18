@@ -40,7 +40,8 @@
 // печатаются — даже подтверждённые. Под цитатой читатель видит, из какого документа она.
 
 import { GEO, geoTokens, marketSummary, marketTokens } from './directoryGeo'
-import { SERVICE_FACT_KINDS, SERVICE_REGIMES, SERVICE_SCOPE_VALUES } from './directoryNumbers'
+import { SERVICE_FACT_KINDS, SERVICE_REGIMES } from './directoryNumbers'
+import { CODES, V2_NEW_PUBLIC_KINDS } from './directoryVocab'
 import { directoryAccentClass } from './sectionAccent'
 
 export const DIRECTORY_BASE = '/directory/'
@@ -388,6 +389,11 @@ export type FactKind =
   | 'regulation' | 'market' | 'turnaround' | 'founded' | 'hosting' | 'format'
   // s109 (109-directory-a2-kinds-or-emergency.sql): kinds for service providers; printed only when confirmed (SERVICE_KINDS)
   | 'service_scope' | 'sector' | 'billing_model' | 'contract_term' | 'accreditation'
+  // s112 (123-directory-vocab-v2.sql): public kinds of vocabulary v2. Gated, and not printed until the card renders them
+  // (UNPRINTED_KINDS). Private kinds never reach this table — they live in directory_research_facts.
+  | 'legal_entity' | 'offices' | 'contract_flag' | 'governing_law' | 'liability_cap' | 'data_protection' | 'security'
+  | 'hosting_provider' | 'capability' | 'ai_use' | 'label_standard' | 'print_tech' | 'min_order' | 'training_mode'
+  | 'training_level' | 'duration' | 'certificate' | 'cpd_points' | 'hotline' | 'data_scope' | 'update_frequency'
 
 /**
  * s104: шесть видов, собранных при перепроверке (11.10). Решение Сергея тем же вечером: печатать сразу — но ТОЛЬКО
@@ -467,12 +473,24 @@ export interface DirectoryFact {
   provided_by: 'editor' | 'owner'
   /** Этот факт — основание для дополнительной категории (`also_in`); только у kind = 'feature'. */
   basis_for: string | null
+  /** s112: yes / no / not_stated (vocabulary v2). Only `yes` prints; the others feed the report. Absent = yes. */
+  status?: 'yes' | 'no' | 'not_stated'
+  /** s112: SDS Basket item code of a price (directoryVocab `price.basket`). */
+  basket?: string | null
 }
 
 // ─────────────────────────── правила печати ───────────────────────────
 
 /** Факты, которые печатаются только подтверждёнными (см. шапку файла; s104 — и шесть видов шага C; s109 — и пять видов услуг). */
-export const GATED_KINDS: readonly FactKind[] = ['price', 'pricing_note', 'responsibility', ...PHASE_C_KINDS, ...SERVICE_KINDS]
+export const GATED_KINDS: readonly FactKind[] = [
+  'price', 'pricing_note', 'responsibility', ...PHASE_C_KINDS, ...SERVICE_KINDS, ...(V2_NEW_PUBLIC_KINDS as readonly FactKind[]),
+]
+
+/**
+ * s112: v2 kinds the card does not render yet. They are not printable, so they neither appear on a page nor count
+ * toward ENTRY_INDEX_MIN_FACTS. When the card starts rendering a kind, take it out of this list in the same commit.
+ */
+export const UNPRINTED_KINDS: readonly FactKind[] = V2_NEW_PUBLIC_KINDS as readonly FactKind[]
 
 /** Цитата об ответственности взята из юридического документа (а не из блога, FAQ или страницы продукта). */
 export function legalSource(f: Pick<DirectoryFact, 'kind' | 'source_kind'>): boolean {
@@ -485,7 +503,12 @@ export function legalSource(f: Pick<DirectoryFact, 'kind' | 'source_kind'>): boo
  * ценами — без подтверждённой цены условия к ней бессмысленны, поэтому гейт тот же.
  * ⚠ `responsibility` проходит два гейта: подтверждена дословность И источник — юридический документ.
  */
-export function printable(f: Pick<DirectoryFact, 'kind' | 'confirmed' | 'source_kind'> & { provided_by?: 'editor' | 'owner' }): boolean {
+export function printable(
+  f: Pick<DirectoryFact, 'kind' | 'confirmed' | 'source_kind'> & { provided_by?: 'editor' | 'owner'; status?: DirectoryFact['status'] },
+): boolean {
+  // s112: «no» and «not stated» are recorded for the report and never print; nor do kinds the card does not render yet
+  if (f.status != null && f.status !== 'yes') return false
+  if (UNPRINTED_KINDS.includes(f.kind)) return false
   if (!GATED_KINDS.includes(f.kind)) return true
   // s96: цену, которую назвал сам владелец, печатаем и до подтверждения — это его цифра о себе, с подписью
   // «stated by the vendor» (ownerStated). Цитата об ответственности — без исключений: оба гейта.
@@ -507,7 +530,7 @@ export function ownerStated(f: Pick<DirectoryFact, 'confirmed'> & { provided_by?
  */
 export const ENTRY_INDEX_MIN_FACTS = 5
 
-type FactForIndex = Pick<DirectoryFact, 'entry_id' | 'kind' | 'confirmed' | 'source_kind'>
+type FactForIndex = Pick<DirectoryFact, 'entry_id' | 'kind' | 'confirmed' | 'source_kind' | 'status'>
 
 /** Сколько фактов записи печатается на её карточке. */
 export function printableFactCount(entryId: number, facts: readonly FactForIndex[]): number {
@@ -809,7 +832,25 @@ export function first(card: CardModel, kind: FactKind): DirectoryFact | null {
 }
 
 export function jurisdictionsOf(card: CardModel): string[] {
-  return (card.facts.jurisdiction ?? []).map((f) => f.value)
+  const out: string[] = []
+  const add = (j: string) => { if (!out.includes(j)) out.push(j) }
+  for (const f of card.facts.jurisdiction ?? []) {
+    // s112: a v2 fact names countries in `detail` (ISO codes) and its role in `label`; the card keeps its five
+    // regime badges, so the countries are folded into them. Classification-only or registration-only facts are not
+    // SDS / label coverage and do not make a badge.
+    if (f.label && f.detail) {
+      if (f.label !== 'sds_format' && f.label !== 'label') continue
+      for (const code of f.detail.split(',').map((c) => c.trim()).filter(Boolean)) add(JURISDICTION_OF_CODE[code] ?? 'other GHS countries')
+    } else add(f.value)
+  }
+  return out
+}
+
+/** s112: country or bloc code of a v2 jurisdiction fact → the regime badge the card prints. */
+const JURISDICTION_OF_CODE: Record<string, string> = {
+  EU: 'EU CLP', EEA: 'EU CLP', ...Object.fromEntries(['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE',
+    'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'IS', 'LI', 'NO'].map((c) => [c, 'EU CLP'])),
+  GB: 'GB CLP', US: 'US OSHA HCS', CA: 'Canada WHMIS',
 }
 
 // ─────────────────────────── география для фильтров (s108, шаг A1) ───────────────────────────
@@ -875,7 +916,9 @@ export interface ServiceOption { value: string; label: string; n: number }
 /** Options of the two selects, from the token lists of the cards on one page. A value nobody on the page offers is not an option. */
 export function serviceFilterOptions(tokensOf: readonly (readonly string[])[]): { services: ServiceOption[]; regimes: ServiceOption[] } {
   const count = (token: string) => tokensOf.filter((t) => t.includes(token)).length
-  const services = SERVICE_SCOPE_VALUES.map((v) => ({ value: serviceSlug(v), label: String(v), n: count(serviceSlug(v)) })).filter((o) => o.n > 0)
+  // s112: every service of the vocabulary (labels of the old nine equal their old wording, so their slugs are unchanged)
+  const labels = CODES.filter((c) => c.vocab === 'service_scope' && !c.retired).map((c) => c.label)
+  const services = labels.map((v) => ({ value: serviceSlug(v), label: v, n: count(serviceSlug(v)) })).filter((o) => o.n > 0)
   const regimes = Object.keys(SERVICE_REGIMES).map((c) => ({ value: c, label: SERVICE_REGIMES[c], n: count(`@${c}`) })).filter((o) => o.n > 0)
   return { services, regimes }
 }

@@ -83,6 +83,8 @@ import {
   // s109 (A2.2): Service and Regime filters
   serviceTokensOf as dirServiceTokens, serviceFilterOptions as dirServiceOptions,
 } from '../src/lib/directoryModel'
+// s112: vocabulary v2 — the printed label of a coded value (the pages get it from directoryData)
+import { displayValue as vocabDisplayValue } from '../src/lib/directoryVocab'
 // s108 (A1b): география общего вида /directory/all/ — те же функции, по которым собрана страница.
 import { marketTokens as dirMarketTokens } from '../src/lib/directoryGeo'
 import { EMERGENCY_VERIFICATIONS } from '../src/lib/emergencyVocab'
@@ -8982,8 +8984,9 @@ const CHECKS: Check[] = [
         'directory_facts', 'id, entry_id, kind, value, detail, confirmed, source_kind, provided_by', (q) => q.eq('kind', 'service_scope').order('id'))
       const problems: string[] = []
       // The same function the pages use, fed with the database rows (confirmed facts only, through printable).
+      // s112: codes become their printed labels exactly as directoryData does for the pages
       const tokensOf = (entryId: number): string[] =>
-        dirServiceTokens({ facts: { service_scope: facts.filter((f) => f.entry_id === entryId) } } as any)
+        dirServiceTokens({ facts: { service_scope: facts.filter((f) => f.entry_id === entryId).map((f) => ({ ...f, value: vocabDisplayValue(f.kind, f.value) })) } } as any)
       const pages: string[] = [
         ...DIR_CATEGORIES.filter((c) => c.slug !== 'closed').map((c) => `directory/${c.slug}/index.html`),
         ...DIR_SUBCATEGORIES.map((x) => `directory/${DIR_SUB_PARENT}/${x.slug}/index.html`),

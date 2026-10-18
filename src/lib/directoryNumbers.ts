@@ -46,6 +46,7 @@
  */
 
 import { parseMarket } from './directoryGeo'
+import { displayValue, isCode } from './directoryVocab'
 
 export const NUM_QUALS = ['exact', 'from', 'at_least', 'up_to', 'approx', 'range'] as const
 
@@ -155,6 +156,16 @@ export const CONTRACT_TERM_LABELS = ['minimum_term', 'notice_period', 'renewal_p
 /** accreditation values: only recognitions with a public register. Management-system certificates stay in `certification`. */
 export const ACCREDITATION_VALUES = ['ISO/IEC 17025 accredited', 'OECD GLP test facility', 'Approved training provider'] as const
 
+/** s112: units of the numeric public kinds of vocabulary v2 (liability_cap: months for fees_paid, flat + currency for fixed_sum). */
+export const V2_NUMERIC_UNITS: Readonly<Record<string, readonly string[]>> = {
+  liability_cap: ['months', 'flat'],
+  security: ['percent'],
+  min_order: ['labels', 'rolls', 'sheets', 'units'],
+  duration: ['hours', 'days'],
+  cpd_points: ['points'],
+  hotline: ['languages'],
+}
+
 export const NUMERIC_FACT_COLS = ['num', 'num_max', 'num_qual', 'unit', 'unit_qty', 'period', 'currency', 'price_role'] as const
 export const TERMS_ENTRY_COLS = ['terms_kind', 'terms_doc_url', 'terms_dated'] as const
 
@@ -166,6 +177,8 @@ export function numbersInText(s: string): number[] {
 }
 
 const has = (list: readonly string[], v: unknown) => typeof v === 'string' && list.includes(v)
+/** s112: a value of an old closed list may be its old wording or its vocabulary v2 code. */
+const known = (kind: string, list: readonly string[], v: unknown) => has(list, v) || (typeof v === 'string' && isCode(kind, v))
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 
 /** Брак числовых полей одного факта; пустой массив — всё в порядке. */
@@ -175,7 +188,9 @@ export function factNumberProblems(f: Loose): string[] {
   const value = String(f.value ?? '')
   const set = (k: string) => f[k] !== undefined && f[k] !== null
   const priceOnly = ['period', 'currency', 'price_role'].filter(set)
-  if (kind !== 'price' && priceOnly.length) p.push(`${priceOnly.join(', ')} — только у цены`)
+  // s112: a fixed-sum liability cap carries a currency (vocabulary v2, liability_cap.fixed_sum)
+  const allowed = kind === 'price' ? priceOnly : kind === 'liability_cap' ? priceOnly.filter((k) => k === 'currency') : []
+  if (priceOnly.length > allowed.length) p.push(`${priceOnly.filter((k) => !allowed.includes(k)).join(', ')} — только у цены`)
   if (set('num') !== set('num_qual')) p.push('num и num_qual ставятся вместе')
   if (set('num_qual') && !has(NUM_QUALS, f.num_qual)) p.push(`num_qual «${f.num_qual}» вне словаря`)
   if (set('num') && !isNum(f.num)) p.push('num — не число')
@@ -234,6 +249,18 @@ export function factNumberProblems(f: Loose): string[] {
     if (isNum(f.num_max) && !numbersInText(value).includes(f.num_max)) p.push(`num_max ${f.num_max} is not in the text "${value}"`)
     if (set('label') && !has(CONTRACT_TERM_LABELS, f.label)) p.push(`label "${f.label}" is outside CONTRACT_TERM_LABELS`)
     if (set('unit_qty')) p.push('contract_term has no unit_qty')
+  } else if (kind in V2_NUMERIC_UNITS) {
+    // s112: numeric public kinds of vocabulary v2 (directoryVocab.ts). The number must stand in the vendor's text.
+    if (set('num') || set('unit')) {
+      const units = V2_NUMERIC_UNITS[kind]
+      if (!has(units, f.unit)) p.push(`unit «${f.unit ?? ''}» for ${kind}: ${units.join(' | ')}`)
+      if (!isNum(f.num)) p.push(`${kind} with a unit needs num`)
+      // a cap period is often written in words («one month», «annual fees»); its quote is the proof, not the digit
+      else if (!(kind === 'liability_cap' && f.unit === 'months') && !numbersInText(value).includes(f.num)) p.push(`num ${f.num} is not in the text "${value}"`)
+      if (isNum(f.num_max) && !numbersInText(value).includes(f.num_max)) p.push(`num_max ${f.num_max} is not in the text "${value}"`)
+      if (set('unit_qty')) p.push(`${kind} has no unit_qty`)
+    }
+    if (kind === 'liability_cap' && set('currency') && f.unit !== 'flat') p.push('liability_cap: a currency goes with unit flat (fixed_sum)')
   } else if (set('num') || set('unit') || set('unit_qty')) {
     p.push(`числа — только у price / language / free_trial / turnaround / founded / contract_term, не у ${kind}`)
   }
@@ -246,7 +273,7 @@ export function factNumberProblems(f: Loose): string[] {
       p.push(`value «${value}» вне словаря актов для ${label}`)
     if (!set('evidence')) p.push('у акта обязателен evidence (номер как напечатан)')
   } else if (kind === 'format') {
-    if (!has(FORMAT_VALUES, value)) p.push(`формат «${value}» вне словаря: ${FORMAT_VALUES.join(' | ')}`)
+    if (!known('format', FORMAT_VALUES, value)) p.push(`формат «${value}» вне словаря: ${FORMAT_VALUES.join(' | ')}`)
   } else if (kind === 'market' || kind === 'hosting') {
     if (!REGION_DETAIL_RE.test(String(f.detail ?? ''))) p.push(`detail «${f.detail ?? ''}» — коды ISO 3166-1 alpha-2 / EU / EEA / worldwide через запятую, либо unspecified`)
     // s108 (A1): код должен быть в таблице directoryGeo.GEO — иначе фильтр «Operates in» молча потеряет эту страну.
@@ -258,17 +285,17 @@ export function factNumberProblems(f: Loose): string[] {
     if (!set('evidence')) p.push(`${kind} needs evidence (the phrase as printed on the source page): without it the fact can never be confirmed or printed`)
     const detail = String(f.detail ?? '')
     if (kind === 'service_scope') {
-      if (!has(SERVICE_SCOPE_VALUES, value)) p.push(`value "${value}" is outside SERVICE_SCOPE_VALUES`)
+      if (!known('service_scope', SERVICE_SCOPE_VALUES, value)) p.push(`value "${value}" is outside SERVICE_SCOPE_VALUES`)
       if (detail) {
         if (!REGIME_DETAIL_RE.test(detail)) p.push(`detail "${detail}" must be comma-separated regime codes (lower case, e.g. eu_reach,uk_reach)`)
         else for (const c of detail.split(',')) if (!Object.prototype.hasOwnProperty.call(SERVICE_REGIMES, c)) p.push(`regime "${c}" is not in SERVICE_REGIMES (src/lib/directoryNumbers.ts)`)
-      } else if (SCOPE_NEEDS_REGIME.includes(value)) p.push(`"${value}" needs detail = the regime codes the vendor names`)
+      } else if (SCOPE_NEEDS_REGIME.includes(displayValue('service_scope', value))) p.push(`"${value}" needs detail = the regime codes the vendor names`)
     } else if (kind === 'sector') {
-      if (!has(SECTOR_VALUES, value)) p.push(`value "${value}" is outside SECTOR_VALUES`)
+      if (!known('sector', SECTOR_VALUES, value)) p.push(`value "${value}" is outside SECTOR_VALUES`)
     } else if (kind === 'billing_model') {
-      if (!has(BILLING_MODEL_VALUES, value)) p.push(`value "${value}" is outside BILLING_MODEL_VALUES`)
+      if (!known('billing_model', BILLING_MODEL_VALUES, value)) p.push(`value "${value}" is outside BILLING_MODEL_VALUES`)
     } else if (kind === 'accreditation') {
-      if (!has(ACCREDITATION_VALUES, value)) p.push(`value "${value}" is outside ACCREDITATION_VALUES`)
+      if (!known('accreditation', ACCREDITATION_VALUES, value)) p.push(`value "${value}" is outside ACCREDITATION_VALUES`)
       if (!detail) p.push('accreditation needs detail = the accrediting body and the scope or register number')
     }
   }

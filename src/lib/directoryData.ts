@@ -13,6 +13,7 @@
 import { supabase } from './supabase'
 import { must } from './mustQuery'
 import type { DirectoryEntry, DirectoryFact } from './directoryModel'
+import { displayValue } from './directoryVocab'
 
 // ⚠ s96: профиль владельца (owner_confirmed_on … subcategory) — здесь; адрес и имя заявителя — в закрытой
 //   directory_claims, которую сборка не читает (и не может: грантов у anon нет).
@@ -20,7 +21,7 @@ const ENTRY_COLS =
   'id, slug, category, state, tier, title, vendor, url, description, description_source, hq_country, hq_country_source, reason, reason_source, closed_on, closed_source, successor, affiliate, affiliate_url, tags, claimed_on, last_verified, ' +
   'owner_confirmed_on, logo_path, owner_description, pricing_url, terms_url, screenshot_path, contact_url, rfq_opt_in, featured_from, featured_until, featured_slots, also_in, subcategory'
 const FACT_COLS =
-  'id, entry_id, kind, label, value, detail, quote, source_url, evidence, sort, checked_on, confirmed, confirmed_on, source_kind, provided_by, basis_for'
+  'id, entry_id, kind, label, value, detail, quote, source_url, evidence, sort, checked_on, confirmed, confirmed_on, source_kind, provided_by, basis_for, status, basket'
 
 export interface DirectorySnapshot {
   entries: DirectoryEntry[]
@@ -39,7 +40,8 @@ async function loadAll(): Promise<DirectorySnapshot> {
       `directory_facts ${from}-${from + 999}`,
       await supabase.from('directory_facts').select(FACT_COLS).order('id').range(from, from + 999),
     ) as unknown as DirectoryFact[]
-    facts.push(...chunk)
+    // s112: vocabulary v2 — a coded value reaches the pages as its printed label («saas» → «Cloud (SaaS)»).
+    facts.push(...chunk.map((f) => ({ ...f, value: displayValue(f.kind, f.value) })))
     if (chunk.length < 1000) break
   }
   // ⚠ Пустой каталог — не «нечего показать», а сломанный доступ (грант, политика, ключ).

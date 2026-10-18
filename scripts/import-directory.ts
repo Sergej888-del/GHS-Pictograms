@@ -56,6 +56,7 @@ import {
   NUMERIC_FACT_COLS, TERMS_ENTRY_COLS, entryTermsProblems, factNumberProblems,
 } from '../src/lib/directoryNumbers'
 import { geoProblems } from '../src/lib/directoryGeo'
+import { PRIVATE_KINDS, VOCAB_VERSION, vocabProblems } from '../src/lib/directoryVocab'
 
 config({ path: resolve(process.cwd(), '.env.local') })
 config()
@@ -98,6 +99,12 @@ if (strayKind.length) die(`source_kind положен только цитата�
 // в кавычках так нельзя: строчная буква в начале без «…» = ошибка посева.
 const fragment = resp.filter((f) => /^[a-z]/.test(String(f.quote ?? '')))
 if (fragment.length) die(`цитата начинается со строчной буквы без «…» (обрывок фразы?): ${fragment.slice(0, 8).map((f) => f.id).join(', ')}`)
+// s112: vocabulary v2 (src/lib/directoryVocab.ts). The repository is public: a private kind in this file would publish
+// research data, so it stops the import outright. Then kind, status, basket and the codes of v2 kinds.
+const privateHere = facts.filter((f) => PRIVATE_KINDS.includes(String(f.kind)))
+if (privateHere.length) die(`private kinds in the public seed (they belong to the research file outside the repository): ${privateHere.slice(0, 8).map((f) => `#${f.id} ${f.kind}`).join(', ')}`)
+const vocabBad = facts.flatMap((f) => vocabProblems(f as { kind: string }, 'public').map((p) => `fact #${f.id}: ${p}`))
+if (vocabBad.length) die(`facts outside vocabulary ${VOCAB_VERSION}:\n  ${vocabBad.slice(0, 20).join('\n  ')}${vocabBad.length > 20 ? `\n  … and ${vocabBad.length - 20} more` : ''}`)
 const legalKinds = resp.filter((f) => ['terms', 'legal_notice', 'policy'].includes(String(f.source_kind))).length
 console.log(`  цитат об ответственности ${resp.length}: из юридических документов ${legalKinds}, не печатаются ${resp.length - legalKinds}`)
 
@@ -161,11 +168,13 @@ const ENTRY_COLS = [
 ]
 const FACT_COLS = [
   'id', 'entry_id', 'kind', 'label', 'value', 'detail', 'quote', 'source_url', 'evidence', 'sort', 'checked_on', 'source_kind', 'provided_by', 'basis_for',
+  // s112 — vocabulary v2: yes / no / not_stated and the SDS Basket item of a price
+  'status', 'basket',
   // s103 — разобранные числа (directoryNumbers.ts)
   ...NUMERIC_FACT_COLS,
 ]
 // ⚠ NOT NULL-колонки с умолчанием: пустой массив / false, а не null (иначе 23502 на первой же строке).
-const DEFAULTS: Record<string, unknown> = { tags: [], featured_slots: [], also_in: [], rfq_opt_in: false, provided_by: 'editor' }
+const DEFAULTS: Record<string, unknown> = { tags: [], featured_slots: [], also_in: [], rfq_opt_in: false, provided_by: 'editor', status: 'yes' }
 const pick = (r: Row, cols: string[]) => Object.fromEntries(cols.map((c) => [c, r[c] ?? DEFAULTS[c] ?? null]))
 
 async function main() {

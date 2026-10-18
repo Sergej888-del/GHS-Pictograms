@@ -51,11 +51,17 @@ const contact = shown.contact && e.contact_url ? e.contact_url : null
 const ownerConfirmed = tier !== 'listed' ? formatDate(e.owner_confirmed_on ?? e.claimed_on) : ''
 const country = countryName(e.hq_country)
 const juris = jurisdictionsOf(card)
-const lang = first(card, 'language')
+// s112: v2 language facts carry a role; the card's Languages line is about documents (old facts have no role)
+const lang = (f.language ?? []).find((x) => !x.label || x.label === 'documents') ?? null
 const deployment = first(card, 'deployment')
 const pricingModel = first(card, 'pricing_model')
 const pricingStatement = first(card, 'pricing_statement')
 const trial = first(card, 'free_trial')
+// s112: the free_trial code says what is free — a demo on request is not a free trial
+const TRIAL_TEXT: Record<string, string> = {
+  demo_on_request: 'Demo on request', free_sample: 'Free sample document', free_tier: 'Free plan', trial_days: 'Free trial',
+}
+const trialText = trial ? (trial.label && TRIAL_TEXT[trial.label]) || 'Free trial or free account' : null
 const api = first(card, 'api')
 const ufi = first(card, 'ufi_pcn')
 const iso17100 = first(card, 'iso17100')
@@ -325,7 +331,7 @@ const hasDetails =
         <div>
           <dt>Also</dt>
           <dd class="dir-flags">
-            {trial && <span>Free trial or free account<a class="dir-src" href={trial.source_url} rel={src} target="_blank">source</a>{ownerStated(trial) && <Fragment set:html={STATED} />}</span>}
+            {trial && <span>{trialText}<a class="dir-src" href={trial.source_url} rel={src} target="_blank">source</a>{ownerStated(trial) && <Fragment set:html={STATED} />}</span>}
             {api && <span>API<a class="dir-src" href={api.source_url} rel={src} target="_blank">source</a>{ownerStated(api) && <Fragment set:html={STATED} />}</span>}
             {ufi && <span>UFI / poison centre notification<a class="dir-src" href={ufi.source_url} rel={src} target="_blank">source</a>{ownerStated(ufi) && <Fragment set:html={STATED} />}</span>}
             {iso17100 && <span>ISO 17100 certified<a class="dir-src" href={iso17100.source_url} rel={src} target="_blank">source</a>{ownerStated(iso17100) && <Fragment set:html={STATED} />}</span>}
@@ -339,6 +345,7 @@ const hasDetails =
     <details class="dir-more" open={variant === 'full'}>
       <summary>Prices, features and terms</summary>
 
+      {(card.prices.length > 0 || notes.length > 0 || card.pricesPartial || card.pricesPending || pricingStatement) && (
       <section class="dir-block">
         <h4>Prices</h4>
         {card.prices.length > 0 && (
@@ -379,6 +386,7 @@ const hasDetails =
           </p>
         )}
       </section>
+      )}
 
       {features.length > 0 && (
         <section class="dir-block">
