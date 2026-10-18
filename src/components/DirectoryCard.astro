@@ -76,7 +76,9 @@ const notes = (f.pricing_note ?? []).filter((n) => n.confirmed === true || owner
 // format — в раскрывающемся блоке. Статус названного акта (действует / заменён) карточка НЕ печатает (REGULATION_LABEL).
 const gated = (k: FactKind) => (f[k] ?? []).filter(printable)
 const market = gated('market')[0]
-const founded = gated('founded')[0]
+// s112: an entry may carry two founding facts (stated by the vendor, incorporated in a register): both print
+const foundedAll = gated('founded')
+const founded = foundedAll[0]
 const turnarounds = gated('turnaround')
 const regulations = gated('regulation')
 const hostings = gated('hosting')
@@ -322,9 +324,13 @@ const hasDetails =
         </div>
       )}
       {founded && (
-        <div data-fact="founded" data-fid={founded.id} data-dir-owner-fact={ownerStated(founded) ? '' : undefined}>
+        <div>
           <dt>Founded</dt>
-          <dd>{founded.value}<a class="dir-src" href={founded.source_url} rel={src} target="_blank">source</a>{ownerStated(founded) && <Fragment set:html={STATED} />}</dd>
+          <dd>
+            {foundedAll.map((x) => (
+              <span data-fact="founded" data-fid={x.id} data-dir-owner-fact={ownerStated(x) ? '' : undefined}>{x.value}<a class="dir-src" href={x.source_url} rel={src} target="_blank">source</a>{ownerStated(x) && <Fragment set:html={STATED} />}</span>
+            ))}
+          </dd>
         </div>
       )}
       {(trial || api || ufi || iso17100) && (

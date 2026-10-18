@@ -57,7 +57,7 @@ export const NUM_QUALS = ['exact', 'from', 'at_least', 'up_to', 'approx', 'range
  */
 export const PRICE_UNITS = [
   'flat', 'sds', 'user', 'site', 'workstation', 'licence', 'word', 'translation', 'label', 'package',
-  'language_option', 'document_block',
+  'language_option', 'document_block', 'hour',
 ] as const
 
 /**
