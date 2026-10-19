@@ -71,9 +71,9 @@ const SW: readonly Scope[] = ['software', 'databases']
 
 export const KINDS: readonly KindDef[] = [
   // existing kinds (s92–s109), kept as they are unless retired
-  { kind: 'jurisdiction', store: 'public', tier: 'T1', scope: ALL, codesIn: 'label', numeric: false, statuses: false, countryDetail: true, note: 'Countries the vendor names for SDS / labels; label = what is done for them (jurisdiction.role)' },
+  { kind: 'jurisdiction', store: 'public', tier: 'T1', scope: ALL, codesIn: 'label', codeVocab: 'jurisdiction.role', numeric: false, statuses: false, countryDetail: true, note: 'Countries the vendor names for SDS / labels; label = what is done for them (jurisdiction.role)' },
   { kind: 'jurisdiction_claim', store: 'public', tier: 'T2', scope: ALL, codesIn: 'none', numeric: false, statuses: false, retired: VOCAB_VERSION, replacedBy: 'jurisdiction', note: 'Free-text list; parsed into jurisdiction (named countries) and coverage_claim (unnamed)' },
-  { kind: 'language', store: 'public', tier: 'T1', scope: ALL, codesIn: 'label', numeric: true, statuses: false, languageDetail: true, note: 'label = role (language.role); num/unit as directoryNumbers.LANGUAGE_UNITS' },
+  { kind: 'language', store: 'public', tier: 'T1', scope: ALL, codesIn: 'label', codeVocab: 'language.role', numeric: true, statuses: false, languageDetail: true, note: 'label = role (language.role); num/unit as directoryNumbers.LANGUAGE_UNITS' },
   { kind: 'deployment', store: 'public', tier: 'T1', scope: ALL, codesIn: 'value', numeric: false, statuses: false, note: 'One fact per deployment mode' },
   { kind: 'platform', store: 'public', tier: 'T1', scope: SW, codesIn: 'value', numeric: false, statuses: false, note: 'One fact per platform' },
   { kind: 'free_trial', store: 'public', tier: 'T1', scope: SW, codesIn: 'label', numeric: true, statuses: false, note: 'trial_days carries num' },
@@ -91,8 +91,8 @@ export const KINDS: readonly KindDef[] = [
   { kind: 'regulation', store: 'public', tier: 'T1', scope: ALL, codesIn: 'label', numeric: false, statuses: false, note: 'Joined to regulatory_instruments for Regulatory Currency' },
   { kind: 'market', store: 'public', tier: 'T2', scope: ALL, codesIn: 'none', numeric: false, statuses: false, countryDetail: true, note: 'Markets the vendor says it serves' },
   { kind: 'turnaround', store: 'public', tier: 'T1', scope: ['services'], codesIn: 'label', numeric: true, statuses: false, note: 'directoryNumbers.TURNAROUND_*' },
-  { kind: 'founded', store: 'public', tier: 'T1', scope: ALL, codesIn: 'label', numeric: true, statuses: false, note: 'label = founded.source; num = year' },
-  { kind: 'hosting', store: 'public', tier: 'T1', scope: SW, codesIn: 'label', numeric: false, statuses: false, countryDetail: true, note: 'label = hosting.region' },
+  { kind: 'founded', store: 'public', tier: 'T1', scope: ALL, codesIn: 'label', codeVocab: 'founded.source', numeric: true, statuses: false, note: 'label = founded.source; num = year' },
+  { kind: 'hosting', store: 'public', tier: 'T1', scope: SW, codesIn: 'label', codeVocab: 'hosting.region', numeric: false, statuses: false, countryDetail: true, note: 'label = hosting.region' },
   { kind: 'format', store: 'public', tier: 'T1', scope: SW, codesIn: 'value', numeric: false, statuses: false, note: 'label = format.direction' },
   { kind: 'service_scope', store: 'public', tier: 'T1', scope: ['services'], codesIn: 'value', numeric: false, statuses: false, note: 'detail = regime codes (directoryNumbers.SERVICE_REGIMES)' },
   { kind: 'sector', store: 'public', tier: 'T2', scope: ALL, codesIn: 'value', numeric: false, statuses: false, note: 'Sectors the vendor names' },
@@ -228,11 +228,13 @@ export const CODES: readonly CodeDef[] = [
   ...c('pricing_model', [
     ['on_request', 'On request', ['On request']],
     ['subscription', 'Subscription', ['Subscription', 'Monthly rental, annual subscription or licence']],
-    ['perpetual_licence', 'Perpetual licence', ['Licence', 'One-off licence', 'Purchase', 'Purchase (online store)']],
+    ['perpetual_licence', 'Perpetual licence', ['Licence', 'One-off licence']],
     ['pay_per_unit', 'Pay per document or unit', ['Per document']],
     ['freemium', 'Free tier and paid plans', ['Free tier + paid plans', 'Free plan; paid plans by proposal']],
     ['free', 'Free', ['Free', 'Free public resource']],
     ['membership', 'Membership', []],
+    // 2026-10-19: hardware and label stock are bought, not licensed («Purchase» was mapped to perpetual_licence before the backfill ran).
+    ['one_off_purchase', 'One-off purchase', ['Purchase', 'Purchase (online store)']],
   ]),
   ...c('price.basket', [
     ['sds_author_1', 'One SDS authored, one language'], ['sds_translate_1', 'One SDS translated into one language'],
@@ -279,7 +281,7 @@ export const CODES: readonly CodeDef[] = [
   ]),
   ...c('certification', [
     ['iso_9001', 'ISO 9001', ['ISO 9001']], ['iso_14001', 'ISO 14001', ['ISO 14001']], ['iso_45001', 'ISO 45001'],
-    ['iso_27001', 'ISO/IEC 27001', ['ISO 27001', 'ISO 27001:2022', 'ISO/IEC 27001:2022 (information security management system)']],
+    ['iso_27001', 'ISO/IEC 27001', ['ISO 27001', 'ISO 27001:2022', 'ISO/IEC 27001:2022', 'ISO/IEC 27001:2022 (information security management system)']],
     ['iso_27701', 'ISO/IEC 27701'], ['iso_17100', 'ISO 17100', ['ISO 17100']], ['soc2_type1', 'SOC 2 Type I'],
     ['soc2_type2', 'SOC 2 Type II'], ['soc2_unspecified', 'SOC 2 (type not stated)', ['SOC 2']],
     ['cyber_essentials', 'Cyber Essentials'], ['cyber_essentials_plus', 'Cyber Essentials Plus'], ['tisax', 'TISAX'],
