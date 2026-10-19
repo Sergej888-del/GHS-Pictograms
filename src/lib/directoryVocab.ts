@@ -1,5 +1,6 @@
 /**
- * src/lib/directoryVocab.ts — the data-collection vocabulary of the directory, v2 (2026-10-17).
+ * src/lib/directoryVocab.ts — the data-collection vocabulary of the directory, v2 (2026-10-17), v2.1 (2026-10-19: AI block,
+ * purchase path, support, scale claims, quality process, free offers — claude/directory-vocab-v2.1-ai-2026-10-19.md).
  *
  * ONE SOURCE. Every coded value a fact may carry is listed here. import:directory (public facts) and
  * import:research (private facts) validate against this file before writing, and copy it into the tables
@@ -19,7 +20,9 @@
  *      language code lists where the kind says so.
  */
 
-export const VOCAB_VERSION = '2026-10-17'
+export const VOCAB_VERSION = '2026-10-19'
+/** Date of vocabulary v2; kinds retired by v2 carry it literally (VOCAB_VERSION moves on). */
+const V2_DATE = '2026-10-17'
 
 export type Store = 'public' | 'private'
 export type Tier = 'T1' | 'T2' | 'T3'
@@ -72,14 +75,14 @@ const SW: readonly Scope[] = ['software', 'databases']
 export const KINDS: readonly KindDef[] = [
   // existing kinds (s92–s109), kept as they are unless retired
   { kind: 'jurisdiction', store: 'public', tier: 'T1', scope: ALL, codesIn: 'label', codeVocab: 'jurisdiction.role', numeric: false, statuses: false, countryDetail: true, note: 'Countries the vendor names for SDS / labels; label = what is done for them (jurisdiction.role)' },
-  { kind: 'jurisdiction_claim', store: 'public', tier: 'T2', scope: ALL, codesIn: 'none', numeric: false, statuses: false, retired: VOCAB_VERSION, replacedBy: 'jurisdiction', note: 'Free-text list; parsed into jurisdiction (named countries) and coverage_claim (unnamed)' },
+  { kind: 'jurisdiction_claim', store: 'public', tier: 'T2', scope: ALL, codesIn: 'none', numeric: false, statuses: false, retired: V2_DATE, replacedBy: 'jurisdiction', note: 'Free-text list; parsed into jurisdiction (named countries) and coverage_claim (unnamed)' },
   { kind: 'language', store: 'public', tier: 'T1', scope: ALL, codesIn: 'label', codeVocab: 'language.role', numeric: true, statuses: false, languageDetail: true, note: 'label = role (language.role); num/unit as directoryNumbers.LANGUAGE_UNITS' },
   { kind: 'deployment', store: 'public', tier: 'T1', scope: ALL, codesIn: 'value', numeric: false, statuses: false, note: 'One fact per deployment mode' },
   { kind: 'platform', store: 'public', tier: 'T1', scope: SW, codesIn: 'value', numeric: false, statuses: false, note: 'One fact per platform' },
   { kind: 'free_trial', store: 'public', tier: 'T1', scope: SW, codesIn: 'label', numeric: true, statuses: false, note: 'trial_days carries num' },
-  { kind: 'api', store: 'public', tier: 'T1', scope: SW, codesIn: 'none', numeric: false, statuses: false, retired: VOCAB_VERSION, replacedBy: 'capability', note: 'Now capability.api' },
-  { kind: 'iso17100', store: 'public', tier: 'T2', scope: ['services'], codesIn: 'none', numeric: false, statuses: false, retired: VOCAB_VERSION, replacedBy: 'certification', note: 'Now certification.iso_17100' },
-  { kind: 'ufi_pcn', store: 'public', tier: 'T1', scope: ALL, codesIn: 'none', numeric: false, statuses: false, retired: VOCAB_VERSION, replacedBy: 'capability', note: 'Ambiguous; re-checked into capability.ufi_generation / pcn_submission or service_scope' },
+  { kind: 'api', store: 'public', tier: 'T1', scope: SW, codesIn: 'none', numeric: false, statuses: false, retired: V2_DATE, replacedBy: 'capability', note: 'Now capability.api' },
+  { kind: 'iso17100', store: 'public', tier: 'T2', scope: ['services'], codesIn: 'none', numeric: false, statuses: false, retired: V2_DATE, replacedBy: 'certification', note: 'Now certification.iso_17100' },
+  { kind: 'ufi_pcn', store: 'public', tier: 'T1', scope: ALL, codesIn: 'none', numeric: false, statuses: false, retired: V2_DATE, replacedBy: 'capability', note: 'Ambiguous; re-checked into capability.ufi_generation / pcn_submission or service_scope' },
   { kind: 'pricing_model', store: 'public', tier: 'T1', scope: ALL, codesIn: 'value', numeric: false, statuses: false, note: 'One fact per model' },
   { kind: 'price', store: 'public', tier: 'T1', scope: ALL, codesIn: 'none', numeric: true, statuses: false, note: 'Plan name in label; basket column = price.basket code when the price fits a basket item' },
   { kind: 'pricing_note', store: 'public', tier: 'T2', scope: ALL, codesIn: 'label', numeric: false, statuses: false, note: 'label = code; value = vendor wording' },
@@ -110,7 +113,7 @@ export const KINDS: readonly KindDef[] = [
   { kind: 'security', store: 'public', tier: 'T1', scope: SW, codesIn: 'label', numeric: true, statuses: true, note: 'uptime_sla carries num (%)' },
   { kind: 'hosting_provider', store: 'public', tier: 'T1', scope: SW, codesIn: 'value', numeric: false, statuses: false, note: 'Infrastructure provider named by the vendor' },
   { kind: 'capability', store: 'public', tier: 'T1', scope: SW, codesIn: 'label', numeric: false, statuses: true, note: 'The 30-point matrix; detail = plan where available' },
-  { kind: 'ai_use', store: 'public', tier: 'T1', scope: SW, codesIn: 'label', numeric: false, statuses: false, note: 'Only when capability.ai_assisted = yes' },
+  { kind: 'ai_use', store: 'public', tier: 'T1', scope: ALL, codesIn: 'label', numeric: false, statuses: false, note: 'v2.1: all categories; detail = vendor_wide when the use is claimed for the platform, not for the listing' },
   { kind: 'label_standard', store: 'public', tier: 'T3', scope: ['labels'], codesIn: 'value', numeric: false, statuses: false, note: 'Material standards the labels are certified to' },
   { kind: 'print_tech', store: 'public', tier: 'T3', scope: ['labels'], codesIn: 'value', numeric: false, statuses: false, note: 'Printing technology' },
   { kind: 'min_order', store: 'public', tier: 'T3', scope: ['labels'], codesIn: 'none', numeric: true, statuses: false, note: 'num + unit (labels, rolls, sheets)' },
@@ -122,6 +125,19 @@ export const KINDS: readonly KindDef[] = [
   { kind: 'hotline', store: 'public', tier: 'T3', scope: ['emergency'], codesIn: 'label', numeric: true, statuses: true, countryDetail: true, note: 'Commercial 24/7 lines; countries_covered uses detail, languages_count uses num' },
   { kind: 'data_scope', store: 'public', tier: 'T3', scope: ['databases'], codesIn: 'value', numeric: false, statuses: false, note: 'What the database contains' },
   { kind: 'update_frequency', store: 'public', tier: 'T3', scope: ['databases'], codesIn: 'value', numeric: false, statuses: false, note: 'How often the vendor says it updates' },
+
+  // v2.1 (2026-10-19): AI block and more market facts. Public, gated, not printed until the card renders them.
+  { kind: 'ai_status', store: 'public', tier: 'T1', scope: ALL, codesIn: 'label', numeric: false, statuses: true, note: 'label = listing (AI in the listed product or service) or vendor_wide (AI claimed elsewhere by the vendor); replaces capability.ai_assisted' },
+  { kind: 'ai_stance', store: 'public', tier: 'T1', scope: ALL, codesIn: 'label', numeric: false, statuses: false, note: 'How the vendor presents AI; headline = page title, H1 or hero of the homepage or the listing page' },
+  { kind: 'ai_governance', store: 'public', tier: 'T1', scope: SW, codesIn: 'label', numeric: false, statuses: false, note: 'AI governance statements on vendor pages, policies or sub-processor lists' },
+  { kind: 'ai_provider', store: 'public', tier: 'T2', scope: ALL, codesIn: 'value', numeric: false, statuses: false, note: 'Model provider, only when the vendor names it' },
+  { kind: 'ai_pricing', store: 'public', tier: 'T2', scope: SW, codesIn: 'label', numeric: false, statuses: false, note: 'How AI features are charged' },
+  { kind: 'ai_disclaimer', store: 'public', tier: 'T1', scope: ALL, codesIn: 'label', numeric: false, statuses: false, note: 'value = verbatim sentence (max ~25 words) from terms, licence, legal notice or a published AI policy only' },
+  { kind: 'purchase_path', store: 'public', tier: 'T1', scope: ALL, codesIn: 'value', numeric: false, statuses: false, note: 'Can the buyer pay online without talking to sales' },
+  { kind: 'support', store: 'public', tier: 'T2', scope: ALL, codesIn: 'value', numeric: false, statuses: false, note: 'Support channels and hours as stated; one fact per code' },
+  { kind: 'scale_claim', store: 'public', tier: 'T2', scope: ALL, codesIn: 'label', numeric: true, statuses: false, note: 'Numbers the vendor claims; num + unit; languages and countries go to language / coverage_claim' },
+  { kind: 'quality_process', store: 'public', tier: 'T2', scope: ['services'], codesIn: 'value', numeric: false, statuses: false, note: 'Human quality steps the service states' },
+  { kind: 'free_offer', store: 'public', tier: 'T2', scope: ALL, codesIn: 'value', numeric: false, statuses: false, note: 'Free resources the vendor offers (lead generation)' },
 
   // private kinds: report analysis only, never on a card
   { kind: 'register_id', store: 'private', tier: 'T1', scope: ALL, codesIn: 'label', codeVocab: 'register_id.register', numeric: false, statuses: false, note: 'label = register_id.register; value = the number' },
@@ -138,6 +154,7 @@ export const KINDS: readonly KindDef[] = [
   { kind: 'release', store: 'private', tier: 'T2', scope: SW, codesIn: 'none', numeric: false, statuses: false, note: 'value = version; detail = release date' },
   { kind: 'last_content_date', store: 'private', tier: 'T1', scope: ALL, codesIn: 'none', numeric: false, statuses: false, note: 'detail = date of the latest dated news / blog item' },
   { kind: 'job_postings', store: 'private', tier: 'T1', scope: ALL, codesIn: 'none', numeric: true, statuses: false, note: 'num = open positions on the vendor careers page on checked_on' },
+  { kind: 'ai_first_seen', store: 'private', tier: 'T2', scope: ALL, codesIn: 'none', numeric: true, statuses: false, note: 'v2.1: num = year of the earliest vendor-published AI announcement; detail = YYYY-MM; source = the announcement' },
 ]
 
 // ─────────────────────────────── codes ───────────────────────────────
@@ -267,6 +284,10 @@ export const CODES: readonly CodeDef[] = [
   ...c('contract_flag', [
     ['auto_renewal', 'Renews automatically'], ['cancel_anytime', 'Cancel any time'], ['annual_prepay', 'Paid annually in advance'],
     ['no_contract', 'No contract required'],
+    // v2.1: from terms / licence only
+    ['unilateral_price_change', 'Vendor may change prices'], ['unilateral_terms_change', 'Vendor may change the terms'],
+    ['data_return_on_exit', 'Data returned or exportable at the end'], ['data_deletion_on_exit', 'Data deleted after the end'],
+    ['sla_credits', 'Service credits for downtime'], ['written_amendment_only', 'Changes only by written agreement'],
   ]),
 
   // 4. trust and law
@@ -286,6 +307,7 @@ export const CODES: readonly CodeDef[] = [
     ['soc2_type2', 'SOC 2 Type II'], ['soc2_unspecified', 'SOC 2 (type not stated)', ['SOC 2']],
     ['cyber_essentials', 'Cyber Essentials'], ['cyber_essentials_plus', 'Cyber Essentials Plus'], ['tisax', 'TISAX'],
     ['iso_27017', 'ISO/IEC 27017'], ['iso_27018', 'ISO/IEC 27018'], ['iso_22301', 'ISO 22301'], ['tx_ramp', 'TX-RAMP'],
+    ['iso_42001', 'ISO/IEC 42001 (AI management system)'], ['iso_18587', 'ISO 18587 (machine translation post-editing)'],
   ]),
   ...c('accreditation', [
     ['iso_17025', 'ISO/IEC 17025 accredited', ['ISO/IEC 17025 accredited', 'ISO/IEC 17025 (testing laboratory accreditation)']],
@@ -300,6 +322,7 @@ export const CODES: readonly CodeDef[] = [
     ['trust_center', 'Trust or security centre page'], ['pen_test_stated', 'Penetration testing stated'],
     ['encryption_at_rest', 'Encryption at rest'], ['encryption_in_transit', 'Encryption in transit'], ['mfa', 'Multi-factor sign-in'],
     ['backups_stated', 'Backups stated'], ['uptime_sla', 'Uptime commitment (%)'],
+    ['status_page_public', 'Public status page'],
   ]),
 
   // 5. technology
@@ -335,11 +358,52 @@ export const CODES: readonly CodeDef[] = [
     ['multilingual_output', 'Multilingual output'], ['machine_translation', 'Machine translation'], ['qr_access', 'QR code access'],
     ['barcode_rfid', 'Barcode or RFID'], ['mobile_app', 'Mobile app'], ['offline_mode', 'Offline mode'], ['sso', 'Single sign-on'],
     ['audit_trail', 'Audit trail'], ['approval_workflow', 'Approval workflow'], ['erp_integration', 'ERP integration'],
-    ['api', 'API'], ['api_docs_public', 'Public API documentation'], ['ai_assisted', 'AI-assisted features'],
+    ['api', 'API'], ['api_docs_public', 'Public API documentation'],
   ]),
+  { vocab: 'capability', code: 'ai_assisted', label: 'AI-assisted features', retired: '2026-10-19', note: 'Now ai_status.listing (v2.1)' },
   ...c('ai_use', [
     ['sds_extraction', 'Data extraction from SDS'], ['authoring_drafting', 'Drafting SDS content'], ['translation', 'Translation'],
     ['classification', 'Classification'], ['regulatory_monitoring', 'Regulatory monitoring'], ['support_chatbot', 'Support assistant'],
+    // v2.1
+    ['sds_review_check', 'Checking SDSs for errors or gaps'], ['search_qa', 'Questions over the customer\'s SDS data'],
+    ['regulatory_qa', 'Regulatory question assistant'], ['agent_connector', 'Connector for AI agents (MCP or similar)'],
+    ['document_generation', 'Generating compliance documents'], ['label_generation', 'Generating labels'],
+    ['container_scanning', 'Recognising containers or labels from photos'], ['data_enrichment', 'Filling in substance data'],
+    ['risk_assessment', 'Risk assessment'], ['other', 'Other AI use'],
+  ]),
+  ...c('ai_status', [['listing', 'AI in the listed product or service'], ['vendor_wide', 'AI claimed elsewhere by the vendor']]),
+  ...c('ai_stance', [
+    ['ai_in_headline', 'AI in the headline'], ['human_review_vendor', 'AI output reviewed by the vendor\'s experts'],
+    ['human_review_customer', 'AI output reviewed by the customer'], ['human_only_stated', 'Work done by people, without AI'],
+    ['ai_optional', 'AI features can be switched off'],
+  ]),
+  ...c('ai_governance', [
+    ['no_training_on_customer_data', 'Customer data not used to train AI'], ['ai_policy_published', 'AI policy published'],
+    ['ai_policy_on_request', 'AI policy on request'], ['ai_subprocessor_named', 'AI provider in the sub-processor list'],
+    ['eu_ai_act_mentioned', 'EU AI Act mentioned'],
+  ]),
+  ...c('ai_provider', [
+    ['openai', 'OpenAI'], ['azure_openai', 'Azure OpenAI'], ['anthropic', 'Anthropic'], ['google', 'Google (Gemini)'],
+    ['aws_bedrock', 'AWS Bedrock'], ['mistral', 'Mistral'], ['own_model', 'Own model'], ['other', 'Other provider'],
+  ]),
+  ...c('ai_pricing', [['included', 'Included in the plan'], ['paid_add_on', 'Paid add-on'], ['separate_product', 'Separate product'], ['usage_credits', 'Charged per use']]),
+  ...c('ai_disclaimer', [['verify_output', 'Customer must verify AI output'], ['no_accuracy_warranty', 'No warranty on AI output'], ['liability_excluded', 'No liability for AI output']]),
+  ...c('purchase_path', [['self_serve_checkout', 'Buy online'], ['quote_only', 'Quote or sales contact only'], ['both', 'Online purchase and quotes']]),
+  ...c('support', [
+    ['phone', 'Phone'], ['email', 'Email'], ['chat', 'Chat'], ['ticket', 'Ticket portal'], ['community', 'Community forum'],
+    ['hours_24_7', 'Support 24/7'], ['business_hours', 'Support in business hours'],
+  ]),
+  ...c('scale_claim', [
+    ['sds_count', 'SDSs in the library'], ['substance_count', 'Substances in the database'], ['regulatory_lists_count', 'Regulatory lists'],
+    ['customer_count', 'Customers'], ['expert_count', 'In-house experts'], ['phrase_count', 'Standard phrases'], ['sds_per_year', 'SDSs produced per year'],
+  ]),
+  ...c('quality_process', [
+    ['two_person_review', 'Second-person review'], ['subject_expert_review', 'Review by a chemical-safety expert'],
+    ['template_free', 'Written without templates or software'], ['iso17100_process', 'ISO 17100 translation process'],
+  ]),
+  ...c('free_offer', [
+    ['free_sds_search', 'Free SDS search'], ['free_calculator', 'Free calculator or tool'], ['free_templates', 'Free templates'],
+    ['free_webinars', 'Free webinars'], ['free_newsletter', 'Regulatory newsletter'],
   ]),
   ...c('integration', [
     ['sap', 'SAP'], ['oracle', 'Oracle'], ['ms_dynamics', 'Microsoft Dynamics'], ['other_erp', 'Other ERP'],

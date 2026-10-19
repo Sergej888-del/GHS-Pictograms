@@ -394,6 +394,9 @@ export type FactKind =
   | 'legal_entity' | 'offices' | 'contract_flag' | 'governing_law' | 'liability_cap' | 'data_protection' | 'security'
   | 'hosting_provider' | 'capability' | 'ai_use' | 'label_standard' | 'print_tech' | 'min_order' | 'training_mode'
   | 'training_level' | 'duration' | 'certificate' | 'cpd_points' | 'hotline' | 'data_scope' | 'update_frequency'
+  // v2.1 (2026-10-19): AI block and market facts; gated and unprinted like the other v2 kinds
+  | 'ai_status' | 'ai_stance' | 'ai_governance' | 'ai_provider' | 'ai_pricing' | 'ai_disclaimer' | 'purchase_path' | 'support'
+  | 'scale_claim' | 'quality_process' | 'free_offer'
 
 /**
  * s104: шесть видов, собранных при перепроверке (11.10). Решение Сергея тем же вечером: печатать сразу — но ТОЛЬКО

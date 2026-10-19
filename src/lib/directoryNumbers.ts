@@ -85,7 +85,8 @@ export const REGULATION_LABELS = ['eu_sds_format', 'eu_clp_revision', 'us_hcs', 
 /** Имена актов так, как их печатает каталог (evidence — как напечатал вендор). «GHS Rev. N» — по образцу GHS_REV_RE. */
 export const REGULATION_VALUES: Record<(typeof REGULATION_LABELS)[number], readonly string[]> = {
   eu_sds_format: ['Regulation (EU) 2020/878', 'Regulation (EU) 2015/830', 'Regulation (EU) No 453/2010'],
-  eu_clp_revision: ['Regulation (EU) 2024/2865'],
+  // v2.1: 2023/707 added the hazard classes ED HH/ENV, PBT/vPvB, PMT/vPvM (eur-lex.europa.eu/eli/reg_del/2023/707/oj)
+  eu_clp_revision: ['Regulation (EU) 2024/2865', 'Delegated Regulation (EU) 2023/707'],
   us_hcs: ['OSHA HCS 2024', 'OSHA HCS 2012', '29 CFR 1910.1200'],
   ca_whmis: ['WHMIS 2015', 'WHMIS 2023', 'Hazardous Products Regulations'],
   ghs_revision: [],
@@ -164,6 +165,8 @@ export const V2_NUMERIC_UNITS: Readonly<Record<string, readonly string[]>> = {
   duration: ['hours', 'days'],
   cpd_points: ['points'],
   hotline: ['languages'],
+  // v2.1: label = scale_claim code; the unit names what is counted
+  scale_claim: ['sds', 'substances', 'lists', 'customers', 'experts', 'phrases', 'sds_per_year'],
 }
 
 export const NUMERIC_FACT_COLS = ['num', 'num_max', 'num_qual', 'unit', 'unit_qty', 'period', 'currency', 'price_role'] as const
