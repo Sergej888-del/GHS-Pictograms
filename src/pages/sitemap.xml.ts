@@ -18,6 +18,9 @@ import { BRANCHES, TEMPLATES } from '../lib/labelMakerHub';
 import { CATEGORIES, SUBCATEGORIES, categoryHref, entryHref, entryIndexable, subcategoryHref } from '../lib/directoryModel';
 import { loadDirectory } from '../lib/directoryData';
 import { emergencyPageExists } from '../lib/emergencyData';
+// s114: the report preview joins the sitemap only once it is public (same flag that drops its noindex) and built
+// (a snapshot with section G exists) — the same loadAiGapView that decides getStaticPaths of /reports/[issue].
+import { REPORT_PREVIEW_PATH, REPORT_PREVIEW_PUBLIC, loadAiGapView } from '../lib/reportData';
 
 export const prerender = true;
 
@@ -374,8 +377,13 @@ export const GET: APIRoute = async () => {
     fetchDirectorySitemapEntries(),
   ]);
 
+  const reportPages = REPORT_PREVIEW_PUBLIC && (await loadAiGapView())
+    ? [{ url: REPORT_PREVIEW_PATH, changefreq: 'monthly', priority: '0.7' }]
+    : [];
+
   const allPages = [
     ...STATIC_PAGES,
+    ...reportPages,
     ...LABEL_MAKER_PAGES,
     ...GHS_PAGES,
     ...COMPLIANCE_PILLAR_PAGES,

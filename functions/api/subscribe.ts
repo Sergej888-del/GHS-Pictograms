@@ -10,6 +10,12 @@ interface Env {
 // returns "An active DOI template does not exist". templateId is also required.
 // The only secret is BREVO_API_KEY, injected via Cloudflare env (same key used by leads.ts).
 const NEWSLETTER_LIST_ID = 6 // Brevo list "GHS Compliance Updates" — CONFIRMED subscribers land here
+// s114 (2026-10-19): sign-up for the full GHS Compliance Market Report (/reports/ai-gap-preview/).
+// ⚠ Until Sergej creates the Brevo list "GHS Compliance Market Report" and its id replaces the 6 below, report sign-ups
+//   land in the newsletter list (they agreed to newsletter updates too in the consent text) and are told apart by the
+//   GA4 event source "market_report_preview".
+const REPORT_LIST_ID = 6
+const LISTS: Record<string, number> = { newsletter: NEWSLETTER_LIST_ID, report: REPORT_LIST_ID }
 const DOI_TEMPLATE_ID = 3 // Brevo template "DOI Confirmation" (HTML, tagged "optin", Active)
 const REDIRECT_URL = 'https://ghspictograms.com/subscribed/' // where Brevo redirects after confirm
 
@@ -28,6 +34,7 @@ export async function onRequestPost(
     const body = (await request.json()) as Record<string, unknown>
 
     const email = typeof body.email === 'string' ? body.email.trim() : ''
+    const listId = LISTS[typeof body.list === 'string' ? body.list : 'newsletter'] ?? NEWSLETTER_LIST_ID
     if (!email || !email.includes('@')) {
       return new Response(JSON.stringify({ error: 'Valid email required' }), {
         status: 400,
@@ -45,7 +52,7 @@ export async function onRequestPost(
       },
       body: JSON.stringify({
         email,
-        includeListIds: [NEWSLETTER_LIST_ID],
+        includeListIds: [listId],
         templateId: DOI_TEMPLATE_ID,
         redirectionUrl: REDIRECT_URL,
       }),

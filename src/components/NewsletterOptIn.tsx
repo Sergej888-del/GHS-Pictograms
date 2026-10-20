@@ -4,13 +4,22 @@ import type React from 'react';
 interface NewsletterOptInProps {
   /** Какой инструмент под собой держит opt-in — уходит в GA4-событие (напр. "svg_download"). */
   source: string;
+  /** s114: which Brevo list (functions/api/subscribe.ts LISTS). Default: the newsletter list. */
+  list?: 'newsletter' | 'report';
+  /** s114: consent wording for this placement (the checkbox stays unticked by default — GDPR Art 7). */
+  consentText?: string;
+  /** s114: button label for this placement. */
+  buttonText?: string;
 }
+
+const DEFAULT_CONSENT =
+  'Email me GHS / CLP / OSHA compliance updates and regulatory deadline alerts, plus a free 2026–2029 compliance deadline calendar. Unsubscribe anytime.';
 
 type Status = 'idle' | 'loading' | 'success' | 'already' | 'error';
 
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
 
-export default function NewsletterOptIn({ source }: NewsletterOptInProps) {
+export default function NewsletterOptIn({ source, list = 'newsletter', consentText = DEFAULT_CONSENT, buttonText = 'Subscribe' }: NewsletterOptInProps) {
   const [email, setEmail] = useState('');
   const [consent, setConsent] = useState(false);
   const [status, setStatus] = useState<Status>('idle');
@@ -29,7 +38,7 @@ export default function NewsletterOptIn({ source }: NewsletterOptInProps) {
       const res = await fetch('/api/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: email.trim(), list }),
       });
       const data = await res.json().catch(() => ({}));
 
@@ -81,7 +90,7 @@ export default function NewsletterOptIn({ source }: NewsletterOptInProps) {
           className="mt-0.5 h-4 w-4 accent-blue-600 flex-shrink-0 cursor-pointer"
         />
         <span className="text-xs text-gray-500 leading-snug">
-          Email me GHS / CLP / OSHA compliance updates and regulatory deadline alerts, plus a free 2026–2029 compliance deadline calendar. Unsubscribe anytime.{' '}
+          {consentText}{' '}
           <a href="/privacy/" className="underline hover:text-gray-700">Privacy Policy</a>
         </span>
       </label>
@@ -112,7 +121,7 @@ export default function NewsletterOptIn({ source }: NewsletterOptInProps) {
               Subscribing…
             </>
           ) : (
-            'Subscribe'
+            buttonText
           )}
         </button>
       </div>

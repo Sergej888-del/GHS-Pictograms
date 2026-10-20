@@ -376,6 +376,8 @@ export const CODES: readonly CodeDef[] = [
     ['ai_in_headline', 'AI in the headline'], ['human_review_vendor', 'AI output reviewed by the vendor\'s experts'],
     ['human_review_customer', 'AI output reviewed by the customer'], ['human_only_stated', 'Work done by people, without AI'],
     ['ai_optional', 'AI features can be switched off'],
+    // 2026-10-19: not using AI is the selling point ("100% human", "not another AI tool", "written manually, not by a generator")
+    ['human_first_positioning', 'Sells itself on not using AI'],
   ]),
   ...c('ai_governance', [
     ['no_training_on_customer_data', 'Customer data not used to train AI'], ['ai_policy_published', 'AI policy published'],
