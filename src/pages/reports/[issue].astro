@@ -98,8 +98,7 @@ const jsonLd = {
             <p class="rp-name">The anti-AI camp</p>
             <p>
               {v.antiAi.humanFirst} vendors sell themselves on not being a machine. {v.antiAi.warnAboutAi} of them warn about AI or
-              machine translation by name, and {v.antiAi.sellAi} of those sell it themselves. Vendors that reject AI and sell
-              none: {v.antiAi.pure}.
+              machine translation by name, and {v.antiAi.sellAi} of those sell it themselves.{v.antiAi.pure > 0 && ` Vendors that reject AI and sell none: ${v.antiAi.pure}.`}
             </p>
           </div>
           <div class="rp-card">
@@ -148,7 +147,7 @@ const jsonLd = {
         <h2 id="rp-method">How we counted</h2>
         <ul>
           <li>We read the websites, terms and licences of {v.vendors} vendors in the <a href="/directory/">GHS Tools &amp; Services Directory</a>. Every fact is a verbatim quote with a link to the vendor's own page.</li>
-          <li>A script re-reads each source page; only facts found there again are counted here.</li>
+          <li>Each source page is read again, by a script or, where a site blocks scripts, in a browser; only facts found there again are counted here.</li>
           <li><strong>Talk about AI</strong>: the vendor claims AI for the listed product or anywhere else on its own site. Claims made only by a parent group, and AI sold in an unrelated business line, are not counted.</li>
           <li><strong>AI in product</strong>: the vendor says the product or service we list uses AI (machine learning, language models, neural machine translation). "Smart" or "automatic" without AI words does not count.</li>
           <li>No ratings, no rankings. A place in the directory is never sold. This page names no vendor: findings are aggregates.</li>
