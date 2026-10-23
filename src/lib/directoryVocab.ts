@@ -417,6 +417,8 @@ export const CODES: readonly CodeDef[] = [
     ['sdscom_xml', 'SDScomXML', ['SDScomXML']], ['pdf', 'PDF', ['PDF']], ['docx', 'Word (DOCX)', ['Word (DOCX)']],
     ['xml', 'XML', ['XML']], ['json', 'JSON', ['JSON']], ['excel_csv', 'Excel / CSV', ['Excel / CSV']],
     ['iuclid', 'IUCLID', ['IUCLID']], ['sap_ehs', 'SAP EH&S', ['SAP EH&S']], ['html', 'HTML', ['HTML']],
+    // s115 (2026-10-23): CSV alone, for a vendor with no native Excel file (SDSentry owner correction); sort 9 in directory_vocab
+    ['csv', 'CSV'],
   ]),
   ...c('format.direction', [['import', 'Import'], ['export', 'Export'], ['both', 'Import and export']]),
 
