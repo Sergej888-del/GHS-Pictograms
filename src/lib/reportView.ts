@@ -49,6 +49,8 @@ export interface AiGapView {
   proof: Share
   checks: { customer: Share; vendor: Share }
   antiAi: { warnAboutAi: number; sellAi: number; pure: number; humanFirst: number }
+  /** Vendors that sell themselves on not using AI, with the base of all live vendors (s115, for the numbers table). */
+  humanFirstShare: Share | null
   insurance: Share
   regions: RegionBar[]
   cover: { talk: string; product: string }
@@ -132,6 +134,7 @@ export function buildAiGapView(snapshot: ReportSnapshot, rows: MetricRow[]): AiG
       pure: scalar(rows, 'G', 'human_first_vs_ai_pure', C) ?? 0,
       humanFirst: scalar(rows, 'G', 'human_first', C) ?? 0,
     },
+    humanFirstShare: share(rows, 'G', 'human_first', C),
     insurance,
     regions,
     cover: { talk: CAP(oneIn(talk.pct, 'atLeast')), product: CAP(oneIn(product.pct, 'atMost')) },
